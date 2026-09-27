@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Check, Mic, X } from "lucide-react";
 import { Button } from "@intake/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@intake/ui/card";
@@ -66,12 +66,25 @@ function parseNotices(data: VoiceParseResponse): string[] {
   return notices;
 }
 
+/** A clip recorded outside the panel (e.g. a hold-to-talk button). */
+export interface VoiceRecording {
+  blob: Blob;
+  mimeType: string;
+}
+
 interface VoicePanelProps {
   /** Called once a save commit succeeds so the host can close the modal. */
   onCommitted?: () => void;
+  /**
+   * A recording made elsewhere, fed into the same transcribe → parse →
+   * review path as a clip recorded in the panel. Each recording object is
+   * processed once; passing a new object processes the new clip (its items
+   * are appended, as a second in-panel recording would be).
+   */
+  initialRecording?: VoiceRecording | null | undefined;
 }
 
-export function VoicePanel({ onCommitted }: VoicePanelProps) {
+export function VoicePanel({ onCommitted, initialRecording }: VoicePanelProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -218,6 +231,17 @@ export function VoicePanel({ onCommitted }: VoicePanelProps) {
     },
     [toast, liquidPresets]
   );
+
+  // A recording handed in from outside (hold-to-talk) goes through exactly
+  // the path an in-panel recording does. The ref keeps a re-run effect
+  // (Strict Mode, a re-render) from processing the same clip twice.
+  const handledRecording = useRef<VoiceRecording | null>(null);
+  useEffect(() => {
+    if (!initialRecording || handledRecording.current === initialRecording) return;
+    handledRecording.current = initialRecording;
+    const { blob, mimeType } = initialRecording;
+    queueMicrotask(() => void handleRecorded(blob, mimeType));
+  }, [initialRecording, handleRecorded]);
 
   const updateRow = useCallback((index: number, next: Partial<RowState>) => {
     setRows((prev) => prev.map((r, i) => (i === index ? { ...r, ...next } : r)));

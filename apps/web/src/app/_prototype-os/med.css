@@ -1,0 +1,79 @@
+/* PROTOTYPE (throwaway): 404 OS look for the home screen, switch with ?variant=
+   Variants D and E ("Medical OS", "Widget board"): the app-with-windows
+   structure in a calm clinical skin. It follows the app's own light/dark
+   theme (the kit's tokens are untouched); it only adds one restrained colour
+   per domain, square-ish corners, Inter, and flattens the real cards inside
+   a window (the window is their frame). Scoped to html.med-skin, set while
+   D or E is mounted. No textures, no animation. */
+
+html.med-skin {
+  /* One colour per domain, as HSL channels: used for a window's accent
+     line, its icon, a widget's edge and its fill. Light theme first. */
+  --d-water: 204 72% 38%;
+  --d-sodium: 33 78% 38%;
+  --d-sugar: 338 52% 44%;
+  --d-potassium: 262 36% 48%;
+  --d-bp: 356 58% 44%;
+  --d-weight: 172 52% 30%;
+  --d-bathroom: 228 30% 46%;
+  --d-meds: 146 42% 32%;
+  --d-voice: 220 14% 28%;
+  --d-caffeine: 26 42% 36%;
+  --d-alcohol: 292 30% 42%;
+  --d-neutral: 220 10% 42%;
+  /* The desktop behind the widgets and windows: a shade off the card. */
+  --med-desk: 220 16% 95%;
+
+  --radius: 0.25rem;
+  --radius-xs: 0.125rem;
+  --radius-sm: 0.125rem;
+  --radius-md: 0.25rem;
+  --radius-lg: 0.25rem;
+  --radius-xl: 0.375rem;
+  --radius-2xl: 0.375rem;
+  --radius-3xl: 0.375rem;
+  --med-bar-h: calc(4rem + env(safe-area-inset-bottom, 0px));
+}
+
+html.med-skin.dark {
+  --d-water: 204 70% 64%;
+  --d-sodium: 36 72% 60%;
+  --d-sugar: 338 55% 68%;
+  --d-potassium: 262 45% 72%;
+  --d-bp: 356 62% 66%;
+  --d-weight: 170 45% 55%;
+  --d-bathroom: 228 40% 72%;
+  --d-meds: 146 38% 58%;
+  --d-voice: 220 14% 82%;
+  --d-caffeine: 30 45% 62%;
+  --d-alcohol: 292 35% 70%;
+  --d-neutral: 220 10% 62%;
+  --med-desk: 220 20% 6%;
+}
+
+html.med-skin body {
+  font-family: var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  overflow: hidden;
+}
+
+/* The real card inside a window: flat, no gradient, no second frame. */
+html.med-skin [data-med-body] .rounded-xl.border.bg-card {
+  background: transparent;
+  background-image: none;
+  border-color: transparent;
+  box-shadow: none;
+}
+html.med-skin [data-med-body] .rounded-xl.border.bg-card > .p-6 {
+  padding: 0.25rem 0 0.75rem;
+}
+/* The card's own heading repeats the window title: quieter, small caps. */
+html.med-skin [data-med-body] .font-semibold.text-lg.uppercase.tracking-wide {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  color: hsl(var(--muted-foreground));
+}
+html.med-skin [data-med-body] .tabular-nums,
+html.med-skin [data-med-num] {
+  font-variant-numeric: tabular-nums;
+}

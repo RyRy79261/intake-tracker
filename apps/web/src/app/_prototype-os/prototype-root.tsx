@@ -2,7 +2,7 @@
 
 // PROTOTYPE (throwaway): 404 OS look for the home screen, switch with ?variant=
 // Three variants of the home route "/" in camp-404's 404 OS look, switchable
-// via ?variant=A|B|C on the existing route; ?variant=current (or no param)
+// via ?variant=A|B|C|D|E on the existing route; ?variant=current (or no param)
 // is the app as it is. Off on the production deploy: there the param is
 // ignored and the switcher never mounts.
 
@@ -12,6 +12,8 @@ import { VariantSwitcher } from "@/app/_prototype-os/switcher";
 import { VariantA } from "@/app/_prototype-os/variant-a";
 import { VariantB } from "@/app/_prototype-os/variant-b";
 import { VariantC } from "@/app/_prototype-os/variant-c";
+import { VariantD } from "@/app/_prototype-os/variant-d";
+import { VariantE } from "@/app/_prototype-os/variant-e";
 import { PROTOTYPE_ENABLED, toVariant } from "@/app/_prototype-os/variants";
 
 export function PrototypeHome({ current }: { current: ReactNode }) {
@@ -24,6 +26,8 @@ export function PrototypeHome({ current }: { current: ReactNode }) {
       {variant === "A" && <VariantA />}
       {variant === "B" && <VariantB />}
       {variant === "C" && <VariantC />}
+      {variant === "D" && <VariantD />}
+      {variant === "E" && <VariantE />}
       <VariantSwitcher current={variant} />
     </>
   );

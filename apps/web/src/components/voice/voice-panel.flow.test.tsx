@@ -489,3 +489,25 @@ describe("VoicePanel — recording again", () => {
     expect(await waterRows()).toHaveLength(1);
   });
 });
+
+describe("VoicePanel initialRecording — a clip recorded outside the panel", () => {
+  it("transcribes, parses and reviews a handed-in recording once", async () => {
+    parsedItems = [{ kind: "water", ml: 250 }];
+    let transcribeCalls = 0;
+    server.use(
+      http.post("*/api/ai/voice-transcribe", () => {
+        transcribeCalls += 1;
+        return HttpResponse.json(transcribeBody);
+      }),
+    );
+    const recording = { blob: new Blob(["audio"]), mimeType: "audio/webm" };
+    const { rerender } = await renderWithFixtures(<VoicePanel initialRecording={recording} />);
+
+    await screen.findByText(/1 pending/);
+    expect(screen.getByText(/dictated transcript/)).toBeInTheDocument();
+    // A re-render with the same recording object does not process it again.
+    rerender(<VoicePanel initialRecording={recording} />);
+    await waitFor(() => expect(transcribeCalls).toBe(1));
+    expect(screen.getByText(/1 pending/)).toBeInTheDocument();
+  });
+});
