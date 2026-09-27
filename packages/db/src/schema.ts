@@ -142,6 +142,8 @@ export const weightRecords = pgTable(
     weight: real("weight").notNull(),
     timestamp: bigint("timestamp", { mode: "number" }).notNull(),
     note: text("note"),
+    // "manual" (form) or "voice"; null on rows written before it existed.
+    source: text("source"),
     createdAt: bigint("created_at", { mode: "number" }).notNull(),
     updatedAt: bigint("updated_at", { mode: "number" }).notNull(),
     deletedAt: bigint("deleted_at", { mode: "number" }),
@@ -174,6 +176,8 @@ export const bloodPressureRecords = pgTable(
     arm: text("arm").notNull(),
     timestamp: bigint("timestamp", { mode: "number" }).notNull(),
     note: text("note"),
+    // "manual" (form) or "voice"; null on rows written before it existed.
+    source: text("source"),
     createdAt: bigint("created_at", { mode: "number" }).notNull(),
     updatedAt: bigint("updated_at", { mode: "number" }).notNull(),
     deletedAt: bigint("deleted_at", { mode: "number" }),
@@ -241,6 +245,8 @@ export const urinationRecords = pgTable(
     timestamp: bigint("timestamp", { mode: "number" }).notNull(),
     amountEstimate: text("amount_estimate"),
     note: text("note"),
+    // "manual" (form) or "voice"; null on rows written before it existed.
+    source: text("source"),
     createdAt: bigint("created_at", { mode: "number" }).notNull(),
     updatedAt: bigint("updated_at", { mode: "number" }).notNull(),
     deletedAt: bigint("deleted_at", { mode: "number" }),
@@ -271,6 +277,8 @@ export const defecationRecords = pgTable(
     timestamp: bigint("timestamp", { mode: "number" }).notNull(),
     amountEstimate: text("amount_estimate"),
     note: text("note"),
+    // "manual" (form) or "voice"; null on rows written before it existed.
+    source: text("source"),
     createdAt: bigint("created_at", { mode: "number" }).notNull(),
     updatedAt: bigint("updated_at", { mode: "number" }).notNull(),
     deletedAt: bigint("deleted_at", { mode: "number" }),
@@ -881,7 +889,8 @@ export const insightReports = pgTable(
 // The settings that describe the user rather than the device (limits,
 // optional trackers, day-start hour, liquid presets, regions, reminder
 // follow-ups, home timezone). A per-user singleton by convention, stored as a
-// normal synced table (globally-unique `id`, last write wins per row). No
+// synced table (globally-unique `id`). Conflicts resolve per setting by
+// `fieldUpdatedAt` (see apps/web/src/lib/settings-merge.ts). No
 // `timezone` column — UserSettings omits it.
 // ─────────────────────────────────────────────────────────────────────────
 
@@ -914,6 +923,10 @@ export const userSettings = pgTable(
     homeTimezoneConfirmedAt: bigint("home_timezone_confirmed_at", {
       mode: "number",
     }),
+    // When each setting was last changed ({ [key]: Unix ms }), so a
+    // conflict resolves per setting instead of per row. Null on rows written
+    // before it existed: every key then counts as changed at `updatedAt`.
+    fieldUpdatedAt: jsonb("field_updated_at").$type<Record<string, number>>(),
     createdAt: bigint("created_at", { mode: "number" }).notNull(),
     updatedAt: bigint("updated_at", { mode: "number" }).notNull(),
     deletedAt: bigint("deleted_at", { mode: "number" }),

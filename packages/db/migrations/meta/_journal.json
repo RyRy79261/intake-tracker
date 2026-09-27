@@ -169,6 +169,13 @@
       "when": 1790460218954,
       "tag": "0023_intake_sodium_source",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1790468000587,
+      "tag": "0024_leftovers_source_field_stamps",
+      "breakpoints": true
     }
   ]
 }
