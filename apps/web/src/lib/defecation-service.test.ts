@@ -123,3 +123,13 @@ describe("defecation-service", () => {
     });
   });
 });
+
+describe("defecation-service: record source", () => {
+  it("stores the given source and omits it when not given", async () => {
+    const given = await addDefecationRecord(1000, "small", undefined, "manual");
+    const unknown = await addDefecationRecord(2000);
+    if (!given.success || !unknown.success) throw new Error("add failed");
+    expect((await db.defecationRecords.get(given.data.id))?.source).toBe("manual");
+    expect("source" in ((await db.defecationRecords.get(unknown.data.id)) ?? {})).toBe(false);
+  });
+});

@@ -299,6 +299,10 @@ function buildSections(
     {
       title: "Intake",
       // The "salt" record type stores sodium mg, so it exports as "sodium".
+      // INTENDED CHANGE (owner decision, 2026-09 audit): CSVs exported before
+      // v1.36.6 wrote "salt" in this type column; anything parsing old
+      // exports by type must accept both. Do not change it back. JSON
+      // backups still carry the stored key "salt".
       // entered_* is what the user typed for a sodium row (e.g. salt, 2, g);
       // blank when the source is unknown.
       headers: [
@@ -326,9 +330,11 @@ function buildSections(
       ]),
     },
     {
+      // source: "manual" (form) or "voice"; blank for rows written before
+      // it was recorded.
       title: "Weight",
-      headers: ["timestamp", "local_time", "weight_kg", "note"],
-      rows: byTime(records.weight).map((r) => [...when(r.timestamp), r.weight, r.note]),
+      headers: ["timestamp", "local_time", "weight_kg", "note", "source"],
+      rows: byTime(records.weight).map((r) => [...when(r.timestamp), r.weight, r.note, r.source]),
     },
     {
       title: "Blood pressure",
@@ -342,6 +348,7 @@ function buildSections(
         "position",
         "arm",
         "note",
+        "source",
       ],
       rows: byTime(records.bp).map((r) => [
         ...when(r.timestamp),
@@ -352,6 +359,7 @@ function buildSections(
         r.position,
         r.arm,
         r.note,
+        r.source,
       ]),
     },
     {
@@ -363,18 +371,31 @@ function buildSections(
       // Urination volume is never measured: the ml column is the app's fixed
       // estimate for the logged size, and the header says so.
       title: "Urination",
-      headers: ["timestamp", "local_time", "amount_estimate", "estimated_ml (not measured)", "note"],
+      headers: [
+        "timestamp",
+        "local_time",
+        "amount_estimate",
+        "estimated_ml (not measured)",
+        "note",
+        "source",
+      ],
       rows: byTime(records.urination).map((r) => [
         ...when(r.timestamp),
         r.amountEstimate,
         r.amountEstimate ? URINATION_ESTIMATE_ML[r.amountEstimate] : undefined,
         r.note,
+        r.source,
       ]),
     },
     {
       title: "Defecation",
-      headers: ["timestamp", "local_time", "amount_estimate", "note"],
-      rows: byTime(records.defecation).map((r) => [...when(r.timestamp), r.amountEstimate, r.note]),
+      headers: ["timestamp", "local_time", "amount_estimate", "note", "source"],
+      rows: byTime(records.defecation).map((r) => [
+        ...when(r.timestamp),
+        r.amountEstimate,
+        r.note,
+        r.source,
+      ]),
     },
     {
       title: "Caffeine and alcohol",
@@ -427,6 +448,9 @@ function buildSections(
  * heart rate, position and arm, meals keep their grams and notes, and dose
  * logs are included. Empty sections are left out; nothing is downloaded when
  * the range has no data.
+ *
+ * Sodium rows (stored type "salt") export with type "sodium" — an intended
+ * label change; older CSVs say "salt". See the Intake section below.
  */
 export async function exportAllRecordsCSV(range: TimeRange): Promise<void> {
   const resolved = await resolveExportRange(range);

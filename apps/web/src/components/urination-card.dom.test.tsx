@@ -81,6 +81,17 @@ describe("UrinationCard", () => {
     const [saved] = await liveRecords();
     expect(saved!.amountEstimate).toBeUndefined();
     expect(saved!.note).toBe("dark colour");
+    expect(saved!.source).toBe("manual");
+  });
+
+  it("marks a quick-log tap as a manual entry", async () => {
+    const user = userEvent.setup();
+    await renderWithFixtures(<UrinationCard />);
+
+    await user.click(await screen.findByRole("button", { name: "Large" }));
+    await waitFor(async () => expect(await liveRecords()).toHaveLength(1));
+    const [saved] = await liveRecords();
+    expect(saved!.source).toBe("manual");
   });
 
   it("details time resets to now when the panel opens", async () => {

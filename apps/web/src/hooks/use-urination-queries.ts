@@ -11,12 +11,15 @@ import {
   undoDeleteUrinationRecord,
 } from "@/lib/urination-service";
 import { unwrap } from "@intake/core/service";
+import type { HealthRecordSource } from "@/lib/db";
 import { useUndoDeleteMutation } from "@/hooks/use-undo-delete-mutation";
 
 export type AddUrinationParams = {
   timestamp?: number;
   amountEstimate?: string;
   note?: string;
+  /** How it was entered: "manual" (a form) or "voice". */
+  source?: HealthRecordSource;
 };
 
 export type UpdateUrinationParams = {
@@ -49,7 +52,8 @@ export function useAddUrination() {
       unwrap(await addUrinationRecord(
         params.timestamp,
         params.amountEstimate,
-        params.note
+        params.note,
+        params.source
       )),
   });
 }

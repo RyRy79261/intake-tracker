@@ -1,5 +1,10 @@
 import type { UpdateSpec } from "dexie";
-import { db, type WeightRecord, type BloodPressureRecord } from "@/lib/db";
+import {
+  db,
+  type WeightRecord,
+  type BloodPressureRecord,
+  type HealthRecordSource,
+} from "@/lib/db";
 import { ok, err } from "@intake/core/service";
 import type { ServiceResult, PaginatedResult } from "@intake/types/service";
 import { generateId, syncFields } from "@/lib/utils";
@@ -11,7 +16,9 @@ import { schedulePush } from "@/lib/sync-engine";
 export async function addWeightRecord(
   weight: number,
   timestamp?: number,
-  note?: string
+  note?: string,
+  /** How it was entered ("manual" form or "voice"); omitted = unknown. */
+  source?: HealthRecordSource
 ): Promise<ServiceResult<WeightRecord>> {
   try {
     const trimmedNote = note?.trim();
@@ -20,6 +27,7 @@ export async function addWeightRecord(
       weight,
       timestamp: timestamp ?? Date.now(),
       ...(trimmedNote !== undefined && trimmedNote !== "" && { note: trimmedNote }),
+      ...(source !== undefined && { source }),
       ...syncFields(),
     };
 
@@ -112,7 +120,9 @@ export async function addBloodPressureRecord(
   heartRate?: number,
   timestamp?: number,
   note?: string,
-  irregularHeartbeat?: boolean
+  irregularHeartbeat?: boolean,
+  /** How it was entered ("manual" form or "voice"); omitted = unknown. */
+  source?: HealthRecordSource
 ): Promise<ServiceResult<BloodPressureRecord>> {
   try {
     const trimmedNote = note?.trim();
@@ -126,6 +136,7 @@ export async function addBloodPressureRecord(
       arm,
       timestamp: timestamp ?? Date.now(),
       ...(trimmedNote !== undefined && trimmedNote !== "" && { note: trimmedNote }),
+      ...(source !== undefined && { source }),
       ...syncFields(),
     };
 
