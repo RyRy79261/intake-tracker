@@ -2,7 +2,8 @@ import { db, type PhaseSchedule } from "@/lib/db";
 import { ok, err } from "@intake/core/service";
 import type { ServiceResult } from "@intake/types/service";
 import { baseSyncFields } from "@/lib/utils";
-import { getDeviceTimezone, localHHMMStringToUTCMinutes } from "@/lib/timezone";
+import { localHHMMStringToUTCMinutes } from "@/lib/timezone";
+import { getScheduleAnchorTimezone, homeAnchorOrUndefined } from "@/lib/schedule-anchor";
 import { buildAuditEntry } from "@/lib/audit-service";
 import { enqueueInsideTx } from "@/lib/sync-queue";
 import { schedulePush } from "@/lib/sync-engine";
@@ -26,7 +27,7 @@ export async function addSchedule(
   input: Omit<PhaseSchedule, "id" | "createdAt" | "updatedAt" | "deletedAt" | "deviceId" | "enabled">,
 ): Promise<ServiceResult<PhaseSchedule>> {
   try {
-    const tz = getDeviceTimezone();
+    const tz = getScheduleAnchorTimezone();
     const schedule: PhaseSchedule = {
       ...input,
       id: crypto.randomUUID(),
@@ -62,14 +63,20 @@ export async function updateSchedule(
   try {
     const { updatedAt: _ignored, ...finalUpdates } = updates;
 
-    // If the time changed, recompute scheduleTimeUTC in the schedule's own
-    // anchor; re-anchoring to the device zone is the travel prompt's job.
+    // If the time changed, encode it in the home zone when one is set (the
+    // time the user typed is a home time), else in the schedule's own anchor.
+    // Never the away device's zone: re-anchoring to it is the travel
+    // prompt's job.
     if (updates.time) {
       const prev = await db.phaseSchedules.get(id);
       if (prev && prev.time === updates.time) {
         delete finalUpdates.time;
       } else {
-        const anchor = updates.anchorTimezone || prev?.anchorTimezone || getDeviceTimezone();
+        const anchor =
+          updates.anchorTimezone ||
+          homeAnchorOrUndefined() ||
+          prev?.anchorTimezone ||
+          getScheduleAnchorTimezone();
         finalUpdates.scheduleTimeUTC = localHHMMStringToUTCMinutes(updates.time, anchor);
         finalUpdates.anchorTimezone = anchor;
       }
