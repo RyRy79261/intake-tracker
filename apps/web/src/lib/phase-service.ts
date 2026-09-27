@@ -2,7 +2,8 @@ import { db, type MedicationPhase, type PhaseSchedule, type PillShape, type Food
 import { ok, err } from "@intake/core/service";
 import type { ServiceResult } from "@intake/types/service";
 import { syncFields } from "@/lib/utils";
-import { getDeviceTimezone, localHHMMStringToUTCMinutes } from "@/lib/timezone";
+import { localHHMMStringToUTCMinutes } from "@/lib/timezone";
+import { getScheduleAnchorTimezone, homeAnchorOrUndefined } from "@/lib/schedule-anchor";
 import { buildAuditEntry } from "@/lib/audit-service";
 import { buildPhase, buildInventory, buildSchedules, buildTransaction } from "@/lib/medication-builders";
 import { enqueueInsideTx } from "@/lib/sync-queue";
@@ -252,7 +253,7 @@ export async function updatePhase(input: UpdatePhaseInput): Promise<ServiceResul
             keptIds.add(s.id);
           } else {
             const sf = syncFields();
-            const tz = getDeviceTimezone();
+            const tz = getScheduleAnchorTimezone();
             toAdd.push({
               id: crypto.randomUUID(),
               phaseId: id,
@@ -283,10 +284,12 @@ export async function updatePhase(input: UpdatePhaseInput): Promise<ServiceResul
           }
         }
         for (const u of toUpdate) {
-          // Keep the schedule's anchor: re-anchoring to the device zone is
-          // the travel prompt's job. Re-encode only when the time changed.
+          // Re-encode only when the time changed, in the home zone when one
+          // is set, else the schedule's own anchor — never the away device's
+          // zone (re-anchoring to it is the travel prompt's job).
           const prev = existingSchedules.find((s) => s.id === u.id);
-          const anchor = prev?.anchorTimezone || getDeviceTimezone();
+          const anchor =
+            homeAnchorOrUndefined() || prev?.anchorTimezone || getScheduleAnchorTimezone();
           const timeFields = prev && prev.time === u.time
             ? {}
             : {

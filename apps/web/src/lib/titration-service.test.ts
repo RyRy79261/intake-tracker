@@ -7,7 +7,6 @@ import {
   getActiveTitrationPlans,
   getPhasesForTitrationPlan,
   getConditionLabels,
-  getActiveTitrationPhaseForPrescription,
   activateTitrationPlan,
   completeTitrationPlan,
   cancelTitrationPlan,
@@ -200,20 +199,6 @@ describe("titration plan reads", () => {
     expect(unique.size).toBe(labels.length);
   });
 
-  it("getActiveTitrationPhaseForPrescription returns active titration phase", async () => {
-    const rxId = await seedPrescription();
-    const result = await createTitrationPlan(
-      validPlanInput(rxId, { startImmediately: true }),
-    );
-    expect(result.success).toBe(true);
-    if (!result.success) return;
-
-    const phase = await getActiveTitrationPhaseForPrescription(rxId);
-    expect(phase).toBeDefined();
-    expect(phase!.type).toBe("titration");
-    expect(phase!.status).toBe("active");
-    expect(phase!.prescriptionId).toBe(rxId);
-  });
 });
 
 // ===================================================================

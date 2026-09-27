@@ -12,7 +12,8 @@
  * minimal EventTarget DOM, `fetch` stubbed per test.
  */
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
-import { db, type IntakeRecord, type SubstanceRecord } from "@/lib/db";
+import { db, type IntakeRecord, type SubstanceRecord, type UserSettings } from "@/lib/db";
+import { makeUserSettings } from "@/__tests__/fixtures/db-fixtures";
 import { enqueue, writeWithSync } from "@/lib/sync-queue";
 import {
   __resetEngineForTests,
@@ -735,5 +736,112 @@ describe("sync-engine correctness (audit 2026-09)", () => {
 
     const [body] = pushBodies(fetchMock);
     expect(body!.ops[0]!.row).toHaveProperty("note", null);
+  });
+});
+
+// ─── Synced settings: per-setting merge on pull ──────────────────────────
+
+describe("sync-engine pull merges the settings row per setting", () => {
+  const STAMPS = { waterLimit: 1_000, saltLimit: 1_000, dayStartHour: 1_000 };
+
+  function settings(overrides: Partial<UserSettings> = {}): UserSettings {
+    return makeUserSettings({
+      id: "settings-1",
+      createdAt: 1_000,
+      updatedAt: 1_000,
+      fieldUpdatedAt: STAMPS,
+      ...overrides,
+    });
+  }
+
+  function pullReturning(row: UserSettings): Mock {
+    return vi.fn(async () =>
+      jsonResponse({
+        result: { userSettings: { rows: [row], hasMore: false } },
+        serverTime: 10_000_000,
+      }),
+    ) as unknown as Mock;
+  }
+
+  beforeEach(async () => {
+    __resetEngineForTests();
+    await db._syncQueue.clear();
+    await db._syncMeta.clear();
+    await db.userSettings.clear();
+    vi.unstubAllGlobals();
+  });
+
+  afterEach(() => {
+    __resetEngineForTests();
+    vi.unstubAllGlobals();
+  });
+
+  it("keeps a pending local edit to one setting and takes the server's edit to another", async () => {
+    installDom();
+    // This device changed the sodium limit offline at 2000 (queued).
+    await db.userSettings.add(
+      settings({ saltLimit: 1200, updatedAt: 2_000, fieldUpdatedAt: { ...STAMPS, saltLimit: 2_000 } }),
+    );
+    await enqueue("userSettings", "settings-1", "upsert");
+    // Another device changed the water limit at 3000.
+    vi.stubGlobal(
+      "fetch",
+      pullReturning(
+        settings({
+          waterLimit: 2500,
+          updatedAt: 3_000,
+          deviceId: "other",
+          fieldUpdatedAt: { ...STAMPS, waterLimit: 3_000 },
+        }),
+      ),
+    );
+
+    expect(await runPullCycle()).toBe(true);
+
+    const local = await db.userSettings.get("settings-1");
+    expect(local?.waterLimit).toBe(2500);
+    expect(local?.saltLimit).toBe(1200);
+    expect(local?.fieldUpdatedAt).toMatchObject({ waterLimit: 3_000, saltLimit: 2_000 });
+    // Still queued, so the merged row (with this device's edit) is pushed.
+    expect(await db._syncQueue.where("tableName").equals("userSettings").count()).toBe(1);
+  });
+
+  it("takes a server edit carried by an older row", async () => {
+    installDom();
+    await db.userSettings.add(
+      settings({ saltLimit: 1200, updatedAt: 5_000, fieldUpdatedAt: { ...STAMPS, saltLimit: 5_000 } }),
+    );
+    vi.stubGlobal(
+      "fetch",
+      pullReturning(
+        settings({ dayStartHour: 4, updatedAt: 4_000, fieldUpdatedAt: { ...STAMPS, dayStartHour: 4_000 } }),
+      ),
+    );
+
+    await runPullCycle();
+
+    const local = await db.userSettings.get("settings-1");
+    expect(local?.dayStartHour).toBe(4);
+    expect(local?.saltLimit).toBe(1200);
+    // A new version, so the settings mirror applies it.
+    expect(local?.updatedAt).toBeGreaterThan(5_000);
+    // The local edit the server lacks is queued for push.
+    expect(await db._syncQueue.where("tableName").equals("userSettings").count()).toBe(1);
+  });
+
+  it("leaves the local row alone when the server has nothing newer", async () => {
+    installDom();
+    const localRow = settings({
+      saltLimit: 1200,
+      updatedAt: 2_000,
+      fieldUpdatedAt: { ...STAMPS, saltLimit: 2_000 },
+    });
+    await db.userSettings.add(localRow);
+    await enqueue("userSettings", "settings-1", "upsert");
+    vi.stubGlobal("fetch", pullReturning(settings({ updatedAt: 1_500 })));
+
+    await runPullCycle();
+
+    expect(await db.userSettings.get("settings-1")).toEqual(localRow);
   });
 });

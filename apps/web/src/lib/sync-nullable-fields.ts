@@ -99,15 +99,15 @@ export const NULLABLE_SYNC_FIELDS: Record<TableName, readonly string[]> = {
     "groupSource",
     "deletedAt",
   ],
-  weightRecords: ["note", "deletedAt"],
-  bloodPressureRecords: ["heartRate", "irregularHeartbeat", "note", "deletedAt"],
+  weightRecords: ["note", "source", "deletedAt"],
+  bloodPressureRecords: ["heartRate", "irregularHeartbeat", "note", "source", "deletedAt"],
   eatingRecords: ["grams", "note", "groupId", "originalInputText", "groupSource", "deletedAt"],
-  urinationRecords: ["amountEstimate", "note", "deletedAt"],
-  defecationRecords: ["amountEstimate", "note", "deletedAt"],
+  urinationRecords: ["amountEstimate", "note", "source", "deletedAt"],
+  defecationRecords: ["amountEstimate", "note", "source", "deletedAt"],
   auditLogs: ["details", "deletedAt"],
   userProfile: ["aiInsightsConsentAt", "deletedAt"],
   insightReports: ["sources", "mode", "deletedAt"],
-  userSettings: ["homeTimezone", "homeTimezoneConfirmedAt", "deletedAt"],
+  userSettings: ["homeTimezone", "homeTimezoneConfirmedAt", "fieldUpdatedAt", "deletedAt"],
 };
 
 /**

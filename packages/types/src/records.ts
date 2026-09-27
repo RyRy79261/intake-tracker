@@ -106,11 +106,19 @@ export interface AuditLog {
   timezone: string;
 }
 
+/**
+ * How a weight, blood-pressure, urination or defecation record was entered:
+ * "manual" = typed into a form, "voice" = the voice panel. Absent on rows
+ * written before the field existed — read those as unknown.
+ */
+export type HealthRecordSource = "manual" | "voice";
+
 export interface WeightRecord {
   id: string;
   weight: number; // in kg
   timestamp: number;
   note?: string;
+  source?: HealthRecordSource; // absent = unknown (older rows)
   createdAt: number;
   updatedAt: number;
   deletedAt: number | null;
@@ -128,6 +136,7 @@ export interface BloodPressureRecord {
   arm: "left" | "right";
   timestamp: number;
   note?: string;
+  source?: HealthRecordSource; // absent = unknown (older rows)
   createdAt: number;
   updatedAt: number;
   deletedAt: number | null;
@@ -155,6 +164,7 @@ export interface UrinationRecord {
   timestamp: number;
   amountEstimate?: string;
   note?: string;
+  source?: HealthRecordSource; // absent = unknown (older rows)
   createdAt: number;
   updatedAt: number;
   deletedAt: number | null;
@@ -167,6 +177,7 @@ export interface DefecationRecord {
   timestamp: number;
   amountEstimate?: string; // "small" | "medium" | "large"
   note?: string;
+  source?: HealthRecordSource; // absent = unknown (older rows)
   createdAt: number;
   updatedAt: number;
   deletedAt: number | null;
@@ -533,6 +544,13 @@ export interface UserSettings {
   // IANA zone the user's dose schedules belong to; null = never confirmed.
   homeTimezone: string | null;
   homeTimezoneConfirmedAt: number | null; // when homeTimezone was last set
+  /**
+   * When each setting was last changed on any device (`{ [key]: Unix ms }`).
+   * Conflicts resolve per setting by these stamps, so two devices editing
+   * different settings both keep their edit. Absent on rows written before
+   * the field existed: every setting then counts as changed at `updatedAt`.
+   */
+  fieldUpdatedAt?: Record<string, number>;
   createdAt: number;
   updatedAt: number;
   deletedAt: number | null;

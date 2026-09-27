@@ -134,6 +134,7 @@ export function WeightCard() {
         weight: parsed.data.weight,
         ...(timestamp !== undefined && { timestamp }),
         ...(trimmedNote !== "" && { note: trimmedNote }),
+        source: "manual",
       });
       toast({
         title: "Weight recorded",

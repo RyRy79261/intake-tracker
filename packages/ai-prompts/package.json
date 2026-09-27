@@ -13,7 +13,8 @@
     "./interaction-check": "./src/interaction-check.ts",
     "./nutrient-analysis": "./src/nutrient-analysis.ts",
     "./titration-warnings": "./src/titration-warnings.ts",
-    "./voice-parse": "./src/voice-parse.ts"
+    "./voice-parse": "./src/voice-parse.ts",
+    "./plain-language": "./src/plain-language.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

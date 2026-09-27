@@ -928,3 +928,145 @@ describe("sync-push-route", () => {
     expect(updateCalls).toHaveLength(0);
   });
 });
+
+// ────────────────────────────────────────────────────────────────────────
+// userSettings: per-setting conflict resolution. Two devices that edit
+// different settings while offline both keep their edit.
+// ────────────────────────────────────────────────────────────────────────
+
+function settingsRow(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "settings-1",
+    waterLimit: 2000,
+    saltLimit: 1500,
+    sugarLimit: 50,
+    potassiumLimit: 3500,
+    waterExtendedBuffer: 500,
+    saltExtendedBuffer: 500,
+    sugarExtendedBuffer: 10,
+    optionalTrackers: { sugar: false, potassium: false },
+    dayStartHour: 2,
+    liquidPresets: [],
+    primaryRegion: "",
+    secondaryRegion: "",
+    reminderFollowUpCount: 2,
+    reminderFollowUpInterval: 10,
+    homeTimezone: null,
+    homeTimezoneConfirmedAt: null,
+    createdAt: 1_000,
+    updatedAt: 1_000,
+    deletedAt: null,
+    deviceId: "dev-A",
+    ...overrides,
+  };
+}
+
+const BASE_STAMPS = {
+  waterLimit: 1_000,
+  saltLimit: 1_000,
+  sugarLimit: 1_000,
+  potassiumLimit: 1_000,
+  waterExtendedBuffer: 1_000,
+  saltExtendedBuffer: 1_000,
+  sugarExtendedBuffer: 1_000,
+  optionalTrackers: 1_000,
+  dayStartHour: 1_000,
+  liquidPresets: 1_000,
+  primaryRegion: 1_000,
+  secondaryRegion: 1_000,
+  reminderFollowUpCount: 1_000,
+  reminderFollowUpInterval: 1_000,
+  homeTimezone: 1_000,
+  homeTimezoneConfirmedAt: 1_000,
+};
+
+describe("sync-push-route: userSettings merges per setting", () => {
+  beforeEach(() => {
+    resetDbState();
+  });
+
+  async function push(row: Record<string, unknown>, queueId = 1) {
+    const { POST } = await import("@/app/api/sync/push/route");
+    const res = await POST(
+      makePushRequest({ ops: [{ queueId, tableName: "userSettings", op: "upsert", row }] }),
+    );
+    expect(res.status).toBe(200);
+    return (await res.json()) as {
+      accepted: { queueId: number; serverUpdatedAt: number }[];
+      rejected: unknown[];
+    };
+  }
+
+  it("an older row's newer edit to a different setting is merged in, not dropped", async () => {
+    // Device A (online) changed the water limit at 3000.
+    existingRows["settings-1"] = {
+      ...settingsRow({
+        waterLimit: 2500,
+        updatedAt: 3_000,
+        fieldUpdatedAt: { ...BASE_STAMPS, waterLimit: 3_000 },
+      }),
+      userId: "user-test",
+    };
+    // Device B changed the sodium limit offline at 2000 and pushes late.
+    const body = await push(
+      settingsRow({
+        saltLimit: 1_200,
+        updatedAt: 2_000,
+        deviceId: "dev-B",
+        fieldUpdatedAt: { ...BASE_STAMPS, saltLimit: 2_000 },
+      }),
+    );
+
+    expect(body.rejected).toEqual([]);
+    expect(insertCalls).toHaveLength(1);
+    const written = insertCalls[0]!.values;
+    expect(written.waterLimit).toBe(2500);
+    expect(written.saltLimit).toBe(1200);
+    expect(written.fieldUpdatedAt).toMatchObject({ waterLimit: 3_000, saltLimit: 2_000 });
+    // Newer than both rows, so both devices pull the merged row.
+    expect(written.updatedAt as number).toBeGreaterThan(3_000);
+    expect(body.accepted).toEqual([{ queueId: 1, serverUpdatedAt: written.updatedAt }]);
+  });
+
+  it("a push whose settings are all older than the server's writes nothing", async () => {
+    existingRows["settings-1"] = {
+      ...settingsRow({
+        waterLimit: 2500,
+        updatedAt: 3_000,
+        fieldUpdatedAt: { ...BASE_STAMPS, waterLimit: 3_000 },
+      }),
+      userId: "user-test",
+    };
+    const body = await push(
+      settingsRow({ waterLimit: 1800, updatedAt: 2_000, fieldUpdatedAt: { ...BASE_STAMPS, waterLimit: 2_000 } }),
+    );
+    expect(insertCalls).toHaveLength(0);
+    expect(body.accepted).toEqual([{ queueId: 1, serverUpdatedAt: 3_000 }]);
+  });
+
+  it("a newer push that only carries its own edits is written as sent", async () => {
+    existingRows["settings-1"] = {
+      ...settingsRow({ fieldUpdatedAt: BASE_STAMPS }),
+      userId: "user-test",
+    };
+    const body = await push(
+      settingsRow({ dayStartHour: 4, updatedAt: 5_000, fieldUpdatedAt: { ...BASE_STAMPS, dayStartHour: 5_000 } }),
+    );
+    expect(insertCalls).toHaveLength(1);
+    expect(insertCalls[0]!.values.dayStartHour).toBe(4);
+    expect(insertCalls[0]!.values.updatedAt).toBe(5_000);
+    expect(body.accepted).toEqual([{ queueId: 1, serverUpdatedAt: 5_000 }]);
+  });
+
+  it("a server row without stamps (pre-migration) resolves like whole-row LWW", async () => {
+    existingRows["settings-1"] = {
+      ...settingsRow({ waterLimit: 2500, updatedAt: 3_000, fieldUpdatedAt: null }),
+      userId: "user-test",
+    };
+    await push(
+      settingsRow({ saltLimit: 1200, updatedAt: 2_000, fieldUpdatedAt: { ...BASE_STAMPS, saltLimit: 2_000 } }),
+    );
+    // The server row's every setting counts as changed at 3000: it wins.
+    expect(insertCalls).toHaveLength(0);
+  });
+});

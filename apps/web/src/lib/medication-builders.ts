@@ -1,6 +1,7 @@
 import { type Prescription, type MedicationPhase, type InventoryItem, type PhaseSchedule, type PillShape, type FoodInstruction, type InventoryTransaction, type CompoundStrength } from "@/lib/db";
 import { syncFields } from "@/lib/utils";
-import { getDeviceTimezone, localHHMMStringToUTCMinutes } from "@/lib/timezone";
+import { localHHMMStringToUTCMinutes } from "@/lib/timezone";
+import { getScheduleAnchorTimezone } from "@/lib/schedule-anchor";
 
 export function buildPrescription(
   input: { genericName: string; indication: string; notes?: string; contraindications?: string[]; warnings?: string[]; compounds?: CompoundStrength[] },
@@ -81,7 +82,7 @@ export function buildSchedules(
   now: number,
 ): PhaseSchedule[] {
   const sf = syncFields();
-  const tz = getDeviceTimezone();
+  const tz = getScheduleAnchorTimezone();
   return schedules.map(s => ({
     id: crypto.randomUUID(),
     phaseId,
