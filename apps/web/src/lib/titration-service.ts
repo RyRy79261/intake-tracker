@@ -125,23 +125,6 @@ export async function getConditionLabels(): Promise<string[]> {
   return Array.from(labels).sort();
 }
 
-/**
- * Check if a prescription has an active titration phase override.
- * Returns the titration phase if one exists, undefined otherwise.
- */
-export async function getActiveTitrationPhaseForPrescription(
-  prescriptionId: string,
-): Promise<MedicationPhase | undefined> {
-  const phases = await db.medicationPhases
-    .where("prescriptionId")
-    .equals(prescriptionId)
-    .toArray();
-  return phases.find(
-    (p) => p.type === "titration" && p.status === "active" && p.titrationPlanId && isLive(p),
-  );
-}
-
-
 // ---------------------------------------------------------------------------
 // Regimen helpers
 // ---------------------------------------------------------------------------

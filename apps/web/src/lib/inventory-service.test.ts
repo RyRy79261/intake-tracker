@@ -7,7 +7,6 @@ import {
 } from "@/__tests__/fixtures/db-fixtures";
 import {
   getCurrentStock,
-  recalculateStockForItem,
   recalculateAllStock,
   getInventoryForPrescription,
   getActiveInventoryForPrescription,
@@ -75,28 +74,6 @@ describe("getCurrentStock", () => {
     // The soft-deleted -1 no longer counts: a deleted row must not come back.
     const stock = await getCurrentStock(item.id);
     expect(stock).toBe(30);
-  });
-});
-
-describe("recalculateStockForItem", () => {
-  it("returns derived stock and updates the cached currentStock field", async () => {
-    const rx = makePrescription({ id: "rx-recalc-1" });
-    const item = makeInventoryItem(rx.id, { id: "item-recalc-1", currentStock: 0 });
-    await db.prescriptions.add(rx);
-    await db.inventoryItems.add(item);
-
-    await db.inventoryTransactions.bulkAdd([
-      makeInventoryTransaction(item.id, { id: "txn-r1", type: "initial", amount: 30 }),
-      makeInventoryTransaction(item.id, { id: "txn-r2", type: "refill", amount: 10 }),
-      makeInventoryTransaction(item.id, { id: "txn-r3", type: "consumed", amount: -2 }),
-    ]);
-
-    const result = await recalculateStockForItem(item.id);
-    expect(result).toBe(38);
-
-    // Verify the cached field was updated
-    const updated = await db.inventoryItems.get(item.id);
-    expect(updated!.currentStock).toBe(38);
   });
 });
 
