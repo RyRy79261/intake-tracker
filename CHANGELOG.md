@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.37.0](https://github.com/RyRy79261/intake-tracker/compare/v1.36.6...v1.37.0) (2026-09-26)
+
+
+### Features
+
+* **ai:** write medicine lookup results in ASD-STE100 plain English ([#365](https://github.com/RyRy79261/intake-tracker/issues/365)) ([882eb07](https://github.com/RyRy79261/intake-tracker/commit/882eb0760982151967c8cc39cbd61ed7569fac2a))
+
 ## [1.36.6](https://github.com/RyRy79261/intake-tracker/compare/v1.36.5...v1.36.6) (2026-09-26)
 
 
