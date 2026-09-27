@@ -110,7 +110,16 @@ export default function RootLayout({
           <a className="recover" href="/recover.html">Reset app</a>
         </div>
         <script dangerouslySetInnerHTML={{ __html: BOOT_SHELL_FALLBACK_TIMER }} />
-        <SerwistProvider swUrl="/serwist/sw.js" disable={swDisabled} options={{ scope: "/" }}>
+        {/* reloadOnOnline defaults to true in @serwist/turbopack: every
+            offline -> online flip reloaded the page and threw away whatever the
+            user was typing. The app is offline-first (Dexie + sync engine), so
+            nothing needs a reload to recover. */}
+        <SerwistProvider
+          swUrl="/serwist/sw.js"
+          disable={swDisabled}
+          reloadOnOnline={false}
+          options={{ scope: "/" }}
+        >
           <Providers>
             <main className="min-h-screen overflow-x-clip bg-linear-to-b from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900">
               <div className="container mx-auto max-w-lg px-4 pt-6">
