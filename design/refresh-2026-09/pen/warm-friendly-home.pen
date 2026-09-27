@@ -1,0 +1,1920 @@
+{
+  "version": "2.13",
+  "children": [
+    {
+      "type": "frame",
+      "id": "l9rgap",
+      "x": 0,
+      "y": 0,
+      "name": "Home Dashboard",
+      "clip": true,
+      "width": 390,
+      "fill": "$page-bg",
+      "layout": "vertical",
+      "children": [
+        {
+          "type": "frame",
+          "id": "QbIt9",
+          "name": "Status Bar",
+          "width": "fill_container",
+          "height": 62,
+          "padding": [
+            0,
+            20
+          ],
+          "justifyContent": "space_between",
+          "alignItems": "center",
+          "children": [
+            {
+              "type": "text",
+              "id": "VaPb0",
+              "name": "Time",
+              "fill": "$text-primary",
+              "content": "9:41",
+              "fontFamily": "Inter",
+              "fontSize": 15,
+              "fontWeight": "600"
+            },
+            {
+              "type": "frame",
+              "id": "TNhQg",
+              "name": "Status Icons",
+              "gap": 6,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "icon",
+                  "id": "sm51n",
+                  "name": "Signal",
+                  "width": 16,
+                  "height": 16,
+                  "icon": "signal",
+                  "library": "lucide",
+                  "fill": "$text-primary"
+                },
+                {
+                  "type": "icon",
+                  "id": "FvOKu",
+                  "name": "Wifi",
+                  "width": 16,
+                  "height": 16,
+                  "icon": "wifi",
+                  "library": "lucide",
+                  "fill": "$text-primary"
+                },
+                {
+                  "type": "icon",
+                  "id": "W4fv9",
+                  "name": "Battery",
+                  "width": 16,
+                  "height": 16,
+                  "icon": "battery-full",
+                  "library": "lucide",
+                  "fill": "$text-primary"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "aqCfa",
+          "name": "Content",
+          "width": "fill_container",
+          "layout": "vertical",
+          "gap": 16,
+          "padding": [
+            0,
+            16
+          ],
+          "children": [
+            {
+              "type": "frame",
+              "id": "z77z4O",
+              "name": "Header",
+              "width": "fill_container",
+              "justifyContent": "space_between",
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "QFdo4",
+                  "name": "Header Left",
+                  "layout": "vertical",
+                  "gap": 2,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "hkPj1",
+                      "name": "App Title",
+                      "fill": "$text-primary",
+                      "content": "Intake Tracker",
+                      "lineHeight": 1.21,
+                      "fontFamily": "Outfit",
+                      "fontSize": 28,
+                      "fontWeight": "700"
+                    },
+                    {
+                      "type": "text",
+                      "id": "xASDv",
+                      "name": "Date Caption",
+                      "fill": "$text-muted",
+                      "content": "Sunday 27 September",
+                      "lineHeight": 1.38,
+                      "fontFamily": "Figtree",
+                      "fontSize": 13,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "ivQ0E",
+                  "name": "Header Icons",
+                  "gap": 8,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "VKxR9",
+                      "name": "Profile Button",
+                      "width": 36,
+                      "height": 36,
+                      "fill": "$card-surface",
+                      "cornerRadius": 18,
+                      "effect": {
+                        "type": "shadow",
+                        "shadowType": "outer",
+                        "color": "#2A232008",
+                        "offset": {
+                          "x": 0,
+                          "y": 1
+                        },
+                        "blur": 2
+                      },
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "wujMe",
+                          "name": "Profile Icon",
+                          "width": 18,
+                          "height": 18,
+                          "icon": "user",
+                          "library": "lucide",
+                          "fill": "$text-muted"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "J6Elou",
+                      "name": "Medications Button",
+                      "width": 36,
+                      "height": 36,
+                      "fill": "$card-surface",
+                      "cornerRadius": 18,
+                      "effect": {
+                        "type": "shadow",
+                        "shadowType": "outer",
+                        "color": "#2A232008",
+                        "offset": {
+                          "x": 0,
+                          "y": 1
+                        },
+                        "blur": 2
+                      },
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "HW3NU",
+                          "name": "Medications Icon",
+                          "width": 18,
+                          "height": 18,
+                          "icon": "pill",
+                          "library": "lucide",
+                          "fill": "$text-muted"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "wABtN",
+                      "name": "Analytics Button",
+                      "width": 36,
+                      "height": 36,
+                      "fill": "$card-surface",
+                      "cornerRadius": 18,
+                      "effect": {
+                        "type": "shadow",
+                        "shadowType": "outer",
+                        "color": "#2A232008",
+                        "offset": {
+                          "x": 0,
+                          "y": 1
+                        },
+                        "blur": 2
+                      },
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "eNidr",
+                          "name": "Analytics Icon",
+                          "width": 18,
+                          "height": 18,
+                          "icon": "chart-no-axes-column",
+                          "library": "lucide",
+                          "fill": "$text-muted"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "rSa2b",
+                      "name": "Settings Button",
+                      "width": 36,
+                      "height": 36,
+                      "fill": "$card-surface",
+                      "cornerRadius": 18,
+                      "effect": {
+                        "type": "shadow",
+                        "shadowType": "outer",
+                        "color": "#2A232008",
+                        "offset": {
+                          "x": 0,
+                          "y": 1
+                        },
+                        "blur": 2
+                      },
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "KNAFs",
+                          "name": "Settings Icon",
+                          "width": 18,
+                          "height": 18,
+                          "icon": "settings",
+                          "library": "lucide",
+                          "fill": "$text-muted"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "FgapO",
+              "name": "Today Card",
+              "width": "fill_container",
+              "fill": "$card-surface",
+              "cornerRadius": 24,
+              "effect": [
+                {
+                  "type": "shadow",
+                  "shadowType": "outer",
+                  "color": "#2A23200A",
+                  "offset": {
+                    "x": 0,
+                    "y": 1
+                  },
+                  "blur": 2
+                },
+                {
+                  "type": "shadow",
+                  "shadowType": "outer",
+                  "color": "#2A23200F",
+                  "offset": {
+                    "x": 0,
+                    "y": 8
+                  },
+                  "blur": 24
+                }
+              ],
+              "layout": "vertical",
+              "gap": 16,
+              "padding": 20,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "xfyxQ",
+                  "name": "Today Header",
+                  "width": "fill_container",
+                  "gap": 12,
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "LZs5i",
+                      "name": "Today Icon Circle",
+                      "width": 36,
+                      "height": 36,
+                      "fill": "$text-primary",
+                      "cornerRadius": 18,
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "akO0h",
+                          "name": "Today Icon",
+                          "width": 18,
+                          "height": 18,
+                          "icon": "calendar-days",
+                          "library": "lucide",
+                          "fill": "#FBF6EF"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "RszRf",
+                      "name": "Today Title",
+                      "fill": "$text-primary",
+                      "content": "Today",
+                      "fontFamily": "Outfit",
+                      "fontSize": 18,
+                      "fontWeight": "600"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "lmX1F",
+                  "name": "Water Row",
+                  "width": "fill_container",
+                  "gap": 12,
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "ZQKTX",
+                      "name": "Water Icon Wrap",
+                      "width": 28,
+                      "height": 28,
+                      "fill": "$water-50",
+                      "cornerRadius": 14,
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "d6HIv",
+                          "name": "Water Icon",
+                          "width": 14,
+                          "height": 14,
+                          "icon": "droplets",
+                          "library": "lucide",
+                          "fill": "$water-700"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "S8F5A6",
+                      "name": "Water Mid",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 4,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "h7tkGB",
+                          "name": "Water Label",
+                          "fill": "$text-primary",
+                          "content": "Water",
+                          "fontFamily": "Figtree",
+                          "fontSize": 14,
+                          "fontWeight": "500"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "A48W6N",
+                          "name": "Water Track",
+                          "width": "fill_container",
+                          "height": 4,
+                          "fill": "$water-100",
+                          "cornerRadius": 2,
+                          "children": [
+                            {
+                              "type": "rectangle",
+                              "cornerRadius": 2,
+                              "id": "qh8Gp",
+                              "layoutPosition": "absolute",
+                              "x": 0,
+                              "y": 0,
+                              "name": "Water Fill",
+                              "fill": "$water-700",
+                              "width": 187,
+                              "height": 4
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "bDKrT",
+                      "name": "Water Value",
+                      "fill": "$text-muted",
+                      "content": "779 / 1,000 ml",
+                      "fontFamily": "Outfit",
+                      "fontSize": 14,
+                      "fontWeight": "600"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "r7weT",
+                  "name": "Sodium Row",
+                  "width": "fill_container",
+                  "gap": 12,
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "d8GdeC",
+                      "name": "Sodium Icon Wrap",
+                      "width": 28,
+                      "height": 28,
+                      "fill": "$sodium-50",
+                      "cornerRadius": 14,
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "IRnyB",
+                          "name": "Sodium Icon",
+                          "width": 14,
+                          "height": 14,
+                          "icon": "flame",
+                          "library": "lucide",
+                          "fill": "$sodium-700"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "jc10B",
+                      "name": "Sodium Mid",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 4,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "Cn7wa",
+                          "name": "Sodium Label",
+                          "fill": "$text-primary",
+                          "content": "Sodium",
+                          "fontFamily": "Figtree",
+                          "fontSize": 14,
+                          "fontWeight": "500"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "I3Jwx",
+                          "name": "Sodium Track",
+                          "width": "fill_container",
+                          "height": 4,
+                          "fill": "$sodium-100",
+                          "cornerRadius": 2,
+                          "children": [
+                            {
+                              "type": "rectangle",
+                              "cornerRadius": 2,
+                              "id": "Dz89u",
+                              "layoutPosition": "absolute",
+                              "x": 0,
+                              "y": 0,
+                              "name": "Sodium Fill",
+                              "fill": "$sodium-700",
+                              "width": 98,
+                              "height": 4
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "kr7h7",
+                      "name": "Sodium Value",
+                      "fill": "$text-muted",
+                      "content": "620 / 1,500 mg",
+                      "fontFamily": "Outfit",
+                      "fontSize": 14,
+                      "fontWeight": "600"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "b4kJ6",
+                  "name": "Sugar Row",
+                  "width": "fill_container",
+                  "gap": 12,
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "WABvU",
+                      "name": "Sugar Icon Wrap",
+                      "width": 28,
+                      "height": 28,
+                      "fill": "$sugar-50",
+                      "cornerRadius": 14,
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "gy6EC",
+                          "name": "Sugar Icon",
+                          "width": 14,
+                          "height": 14,
+                          "icon": "candy",
+                          "library": "lucide",
+                          "fill": "$sugar-700"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "w83Tw",
+                      "name": "Sugar Mid",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 4,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "nK93L",
+                          "name": "Sugar Label",
+                          "fill": "$text-primary",
+                          "content": "Sugar",
+                          "fontFamily": "Figtree",
+                          "fontSize": 14,
+                          "fontWeight": "500"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "IRGoL",
+                          "name": "Sugar Track",
+                          "width": "fill_container",
+                          "height": 4,
+                          "fill": "$sugar-100",
+                          "cornerRadius": 2,
+                          "children": [
+                            {
+                              "type": "rectangle",
+                              "cornerRadius": 2,
+                              "id": "TeM0K",
+                              "layoutPosition": "absolute",
+                              "x": 0,
+                              "y": 0,
+                              "name": "Sugar Fill",
+                              "fill": "$sugar-700",
+                              "width": 0,
+                              "height": 4
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "J2KiF5",
+                      "name": "Sugar Value",
+                      "fill": "$text-muted",
+                      "content": "0 / 30 g",
+                      "fontFamily": "Outfit",
+                      "fontSize": 14,
+                      "fontWeight": "600"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "rvTDl",
+                  "name": "Caffeine Row",
+                  "width": "fill_container",
+                  "gap": 12,
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "YV09k",
+                      "name": "Caffeine Icon Wrap",
+                      "width": 28,
+                      "height": 28,
+                      "fill": "$caffeine-50",
+                      "cornerRadius": 14,
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "rpr4V",
+                          "name": "Caffeine Icon",
+                          "width": 14,
+                          "height": 14,
+                          "icon": "coffee",
+                          "library": "lucide",
+                          "fill": "$caffeine-700"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "nkEVT",
+                      "name": "Caffeine Mid",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 4,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "trR4F",
+                          "name": "Caffeine Label",
+                          "fill": "$text-primary",
+                          "content": "Caffeine",
+                          "fontFamily": "Figtree",
+                          "fontSize": 14,
+                          "fontWeight": "500"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "m0XxkB",
+                      "name": "Caffeine Value",
+                      "fill": "$text-muted",
+                      "content": "63 mg",
+                      "fontFamily": "Outfit",
+                      "fontSize": 14,
+                      "fontWeight": "600"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "LxWWM",
+                  "name": "Alcohol Row",
+                  "width": "fill_container",
+                  "gap": 12,
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "dla4w",
+                      "name": "Alcohol Icon Wrap",
+                      "width": 28,
+                      "height": 28,
+                      "fill": "$alcohol-50",
+                      "cornerRadius": 14,
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "m88oK",
+                          "name": "Alcohol Icon",
+                          "width": 14,
+                          "height": 14,
+                          "icon": "wine",
+                          "library": "lucide",
+                          "fill": "$alcohol-700"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "P6Hpr2",
+                      "name": "Alcohol Mid",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 4,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "WuHCn",
+                          "name": "Alcohol Label",
+                          "fill": "$text-primary",
+                          "content": "Alcohol",
+                          "fontFamily": "Figtree",
+                          "fontSize": 14,
+                          "fontWeight": "500"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "sPQtS",
+                      "name": "Alcohol Value",
+                      "fill": "$text-muted",
+                      "content": "0 std drinks",
+                      "fontFamily": "Outfit",
+                      "fontSize": 14,
+                      "fontWeight": "600"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "ZGjOl",
+              "name": "Liquids Card",
+              "width": "fill_container",
+              "fill": "$card-surface",
+              "cornerRadius": 24,
+              "effect": [
+                {
+                  "type": "shadow",
+                  "shadowType": "outer",
+                  "color": "#2A23200A",
+                  "offset": {
+                    "x": 0,
+                    "y": 1
+                  },
+                  "blur": 2
+                },
+                {
+                  "type": "shadow",
+                  "shadowType": "outer",
+                  "color": "#2A23200F",
+                  "offset": {
+                    "x": 0,
+                    "y": 8
+                  },
+                  "blur": 24
+                }
+              ],
+              "layout": "vertical",
+              "gap": 16,
+              "padding": 20,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "twhuU",
+                  "name": "Liquids Header",
+                  "width": "fill_container",
+                  "gap": 12,
+                  "justifyContent": "space_between",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "DvHOM",
+                      "name": "Liquids Header Left",
+                      "gap": 12,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "EdCYR",
+                          "name": "Liquids Icon Circle",
+                          "width": 36,
+                          "height": 36,
+                          "fill": "$water-700",
+                          "cornerRadius": 18,
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "icon",
+                              "id": "Hzg2W",
+                              "name": "Liquids Icon",
+                              "width": 18,
+                              "height": 18,
+                              "icon": "droplets",
+                              "library": "lucide",
+                              "fill": "#FFFFFF"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "gqYz9",
+                          "name": "Liquids Title",
+                          "fill": "$text-primary",
+                          "content": "Liquids",
+                          "fontFamily": "Outfit",
+                          "fontSize": 18,
+                          "fontWeight": "600"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "hhfPo",
+                      "name": "Liquids Readout",
+                      "fill": "$water-700",
+                      "content": "779 of 1,000 ml",
+                      "fontFamily": "Outfit",
+                      "fontSize": 14,
+                      "fontWeight": "600"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "RasHW",
+                  "name": "Segment Track",
+                  "width": "fill_container",
+                  "height": 40,
+                  "fill": "$water-50",
+                  "cornerRadius": 20,
+                  "gap": 4,
+                  "padding": 4,
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "urss6",
+                      "name": "Seg Water",
+                      "width": "fill_container",
+                      "height": "fill_container",
+                      "fill": "$water-700",
+                      "cornerRadius": 16,
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "eZbO5",
+                          "name": "Seg Water Label",
+                          "fill": "#FFFFFF",
+                          "content": "Water",
+                          "fontFamily": "Figtree",
+                          "fontSize": 13,
+                          "fontWeight": "500"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "t3E5X1",
+                      "name": "Seg Beverage",
+                      "width": "fill_container",
+                      "height": "fill_container",
+                      "fill": "#00000000",
+                      "cornerRadius": 16,
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "oj3uJ",
+                          "name": "Seg Beverage Label",
+                          "fill": "$water-700",
+                          "content": "Beverage",
+                          "fontFamily": "Figtree",
+                          "fontSize": 13,
+                          "fontWeight": "500"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "k4KcMU",
+                      "name": "Seg Coffee",
+                      "width": "fill_container",
+                      "height": "fill_container",
+                      "fill": "#00000000",
+                      "cornerRadius": 16,
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "Ev9p9",
+                          "name": "Seg Coffee Label",
+                          "fill": "$water-700",
+                          "content": "Coffee",
+                          "fontFamily": "Figtree",
+                          "fontSize": 13,
+                          "fontWeight": "500"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "ie7Fu",
+                      "name": "Seg Alcohol",
+                      "width": "fill_container",
+                      "height": "fill_container",
+                      "fill": "#00000000",
+                      "cornerRadius": 16,
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "KBZZy",
+                          "name": "Seg Alcohol Label",
+                          "fill": "$water-700",
+                          "content": "Alcohol",
+                          "fontFamily": "Figtree",
+                          "fontSize": 13,
+                          "fontWeight": "500"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "UHJxt",
+                  "name": "Quick Values",
+                  "width": "fill_container",
+                  "gap": 8,
+                  "justifyContent": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "hHkq1",
+                      "name": "Quick 70",
+                      "height": 36,
+                      "fill": "$water-50",
+                      "cornerRadius": 18,
+                      "padding": [
+                        0,
+                        16
+                      ],
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "T5F8p8",
+                          "name": "Quick 70 Label",
+                          "fill": "$water-700",
+                          "content": "70 ml",
+                          "fontFamily": "Outfit",
+                          "fontSize": 14,
+                          "fontWeight": "600"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "DK8jO",
+                      "name": "Quick 100",
+                      "height": 36,
+                      "fill": "$water-50",
+                      "cornerRadius": 18,
+                      "padding": [
+                        0,
+                        16
+                      ],
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "OS6jO",
+                          "name": "Quick 100 Label",
+                          "fill": "$water-700",
+                          "content": "100 ml",
+                          "fontFamily": "Outfit",
+                          "fontSize": 14,
+                          "fontWeight": "600"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "vMegv",
+                      "name": "Quick 150",
+                      "height": 36,
+                      "fill": "$water-50",
+                      "cornerRadius": 18,
+                      "padding": [
+                        0,
+                        16
+                      ],
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "HB2kB",
+                          "name": "Quick 150 Label",
+                          "fill": "$water-700",
+                          "content": "150 ml",
+                          "fontFamily": "Outfit",
+                          "fontSize": 14,
+                          "fontWeight": "600"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "MksuW",
+                      "name": "Quick 200",
+                      "height": 36,
+                      "fill": "$water-50",
+                      "cornerRadius": 18,
+                      "padding": [
+                        0,
+                        16
+                      ],
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "OeVhx",
+                          "name": "Quick 200 Label",
+                          "fill": "$water-700",
+                          "content": "200 ml",
+                          "fontFamily": "Outfit",
+                          "fontSize": 14,
+                          "fontWeight": "600"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "QFrFo",
+                  "name": "Number Entry",
+                  "width": "fill_container",
+                  "gap": 20,
+                  "justifyContent": "center",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "FRBBG",
+                      "name": "Minus Button",
+                      "width": 52,
+                      "height": 52,
+                      "fill": "$water-100",
+                      "cornerRadius": 26,
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "lV8IT",
+                          "name": "Minus Icon",
+                          "width": 22,
+                          "height": 22,
+                          "icon": "minus",
+                          "library": "lucide",
+                          "fill": "$water-700"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "Tb3vu",
+                      "name": "Number Display",
+                      "gap": 6,
+                      "alignItems": "end",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "PT36e",
+                          "name": "Number Value",
+                          "fill": "$text-primary",
+                          "content": "250",
+                          "lineHeight": 1.09,
+                          "fontFamily": "Outfit",
+                          "fontSize": 44,
+                          "fontWeight": "700"
+                        },
+                        {
+                          "type": "text",
+                          "id": "K274J5",
+                          "name": "Number Unit",
+                          "fill": "$text-muted",
+                          "content": "ml",
+                          "fontFamily": "Outfit",
+                          "fontSize": 18,
+                          "fontWeight": "500"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "vlWnK",
+                      "name": "Plus Button",
+                      "width": 52,
+                      "height": 52,
+                      "fill": "$water-100",
+                      "cornerRadius": 26,
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "b7VN4",
+                          "name": "Plus Icon",
+                          "width": 22,
+                          "height": 22,
+                          "icon": "plus",
+                          "library": "lucide",
+                          "fill": "$water-700"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "Z9KkE",
+                  "name": "Log Button",
+                  "width": "fill_container",
+                  "height": 52,
+                  "fill": "$water-700",
+                  "cornerRadius": 26,
+                  "justifyContent": "center",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "P9ullZ",
+                      "name": "Log Button Label",
+                      "fill": "#FFFFFF",
+                      "content": "Log 250 ml",
+                      "fontFamily": "Figtree",
+                      "fontSize": 16,
+                      "fontWeight": "600"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "b7SB6x",
+                  "name": "Recent Section",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 8,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "jfNVM",
+                      "name": "Recent Label",
+                      "fill": "$text-muted",
+                      "content": "Recent",
+                      "fontFamily": "Figtree",
+                      "fontSize": 14,
+                      "fontWeight": "500"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "HQ1kL",
+                      "name": "Recent 08:12",
+                      "width": "fill_container",
+                      "height": 48,
+                      "fill": "$water-50",
+                      "cornerRadius": 16,
+                      "gap": 10,
+                      "padding": [
+                        0,
+                        16
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "T0k0wk",
+                          "name": "Dot 08:12",
+                          "width": 8,
+                          "height": 8,
+                          "fill": "$water-700",
+                          "cornerRadius": 4
+                        },
+                        {
+                          "type": "text",
+                          "id": "wx4bA",
+                          "name": "Val 08:12",
+                          "fill": "$text-primary",
+                          "content": "250 ml",
+                          "fontFamily": "Outfit",
+                          "fontSize": 16,
+                          "fontWeight": "600"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "vts7h",
+                          "name": "Spacer 08:12",
+                          "width": "fill_container",
+                          "height": 1
+                        },
+                        {
+                          "type": "text",
+                          "id": "G0P1d",
+                          "name": "Time 08:12",
+                          "fill": "$text-muted",
+                          "content": "08:12",
+                          "fontFamily": "Figtree",
+                          "fontSize": 14,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "D0Aet",
+                      "name": "Recent 08:05",
+                      "width": "fill_container",
+                      "height": 48,
+                      "fill": "$water-50",
+                      "cornerRadius": 16,
+                      "gap": 10,
+                      "padding": [
+                        0,
+                        16
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "tYWAx",
+                          "name": "Dot 08:05",
+                          "width": 8,
+                          "height": 8,
+                          "fill": "$water-700",
+                          "cornerRadius": 4
+                        },
+                        {
+                          "type": "text",
+                          "id": "Mx2da",
+                          "name": "Val 08:05",
+                          "fill": "$text-primary",
+                          "content": "29 ml",
+                          "fontFamily": "Outfit",
+                          "fontSize": 16,
+                          "fontWeight": "600"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "h04QYt",
+                          "name": "Tag 08:05",
+                          "fill": "$caffeine-50",
+                          "cornerRadius": 12,
+                          "padding": [
+                            4,
+                            10
+                          ],
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "AnoAR",
+                              "name": "Tag Label 08:05",
+                              "fill": "$caffeine-700",
+                              "content": "Espresso",
+                              "fontFamily": "Figtree",
+                              "fontSize": 12,
+                              "fontWeight": "500"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "B3ElU",
+                          "name": "Spacer 08:05",
+                          "width": "fill_container",
+                          "height": 1
+                        },
+                        {
+                          "type": "text",
+                          "id": "NLbSj",
+                          "name": "Time 08:05",
+                          "fill": "$text-muted",
+                          "content": "08:05",
+                          "fontFamily": "Figtree",
+                          "fontSize": 14,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "R7fbJh",
+                      "name": "Recent 07:40",
+                      "width": "fill_container",
+                      "height": 48,
+                      "fill": "$water-50",
+                      "cornerRadius": 16,
+                      "gap": 10,
+                      "padding": [
+                        0,
+                        16
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "F7RQ38",
+                          "name": "Dot 07:40",
+                          "width": 8,
+                          "height": 8,
+                          "fill": "$water-700",
+                          "cornerRadius": 4
+                        },
+                        {
+                          "type": "text",
+                          "id": "kj7kU",
+                          "name": "Val 07:40",
+                          "fill": "$text-primary",
+                          "content": "250 ml",
+                          "fontFamily": "Outfit",
+                          "fontSize": 16,
+                          "fontWeight": "600"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "uCVZR",
+                          "name": "Spacer 07:40",
+                          "width": "fill_container",
+                          "height": 1
+                        },
+                        {
+                          "type": "text",
+                          "id": "VFa1t",
+                          "name": "Time 07:40",
+                          "fill": "$text-muted",
+                          "content": "07:40",
+                          "fontFamily": "Figtree",
+                          "fontSize": 14,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "YrxaO",
+              "name": "Food Card",
+              "width": "fill_container",
+              "fill": "$card-surface",
+              "cornerRadius": 24,
+              "effect": [
+                {
+                  "type": "shadow",
+                  "shadowType": "outer",
+                  "color": "#2A23200A",
+                  "offset": {
+                    "x": 0,
+                    "y": 1
+                  },
+                  "blur": 2
+                },
+                {
+                  "type": "shadow",
+                  "shadowType": "outer",
+                  "color": "#2A23200F",
+                  "offset": {
+                    "x": 0,
+                    "y": 8
+                  },
+                  "blur": 24
+                }
+              ],
+              "layout": "vertical",
+              "gap": 16,
+              "padding": 20,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "yXwqn",
+                  "name": "Food Header",
+                  "width": "fill_container",
+                  "gap": 12,
+                  "justifyContent": "space_between",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "Hqp0L",
+                      "name": "Food Header Left",
+                      "gap": 12,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "V0jxX",
+                          "name": "Food Icon Circle",
+                          "width": 36,
+                          "height": 36,
+                          "fill": "$sodium-700",
+                          "cornerRadius": 18,
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "icon",
+                              "id": "d4AJLn",
+                              "name": "Food Icon",
+                              "width": 18,
+                              "height": 18,
+                              "icon": "utensils",
+                              "library": "lucide",
+                              "fill": "#FFFFFF"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "csdW0",
+                          "name": "Food Title",
+                          "fill": "$text-primary",
+                          "content": "Food & sodium",
+                          "fontFamily": "Outfit",
+                          "fontSize": 18,
+                          "fontWeight": "600"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "jS9Jg",
+                      "name": "Food Readout",
+                      "fill": "$sodium-700",
+                      "content": "620 of 1,500 mg",
+                      "fontFamily": "Outfit",
+                      "fontSize": 14,
+                      "fontWeight": "600"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "JAbEd",
+                  "name": "Food Input",
+                  "width": "fill_container",
+                  "height": 48,
+                  "fill": "#F5F0E8",
+                  "cornerRadius": 16,
+                  "gap": 10,
+                  "padding": [
+                    0,
+                    16
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon",
+                      "id": "nbrMW",
+                      "name": "Search Icon",
+                      "width": 18,
+                      "height": 18,
+                      "icon": "search",
+                      "library": "lucide",
+                      "fill": "$text-muted"
+                    },
+                    {
+                      "type": "text",
+                      "id": "xH5rn",
+                      "name": "Input Placeholder",
+                      "fill": "#B0A89E",
+                      "content": "What did you eat?",
+                      "fontFamily": "Figtree",
+                      "fontSize": 16,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "GoC04",
+              "name": "Bottom Spacer",
+              "width": "fill_container",
+              "height": 72
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "OrNLp",
+          "name": "Nav Bar",
+          "width": "fill_container",
+          "padding": [
+            8,
+            8,
+            12,
+            8
+          ],
+          "justifyContent": "center",
+          "children": [
+            {
+              "type": "frame",
+              "id": "Re3b1",
+              "name": "Nav Pill",
+              "width": 366,
+              "height": 56,
+              "fill": "#FFFFFFB3",
+              "cornerRadius": 28,
+              "effect": {
+                "type": "shadow",
+                "shadowType": "outer",
+                "color": "#2A232310",
+                "offset": {
+                  "x": 0,
+                  "y": 4
+                },
+                "blur": 16
+              },
+              "padding": 6,
+              "justifyContent": "space_around",
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "H29F4",
+                  "name": "Nav Liquids",
+                  "width": "fill_container",
+                  "height": "fill_container",
+                  "layout": "vertical",
+                  "gap": 2,
+                  "justifyContent": "center",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "pRHPq",
+                      "name": "Nav Liquids Highlight",
+                      "fill": "$water-100",
+                      "cornerRadius": 16,
+                      "gap": 4,
+                      "padding": [
+                        4,
+                        10
+                      ],
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "Q0rS0",
+                          "name": "Nav Liquids Icon",
+                          "width": 18,
+                          "height": 18,
+                          "icon": "droplets",
+                          "library": "lucide",
+                          "fill": "$water-700"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "t0BhY",
+                      "name": "Nav Liquids Label",
+                      "fill": "$water-700",
+                      "content": "Liquids",
+                      "fontFamily": "Figtree",
+                      "fontSize": 10,
+                      "fontWeight": "500"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "c04uu",
+                  "name": "Nav Food",
+                  "width": "fill_container",
+                  "height": "fill_container",
+                  "layout": "vertical",
+                  "gap": 2,
+                  "justifyContent": "center",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon",
+                      "id": "uWyFj",
+                      "name": "Nav Food Icon",
+                      "width": 20,
+                      "height": 20,
+                      "icon": "utensils",
+                      "library": "lucide",
+                      "fill": "$text-muted"
+                    },
+                    {
+                      "type": "text",
+                      "id": "VTU3i",
+                      "name": "Nav Food Label",
+                      "fill": "$text-muted",
+                      "content": "Food",
+                      "fontFamily": "Figtree",
+                      "fontSize": 10,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "f1VKbq",
+                  "name": "Nav Blood pressure",
+                  "width": "fill_container",
+                  "height": "fill_container",
+                  "layout": "vertical",
+                  "gap": 2,
+                  "justifyContent": "center",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon",
+                      "id": "f0OXv",
+                      "name": "Nav Blood pressure Icon",
+                      "width": 20,
+                      "height": 20,
+                      "icon": "heart-pulse",
+                      "library": "lucide",
+                      "fill": "$text-muted"
+                    },
+                    {
+                      "type": "text",
+                      "id": "Qo6AL",
+                      "name": "Nav Blood pressure Label",
+                      "fill": "$text-muted",
+                      "content": "Blood pressure",
+                      "fontFamily": "Figtree",
+                      "fontSize": 10,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "a5zzum",
+                  "name": "Nav Weight",
+                  "width": "fill_container",
+                  "height": "fill_container",
+                  "layout": "vertical",
+                  "gap": 2,
+                  "justifyContent": "center",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon",
+                      "id": "igq7k",
+                      "name": "Nav Weight Icon",
+                      "width": 20,
+                      "height": 20,
+                      "icon": "scale",
+                      "library": "lucide",
+                      "fill": "$text-muted"
+                    },
+                    {
+                      "type": "text",
+                      "id": "yNfbf",
+                      "name": "Nav Weight Label",
+                      "fill": "$text-muted",
+                      "content": "Weight",
+                      "fontFamily": "Figtree",
+                      "fontSize": 10,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "v61sX",
+                  "name": "Nav Urination",
+                  "width": "fill_container",
+                  "height": "fill_container",
+                  "layout": "vertical",
+                  "gap": 2,
+                  "justifyContent": "center",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon",
+                      "id": "PgNWl",
+                      "name": "Nav Urination Icon",
+                      "width": 20,
+                      "height": 20,
+                      "icon": "droplet",
+                      "library": "lucide",
+                      "fill": "$text-muted"
+                    },
+                    {
+                      "type": "text",
+                      "id": "FRrD2",
+                      "name": "Nav Urination Label",
+                      "fill": "$text-muted",
+                      "content": "Urination",
+                      "fontFamily": "Figtree",
+                      "fontSize": 10,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "OrD36",
+                  "name": "Nav Defecation",
+                  "width": "fill_container",
+                  "height": "fill_container",
+                  "layout": "vertical",
+                  "gap": 2,
+                  "justifyContent": "center",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon",
+                      "id": "EHEVr",
+                      "name": "Nav Defecation Icon",
+                      "width": 20,
+                      "height": 20,
+                      "icon": "circle-dot",
+                      "library": "lucide",
+                      "fill": "$text-muted"
+                    },
+                    {
+                      "type": "text",
+                      "id": "sSE13",
+                      "name": "Nav Defecation Label",
+                      "fill": "$text-muted",
+                      "content": "Defecation",
+                      "fontFamily": "Figtree",
+                      "fontSize": 10,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "variables": {
+    "alcohol-100": {
+      "type": "color",
+      "value": "#F0D5F1"
+    },
+    "alcohol-50": {
+      "type": "color",
+      "value": "#F9EEF9"
+    },
+    "alcohol-700": {
+      "type": "color",
+      "value": "#86198F"
+    },
+    "bp-100": {
+      "type": "color",
+      "value": "#FAD1D8"
+    },
+    "bp-50": {
+      "type": "color",
+      "value": "#FDEEF0"
+    },
+    "bp-700": {
+      "type": "color",
+      "value": "#BE123C"
+    },
+    "caffeine-100": {
+      "type": "color",
+      "value": "#F3E2B8"
+    },
+    "caffeine-50": {
+      "type": "color",
+      "value": "#FBF4E4"
+    },
+    "caffeine-700": {
+      "type": "color",
+      "value": "#92400E"
+    },
+    "card-surface": {
+      "type": "color",
+      "value": "#FFFFFF"
+    },
+    "defecation-100": {
+      "type": "color",
+      "value": "#E4DAD1"
+    },
+    "defecation-50": {
+      "type": "color",
+      "value": "#F4F0EC"
+    },
+    "defecation-700": {
+      "type": "color",
+      "value": "#6B5B4E"
+    },
+    "hairline": {
+      "type": "color",
+      "value": "#EDE3D6"
+    },
+    "medication-100": {
+      "type": "color",
+      "value": "#C4EAE5"
+    },
+    "medication-50": {
+      "type": "color",
+      "value": "#E7F6F4"
+    },
+    "medication-700": {
+      "type": "color",
+      "value": "#0F766E"
+    },
+    "page-bg": {
+      "type": "color",
+      "value": "#FBF6EF"
+    },
+    "sodium-100": {
+      "type": "color",
+      "value": "#FBE3BD"
+    },
+    "sodium-50": {
+      "type": "color",
+      "value": "#FDF3E3"
+    },
+    "sodium-700": {
+      "type": "color",
+      "value": "#B45309"
+    },
+    "status-approaching": {
+      "type": "color",
+      "value": "#D97706"
+    },
+    "status-danger": {
+      "type": "color",
+      "value": "#B91C1C"
+    },
+    "status-over": {
+      "type": "color",
+      "value": "#C2410C"
+    },
+    "sugar-100": {
+      "type": "color",
+      "value": "#FAD3E3"
+    },
+    "sugar-50": {
+      "type": "color",
+      "value": "#FDEEF4"
+    },
+    "sugar-700": {
+      "type": "color",
+      "value": "#BE185D"
+    },
+    "text-muted": {
+      "type": "color",
+      "value": "#7A6E66"
+    },
+    "text-primary": {
+      "type": "color",
+      "value": "#2A2320"
+    },
+    "urination-100": {
+      "type": "color",
+      "value": "#DDD3FA"
+    },
+    "urination-50": {
+      "type": "color",
+      "value": "#F2EEFD"
+    },
+    "urination-700": {
+      "type": "color",
+      "value": "#6D28D9"
+    },
+    "water-100": {
+      "type": "color",
+      "value": "#CFE8F6"
+    },
+    "water-50": {
+      "type": "color",
+      "value": "#EAF5FB"
+    },
+    "water-700": {
+      "type": "color",
+      "value": "#0B6FA4"
+    },
+    "weight-100": {
+      "type": "color",
+      "value": "#C9EDDD"
+    },
+    "weight-50": {
+      "type": "color",
+      "value": "#E9F7F1"
+    },
+    "weight-700": {
+      "type": "color",
+      "value": "#047857"
+    }
+  }
+}

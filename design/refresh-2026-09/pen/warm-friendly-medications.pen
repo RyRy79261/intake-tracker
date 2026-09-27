@@ -1,0 +1,1720 @@
+{
+  "version": "2.13",
+  "children": [
+    {
+      "type": "frame",
+      "id": "zUZo6",
+      "x": 0,
+      "y": 0,
+      "name": "Medications Screen",
+      "clip": true,
+      "width": 390,
+      "fill": "$page-bg",
+      "layout": "vertical",
+      "children": [
+        {
+          "type": "frame",
+          "id": "o95AF",
+          "name": "Status Bar",
+          "width": "fill_container",
+          "height": 62,
+          "padding": [
+            0,
+            20
+          ],
+          "justifyContent": "space_between",
+          "alignItems": "center",
+          "children": [
+            {
+              "type": "text",
+              "id": "g09O3S",
+              "name": "Time",
+              "fill": "$text-primary",
+              "content": "9:41",
+              "fontFamily": "Inter",
+              "fontSize": 15,
+              "fontWeight": "600"
+            },
+            {
+              "type": "frame",
+              "id": "xkSfO",
+              "name": "Status Icons",
+              "gap": 6,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "icon",
+                  "id": "Ilt5a",
+                  "name": "Signal",
+                  "width": 16,
+                  "height": 16,
+                  "icon": "signal",
+                  "library": "lucide",
+                  "fill": "$text-primary"
+                },
+                {
+                  "type": "icon",
+                  "id": "jURvL",
+                  "name": "Wifi",
+                  "width": 16,
+                  "height": 16,
+                  "icon": "wifi",
+                  "library": "lucide",
+                  "fill": "$text-primary"
+                },
+                {
+                  "type": "icon",
+                  "id": "KWKst",
+                  "name": "Battery",
+                  "width": 16,
+                  "height": 16,
+                  "icon": "battery-full",
+                  "library": "lucide",
+                  "fill": "$text-primary"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "qdcIa",
+          "name": "Content",
+          "width": "fill_container",
+          "layout": "vertical",
+          "gap": 20,
+          "padding": [
+            0,
+            20
+          ],
+          "children": [
+            {
+              "type": "frame",
+              "id": "jwF3g",
+              "name": "Header Row",
+              "width": "fill_container",
+              "justifyContent": "space_between",
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "retTx",
+                  "name": "Screen Title",
+                  "fill": "$text-primary",
+                  "content": "Medications",
+                  "lineHeight": 1.21,
+                  "fontFamily": "$font-display",
+                  "fontSize": 28,
+                  "fontWeight": "700"
+                },
+                {
+                  "type": "frame",
+                  "id": "YG2DU",
+                  "name": "Nav Icons",
+                  "gap": 4,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "Yr0rV",
+                      "name": "Nav Home",
+                      "width": 40,
+                      "height": 40,
+                      "cornerRadius": 20,
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "HQqT3",
+                          "name": "Home Icon",
+                          "width": 20,
+                          "height": 20,
+                          "icon": "droplets",
+                          "library": "lucide",
+                          "fill": "$text-muted"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "du7IA",
+                      "name": "Nav Meds",
+                      "width": 40,
+                      "height": 40,
+                      "fill": "$med-700",
+                      "cornerRadius": 20,
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "tRiKs",
+                          "name": "Meds Icon",
+                          "width": 20,
+                          "height": 20,
+                          "icon": "pill",
+                          "library": "lucide",
+                          "fill": "#FFFFFF"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "yjfaX",
+                      "name": "Nav History",
+                      "width": 40,
+                      "height": 40,
+                      "cornerRadius": 20,
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "f9xz3",
+                          "name": "History Icon",
+                          "width": 20,
+                          "height": 20,
+                          "icon": "chart-column",
+                          "library": "lucide",
+                          "fill": "$text-muted"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "WMmuO",
+                      "name": "Nav Settings",
+                      "width": 40,
+                      "height": 40,
+                      "cornerRadius": 20,
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "mPGLr",
+                          "name": "Settings Icon",
+                          "width": 20,
+                          "height": 20,
+                          "icon": "settings",
+                          "library": "lucide",
+                          "fill": "$text-muted"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "Aql6i",
+              "name": "Tab Bar",
+              "width": "fill_container",
+              "fill": "$med-50",
+              "cornerRadius": 26,
+              "gap": 4,
+              "padding": 4,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "N0gmeJ",
+                  "name": "Tab Schedule",
+                  "width": "fill_container",
+                  "height": 36,
+                  "fill": "$med-700",
+                  "cornerRadius": 18,
+                  "justifyContent": "center",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "ytpy9",
+                      "name": "Schedule Label",
+                      "fill": "#FFFFFF",
+                      "content": "Schedule",
+                      "fontFamily": "$font-body",
+                      "fontSize": 13,
+                      "fontWeight": "600"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "C7ctw5",
+                  "name": "Tab Prescriptions",
+                  "width": "fill_container",
+                  "height": 36,
+                  "cornerRadius": 18,
+                  "justifyContent": "center",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "Eu0EB",
+                      "name": "Prescriptions Label",
+                      "fill": "$text-muted",
+                      "content": "Prescriptions",
+                      "fontFamily": "$font-body",
+                      "fontSize": 13,
+                      "fontWeight": "500"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "MpvJU",
+                  "name": "Tab Stock",
+                  "width": "fill_container",
+                  "height": 36,
+                  "cornerRadius": 18,
+                  "justifyContent": "center",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "nno3y",
+                      "name": "Stock Label",
+                      "fill": "$text-muted",
+                      "content": "Stock",
+                      "fontFamily": "$font-body",
+                      "fontSize": 13,
+                      "fontWeight": "500"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "C8lQ8h",
+                  "name": "Tab Titrations",
+                  "width": "fill_container",
+                  "height": 36,
+                  "cornerRadius": 18,
+                  "justifyContent": "center",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "wfrwG",
+                      "name": "Titrations Label",
+                      "fill": "$text-muted",
+                      "content": "Titrations",
+                      "fontFamily": "$font-body",
+                      "fontSize": 13,
+                      "fontWeight": "500"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "rKUd9",
+              "name": "Week Strip",
+              "width": "fill_container",
+              "gap": 4,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "icon",
+                  "id": "VbydH",
+                  "name": "Prev Week",
+                  "width": 20,
+                  "height": 20,
+                  "icon": "chevron-left",
+                  "library": "lucide",
+                  "fill": "$text-muted"
+                },
+                {
+                  "type": "frame",
+                  "id": "wN8PN",
+                  "name": "Day Sun",
+                  "width": "fill_container",
+                  "height": 56,
+                  "fill": "$med-700",
+                  "cornerRadius": 16,
+                  "layout": "vertical",
+                  "gap": 2,
+                  "justifyContent": "center",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "AYNf1",
+                      "name": "Sun Label",
+                      "fill": "#FFFFFFCC",
+                      "content": "Sun",
+                      "fontFamily": "$font-body",
+                      "fontSize": 11,
+                      "fontWeight": "500"
+                    },
+                    {
+                      "type": "text",
+                      "id": "eRc0a",
+                      "name": "Sun Number",
+                      "fill": "#FFFFFF",
+                      "content": "27",
+                      "fontFamily": "$font-display",
+                      "fontSize": 16,
+                      "fontWeight": "600"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "TT8nL",
+                  "name": "Day Mon",
+                  "width": "fill_container",
+                  "height": 56,
+                  "cornerRadius": 16,
+                  "layout": "vertical",
+                  "gap": 2,
+                  "justifyContent": "center",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "UwNbd",
+                      "name": "Mon Label",
+                      "fill": "$text-muted",
+                      "content": "Mon",
+                      "fontFamily": "$font-body",
+                      "fontSize": 11,
+                      "fontWeight": "500"
+                    },
+                    {
+                      "type": "text",
+                      "id": "QgcLx",
+                      "name": "Mon Number",
+                      "fill": "$text-primary",
+                      "content": "28",
+                      "fontFamily": "$font-display",
+                      "fontSize": 16,
+                      "fontWeight": "600"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "qxJ48",
+                  "name": "Day Tue",
+                  "width": "fill_container",
+                  "height": 56,
+                  "cornerRadius": 16,
+                  "layout": "vertical",
+                  "gap": 2,
+                  "justifyContent": "center",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "YdcNP",
+                      "name": "Tue Label",
+                      "fill": "$text-muted",
+                      "content": "Tue",
+                      "fontFamily": "$font-body",
+                      "fontSize": 11,
+                      "fontWeight": "500"
+                    },
+                    {
+                      "type": "text",
+                      "id": "u56YOu",
+                      "name": "Tue Number",
+                      "fill": "$text-primary",
+                      "content": "29",
+                      "fontFamily": "$font-display",
+                      "fontSize": 16,
+                      "fontWeight": "600"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "eNpbk",
+                  "name": "Day Wed",
+                  "width": "fill_container",
+                  "height": 56,
+                  "cornerRadius": 16,
+                  "layout": "vertical",
+                  "gap": 2,
+                  "justifyContent": "center",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "BxF0v",
+                      "name": "Wed Label",
+                      "fill": "$text-muted",
+                      "content": "Wed",
+                      "fontFamily": "$font-body",
+                      "fontSize": 11,
+                      "fontWeight": "500"
+                    },
+                    {
+                      "type": "text",
+                      "id": "N0QgrZ",
+                      "name": "Wed Number",
+                      "fill": "$text-primary",
+                      "content": "30",
+                      "fontFamily": "$font-display",
+                      "fontSize": 16,
+                      "fontWeight": "600"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "fGECe",
+                  "name": "Day Thu",
+                  "width": "fill_container",
+                  "height": 56,
+                  "cornerRadius": 16,
+                  "layout": "vertical",
+                  "gap": 2,
+                  "justifyContent": "center",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "fe0n5",
+                      "name": "Thu Label",
+                      "fill": "$text-muted",
+                      "content": "Thu",
+                      "fontFamily": "$font-body",
+                      "fontSize": 11,
+                      "fontWeight": "500"
+                    },
+                    {
+                      "type": "text",
+                      "id": "Lx5tk",
+                      "name": "Thu Number",
+                      "fill": "$text-primary",
+                      "content": "1",
+                      "fontFamily": "$font-display",
+                      "fontSize": 16,
+                      "fontWeight": "600"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "Uw4Y0",
+                  "name": "Day Fri",
+                  "width": "fill_container",
+                  "height": 56,
+                  "cornerRadius": 16,
+                  "layout": "vertical",
+                  "gap": 2,
+                  "justifyContent": "center",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "WAGpO",
+                      "name": "Fri Label",
+                      "fill": "$text-muted",
+                      "content": "Fri",
+                      "fontFamily": "$font-body",
+                      "fontSize": 11,
+                      "fontWeight": "500"
+                    },
+                    {
+                      "type": "text",
+                      "id": "s2sWN",
+                      "name": "Fri Number",
+                      "fill": "$text-primary",
+                      "content": "2",
+                      "fontFamily": "$font-display",
+                      "fontSize": 16,
+                      "fontWeight": "600"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "r3GojJ",
+                  "name": "Day Sat",
+                  "width": "fill_container",
+                  "height": 56,
+                  "cornerRadius": 16,
+                  "layout": "vertical",
+                  "gap": 2,
+                  "justifyContent": "center",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "v5PzWh",
+                      "name": "Sat Label",
+                      "fill": "$text-muted",
+                      "content": "Sat",
+                      "fontFamily": "$font-body",
+                      "fontSize": 11,
+                      "fontWeight": "500"
+                    },
+                    {
+                      "type": "text",
+                      "id": "NPfcU",
+                      "name": "Sat Number",
+                      "fill": "$text-primary",
+                      "content": "3",
+                      "fontFamily": "$font-display",
+                      "fontSize": 16,
+                      "fontWeight": "600"
+                    }
+                  ]
+                },
+                {
+                  "type": "icon",
+                  "id": "Dqjgp",
+                  "name": "Next Week",
+                  "width": 20,
+                  "height": 20,
+                  "icon": "chevron-right",
+                  "library": "lucide",
+                  "fill": "$text-muted"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "bNyiB",
+              "name": "Summary Card",
+              "width": "fill_container",
+              "fill": "$card-surface",
+              "cornerRadius": 24,
+              "effect": [
+                {
+                  "type": "shadow",
+                  "shadowType": "outer",
+                  "color": "#2A23200A",
+                  "offset": {
+                    "x": 0,
+                    "y": 1
+                  },
+                  "blur": 2
+                },
+                {
+                  "type": "shadow",
+                  "shadowType": "outer",
+                  "color": "#2A23200F",
+                  "offset": {
+                    "x": 0,
+                    "y": 8
+                  },
+                  "blur": 24
+                }
+              ],
+              "padding": 16,
+              "justifyContent": "space_between",
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "DilH4",
+                  "name": "Summary Text",
+                  "layout": "vertical",
+                  "gap": 2,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "mjxJj",
+                      "name": "Summary Title",
+                      "fill": "$text-muted",
+                      "content": "Today's progress",
+                      "fontFamily": "$font-body",
+                      "fontSize": 14,
+                      "fontWeight": "500"
+                    },
+                    {
+                      "type": "text",
+                      "id": "C9hYtQ",
+                      "name": "Summary Value",
+                      "fill": "$text-primary",
+                      "content": "2 of 5 doses taken",
+                      "fontFamily": "$font-display",
+                      "fontSize": 18,
+                      "fontWeight": "600"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "MLkIS",
+                  "name": "Ring Wrap",
+                  "width": 48,
+                  "height": 48,
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "ellipse",
+                      "id": "aklZo",
+                      "x": 0,
+                      "y": 0,
+                      "name": "Ring Track",
+                      "innerRadius": 0.75,
+                      "fill": "$med-100",
+                      "width": 48,
+                      "height": 48
+                    },
+                    {
+                      "type": "ellipse",
+                      "id": "sAOta",
+                      "x": 0,
+                      "y": 0,
+                      "name": "Ring Progress",
+                      "innerRadius": 0.75,
+                      "startAngle": 90,
+                      "sweepAngle": -144,
+                      "fill": "$med-700",
+                      "width": 48,
+                      "height": 48
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "B4FVvI",
+              "name": "Morning Section",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 10,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "pxSbu",
+                  "name": "Morning Header",
+                  "width": "fill_container",
+                  "gap": 8,
+                  "padding": [
+                    0,
+                    4
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "b0Yku",
+                      "name": "Morning Label",
+                      "fill": "$text-muted",
+                      "content": "MORNING",
+                      "fontFamily": "$font-body",
+                      "fontSize": 13,
+                      "fontWeight": "600"
+                    },
+                    {
+                      "type": "rectangle",
+                      "id": "km3AB",
+                      "name": "Morning Divider",
+                      "fill": "$hairline",
+                      "width": "fill_container",
+                      "height": 1
+                    },
+                    {
+                      "type": "text",
+                      "id": "bU202",
+                      "name": "Morning Time",
+                      "fill": "$text-muted",
+                      "content": "08:00",
+                      "fontFamily": "$font-body",
+                      "fontSize": 13,
+                      "fontWeight": "500"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "zPdNl",
+                  "name": "Bisoprolol Row",
+                  "width": "fill_container",
+                  "fill": "$card-surface",
+                  "cornerRadius": 24,
+                  "effect": [
+                    {
+                      "type": "shadow",
+                      "shadowType": "outer",
+                      "color": "#2A23200A",
+                      "offset": {
+                        "x": 0,
+                        "y": 1
+                      },
+                      "blur": 2
+                    },
+                    {
+                      "type": "shadow",
+                      "shadowType": "outer",
+                      "color": "#2A23200F",
+                      "offset": {
+                        "x": 0,
+                        "y": 8
+                      },
+                      "blur": 24
+                    }
+                  ],
+                  "gap": 12,
+                  "padding": 16,
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "yCjBD",
+                      "name": "Bisoprolol Icon Circle",
+                      "width": 36,
+                      "height": 36,
+                      "fill": "$med-700",
+                      "cornerRadius": 18,
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "S6akJ",
+                          "name": "Bisoprolol Icon",
+                          "width": 18,
+                          "height": 18,
+                          "icon": "pill",
+                          "library": "lucide",
+                          "fill": "#FFFFFF"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "ppTYy",
+                      "name": "Bisoprolol Info",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 2,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "CFrCO",
+                          "name": "Bisoprolol Name",
+                          "fill": "$text-primary",
+                          "content": "Bisoprolol 2.5 mg",
+                          "fontFamily": "$font-body",
+                          "fontSize": 15,
+                          "fontWeight": "600"
+                        },
+                        {
+                          "type": "text",
+                          "id": "Rmvp5",
+                          "name": "Bisoprolol Dose",
+                          "fill": "$text-muted",
+                          "content": "1 tablet",
+                          "fontFamily": "$font-body",
+                          "fontSize": 13
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "hs4rt",
+                      "name": "Bisoprolol State",
+                      "gap": 6,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "W8afh",
+                          "name": "Bisoprolol Check",
+                          "width": 28,
+                          "height": 28,
+                          "fill": "$med-700",
+                          "cornerRadius": 14,
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "icon",
+                              "id": "H9huY",
+                              "name": "Bisoprolol Check Icon",
+                              "width": 16,
+                              "height": 16,
+                              "icon": "check",
+                              "library": "lucide",
+                              "fill": "#FFFFFF"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "u27usj",
+                          "name": "Bisoprolol Time Taken",
+                          "fill": "$med-700",
+                          "content": "08:04",
+                          "fontFamily": "$font-body",
+                          "fontSize": 12,
+                          "fontWeight": "500"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "zxNYu",
+                  "name": "Clopidogrel Row",
+                  "width": "fill_container",
+                  "fill": "$card-surface",
+                  "cornerRadius": 24,
+                  "effect": [
+                    {
+                      "type": "shadow",
+                      "shadowType": "outer",
+                      "color": "#2A23200A",
+                      "offset": {
+                        "x": 0,
+                        "y": 1
+                      },
+                      "blur": 2
+                    },
+                    {
+                      "type": "shadow",
+                      "shadowType": "outer",
+                      "color": "#2A23200F",
+                      "offset": {
+                        "x": 0,
+                        "y": 8
+                      },
+                      "blur": 24
+                    }
+                  ],
+                  "gap": 12,
+                  "padding": 16,
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "X5yEby",
+                      "name": "Clopidogrel Icon Circle",
+                      "width": 36,
+                      "height": 36,
+                      "fill": "$med-700",
+                      "cornerRadius": 18,
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "wAa82",
+                          "name": "Clopidogrel Icon",
+                          "width": 18,
+                          "height": 18,
+                          "icon": "pill",
+                          "library": "lucide",
+                          "fill": "#FFFFFF"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "q2Gro",
+                      "name": "Clopidogrel Info",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 2,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "gpMwM",
+                          "name": "Clopidogrel Name",
+                          "fill": "$text-primary",
+                          "content": "Clopidogrel 75 mg",
+                          "fontFamily": "$font-body",
+                          "fontSize": 15,
+                          "fontWeight": "600"
+                        },
+                        {
+                          "type": "text",
+                          "id": "Cyzh6",
+                          "name": "Clopidogrel Dose",
+                          "fill": "$text-muted",
+                          "content": "1 tablet",
+                          "fontFamily": "$font-body",
+                          "fontSize": 13
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "hbk8j",
+                      "name": "Clopidogrel State",
+                      "gap": 6,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "yFuhY",
+                          "name": "Clopidogrel Check",
+                          "width": 28,
+                          "height": 28,
+                          "fill": "$med-700",
+                          "cornerRadius": 14,
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "icon",
+                              "id": "UamI4",
+                              "name": "Clopidogrel Check Icon",
+                              "width": 16,
+                              "height": 16,
+                              "icon": "check",
+                              "library": "lucide",
+                              "fill": "#FFFFFF"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "OfUHM",
+                          "name": "Clopidogrel Time Taken",
+                          "fill": "$med-700",
+                          "content": "08:04",
+                          "fontFamily": "$font-body",
+                          "fontSize": 12,
+                          "fontWeight": "500"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "f3efZ",
+              "name": "Noon Section",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 10,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "hGayd",
+                  "name": "Noon Header",
+                  "width": "fill_container",
+                  "gap": 8,
+                  "padding": [
+                    0,
+                    4
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "HqY8n",
+                      "name": "Noon Label",
+                      "fill": "$text-muted",
+                      "content": "NOON",
+                      "fontFamily": "$font-body",
+                      "fontSize": 13,
+                      "fontWeight": "600"
+                    },
+                    {
+                      "type": "rectangle",
+                      "id": "BSv8o",
+                      "name": "Noon Divider",
+                      "fill": "$hairline",
+                      "width": "fill_container",
+                      "height": 1
+                    },
+                    {
+                      "type": "text",
+                      "id": "s8RTHS",
+                      "name": "Noon Time",
+                      "fill": "$text-muted",
+                      "content": "13:00",
+                      "fontFamily": "$font-body",
+                      "fontSize": 13,
+                      "fontWeight": "500"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "YLVA3",
+                  "name": "Spironolactone Row",
+                  "width": "fill_container",
+                  "fill": "$card-surface",
+                  "cornerRadius": 24,
+                  "effect": [
+                    {
+                      "type": "shadow",
+                      "shadowType": "outer",
+                      "color": "#2A23200A",
+                      "offset": {
+                        "x": 0,
+                        "y": 1
+                      },
+                      "blur": 2
+                    },
+                    {
+                      "type": "shadow",
+                      "shadowType": "outer",
+                      "color": "#2A23200F",
+                      "offset": {
+                        "x": 0,
+                        "y": 8
+                      },
+                      "blur": 24
+                    }
+                  ],
+                  "layout": "vertical",
+                  "gap": 12,
+                  "padding": 16,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "LjxZk",
+                      "name": "Spiro Top",
+                      "width": "fill_container",
+                      "gap": 12,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "K2yH2",
+                          "name": "Spiro Icon Circle",
+                          "width": 36,
+                          "height": 36,
+                          "fill": "$med-700",
+                          "cornerRadius": 18,
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "icon",
+                              "id": "S8TI1C",
+                              "name": "Spiro Icon",
+                              "width": 18,
+                              "height": 18,
+                              "icon": "pill",
+                              "library": "lucide",
+                              "fill": "#FFFFFF"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "DB9Kw",
+                          "name": "Spiro Info",
+                          "width": "fill_container",
+                          "layout": "vertical",
+                          "gap": 2,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "K8GNi",
+                              "name": "Spiro Name",
+                              "fill": "$text-primary",
+                              "content": "Spironolactone 25 mg",
+                              "fontFamily": "$font-body",
+                              "fontSize": 15,
+                              "fontWeight": "600"
+                            },
+                            {
+                              "type": "text",
+                              "id": "K5bp7x",
+                              "name": "Spiro Dose",
+                              "fill": "$text-muted",
+                              "content": "1 tablet",
+                              "fontFamily": "$font-body",
+                              "fontSize": 13
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "FY2dN",
+                          "name": "Due Badge",
+                          "fill": "#D976061A",
+                          "cornerRadius": 12,
+                          "padding": [
+                            4,
+                            10
+                          ],
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "avyIR",
+                              "name": "Due Text",
+                              "fill": "$amber-warn",
+                              "content": "Due now",
+                              "fontFamily": "$font-body",
+                              "fontSize": 11,
+                              "fontWeight": "600"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "RLtX4",
+                      "name": "Spiro Actions",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "GLFdD",
+                          "name": "Take Button",
+                          "width": "fill_container",
+                          "height": 44,
+                          "fill": "$med-700",
+                          "cornerRadius": 22,
+                          "gap": 6,
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "icon",
+                              "id": "UgmCO",
+                              "name": "Take Icon",
+                              "width": 18,
+                              "height": 18,
+                              "icon": "check",
+                              "library": "lucide",
+                              "fill": "#FFFFFF"
+                            },
+                            {
+                              "type": "text",
+                              "id": "ugt4X",
+                              "name": "Take Label",
+                              "fill": "#FFFFFF",
+                              "content": "Take",
+                              "fontFamily": "$font-body",
+                              "fontSize": 15,
+                              "fontWeight": "600"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "u9qR5E",
+                          "name": "Skip Button",
+                          "width": "fill_container",
+                          "height": 44,
+                          "fill": "$med-100",
+                          "cornerRadius": 22,
+                          "gap": 6,
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "icon",
+                              "id": "gyadI",
+                              "name": "Skip Icon",
+                              "width": 18,
+                              "height": 18,
+                              "icon": "x",
+                              "library": "lucide",
+                              "fill": "$med-700"
+                            },
+                            {
+                              "type": "text",
+                              "id": "QWZM0",
+                              "name": "Skip Label",
+                              "fill": "$med-700",
+                              "content": "Skip",
+                              "fontFamily": "$font-body",
+                              "fontSize": 15,
+                              "fontWeight": "600"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "NBeVt",
+              "name": "Evening Section",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 10,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "dX9Iv",
+                  "name": "Evening Header",
+                  "width": "fill_container",
+                  "gap": 8,
+                  "padding": [
+                    0,
+                    4
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "A5OMG7",
+                      "name": "Evening Label",
+                      "fill": "$text-muted",
+                      "content": "EVENING",
+                      "fontFamily": "$font-body",
+                      "fontSize": 13,
+                      "fontWeight": "600"
+                    },
+                    {
+                      "type": "rectangle",
+                      "id": "yLwIS",
+                      "name": "Evening Divider",
+                      "fill": "$hairline",
+                      "width": "fill_container",
+                      "height": 1
+                    },
+                    {
+                      "type": "text",
+                      "id": "deDHn",
+                      "name": "Evening Time",
+                      "fill": "$text-muted",
+                      "content": "19:00",
+                      "fontFamily": "$font-body",
+                      "fontSize": 13,
+                      "fontWeight": "500"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "aFOM0",
+                  "name": "Atorvastatin Row",
+                  "width": "fill_container",
+                  "fill": "$card-surface",
+                  "cornerRadius": 24,
+                  "effect": [
+                    {
+                      "type": "shadow",
+                      "shadowType": "outer",
+                      "color": "#2A23200A",
+                      "offset": {
+                        "x": 0,
+                        "y": 1
+                      },
+                      "blur": 2
+                    },
+                    {
+                      "type": "shadow",
+                      "shadowType": "outer",
+                      "color": "#2A23200F",
+                      "offset": {
+                        "x": 0,
+                        "y": 8
+                      },
+                      "blur": 24
+                    }
+                  ],
+                  "layout": "vertical",
+                  "gap": 10,
+                  "padding": 16,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "W4RaWF",
+                      "name": "Ator Top",
+                      "width": "fill_container",
+                      "gap": 12,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "TAOyQ",
+                          "name": "Ator Icon Circle",
+                          "width": 36,
+                          "height": 36,
+                          "fill": "$med-700",
+                          "cornerRadius": 18,
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "icon",
+                              "id": "Rejks",
+                              "name": "Ator Icon",
+                              "width": 18,
+                              "height": 18,
+                              "icon": "pill",
+                              "library": "lucide",
+                              "fill": "#FFFFFF"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "G6k4Le",
+                          "name": "Ator Info",
+                          "width": "fill_container",
+                          "layout": "vertical",
+                          "gap": 2,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "CvjBy",
+                              "name": "Ator Name",
+                              "fill": "$text-primary",
+                              "content": "Atorvastatin 40 mg",
+                              "fontFamily": "$font-body",
+                              "fontSize": 15,
+                              "fontWeight": "600"
+                            },
+                            {
+                              "type": "text",
+                              "id": "xTl5M",
+                              "name": "Ator Dose",
+                              "fill": "$text-muted",
+                              "content": "1 tablet",
+                              "fontFamily": "$font-body",
+                              "fontSize": 13
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "h2bHt",
+                          "name": "Ator State",
+                          "gap": 4,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "icon",
+                              "id": "y9ZB6",
+                              "name": "Ator Clock",
+                              "width": 16,
+                              "height": 16,
+                              "icon": "clock-3",
+                              "library": "lucide",
+                              "fill": "$text-muted"
+                            },
+                            {
+                              "type": "text",
+                              "id": "gkTD7",
+                              "name": "Ator Upcoming",
+                              "fill": "$text-muted",
+                              "content": "19:00",
+                              "fontFamily": "$font-body",
+                              "fontSize": 12,
+                              "fontWeight": "500"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "TQmVY",
+                      "name": "Low Stock Badge",
+                      "fill": "#C2410C1A",
+                      "cornerRadius": 12,
+                      "gap": 6,
+                      "padding": [
+                        6,
+                        12
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "e20WsW",
+                          "name": "Stock Icon",
+                          "width": 14,
+                          "height": 14,
+                          "icon": "triangle-alert",
+                          "library": "lucide",
+                          "fill": "$clay-over"
+                        },
+                        {
+                          "type": "text",
+                          "id": "WwOIa",
+                          "name": "Stock Text",
+                          "fill": "$clay-over",
+                          "content": "Low stock – 4 days left",
+                          "fontFamily": "$font-body",
+                          "fontSize": 12,
+                          "fontWeight": "600"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "v5iO0z",
+              "name": "Bedtime Section",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 10,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "uckhb",
+                  "name": "Bedtime Header",
+                  "width": "fill_container",
+                  "gap": 8,
+                  "padding": [
+                    0,
+                    4
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "Bc0yc",
+                      "name": "Bedtime Label",
+                      "fill": "$text-muted",
+                      "content": "BEDTIME",
+                      "fontFamily": "$font-body",
+                      "fontSize": 13,
+                      "fontWeight": "600"
+                    },
+                    {
+                      "type": "rectangle",
+                      "id": "pbuto",
+                      "name": "Bedtime Divider",
+                      "fill": "$hairline",
+                      "width": "fill_container",
+                      "height": 1
+                    },
+                    {
+                      "type": "text",
+                      "id": "hkPbT",
+                      "name": "Bedtime Time",
+                      "fill": "$text-muted",
+                      "content": "22:00",
+                      "fontFamily": "$font-body",
+                      "fontSize": 13,
+                      "fontWeight": "500"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "sIMjw",
+                  "name": "Melatonin Row",
+                  "width": "fill_container",
+                  "fill": "$card-surface",
+                  "cornerRadius": 24,
+                  "effect": [
+                    {
+                      "type": "shadow",
+                      "shadowType": "outer",
+                      "color": "#2A23200A",
+                      "offset": {
+                        "x": 0,
+                        "y": 1
+                      },
+                      "blur": 2
+                    },
+                    {
+                      "type": "shadow",
+                      "shadowType": "outer",
+                      "color": "#2A23200F",
+                      "offset": {
+                        "x": 0,
+                        "y": 8
+                      },
+                      "blur": 24
+                    }
+                  ],
+                  "gap": 12,
+                  "padding": 16,
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "e2IMn",
+                      "name": "Mel Icon Circle",
+                      "width": 36,
+                      "height": 36,
+                      "fill": "$med-700",
+                      "cornerRadius": 18,
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "bQuYL",
+                          "name": "Mel Icon",
+                          "width": 18,
+                          "height": 18,
+                          "icon": "pill",
+                          "library": "lucide",
+                          "fill": "#FFFFFF"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "R5KSNi",
+                      "name": "Mel Info",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 2,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "P2X9iy",
+                          "name": "Mel Name",
+                          "fill": "$text-primary",
+                          "content": "Melatonin 2 mg",
+                          "fontFamily": "$font-body",
+                          "fontSize": 15,
+                          "fontWeight": "600"
+                        },
+                        {
+                          "type": "text",
+                          "id": "rfHLS",
+                          "name": "Mel Dose",
+                          "fill": "$text-muted",
+                          "content": "1 tablet",
+                          "fontFamily": "$font-body",
+                          "fontSize": 13
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "z9Tx1I",
+                      "name": "Mel State",
+                      "gap": 4,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "NpeYY",
+                          "name": "Mel Clock",
+                          "width": 16,
+                          "height": 16,
+                          "icon": "clock-3",
+                          "library": "lucide",
+                          "fill": "$text-muted"
+                        },
+                        {
+                          "type": "text",
+                          "id": "Ne7eV",
+                          "name": "Mel Upcoming",
+                          "fill": "$text-muted",
+                          "content": "22:00",
+                          "fontFamily": "$font-body",
+                          "fontSize": 12,
+                          "fontWeight": "500"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "khdg9",
+          "layoutPosition": "absolute",
+          "x": 314,
+          "y": 888,
+          "name": "FAB",
+          "width": 56,
+          "height": 56,
+          "fill": "$med-700",
+          "cornerRadius": 28,
+          "effect": [
+            {
+              "type": "shadow",
+              "shadowType": "outer",
+              "color": "#0F766E40",
+              "offset": {
+                "x": 0,
+                "y": 4
+              },
+              "blur": 16
+            },
+            {
+              "type": "shadow",
+              "shadowType": "outer",
+              "color": "#0F766E20",
+              "offset": {
+                "x": 0,
+                "y": 1
+              },
+              "blur": 3
+            }
+          ],
+          "justifyContent": "center",
+          "alignItems": "center",
+          "children": [
+            {
+              "type": "icon",
+              "id": "R1VtxL",
+              "name": "FAB Icon",
+              "width": 24,
+              "height": 24,
+              "icon": "plus",
+              "library": "lucide",
+              "fill": "#FFFFFF"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "variables": {
+    "amber-warn": {
+      "type": "color",
+      "value": "#D97706"
+    },
+    "card-surface": {
+      "type": "color",
+      "value": "#FFFFFF"
+    },
+    "clay-over": {
+      "type": "color",
+      "value": "#C2410C"
+    },
+    "font-body": {
+      "type": "string",
+      "value": "Figtree"
+    },
+    "font-display": {
+      "type": "string",
+      "value": "Outfit"
+    },
+    "hairline": {
+      "type": "color",
+      "value": "#EDE3D6"
+    },
+    "med-100": {
+      "type": "color",
+      "value": "#C4EAE5"
+    },
+    "med-50": {
+      "type": "color",
+      "value": "#E7F6F4"
+    },
+    "med-700": {
+      "type": "color",
+      "value": "#0F766E"
+    },
+    "page-bg": {
+      "type": "color",
+      "value": "#FBF6EF"
+    },
+    "text-muted": {
+      "type": "color",
+      "value": "#7A6E66"
+    },
+    "text-primary": {
+      "type": "color",
+      "value": "#2A2320"
+    }
+  }
+}
