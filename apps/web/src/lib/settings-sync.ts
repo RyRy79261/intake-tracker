@@ -475,6 +475,16 @@ export function installSettingsSync(): () => void {
           dirty.add(key as SyncedSettingKey);
         }
       }
+      // A setting the row predates cannot have been written by it, so any
+      // edit of it recorded here never reached the table.
+      for (const key of SETTINGS_ADDED_AFTER_ROWS) {
+        if (
+          editedAt[key] !== undefined &&
+          !Object.prototype.hasOwnProperty.call(row, key)
+        ) {
+          dirty.add(key);
+        }
+      }
       // adopt() keeps a copy of the local values it replaces.
       adopt(row);
       if (dirty.size > 0) await writeCurrent();

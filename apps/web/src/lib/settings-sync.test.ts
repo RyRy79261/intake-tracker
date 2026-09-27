@@ -322,6 +322,25 @@ describe("settings-sync (audit state-settings-cache#2)", () => {
     expect(row.fieldUpdatedAt!.weekStartsOn).toBe(row.updatedAt);
   });
 
+  it("writes a week start chosen last session over a row without one", async () => {
+    // The app closed after this device picked Sunday but before the table
+    // write; the row still predates the setting.
+    const now = Date.now();
+    const { weekStartsOn: _drop, ...legacy } = remoteRow({ updatedAt: now - 120_000 });
+    void _drop;
+    await db.userSettings.put(legacy as UserSettings);
+    useSettingsStore.setState({ weekStartsOn: 0 });
+    localStorage.setItem(SETTINGS_EDITED_AT_KEY, JSON.stringify({ weekStartsOn: now - 60_000 }));
+
+    dispose = installSettingsSync();
+    await settle();
+
+    const row = (await getActiveUserSettings())!;
+    expect(row.weekStartsOn).toBe(0);
+    expect(row.fieldUpdatedAt!.weekStartsOn).toBeGreaterThan(SEED_UPDATED_AT);
+    expect(useSettingsStore.getState().weekStartsOn).toBe(0);
+  });
+
   it("keeps the local week start for a row without one or with a malformed one", async () => {
     useSettingsStore.setState({ weekStartsOn: 0 });
     const { weekStartsOn: _drop, ...legacy } = remoteRow({ saltLimit: 2100 });
