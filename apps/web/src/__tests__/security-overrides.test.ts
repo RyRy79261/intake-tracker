@@ -83,7 +83,16 @@ describe("pnpm overrides stay within the resolved major", () => {
  */
 const FIXED_ADVISORIES: Array<[string, string, string, string]> = [
   ["brace-expansion", "0.0.0", "1.1.18", "GHSA-3jxr/mh99/rgw5 (1.x)"],
-  ["brace-expansion", "3.0.0", "5.0.9", "GHSA-3jxr/mh99/rgw5 (5.x)"],
+  // Bounding the testcontainers/archiver chain back into its declared majors
+  // re-introduced brace-expansion 2.x, minimatch 5.x/9.x and glob 10.x; the
+  // same advisories cover those lines, so guard them too.
+  ["brace-expansion", "2.0.0", "2.1.4", "GHSA-3jxr/mh99/rgw5 (2.x)"],
+  ["brace-expansion", "3.0.0", "5.0.9", "GHSA-3jxr/mh99/rgw5 (3.x-5.x)"],
+  ["minimatch", "0.0.0", "3.1.4", "GHSA-3ppc/7r86/23c5 (3.x)"],
+  ["minimatch", "5.0.0", "5.1.8", "GHSA-3ppc/7r86/23c5 (5.x)"],
+  ["minimatch", "9.0.0", "9.0.7", "GHSA-3ppc/7r86/23c5 (9.x)"],
+  ["minimatch", "10.0.0", "10.2.3", "GHSA-3ppc/7r86/23c5 (10.x)"],
+  ["glob", "10.2.0", "10.5.0", "GHSA-5j98-mcp5-4vw2"],
   ["browserslist", "0.0.0", "4.28.7", "GHSA-73wf-gq98-2v4g / GHSA-c83g-rgw3-j3cx"],
   ["fast-uri", "3.0.0", "3.1.6", "GHSA-5jgf/7p8r/f65p/fph4/jqff/v2hh"],
   ["@simplewebauthn/server", "0.0.0", "13.3.2", "GHSA-6hxq-p678-4hr2"],
