@@ -47,6 +47,7 @@ export type {
   ErrorLogEntry,
   ErrorLogSource,
   FoodInstruction,
+  HealthRecordSource,
   InsightReport,
   IntakeRecord,
   InventoryItem,
