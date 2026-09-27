@@ -225,6 +225,8 @@ export const userSettingsSchema = baseRecordNoTz
     waterLimit: finiteNumber,
     saltLimit: finiteNumber,
     dayStartHour: finiteNumber,
+    // Absent on rows from before the week-start setting existed.
+    weekStartsOn: z.number().int().min(0).max(6).optional(),
     liquidPresets: z.array(z.object({ id: z.string(), name: z.string() }).passthrough()),
     // Per-setting change stamps; absent on rows from older app versions.
     fieldUpdatedAt: z.record(z.string(), finiteNumber).nullable().optional(),

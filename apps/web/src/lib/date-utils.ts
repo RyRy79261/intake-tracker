@@ -81,25 +81,15 @@ export function toLocalDateKey(value: Date | number = new Date()): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-/**
- * First day of a displayed week (1 = Monday, JS `getDay()` numbering). One
- * convention for every weekly view: the dashboard's weekly grid, the
- * medications week strip and every day picker start on Monday. Stored
- * `daysOfWeek` stay Sunday-indexed (0 = Sunday); only the display order moves.
- */
-export const WEEK_STARTS_ON: number = 1;
-
-/** Sunday-indexed weekdays (0 = Sunday) in display order, first day first. */
-export const WEEK_DAY_ORDER: readonly number[] = Array.from(
-  { length: 7 },
-  (_, i) => (WEEK_STARTS_ON + i) % 7,
-);
-
-/** Sunday-indexed weekdays sorted into display order (Monday first). */
-export function sortDaysForDisplay(days: readonly number[]): number[] {
-  const pos = (d: number) => (d - WEEK_STARTS_ON + 7) % 7;
-  return [...days].sort((a, b) => pos(a) - pos(b));
-}
+// Week order: the first day is the user's synced `weekStartsOn` setting
+// (default Monday). See lib/week-start.ts.
+export {
+  DEFAULT_WEEK_STARTS_ON,
+  normalizeWeekStartsOn,
+  weekDayPosition,
+  weekDayOrder,
+  sortDaysForDisplay,
+} from "@/lib/week-start";
 
 export type TimeFormat = "12h" | "24h";
 

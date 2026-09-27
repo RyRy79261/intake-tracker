@@ -829,6 +829,32 @@ describe("sync-engine pull merges the settings row per setting", () => {
     expect(await db._syncQueue.where("tableName").equals("userSettings").count()).toBe(1);
   });
 
+  it("takes a week start chosen on another device and keeps a local limit edit", async () => {
+    installDom();
+    await db.userSettings.add(
+      settings({ saltLimit: 1200, updatedAt: 2_000, fieldUpdatedAt: { ...STAMPS, saltLimit: 2_000 } }),
+    );
+    await enqueue("userSettings", "settings-1", "upsert");
+    vi.stubGlobal(
+      "fetch",
+      pullReturning(
+        settings({
+          weekStartsOn: 0,
+          updatedAt: 3_000,
+          deviceId: "other",
+          fieldUpdatedAt: { ...STAMPS, weekStartsOn: 3_000 },
+        }),
+      ),
+    );
+
+    await runPullCycle();
+
+    const local = await db.userSettings.get("settings-1");
+    expect(local?.weekStartsOn).toBe(0);
+    expect(local?.saltLimit).toBe(1200);
+    expect(local?.fieldUpdatedAt).toMatchObject({ weekStartsOn: 3_000, saltLimit: 2_000 });
+  });
+
   it("leaves the local row alone when the server has nothing newer", async () => {
     installDom();
     const localRow = settings({

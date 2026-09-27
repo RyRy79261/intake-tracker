@@ -37,7 +37,7 @@ const DEAD_KEYS = [
 
 describe("settings migrations", () => {
   it("constant matches the version migrate brings state up to", () => {
-    expect(SETTINGS_PERSIST_VERSION).toBe(17);
+    expect(SETTINGS_PERSIST_VERSION).toBe(18);
   });
 
   // A user who never changed a setting must end up exactly where a fresh
@@ -48,6 +48,17 @@ describe("settings migrations", () => {
       expect(hydrate({}, version)).toEqual(freshDefaults());
     },
   );
+
+  it("starts the week on Monday for installs saved before the setting existed", () => {
+    const migrated = migrateSettings({ dayStartHour: 4 }, 17) as unknown as Record<string, unknown>;
+    expect(migrated.weekStartsOn).toBe(1);
+    expect(migrated.dayStartHour).toBe(4);
+  });
+
+  it("keeps a valid week start and replaces a malformed one on upgrade", () => {
+    expect(hydrate({ weekStartsOn: 0 }, 17).weekStartsOn).toBe(0);
+    expect(hydrate({ weekStartsOn: 9 }, 17).weekStartsOn).toBe(1);
+  });
 
   it("moves installs still on the old 8 / 3 shake defaults to the current 10 / 5", () => {
     const state = hydrate({ shakeThreshold: 8, shakeRequiredJolts: 3 }, 16);
@@ -100,6 +111,27 @@ describe("settings migrations", () => {
     const state = hydrate({ primaryRegion: stored, secondaryRegion: stored }, 16);
     expect(state.primaryRegion).toBe(expected);
     expect(state.secondaryRegion).toBe(expected);
+  });
+});
+
+describe("weekStartsOn", () => {
+  beforeEach(() => {
+    useSettingsStore.setState(useSettingsStore.getInitialState());
+  });
+
+  it("defaults to Monday", () => {
+    expect(useSettingsStore.getInitialState().weekStartsOn).toBe(1);
+  });
+
+  it("stores a chosen weekday and ignores anything outside 0-6", () => {
+    useSettingsStore.getState().setWeekStartsOn(0);
+    expect(useSettingsStore.getState().weekStartsOn).toBe(0);
+    useSettingsStore.getState().setWeekStartsOn(6);
+    expect(useSettingsStore.getState().weekStartsOn).toBe(6);
+    useSettingsStore.getState().setWeekStartsOn(7);
+    useSettingsStore.getState().setWeekStartsOn(-1);
+    useSettingsStore.getState().setWeekStartsOn(2.5);
+    expect(useSettingsStore.getState().weekStartsOn).toBe(6);
   });
 });
 

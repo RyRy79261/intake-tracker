@@ -24,6 +24,18 @@ describe("TextMetrics", () => {
     expect(screen.getByText("This Week (Mon-Sun)")).toBeInTheDocument();
   });
 
+  it("labels the week from the chosen first day", async () => {
+    await renderWithFixtures(<TextMetrics />, { settings: { weekStartsOn: 0 } });
+    expect(await screen.findByText("This Week (Sun-Sat)")).toBeInTheDocument();
+  });
+
+  it("orders the day headers from the chosen first day", async () => {
+    await renderWithFixtures(<TextMetrics />, { settings: { weekStartsOn: 6 } });
+    expect(await screen.findByText("This Week (Sat-Fri)")).toBeInTheDocument();
+    const headers = screen.getAllByTestId("week-day-header").map((h) => h.textContent);
+    expect(headers).toEqual(["S", "S", "M", "T", "W", "T", "F"]);
+  });
+
   it("reflects today's seeded water intake", async () => {
     await renderWithFixtures(<TextMetrics />, {
       seed: {
@@ -154,7 +166,7 @@ describe("weekly bucketing", () => {
     // Wed 21 Oct 2026, 12:00 local; the week (Mon-Sun) is 19-25 Oct and
     // clocks go back on Sunday 25 Oct, so the last logical day is 25h long.
     const now = new Date(2026, 9, 21, 12, 0);
-    const week = getLogicalWeek(now, 2);
+    const week = getLogicalWeek(now, 2, 1);
 
     expect(week.dayKeys[0]).toBe("2026-10-19");
     expect(week.dayKeys[6]).toBe("2026-10-25");
@@ -180,15 +192,42 @@ describe("weekly bucketing", () => {
 
   it("uses the same Monday week start as the medications week strip", () => {
     const now = new Date(2026, 8, 26, 9, 0); // Sat 26 Sep 2026
-    const week = getLogicalWeek(now, 2);
+    const week = getLogicalWeek(now, 2, 1);
     expect(week.dayKeys[0]).toBe("2026-09-21");
     expect(week.todayIndex).toBe(5);
   });
 
   it("puts Sunday last in the week", () => {
     const now = new Date(2026, 8, 27, 12, 0); // Sun 27 Sep 2026
-    const week = getLogicalWeek(now, 2);
+    const week = getLogicalWeek(now, 2, 1);
     expect(week.dayKeys[0]).toBe("2026-09-21");
+    expect(week.todayIndex).toBe(6);
+  });
+
+  it("starts the week on Sunday when the user chose Sunday", () => {
+    const now = new Date(2026, 8, 26, 9, 0); // Sat 26 Sep 2026
+    const week = getLogicalWeek(now, 2, 0);
+    expect(week.dayKeys[0]).toBe("2026-09-20");
+    expect(week.dayKeys[6]).toBe("2026-09-26");
+    expect(week.todayIndex).toBe(6);
+
+    // Sunday opens the next week.
+    const sunday = getLogicalWeek(new Date(2026, 8, 27, 12, 0), 2, 0);
+    expect(sunday.dayKeys[0]).toBe("2026-09-27");
+    expect(sunday.todayIndex).toBe(0);
+  });
+
+  it("starts the week on Saturday when the user chose Saturday", () => {
+    const week = getLogicalWeek(new Date(2026, 8, 25, 12, 0), 2, 6); // Fri
+    expect(week.dayKeys[0]).toBe("2026-09-19");
+    expect(week.todayIndex).toBe(6);
+  });
+
+  it("keeps a before-day-start hour in the previous logical week", () => {
+    // 01:00 Sun 27 Sep with a 2am day start is still Saturday's logical day,
+    // so a Sunday-first week is the one that started on 20 Sep.
+    const week = getLogicalWeek(new Date(2026, 8, 27, 1, 0), 2, 0);
+    expect(week.dayKeys[0]).toBe("2026-09-20");
     expect(week.todayIndex).toBe(6);
   });
 });

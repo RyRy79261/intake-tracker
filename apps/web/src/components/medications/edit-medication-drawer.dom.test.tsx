@@ -71,6 +71,27 @@ describe("PrescriptionViewDrawer", () => {
     expect(screen.getByDisplayValue("10")).toBeInTheDocument();
   });
 
+  it("orders the schedule day picker from the user's week start", async () => {
+    const { prescription, phase, schedule } = regimen();
+    const seed = {
+      prescriptions: [prescription],
+      medicationPhases: [phase],
+      phaseSchedules: [schedule],
+    };
+    const dayLabels = () =>
+      screen
+        .getAllByRole("button")
+        .map((b) => b.textContent ?? "")
+        .filter((t) => /^(Su|Mo|Tu|We|Th|Fr|Sa)$/.test(t));
+
+    await renderWithFixtures(
+      <PrescriptionViewDrawer prescription={prescription} open onOpenChange={() => {}} />,
+      { seed, settings: { weekStartsOn: 0 } },
+    );
+    await screen.findByDisplayValue("08:00");
+    expect(dayLabels()).toEqual(["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"]);
+  });
+
   it("editing a dosage row reveals the Save control and persists on save", async () => {
     const user = userEvent.setup();
     const { prescription, phase, schedule } = regimen();

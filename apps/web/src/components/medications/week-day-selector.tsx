@@ -5,7 +5,8 @@ import { Button } from "@intake/ui/button";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTodayKey } from "@/hooks/use-today-key";
-import { WEEK_STARTS_ON } from "@/lib/date-utils";
+import { weekDayPosition } from "@/lib/date-utils";
+import { useSettingsStore } from "@/stores/settings-store";
 
 const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -14,9 +15,10 @@ interface WeekDaySelectorProps {
   onSelectDate: (date: Date) => void;
 }
 
-function startOfWeek(date: Date): Date {
+/** Midnight of the first day of `date`'s week, the week starting on `weekStartsOn`. */
+function startOfWeek(date: Date, weekStartsOn: number): Date {
   const d = new Date(date);
-  d.setDate(d.getDate() - ((d.getDay() - WEEK_STARTS_ON + 7) % 7));
+  d.setDate(d.getDate() - weekDayPosition(d.getDay(), weekStartsOn));
   d.setHours(0, 0, 0, 0);
   return d;
 }
@@ -48,7 +50,11 @@ export function WeekDaySelector({ selectedDate, onSelectDate }: WeekDaySelectorP
   // eslint-disable-next-line react-hooks/exhaustive-deps -- todayKey is the rollover trigger
   const today = useMemo(() => new Date(), [todayKey]);
 
-  const weekStart = useMemo(() => startOfWeek(selectedDate), [selectedDate]);
+  const weekStartsOn = useSettingsStore((s) => s.weekStartsOn);
+  const weekStart = useMemo(
+    () => startOfWeek(selectedDate, weekStartsOn),
+    [selectedDate, weekStartsOn],
+  );
 
   const weekDays = useMemo(() => {
     return Array.from({ length: 7 }, (_, i) => {

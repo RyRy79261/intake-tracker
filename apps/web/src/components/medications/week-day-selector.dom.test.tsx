@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, act } from "@testing-library/react";
 
 import { WeekDaySelector } from "@/components/medications/week-day-selector";
+import { useSettingsStore } from "@/stores/settings-store";
 
 describe("WeekDaySelector", () => {
   beforeEach(() => {
@@ -40,5 +41,31 @@ describe("WeekDaySelector", () => {
     render(<WeekDaySelector selectedDate={new Date(2026, 8, 27, 12, 0)} onSelectDate={() => {}} />);
     const days = screen.getAllByRole("button").filter((b) => /^(Mon|Sun)\d+$/.test(b.textContent ?? ""));
     expect(days.map((b) => b.textContent)).toEqual(["Mon21", "Sun27"]);
+  });
+
+  describe("with a user-chosen week start", () => {
+    afterEach(() => {
+      useSettingsStore.setState(useSettingsStore.getInitialState());
+    });
+
+    it("starts the week on Sunday when the user chose Sunday", () => {
+      useSettingsStore.setState({ weekStartsOn: 0 });
+      render(<WeekDaySelector selectedDate={new Date(2026, 8, 24, 12, 0)} onSelectDate={() => {}} />);
+      const days = screen.getAllByRole("button").filter((b) => /^(Mon|Tue|Wed|Thu|Fri|Sat|Sun)\d+$/.test(b.textContent ?? ""));
+      expect(days.map((b) => b.textContent)).toEqual([
+        "Sun20", "Mon21", "Tue22", "Wed23", "Thu24", "Fri25", "Sat26",
+      ]);
+    });
+
+    it("moves the strip when the setting changes", () => {
+      render(<WeekDaySelector selectedDate={new Date(2026, 8, 27, 12, 0)} onSelectDate={() => {}} />);
+      const firstDay = () =>
+        screen.getAllByRole("button").find((b) => /^(Mon|Tue|Wed|Thu|Fri|Sat|Sun)\d+$/.test(b.textContent ?? ""))!.textContent;
+      expect(firstDay()).toBe("Mon21");
+      act(() => {
+        useSettingsStore.setState({ weekStartsOn: 6 });
+      });
+      expect(firstDay()).toBe("Sat26");
+    });
   });
 });

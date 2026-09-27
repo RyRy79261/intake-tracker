@@ -7,22 +7,38 @@ import {
   formatTimeOnly,
   formatDateTime,
   formatClockTime,
-  WEEK_STARTS_ON,
-  WEEK_DAY_ORDER,
+  DEFAULT_WEEK_STARTS_ON,
+  normalizeWeekStartsOn,
+  weekDayOrder,
   sortDaysForDisplay,
 } from "@/lib/date-utils";
 import { useSettingsStore } from "@/stores/settings-store";
 
 describe("date-utils", () => {
   describe("week order", () => {
-    it("starts the week on Monday", () => {
-      expect(WEEK_STARTS_ON).toBe(1);
-      expect(WEEK_DAY_ORDER).toEqual([1, 2, 3, 4, 5, 6, 0]);
+    it("defaults the week to starting on Monday", () => {
+      expect(DEFAULT_WEEK_STARTS_ON).toBe(1);
+      expect(weekDayOrder(DEFAULT_WEEK_STARTS_ON)).toEqual([1, 2, 3, 4, 5, 6, 0]);
     });
 
-    it("sorts Sunday-indexed days Monday first", () => {
-      expect(sortDaysForDisplay([0, 3, 1])).toEqual([1, 3, 0]);
-      expect(sortDaysForDisplay([6, 0])).toEqual([6, 0]);
+    it("orders the week from any first day", () => {
+      expect(weekDayOrder(0)).toEqual([0, 1, 2, 3, 4, 5, 6]);
+      expect(weekDayOrder(6)).toEqual([6, 0, 1, 2, 3, 4, 5]);
+    });
+
+    it("sorts Sunday-indexed days from the chosen first day", () => {
+      expect(sortDaysForDisplay([0, 3, 1], 1)).toEqual([1, 3, 0]);
+      expect(sortDaysForDisplay([6, 0], 1)).toEqual([6, 0]);
+      expect(sortDaysForDisplay([6, 0, 3], 0)).toEqual([0, 3, 6]);
+      expect(sortDaysForDisplay([1, 0, 6], 6)).toEqual([6, 0, 1]);
+    });
+
+    it("reads anything but a whole weekday 0-6 as the default", () => {
+      expect(normalizeWeekStartsOn(0)).toBe(0);
+      expect(normalizeWeekStartsOn(6)).toBe(6);
+      for (const bad of [7, -1, 1.5, NaN, "0", null, undefined]) {
+        expect(normalizeWeekStartsOn(bad)).toBe(1);
+      }
     });
   });
 

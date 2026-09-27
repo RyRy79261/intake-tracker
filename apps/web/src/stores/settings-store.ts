@@ -7,13 +7,15 @@ import {
   type LiquidPresetPatch,
 } from "@/lib/constants";
 import { DEFAULT_QUICK_NAV_ITEMS, type QuickNavItem } from "@/lib/quick-nav-defaults";
+import { DEFAULT_WEEK_STARTS_ON, isWeekStartsOn } from "@/lib/week-start";
 
 export type { LiquidPreset } from "@/lib/constants";
 export type { QuickNavItem } from "@/lib/quick-nav-defaults";
 
 /**
  * All settings, persisted to this device's localStorage. The ones that
- * describe the user (limits, buffers, optional trackers, day start, liquid
+ * describe the user (limits, buffers, optional trackers, day start, week
+ * start, liquid
  * presets, regions, reminder follow-ups, home timezone) are also mirrored to
  * the synced `userSettings` table by lib/settings-sync.ts
  * (SYNCED_SETTING_KEYS); the rest are device-only preferences.
@@ -49,6 +51,10 @@ export interface Settings {
   // Day start hour for budget tracking (0-23, default 2 = 2am)
   // Records after this hour count toward "today's" budget
   dayStartHour: number;
+
+  // First day of every displayed week (0-6, JS getDay numbering; default
+  // 1 = Monday). Display order only: stored daysOfWeek stay Sunday-indexed.
+  weekStartsOn: number;
 
   // Quick Nav footer
   showQuickNav: boolean;
@@ -117,6 +123,7 @@ interface SettingsActions {
   setPotassiumLimit: (value: number) => void;
   setOptionalTracker: (key: "sugar" | "potassium", enabled: boolean) => void;
   setDayStartHour: (hour: number) => void;
+  setWeekStartsOn: (day: number) => void;
   setShowQuickNav: (value: boolean) => void;
   setQuickNavOrder: (order: "ltr" | "rtl") => void;
   setQuickNavItems: (items: QuickNavItem[]) => void;
@@ -172,6 +179,7 @@ const defaultSettings: Settings = {
     potassium: false,
   },
   dayStartHour: 2, // Default: 2am - day starts at 2am for budget tracking
+  weekStartsOn: DEFAULT_WEEK_STARTS_ON, // Monday
   showQuickNav: true,
   quickNavOrder: "rtl" as const,
   quickNavItems: DEFAULT_QUICK_NAV_ITEMS,
@@ -205,7 +213,7 @@ const defaultSettings: Settings = {
  * that would break an older stored state (new required field, dropped key,
  * renamed key, etc).
  */
-export const SETTINGS_PERSIST_VERSION = 17;
+export const SETTINGS_PERSIST_VERSION = 18;
 
 /**
  * Fields "Reset to Defaults" must not touch:
@@ -348,6 +356,11 @@ export function migrateSettings(
       delete state[key];
     }
   }
+  if (version < 18) {
+    // The week start became a setting. Installs saved before it get the
+    // Monday default (what the app already showed).
+    if (!isWeekStartsOn(state.weekStartsOn)) state.weekStartsOn = DEFAULT_WEEK_STARTS_ON;
+  }
   return state as unknown as Settings & SettingsActions;
 }
 
@@ -379,6 +392,10 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
 
       setDayStartHour: (hour) =>
         set({ dayStartHour: sanitizeNumericInput(hour, 0, 23) }),
+      // Only a whole weekday 0-6; anything else is ignored.
+      setWeekStartsOn: (day) => {
+        if (isWeekStartsOn(day)) set({ weekStartsOn: day });
+      },
 
       setShowQuickNav: (value) => set({ showQuickNav: value }),
       setQuickNavOrder: (order) => set({ quickNavOrder: order }),

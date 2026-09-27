@@ -515,10 +515,11 @@ export type SyncedLiquidPreset = { id: string; name: string } & Record<string, u
 /**
  * The user's synced settings (Dexie v24) — the settings that describe the
  * user rather than the device: daily limits and their extended buffers,
- * optional trackers, the day-start hour, liquid presets, medication regions,
- * reminder follow-up settings and the home timezone. Device-only preferences
- * (theme, animation timing, swipe and quick-nav, shake-to-report, clock
- * format, +/- increments, storage mode) stay in localStorage.
+ * optional trackers, the day-start hour, the week start, liquid presets,
+ * medication regions, reminder follow-up settings and the home timezone.
+ * Device-only preferences (theme, animation timing, swipe and quick-nav,
+ * shake-to-report, clock format, +/- increments, storage mode) stay in
+ * localStorage.
  *
  * Treated as a per-user singleton like `UserProfile`: the row id is the
  * account id when one is known, and readers take the newest live row. The
@@ -536,6 +537,9 @@ export interface UserSettings {
   sugarExtendedBuffer: number; // g
   optionalTrackers: { sugar: boolean; potassium: boolean };
   dayStartHour: number; // 0-23
+  // First day of the displayed week, 0-6 (JS getDay; 1 = Monday). Absent on
+  // rows written before the setting existed: readers keep their own value.
+  weekStartsOn?: number;
   liquidPresets: SyncedLiquidPreset[];
   primaryRegion: string; // ISO code, "" = not specified
   secondaryRegion: string;
