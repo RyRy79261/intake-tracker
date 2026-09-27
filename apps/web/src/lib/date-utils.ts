@@ -82,12 +82,24 @@ export function toLocalDateKey(value: Date | number = new Date()): string {
 }
 
 /**
- * First day of a displayed week (0 = Sunday, JS `getDay()` numbering). One
- * convention for every weekly view: the dashboard's weekly grid and the
- * medications week strip both start on Sunday, matching the Sunday-indexed
- * `daysOfWeek` on phase schedules.
+ * First day of a displayed week (1 = Monday, JS `getDay()` numbering). One
+ * convention for every weekly view: the dashboard's weekly grid, the
+ * medications week strip and every day picker start on Monday. Stored
+ * `daysOfWeek` stay Sunday-indexed (0 = Sunday); only the display order moves.
  */
-export const WEEK_STARTS_ON = 0;
+export const WEEK_STARTS_ON: number = 1;
+
+/** Sunday-indexed weekdays (0 = Sunday) in display order, first day first. */
+export const WEEK_DAY_ORDER: readonly number[] = Array.from(
+  { length: 7 },
+  (_, i) => (WEEK_STARTS_ON + i) % 7,
+);
+
+/** Sunday-indexed weekdays sorted into display order (Monday first). */
+export function sortDaysForDisplay(days: readonly number[]): number[] {
+  const pos = (d: number) => (d - WEEK_STARTS_ON + 7) % 7;
+  return [...days].sort((a, b) => pos(a) - pos(b));
+}
 
 export type TimeFormat = "12h" | "24h";
 

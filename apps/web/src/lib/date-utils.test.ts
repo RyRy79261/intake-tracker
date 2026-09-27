@@ -7,10 +7,25 @@ import {
   formatTimeOnly,
   formatDateTime,
   formatClockTime,
+  WEEK_STARTS_ON,
+  WEEK_DAY_ORDER,
+  sortDaysForDisplay,
 } from "@/lib/date-utils";
 import { useSettingsStore } from "@/stores/settings-store";
 
 describe("date-utils", () => {
+  describe("week order", () => {
+    it("starts the week on Monday", () => {
+      expect(WEEK_STARTS_ON).toBe(1);
+      expect(WEEK_DAY_ORDER).toEqual([1, 2, 3, 4, 5, 6, 0]);
+    });
+
+    it("sorts Sunday-indexed days Monday first", () => {
+      expect(sortDaysForDisplay([0, 3, 1])).toEqual([1, 3, 0]);
+      expect(sortDaysForDisplay([6, 0])).toEqual([6, 0]);
+    });
+  });
+
   afterEach(() => {
     vi.useRealTimers();
     useSettingsStore.setState(useSettingsStore.getInitialState());

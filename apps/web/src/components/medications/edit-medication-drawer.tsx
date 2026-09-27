@@ -33,6 +33,7 @@ import { DoseAmountInput, DosePreviewLine } from "@/components/medications/dose-
 import { PillIcon } from "@/components/medications/pill-icon";
 import { PILL_SHAPES, PRESET_COLORS } from "@/components/medications/add-medication-steps/types";
 import { cn } from "@/lib/utils";
+import { WEEK_DAY_ORDER } from "@/lib/date-utils";
 
 const SELECT_CLASS =
   "flex h-9 rounded-md border border-input bg-background text-foreground px-3 py-1 text-sm shadow-xs";
@@ -334,7 +335,7 @@ function ScheduleTab({ prescription }: { prescription: Prescription }) {
             </div>
             <DosePreviewLine dosage={row.dosage} unit={unit} brand={activeBrand} />
             <div className="flex gap-1">
-              {ALL_DAYS.map((day) => (
+              {WEEK_DAY_ORDER.map((day) => (
                 <button
                   key={day}
                   type="button"

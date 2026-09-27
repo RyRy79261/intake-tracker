@@ -40,6 +40,7 @@ import { findActiveBrand } from "@/lib/dose-preview";
 import type { MedicationPhase, TitrationPlan } from "@/lib/db";
 import { cn } from "@/lib/utils";
 import { DAY_LABELS_LONG } from "@/components/medications/titrations/types";
+import { sortDaysForDisplay } from "@/lib/date-utils";
 import { formatComboDose } from "@intake/core/compound";
 
 export function TitrationPlanCard({
@@ -323,7 +324,7 @@ function PhaseEntryRow({ phase }: { phase: MedicationPhase }) {
               </span>
               {s.daysOfWeek.length < 7 && (
                 <span className="text-[10px]">
-                  ({s.daysOfWeek.map((d) => DAY_LABELS_LONG[d]).join(", ")})
+                  ({sortDaysForDisplay(s.daysOfWeek).map((d) => DAY_LABELS_LONG[d]).join(", ")})
                 </span>
               )}
             </div>

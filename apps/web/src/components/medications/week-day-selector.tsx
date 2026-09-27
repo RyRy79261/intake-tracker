@@ -5,6 +5,7 @@ import { Button } from "@intake/ui/button";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTodayKey } from "@/hooks/use-today-key";
+import { WEEK_STARTS_ON } from "@/lib/date-utils";
 
 const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -15,7 +16,7 @@ interface WeekDaySelectorProps {
 
 function startOfWeek(date: Date): Date {
   const d = new Date(date);
-  d.setDate(d.getDate() - d.getDay());
+  d.setDate(d.getDate() - ((d.getDay() - WEEK_STARTS_ON + 7) % 7));
   d.setHours(0, 0, 0, 0);
   return d;
 }
@@ -102,7 +103,7 @@ export function WeekDaySelector({ selectedDate, onSelectDate }: WeekDaySelectorP
                   "text-[10px] font-medium",
                   isSelected ? "text-teal-100" : "text-muted-foreground"
                 )}>
-                  {DAY_LABELS[i]}
+                  {DAY_LABELS[day.getDay()]}
                 </span>
                 <span className={cn(
                   "text-sm font-semibold mt-0.5",

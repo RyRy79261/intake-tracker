@@ -8,6 +8,7 @@ import {
 } from "@/hooks/use-medication-queries";
 import type { Prescription } from "@/lib/db";
 import { DAY_LABELS_LONG } from "@/components/medications/titrations/types";
+import { sortDaysForDisplay } from "@/lib/date-utils";
 import { averageDailyDosage } from "@/lib/medication-ui-utils";
 import { formatComboDose } from "@intake/core/compound";
 
@@ -52,7 +53,7 @@ export function MaintenanceRow({ prescription }: { prescription: Prescription })
             </span>
             {s.daysOfWeek.length < 7 && (
               <span className="text-[10px]">
-                ({s.daysOfWeek.map((d) => DAY_LABELS_LONG[d]).join(", ")})
+                ({sortDaysForDisplay(s.daysOfWeek).map((d) => DAY_LABELS_LONG[d]).join(", ")})
               </span>
             )}
           </div>

@@ -21,7 +21,7 @@ describe("TextMetrics", () => {
       await screen.findByRole("region", { name: /daily intake summary/i }),
     ).toBeInTheDocument();
     expect(screen.getByText("Today")).toBeInTheDocument();
-    expect(screen.getByText("This Week (Sun-Sat)")).toBeInTheDocument();
+    expect(screen.getByText("This Week (Mon-Sun)")).toBeInTheDocument();
   });
 
   it("reflects today's seeded water intake", async () => {
@@ -151,25 +151,25 @@ describe("weekly bucketing", () => {
 
   it("buckets by logical day across a 25h DST day", () => {
     process.env.TZ = "Europe/Berlin";
-    // Wed 28 Oct 2026, 12:00 local; the week (Sun-Sat) is 25-31 Oct and
-    // clocks go back on Sunday 25 Oct.
-    const now = new Date(2026, 9, 28, 12, 0);
+    // Wed 21 Oct 2026, 12:00 local; the week (Mon-Sun) is 19-25 Oct and
+    // clocks go back on Sunday 25 Oct, so the last logical day is 25h long.
+    const now = new Date(2026, 9, 21, 12, 0);
     const week = getLogicalWeek(now, 2);
 
-    expect(week.dayKeys[0]).toBe("2026-10-25");
-    expect(week.dayKeys[6]).toBe("2026-10-31");
-    // The week ends at the next logical day start (Sun 1 Nov 02:00 local),
+    expect(week.dayKeys[0]).toBe("2026-10-19");
+    expect(week.dayKeys[6]).toBe("2026-10-25");
+    // The week ends at the next logical day start (Mon 26 Oct 02:00 local),
     // not 7 × 24h after the start.
-    expect(week.end).toBe(new Date(2026, 10, 1, 2, 0).getTime());
+    expect(week.end).toBe(new Date(2026, 9, 26, 2, 0).getTime());
 
-    // 01:30 on Sun 1 Nov still belongs to Saturday's logical day.
-    const lateSaturday = new Date(2026, 10, 1, 1, 30).getTime();
-    // 01:30 on Sat 31 Oct belongs to Friday's logical day.
-    const lateFriday = new Date(2026, 9, 31, 1, 30).getTime();
+    // 01:30 on Mon 26 Oct still belongs to Sunday's logical day.
+    const lateSunday = new Date(2026, 9, 26, 1, 30).getTime();
+    // 01:30 on Sun 25 Oct belongs to Saturday's logical day.
+    const lateSaturday = new Date(2026, 9, 25, 1, 30).getTime();
     const buckets = bucketByLogicalDay(
       [
-        { timestamp: lateSaturday, amount: 100 },
-        { timestamp: lateFriday, amount: 50 },
+        { timestamp: lateSunday, amount: 100 },
+        { timestamp: lateSaturday, amount: 50 },
       ],
       week.dayKeys,
       2,
@@ -178,10 +178,17 @@ describe("weekly bucketing", () => {
     expect(buckets).toEqual([0, 0, 0, 0, 0, 50, 100]);
   });
 
-  it("uses the same Sunday week start as the medications week strip", () => {
+  it("uses the same Monday week start as the medications week strip", () => {
     const now = new Date(2026, 8, 26, 9, 0); // Sat 26 Sep 2026
     const week = getLogicalWeek(now, 2);
-    expect(week.dayKeys[0]).toBe("2026-09-20");
+    expect(week.dayKeys[0]).toBe("2026-09-21");
+    expect(week.todayIndex).toBe(5);
+  });
+
+  it("puts Sunday last in the week", () => {
+    const now = new Date(2026, 8, 27, 12, 0); // Sun 27 Sep 2026
+    const week = getLogicalWeek(now, 2);
+    expect(week.dayKeys[0]).toBe("2026-09-21");
     expect(week.todayIndex).toBe(6);
   });
 });
