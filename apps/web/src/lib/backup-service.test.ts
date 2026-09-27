@@ -39,6 +39,7 @@ import {
   makeInsightReport,
   makeUserSettings,
 } from "@/__tests__/fixtures/db-fixtures";
+import { mergeSettingsRows } from "@/lib/settings-merge";
 
 // Tests run in the node vitest environment (per vitest.config.ts), so File,
 // Blob, and crypto.subtle are present (Node 22+). document is NOT present —
@@ -717,5 +718,57 @@ describe("backup-service: synced settings (audit state-settings-cache#2)", () =>
       ["userSettings", "settings-1"],
     ]);
     expect((await db.userSettings.get("settings-1"))!.waterLimit).toBe(2500);
+  });
+});
+
+describe("backup-service: restored settings beat newer per-setting stamps", () => {
+  // A restored settings row gets a fresh updatedAt so it wins, but settings
+  // conflicts resolve per setting by fieldUpdatedAt. Keeping the backup's
+  // old stamps would make every restored setting lose to the server's newer
+  // stamps: the restore would show locally, never reach the server, and be
+  // reverted by the next pull.
+  const server = makeUserSettings({
+    id: "settings-1",
+    waterLimit: 2500,
+    updatedAt: 5_000,
+    fieldUpdatedAt: { waterLimit: 5_000 },
+  });
+  const backupRow = makeUserSettings({
+    id: "settings-1",
+    waterLimit: 1600,
+    updatedAt: 1_000,
+    fieldUpdatedAt: { waterLimit: 1_000 },
+  });
+
+  it("resolveConflicts: the chosen backup settings win the per-setting merge", async () => {
+    await db.userSettings.add({ ...server });
+
+    await resolveConflicts([
+      { table: "userSettings", id: "settings-1", useBackup: true, backupRecord: { ...backupRow } },
+    ]);
+
+    const restored = (await db.userSettings.get("settings-1"))!;
+    expect(restored.waterLimit).toBe(1600);
+    const merge = mergeSettingsRows(server, restored);
+    expect(merge.incomingWins).toContain("waterLimit");
+    expect(merge.row.waterLimit).toBe(1600);
+  });
+
+  it("replace mode: the restored settings win the per-setting merge", async () => {
+    await db.userSettings.add({ ...server });
+
+    await importBackup(makeFile(makeBackupJson({ userSettings: [{ ...backupRow }] })), "replace");
+
+    const restored = (await db.userSettings.get("settings-1"))!;
+    expect(restored.waterLimit).toBe(1600);
+    expect(mergeSettingsRows(server, restored).row.waterLimit).toBe(1600);
+  });
+
+  it("a row new to this device keeps the backup's own stamps (a newer server copy still wins)", async () => {
+    await importBackup(makeFile(makeBackupJson({ userSettings: [{ ...backupRow }] })), "merge");
+
+    const restored = (await db.userSettings.get("settings-1"))!;
+    expect(restored.fieldUpdatedAt).toEqual({ waterLimit: 1_000 });
+    expect(mergeSettingsRows(server, restored).row.waterLimit).toBe(2500);
   });
 });

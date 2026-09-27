@@ -429,6 +429,12 @@ async function writeRow(
   const written: Row = existing
     ? { ...row, updatedAt: Math.max(now, (existing.updatedAt ?? 0) + 1) }
     : row;
+  // Settings merge per setting by `fieldUpdatedAt`, not by the row's
+  // updatedAt. The backup's old stamps would make every restored setting
+  // lose to newer ones (locally on the next pull, and on the server), so a
+  // replacing settings row drops them: every setting then counts as changed
+  // at the fresh updatedAt, as a whole-row restore should.
+  if (existing && tableName === "userSettings") delete written.fieldUpdatedAt;
   await db.table<Row, string>(tableName).put(written);
   if (!existing && !isLive(written)) return false;
   await enqueueInsideTx(tableName, written.id, isLive(written) ? "upsert" : "delete");
