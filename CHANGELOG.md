@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.37.1](https://github.com/RyRy79261/intake-tracker/compare/v1.37.0...v1.37.1) (2026-09-27)
+
+
+### Bug Fixes
+
+* **deps:** patch 20 Dependabot alerts with bounded overrides ([#373](https://github.com/RyRy79261/intake-tracker/issues/373)) ([5b9d396](https://github.com/RyRy79261/intake-tracker/commit/5b9d39671945a3126a427858ef478b17f2026641))
+* no reload on reconnect, plain-English AI text, audit leftovers ([#375](https://github.com/RyRy79261/intake-tracker/issues/375)) ([d956cf8](https://github.com/RyRy79261/intake-tracker/commit/d956cf84df350690d3f7323c3645d409ee4a6b20))
+
 ## [1.37.0](https://github.com/RyRy79261/intake-tracker/compare/v1.36.6...v1.37.0) (2026-09-26)
 
 
