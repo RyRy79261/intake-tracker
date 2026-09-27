@@ -17,6 +17,7 @@
 
 import { z } from "zod";
 import { DOMAINS, type Domain } from "@intake/types/analytics";
+import { STE_FIELD_SUFFIX, plainLanguageSection } from "./plain-language";
 
 const DOMAIN_LABELS: Record<Domain, string> = {
   water: "water intake",
@@ -256,13 +257,15 @@ export const INSIGHT_TOOL = {
       summary: {
         type: "string",
         description:
-          "A 2-4 sentence plain-language overview of the period, referencing the actual numbers. In deep mode this can be longer (3-5 sentences) and weave in clinical context, condition framing, and medication-response alignment.",
+          "A 2-4 sentence plain-language overview of the period, referencing the actual numbers. In deep mode this can be longer (3-5 sentences) and weave in clinical context, condition framing, and medication-response alignment." +
+          STE_FIELD_SUFFIX,
       },
       observations: {
         type: "array",
         items: { type: "string" },
         description:
-          "3-6 specific, factual observations in fast mode; 4-8 in deep mode. Each cites a concrete metric. In deep mode, observations should connect trends to the user's medications and conditions where applicable, and may cite a source URL inline.",
+          "3-6 specific, factual observations in fast mode; 4-8 in deep mode. Each cites a concrete metric. In deep mode, observations should connect trends to the user's medications and conditions where applicable, and may cite a source URL inline." +
+          STE_FIELD_SUFFIX,
       },
       sources: {
         type: "array",
@@ -291,7 +294,12 @@ Rules:
 - Correlation is not causation — never imply one metric causes another.
 - Keep a neutral, non-alarming tone. This summary is informational only and never replaces a qualified professional. If a reading looks notable, state the number plainly and recommend the user discuss it with their healthcare provider.
 - If one or more previous assessments are supplied, compare the current period against the most recent one: note specifically what has changed, improved, or worsened, citing both the old and new numbers where possible. Do not simply repeat unchanged observations.
-- Always return your answer by calling the analytics_insight tool.`;
+- Always return your answer by calling the analytics_insight tool.
+
+${plainLanguageSection(
+  ["summary", "observations"],
+  "every number, unit (mmHg, kg, mg, ml), date and medication name",
+)}`;
 
 export const DEEP_SYSTEM_PROMPT = `${INSIGHTS_SYSTEM_PROMPT}
 
@@ -314,13 +322,12 @@ REQUIRED PROCESS:
    profile, write at least one observation that compares the observed
    metric trend against the expected clinical response, framed
    descriptively (NOT prescriptively). Examples of the right shape:
-     - "Average systolic BP held at 132 mmHg over the period. For
-        bisoprolol in HFrEF this is within the typical early-titration
-        range; published targets are <130 mmHg once the dose is stable
-        [source URL]."
-     - "Weight trended down 1.8 kg, consistent with the diuretic-adjacent
-        effect frequently observed when bisoprolol is up-titrated in
-        heart failure [source URL]."
+     - "Your average top blood pressure number (systolic) stayed at
+        132 mmHg. This is usual for the first dose steps of bisoprolol
+        in heart failure. The published target is below 130 mmHg when
+        the dose is stable [source URL]."
+     - "Your weight went down by 1.8 kg. This change is often seen when
+        the bisoprolol dose goes up in heart failure [source URL]."
    If you cannot find a credible source, say so and frame the observation
    as data-only.
 

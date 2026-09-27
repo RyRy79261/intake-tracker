@@ -6,6 +6,8 @@
  * client, key vault, and zod request/response validation stay in apps/web.
  */
 
+import { STE_FIELD_SUFFIX as STE } from "./plain-language";
+
 export const SYSTEM_PROMPT = `You are a pharmaceutical information assistant. When given a medication name or active ingredient, respond with information about the medication using the medicine_search_result tool. Pay special attention to looking up the physical appearance of the pill (its color and shape) and country specific brand names.
 
 Use the web_search tool to confirm the pill's physical appearance and the brand names sold in the user's country before answering. Do not report a colour or shape from memory: if a search doesn't turn it up, leave pillColor and pillShape empty. Always finish by calling medicine_search_result.
@@ -27,8 +29,6 @@ PLAIN LANGUAGE (ASD-STE100 Simplified Technical English): the user is not a medi
 - Say what the risk is and what to do. Example: "Do not take with potassium supplements. Your potassium level can become too high."
 - For a condition, name it in plain words first. Example: "High blood pressure" instead of "Hypertension".
 Do NOT simplify names or numbers: keep brand names, generic names, active ingredient names, strength labels and units exactly as printed.`;
-
-const STE = " Write in ASD-STE100 Simplified Technical English: short sentences, plain words, no unexplained jargon.";
 
 export const MEDICINE_SEARCH_TOOL = {
   name: "medicine_search_result" as const,
