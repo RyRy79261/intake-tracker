@@ -21,7 +21,7 @@ Check the queried substance against EACH active medication. Include an entry for
 
 ${plainLanguageSection(
   ["description", "drugClass", "summary"],
-  'substance names, medication names (copy each one exactly as the user wrote it), doses and units',
+  'substance names, medication names (copy each one exactly as written in the list, without the drug class in brackets), doses and units',
 )}
 In each "description", say what can happen and what to do. Example: "Both lower blood pressure. You can feel dizzy when you stand up. Check your blood pressure more often."`;
 
@@ -42,7 +42,8 @@ export const INTERACTION_CHECK_TOOL = {
             substance: { type: "string" },
             medication: {
               type: "string",
-              description: "The medication name exactly as the user wrote it.",
+              description:
+                "The medication name exactly as written in the list, without the drug class in brackets.",
             },
             severity: { type: "string", enum: ["AVOID", "CAUTION", "OK"] },
             description: {

@@ -62,11 +62,26 @@ describe("ASD-STE100 plain-language output", () => {
     expect(JSON.stringify(row.substance)).not.toContain("ASD-STE100");
     expect(row.medication.description).not.toContain("ASD-STE100");
     expect(row.medication.description).toMatch(/exactly/);
+    // The user prompt lists "- bisoprolol (Beta blocker)". A live call with
+    // "exactly as the user wrote it" copied the bracketed class into the
+    // name, so the UI showed "ibuprofen vs bisoprolol (Beta blocker)".
+    expect(row.medication.description).toMatch(/without the drug class/);
   });
 
   it("titration warnings ask for plain English in the prompt and each warning", () => {
     expectPlainLanguageSection(titrationWarnings.SYSTEM_PROMPT);
     expectSte(titrationWarnings.TITRATION_WARNINGS_TOOL.input_schema.properties.warnings.description);
+  });
+
+  it("titration warning example matches the one-sentence-per-warning rule", () => {
+    // The prompt caps each warning at one short sentence, so the example the
+    // model copies must be one sentence too (a two-sentence example
+    // contradicts the rule and the model follows the example).
+    expect(titrationWarnings.SYSTEM_PROMPT).toContain("Keep each warning to one short sentence");
+    const example = titrationWarnings.SYSTEM_PROMPT.match(/Each warning says[^\n]*Example: "([^"]+)"/)?.[1];
+    expect(example).toBeDefined();
+    expect(example!.match(/[.!?](\s|$)/g)).toHaveLength(1);
+    expect(example).toMatch(/50 beats per minute/);
   });
 
   it("analytics insights (fast and deep) ask for plain English", () => {

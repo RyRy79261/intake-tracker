@@ -21,7 +21,7 @@ export const TITRATION_WARNINGS_TOOL = {
         type: "array",
         items: { type: "string" },
         description:
-          "One warning sign per entry: what to watch for and what to do." + STE_FIELD_SUFFIX,
+          "One warning sign per entry, in one short sentence: what to watch for and what to do." + STE_FIELD_SUFFIX,
       },
     },
     required: ["warnings"],
@@ -46,4 +46,4 @@ ${plainLanguageSection(
   ["warnings"],
   "medication names, doses, times, units and vital-sign thresholds (for example 90 mmHg or 50 beats per minute)",
 )}
-Each warning says what to watch for and what to do. Example: "Your heart rate is below 50 beats per minute. Call your doctor."`;
+Each warning says what to watch for and what to do. Example: "If your heart rate goes below 50 beats per minute, call your doctor."`;
