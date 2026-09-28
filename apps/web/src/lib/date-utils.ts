@@ -81,13 +81,15 @@ export function toLocalDateKey(value: Date | number = new Date()): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-/**
- * First day of a displayed week (0 = Sunday, JS `getDay()` numbering). One
- * convention for every weekly view: the dashboard's weekly grid and the
- * medications week strip both start on Sunday, matching the Sunday-indexed
- * `daysOfWeek` on phase schedules.
- */
-export const WEEK_STARTS_ON = 0;
+// Week order: the first day is the user's synced `weekStartsOn` setting
+// (default Monday). See lib/week-start.ts.
+export {
+  DEFAULT_WEEK_STARTS_ON,
+  normalizeWeekStartsOn,
+  weekDayPosition,
+  weekDayOrder,
+  sortDaysForDisplay,
+} from "@/lib/week-start";
 
 export type TimeFormat = "12h" | "24h";
 

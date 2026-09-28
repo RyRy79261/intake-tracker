@@ -176,6 +176,13 @@
       "when": 1790468000587,
       "tag": "0024_leftovers_source_field_stamps",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1790510373022,
+      "tag": "0025_user_settings_week_starts_on",
+      "breakpoints": true
     }
   ]
 }

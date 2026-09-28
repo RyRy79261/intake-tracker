@@ -946,6 +946,7 @@ function settingsRow(overrides: Record<string, unknown> = {}) {
     sugarExtendedBuffer: 10,
     optionalTrackers: { sugar: false, potassium: false },
     dayStartHour: 2,
+    weekStartsOn: 1,
     liquidPresets: [],
     primaryRegion: "",
     secondaryRegion: "",
@@ -971,6 +972,7 @@ const BASE_STAMPS = {
   sugarExtendedBuffer: 1_000,
   optionalTrackers: 1_000,
   dayStartHour: 1_000,
+  weekStartsOn: 1_000,
   liquidPresets: 1_000,
   primaryRegion: 1_000,
   secondaryRegion: 1_000,
@@ -1026,6 +1028,45 @@ describe("sync-push-route: userSettings merges per setting", () => {
     // Newer than both rows, so both devices pull the merged row.
     expect(written.updatedAt as number).toBeGreaterThan(3_000);
     expect(body.accepted).toEqual([{ queueId: 1, serverUpdatedAt: written.updatedAt }]);
+  });
+
+  it("merges a week-start edit from one device with a limit edit from another", async () => {
+    existingRows["settings-1"] = {
+      ...settingsRow({
+        waterLimit: 2500,
+        updatedAt: 3_000,
+        fieldUpdatedAt: { ...BASE_STAMPS, waterLimit: 3_000 },
+      }),
+      userId: "user-test",
+    };
+    await push(
+      settingsRow({
+        weekStartsOn: 0,
+        updatedAt: 2_000,
+        deviceId: "dev-B",
+        fieldUpdatedAt: { ...BASE_STAMPS, weekStartsOn: 2_000 },
+      }),
+    );
+
+    expect(insertCalls).toHaveLength(1);
+    const written = insertCalls[0]!.values;
+    expect(written.weekStartsOn).toBe(0);
+    expect(written.waterLimit).toBe(2500);
+    expect(written.fieldUpdatedAt).toMatchObject({ weekStartsOn: 2_000, waterLimit: 3_000 });
+  });
+
+  it("keeps the server's week start when an older client pushes a row without one", async () => {
+    existingRows["settings-1"] = {
+      ...settingsRow({ weekStartsOn: 6, fieldUpdatedAt: BASE_STAMPS }),
+      userId: "user-test",
+    };
+    const { weekStartsOn: _drop, ...legacy } = settingsRow({ saltLimit: 1200, updatedAt: 5_000 });
+    void _drop;
+    await push(legacy);
+
+    expect(insertCalls).toHaveLength(1);
+    expect(insertCalls[0]!.values.weekStartsOn).toBe(6);
+    expect(insertCalls[0]!.values.saltLimit).toBe(1200);
   });
 
   it("a push whose settings are all older than the server's writes nothing", async () => {

@@ -33,6 +33,8 @@ import { DoseAmountInput, DosePreviewLine } from "@/components/medications/dose-
 import { PillIcon } from "@/components/medications/pill-icon";
 import { PILL_SHAPES, PRESET_COLORS } from "@/components/medications/add-medication-steps/types";
 import { cn } from "@/lib/utils";
+import { weekDayOrder } from "@/lib/date-utils";
+import { useSettingsStore } from "@/stores/settings-store";
 
 const SELECT_CLASS =
   "flex h-9 rounded-md border border-input bg-background text-foreground px-3 py-1 text-sm shadow-xs";
@@ -121,6 +123,7 @@ function ScheduleTab({ prescription }: { prescription: Prescription }) {
   const maintenancePhase = getMaintenancePhase(phases);
   const activeTitration = getActiveTitrationPhase(phases);
   const dbSchedules = useSchedulesForPhase(maintenancePhase?.id);
+  const weekStartsOn = useSettingsStore((s) => s.weekStartsOn);
   const updatePhase = useUpdatePhase();
   const startNewPhase = useStartNewPhase();
   // Pill math divides each dose by the active brand's strength as plain
@@ -334,7 +337,7 @@ function ScheduleTab({ prescription }: { prescription: Prescription }) {
             </div>
             <DosePreviewLine dosage={row.dosage} unit={unit} brand={activeBrand} />
             <div className="flex gap-1">
-              {ALL_DAYS.map((day) => (
+              {weekDayOrder(weekStartsOn).map((day) => (
                 <button
                   key={day}
                   type="button"

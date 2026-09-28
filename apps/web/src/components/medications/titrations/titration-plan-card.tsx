@@ -40,6 +40,8 @@ import { findActiveBrand } from "@/lib/dose-preview";
 import type { MedicationPhase, TitrationPlan } from "@/lib/db";
 import { cn } from "@/lib/utils";
 import { DAY_LABELS_LONG } from "@/components/medications/titrations/types";
+import { sortDaysForDisplay } from "@/lib/date-utils";
+import { useSettingsStore } from "@/stores/settings-store";
 import { formatComboDose } from "@intake/core/compound";
 
 export function TitrationPlanCard({
@@ -289,6 +291,7 @@ function PhaseEntryRow({ phase }: { phase: MedicationPhase }) {
   const schedules = useSchedulesForPhase(phase.id);
 
   const inventoryItems = useInventoryForPrescription(phase.prescriptionId);
+  const weekStartsOn = useSettingsStore((s) => s.weekStartsOn);
 
   const rx = prescriptions.find((p) => p.id === phase.prescriptionId);
   // Combination doses are labelled from the active brand's tablets; with no
@@ -323,7 +326,7 @@ function PhaseEntryRow({ phase }: { phase: MedicationPhase }) {
               </span>
               {s.daysOfWeek.length < 7 && (
                 <span className="text-[10px]">
-                  ({s.daysOfWeek.map((d) => DAY_LABELS_LONG[d]).join(", ")})
+                  ({sortDaysForDisplay(s.daysOfWeek, weekStartsOn).map((d) => DAY_LABELS_LONG[d]).join(", ")})
                 </span>
               )}
             </div>

@@ -9,6 +9,8 @@ import type {
   ScheduleEntry,
 } from "@/hooks/use-add-medication-form";
 import { type FieldChange, ALL_DAYS, DAY_LABELS_SHORT } from "@/components/medications/add-medication-steps/types";
+import { weekDayOrder } from "@/lib/date-utils";
+import { useSettingsStore } from "@/stores/settings-store";
 
 export function ScheduleStep({
   formState, onFieldChange,
@@ -17,6 +19,7 @@ export function ScheduleStep({
   onFieldChange: FieldChange;
 }) {
   const { schedules } = formState;
+  const weekStartsOn = useSettingsStore((s) => s.weekStartsOn);
   const setSchedules = (next: ScheduleEntry[]) => onFieldChange("schedules", next);
 
   const updateSchedule = (index: number, updates: Partial<ScheduleEntry>) => {
@@ -59,7 +62,7 @@ export function ScheduleStep({
             className="w-28 shrink-0"
           />
           <div className="flex gap-0.5 flex-1">
-            {DAY_LABELS_SHORT.map((label, dayIndex) => (
+            {weekDayOrder(weekStartsOn).map((dayIndex) => (
               <button
                 key={dayIndex}
                 onClick={() => toggleDay(i, dayIndex)}
@@ -70,7 +73,7 @@ export function ScheduleStep({
                     : "bg-muted text-muted-foreground hover:bg-muted/80"
                 )}
               >
-                {label}
+                {DAY_LABELS_SHORT[dayIndex]}
               </button>
             ))}
           </div>

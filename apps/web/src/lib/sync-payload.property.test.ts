@@ -488,6 +488,7 @@ describe("userSettings ops (synced settings)", () => {
     sugarExtendedBuffer: 10,
     optionalTrackers: { sugar: true, potassium: false },
     dayStartHour: 2,
+    weekStartsOn: 0,
     liquidPresets: [
       { id: "p1", name: "Oat latte", tab: "coffee", defaultVolumeMl: 250, caffeinePer100ml: 40 },
     ],
@@ -506,6 +507,16 @@ describe("userSettings ops (synced settings)", () => {
   it("accepts a settings row with its JSON presets and trackers", () => {
     const parsed = opSchema_.safeParse({ queueId: 1, op: "upsert", tableName: "userSettings", row });
     expect(parsed.success).toBe(true);
+  });
+
+  it("carries the week start, and accepts an older client's row without one", () => {
+    const parsed = opSchema_.safeParse({ queueId: 1, op: "upsert", tableName: "userSettings", row });
+    expect(parsed.success && (parsed.data.row as Record<string, unknown>).weekStartsOn).toBe(0);
+    const { weekStartsOn: _drop, ...legacy } = row;
+    void _drop;
+    expect(
+      opSchema_.safeParse({ queueId: 1, op: "upsert", tableName: "userSettings", row: legacy }).success,
+    ).toBe(true);
   });
 
   it("rejects a settings row without its limits", () => {

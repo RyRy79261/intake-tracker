@@ -29,6 +29,8 @@ import { readAiErrorMessage } from "@/lib/ai-error-message";
 import { useAuthGate } from "@/components/auth-guard";
 import { RxEntryCard, EditPhaseScheduleLoader } from "@/components/medications/titrations/rx-entry-card";
 import { DAY_LABELS_LONG } from "@/components/medications/titrations/types";
+import { sortDaysForDisplay } from "@/lib/date-utils";
+import { useSettingsStore } from "@/stores/settings-store";
 import { useTitrationDrawerForm } from "@/components/medications/titrations/use-titration-drawer-form";
 
 export function TitrationDrawer({
@@ -48,6 +50,7 @@ export function TitrationDrawer({
   const { toast } = useToast();
   const showAi = useAuthGate();
   const isEditing = editingPlan !== null;
+  const weekStartsOn = useSettingsStore((s) => s.weekStartsOn);
 
   const editingPhases = usePhasesForTitrationPlan(editingPlan?.id);
 
@@ -87,7 +90,7 @@ export function TitrationDrawer({
     const titrationRxIds = new Set(entries.filter((e) => e.prescriptionId).map((e) => e.prescriptionId));
 
     const describeDays = (days: number[]) =>
-      days.length === 7 ? "daily" : days.map((d) => DAY_LABELS_LONG[d]).join(", ");
+      days.length === 7 ? "daily" : sortDaysForDisplay(days, weekStartsOn).map((d) => DAY_LABELS_LONG[d]).join(", ");
 
     // Doses are labelled in the prescription's own unit, the "daily" total is
     // averaged over the week (a Mon/Wed/Fri dose isn't daily), and the current

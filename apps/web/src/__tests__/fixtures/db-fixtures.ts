@@ -299,6 +299,7 @@ export function makeUserSettings(overrides?: Partial<UserSettings>): UserSetting
     sugarExtendedBuffer: 10,
     optionalTrackers: { sugar: true, potassium: false },
     dayStartHour: 2,
+    weekStartsOn: 1,
     liquidPresets: [],
     primaryRegion: "",
     secondaryRegion: "",

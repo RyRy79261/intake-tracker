@@ -18,7 +18,7 @@ import { Progress, progressStatusTextClass } from "@intake/ui/progress";
 import { computeTwoStageProgress, getProgressStatus } from "@intake/core/progress";
 import { Droplets, Sparkles, Coffee, Wine, Candy, Banana } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { toLocalDateKey, WEEK_STARTS_ON } from "@/lib/date-utils";
+import { toLocalDateKey, weekDayOrder, weekDayPosition } from "@/lib/date-utils";
 
 const DAY_LETTERS = ["S", "M", "T", "W", "T", "F", "S"] as const;
 const DAY_ABBREVIATIONS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
@@ -31,14 +31,15 @@ function logicalDate(timestamp: number, dayStartHour: number): Date {
 }
 
 /**
- * The logical week containing `now`: its seven day keys, the [start, end)
- * timestamps to query, and today's column. Days are calendar dates shifted by
- * dayStartHour, and the end is the next logical day start rather than
- * start + 7 × 24h, so 23h/25h DST days don't drop or borrow an hour.
+ * The logical week containing `now`, starting on `weekStartsOn` (0-6, JS
+ * getDay): its seven day keys, the [start, end) timestamps to query, and
+ * today's column. Days are calendar dates shifted by dayStartHour, and the end
+ * is the next logical day start rather than start + 7 × 24h, so 23h/25h DST
+ * days don't drop or borrow an hour.
  */
-export function getLogicalWeek(now: Date, dayStartHour: number) {
+export function getLogicalWeek(now: Date, dayStartHour: number, weekStartsOn: number) {
   const today = logicalDate(now.getTime(), dayStartHour);
-  const todayIndex = (today.getDay() - WEEK_STARTS_ON + 7) % 7;
+  const todayIndex = weekDayPosition(today.getDay(), weekStartsOn);
 
   const first = new Date(today);
   first.setDate(today.getDate() - todayIndex);
@@ -63,11 +64,16 @@ function formatValue(value: number): string {
   return (Math.round(value * 10) / 10).toLocaleString();
 }
 
-const DAY_HEADERS = Array.from(
-  { length: 7 },
-  (_, i) => DAY_LETTERS[(WEEK_STARTS_ON + i) % 7]!
-);
-const WEEK_LABEL = `${DAY_ABBREVIATIONS[WEEK_STARTS_ON]}-${DAY_ABBREVIATIONS[(WEEK_STARTS_ON + 6) % 7]}`;
+/** One-letter column headers for a week starting on `weekStartsOn`. */
+function dayHeaders(weekStartsOn: number): string[] {
+  return weekDayOrder(weekStartsOn).map((d) => DAY_LETTERS[d]!);
+}
+
+/** "Mon-Sun" for a week starting on `weekStartsOn`. */
+function weekLabel(weekStartsOn: number): string {
+  const order = weekDayOrder(weekStartsOn);
+  return `${DAY_ABBREVIATIONS[order[0]!]}-${DAY_ABBREVIATIONS[order[6]!]}`;
+}
 
 /** Sum records into the week's columns by the logical day each belongs to. */
 export function bucketByLogicalDay<T extends { timestamp: number }>(
@@ -83,6 +89,7 @@ export function bucketByLogicalDay<T extends { timestamp: number }>(
 
 export function TextMetrics() {
   const dayStartHour = useSettingsStore((s) => s.dayStartHour);
+  const weekStartsOn = useSettingsStore((s) => s.weekStartsOn);
   const waterLimit = useSettingsStore((s) => s.waterLimit);
   const saltLimit = useSettingsStore((s) => s.saltLimit);
   const sugarLimit = useSettingsStore((s) => s.sugarLimit);
@@ -125,10 +132,11 @@ export function TextMetrics() {
 
   // Weekly data
   const week = useMemo(
-    () => getLogicalWeek(new Date(), dayStartHour),
+    () => getLogicalWeek(new Date(), dayStartHour, weekStartsOn),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [dayStartHour, tick]
+    [dayStartHour, weekStartsOn, tick]
   );
+  const dayHeaderLetters = useMemo(() => dayHeaders(weekStartsOn), [weekStartsOn]);
   const { start: weekStart, end: weekEnd, dayKeys, todayIndex } = week;
 
   const weeklyWaterRecords = useIntakeRecordsByDateRange(
@@ -449,14 +457,15 @@ export function TextMetrics() {
 
         {/* Weekly Summary */}
         <h2 className="text-xs font-medium uppercase tracking-wide text-muted-foreground mt-4 mb-2">
-          {`This Week (${WEEK_LABEL})`}
+          {`This Week (${weekLabel(weekStartsOn)})`}
         </h2>
         <div className="grid grid-cols-[auto_repeat(7,1fr)] gap-x-1 gap-y-1">
           {/* Day headers row */}
           <div /> {/* Empty first cell */}
-          {DAY_HEADERS.map((day, i) => (
+          {dayHeaderLetters.map((day, i) => (
             <div
               key={`header-${i}`}
+              data-testid="week-day-header"
               className={cn(
                 "text-xs text-muted-foreground text-center font-medium",
                 i === todayIndex && "font-semibold"
