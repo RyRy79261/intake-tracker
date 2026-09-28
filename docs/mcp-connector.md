@@ -175,26 +175,36 @@ point to.
 
 #### `[transport]/route.ts` — MCP server
 
-Uses `mcp-handler` (Vercel Labs adapter) for the JSON-RPC plumbing:
+Uses `mcp-handler` 2 (Vercel Labs adapter, on MCP SDK v2 —
+`@modelcontextprotocol/server`) for the JSON-RPC plumbing. It serves the
+stateless 2026-07-28 protocol and answers 2025-era Streamable HTTP clients
+through the SDK's legacy fallback, from the same handler. It serves whatever
+route it is mounted on, so the route only answers the `mcp` segment
+(`/api/mcp/mcp`, the URL connectors are configured with):
 
 ```ts
-import { createMcpHandler } from "mcp-handler";
+import { createMcpHandler, withMcpAuth } from "mcp-handler";
 import { z } from "zod";
-import { requireMcpAuth } from "@/lib/mcp/auth";
-// ... read-only query helpers from src/lib/mcp/queries.ts
 
 const handler = createMcpHandler(
   (server) => {
-    server.tool("get_today_summary", "...", {}, async (_, ctx) => {
-      const { userId } = await requireMcpAuth(ctx.request);
-      return { content: [{ type: "text", text: JSON.stringify(await getTodaySummary(userId)) }] };
-    });
-    // ... other read-only tools
+    server.registerTool(
+      "get_today_summary",
+      { description: "...", inputSchema: z.object({ timezone: z.string().optional() }) },
+      async (args, ctx) => {
+        const userId = ctx.http?.authInfo?.extra?.userId; // set by verifyToken
+        // ...
+      },
+    );
+    // ... other read-only tools (src/lib/mcp/tools.ts)
   },
   { serverInfo: { name: "intake-tracker", version: "1.0.0" } },
 );
 
-export { handler as GET, handler as POST };
+const authed = withMcpAuth(handler, verifyToken, {
+  required: true,
+  resourceMetadataPath: "/.well-known/oauth-protected-resource",
+});
 ```
 
 `requireMcpAuth` parses the `Authorization: Bearer` header, hashes the
@@ -418,9 +428,9 @@ Code / Claude Desktop validation; phases 2–4 are what unlock claude.ai web.
 
 ## Open questions
 
-- `mcp-handler` version pin: need to use ≥ the version that depends on
-  `@modelcontextprotocol/sdk@>=1.26.0` to avoid the known CVE. Confirm
-  latest on npm at implementation time.
+- ~~`mcp-handler` version pin~~ — resolved: on `mcp-handler` 2.x with
+  `@modelcontextprotocol/server` 2.x (the v1 `@modelcontextprotocol/sdk` is
+  no longer a dependency).
 - Whether to namespace the OAuth metadata under `/api/mcp/.well-known/`
   (default) or surface it at the root `/.well-known/...` for stricter
   RFC 8414 compliance. Both work with claude.ai; the namespaced version
