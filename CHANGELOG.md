@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.38.0](https://github.com/RyRy79261/intake-tracker/compare/v1.37.1...v1.38.0) (2026-09-28)
+
+
+### Features
+
+* **settings:** week starts on Monday by default, as a synced setting ([#377](https://github.com/RyRy79261/intake-tracker/issues/377)) ([2783830](https://github.com/RyRy79261/intake-tracker/commit/27838309b34559c20fd86f05ec4443b235cd8933))
+
 ## [1.37.1](https://github.com/RyRy79261/intake-tracker/compare/v1.37.0...v1.37.1) (2026-09-27)
 
 
