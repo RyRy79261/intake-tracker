@@ -178,12 +178,19 @@ describe("MCP route — current SDK client (2026-07-28 protocol)", () => {
         params: Promise.resolve({ transport: "mcp" }),
       });
     };
-    const client = new Client({ name: "route-test", version: "1.0.0" });
+    // The v2 client defaults to the 2025 (legacy) sequence; pin the modern era
+    // so this exercises the 2026-07-28 path rather than the legacy fallback.
+    const client = new Client(
+      { name: "route-test", version: "1.0.0" },
+      { versionNegotiation: { mode: { pin: "2026-07-28" } } },
+    );
     await client.connect(
       new StreamableHTTPClientTransport(new URL("https://intake.example/api/mcp/mcp"), {
         fetch: fetchIntoRoute,
       }),
     );
+    expect(client.getProtocolEra()).toBe("modern");
+    expect(client.getNegotiatedProtocolVersion()).toBe("2026-07-28");
 
     const { tools } = await client.listTools();
     expect(tools.map((t) => t.name).sort()).toEqual([...MCP_TOOL_NAMES].sort());
