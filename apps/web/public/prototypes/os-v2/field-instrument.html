@@ -1,0 +1,1434 @@
+<!doctype html>
+<!-- PROTOTYPE (throwaway): Field Instrument (hardware faceplate, keypad, rack modules) — intake-tracker app-OS concept -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Field Instrument · intake-tracker prototype</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Chivo+Mono:wght@400;500&family=Chivo:wght@400;600;700&family=DotGothic16&family=Doto:wght@800&display=swap" rel="stylesheet">
+<style>
+/* ---------- page / harness backdrop (outside the product) ---------- */
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:#5b5a57;overflow:hidden}
+body.framed{overflow:auto}
+#stage{width:100vw;height:100dvh}
+body.framed #stage{width:auto;height:auto;min-height:100dvh;display:flex;align-items:center;justify-content:center;padding:24px}
+
+/* ---------- theme tokens ---------- */
+.app{
+  --chassis:#DAD6CD;--module:#EEEBE4;--key:#F8F6F1;--lip:#ABA496;--ink:#34332F;--ink2:#5B5850;--rule:#C2BDB1;--well:#E4E0D7;
+  --glass:#0F1011;--bezel:#C6C1B5;--bezel-hl:rgba(255,255,255,.65);--hl:rgba(255,255,255,.95);--screw:rgba(52,51,47,.32);
+  --inv-bg:#34332F;--inv-fg:#F4F2EC;--led-off:#BDB8AC;
+  --g-fg:#EDEDE8;--g-mu:#8F8F89;--g-off:#2A2B2E;--g-rule:#24252A;
+  --water:#0A67B5;--sodium:#8C5A00;--sugar:#B01E62;--caffeine:#7D4B28;--alcohol:#653CC9;--bp:#BA2424;--weight:#137645;--bath:#6B620E;--meds:#06746B;--ai:#3B47C9;--potassium:#4F6B12;
+  --water-g:#3FB4FF;--sodium-g:#FFC53D;--sugar-g:#FF7BB8;--caffeine-g:#D6975F;--alcohol-g:#B38AFF;--bp-g:#FF5B55;--weight-g:#4ED98E;--bath-g:#D2C45A;--meds-g:#2ED6C6;--ai-g:#92A1FF;--potassium-g:#A9D65A;
+  --on-c:#FFFFFF;--focus:#34332F;
+  --f-dot:"Doto","DotGothic16",monospace;--f-eng:"Chivo",sans-serif;--f-mono:"Chivo Mono",monospace;
+}
+.app.dark{
+  --chassis:#1F201C;--module:#282925;--key:#353631;--lip:#0D0E0C;--ink:#DEDBD3;--ink2:#A9A69C;--rule:#41423C;--well:#191A17;
+  --glass:#030304;--bezel:#45463F;--bezel-hl:rgba(255,255,255,.16);--hl:rgba(255,255,255,.10);--screw:rgba(222,219,211,.28);
+  --inv-bg:#EFECE4;--inv-fg:#151613;--led-off:#46473F;
+  --water:#3FB4FF;--sodium:#FFC53D;--sugar:#FF7BB8;--caffeine:#D6975F;--alcohol:#B38AFF;--bp:#FF5B55;--weight:#4ED98E;--bath:#D2C45A;--meds:#2ED6C6;--ai:#92A1FF;--potassium:#A9D65A;
+  --on-c:#111210;--focus:#EFECE4;
+}
+
+/* ---------- device ---------- */
+.app{
+  container-type:inline-size;container-name:app;
+  position:relative;width:100vw;height:100dvh;overflow:hidden;border-radius:0;
+  background:var(--chassis);color:var(--ink);
+  font:400 15px/1.4 var(--f-eng);-webkit-font-smoothing:antialiased;
+  padding-top:env(safe-area-inset-top);padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-right);
+  display:flex;flex-direction:column;
+}
+body.framed .app{flex:none}
+body.f390 .app{width:390px;height:844px}
+body.f1280 .app{width:1280px;height:800px}
+.app button{font:inherit;color:inherit}
+.app :focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.glass :focus-visible,.glass:focus-visible{outline-color:#EDEDE8}
+.mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.eng{font:600 11px/1.2 var(--f-eng);text-transform:uppercase;letter-spacing:.08em}
+.dot{font-family:var(--f-dot);font-weight:800;line-height:1;letter-spacing:.02em}
+.figm{font-family:var(--f-mono);font-weight:500;line-height:1;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.chrome,.sysbar,.modes,.keypad-mod,.strips,.mod-head,.tabs{user-select:none;-webkit-user-select:none}
+.mod-body{user-select:text}
+.wd-only{display:none!important}
+
+/* ---------- keycaps: square, hard lip (the single elevation device) ---------- */
+.kc{appearance:none;border:0;cursor:pointer;background:var(--key);color:var(--ink);border-radius:2px;
+  box-shadow:inset 0 1px 0 var(--hl),inset 0 0 0 1px rgba(0,0,0,.07),0 3px 0 var(--lip);
+  transition:transform 50ms linear,box-shadow 50ms linear;min-height:44px;min-width:44px;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+.app.dark .kc{box-shadow:inset 0 1px 0 var(--hl),inset 0 0 0 1px rgba(255,255,255,.03),0 3px 0 var(--lip)}
+.kc:active,.kc.down{transform:translateY(2px);box-shadow:inset 0 1px 0 var(--hl),0 1px 0 var(--lip)!important}
+.kc.inv,.kc[aria-pressed="true"],.kc[aria-selected="true"]{background:var(--inv-bg);color:var(--inv-fg);box-shadow:inset 0 0 0 1px rgba(0,0,0,.25),0 3px 0 var(--lip)}
+.kc[disabled]{cursor:not-allowed;background:transparent;color:var(--ink2);box-shadow:inset 0 0 0 1.5px var(--rule)!important;transform:none}
+.kc.sm{min-height:44px;padding:0 14px;font-size:14px}
+.kc.pri{background:var(--inv-bg);color:var(--inv-fg)}
+.kc.pri[disabled]{background:transparent;color:var(--ink2)}
+.kc.wide{width:100%}
+.btnrow{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.ic{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:square;stroke-linejoin:miter;display:inline-block;vertical-align:-3px;flex:none}
+
+/* ---------- system bar: one 44px faceplate strip ---------- */
+.sysbar{flex:none;display:flex;align-items:stretch;height:44px;border-bottom:1px solid var(--rule);background:var(--chassis)}
+.sb-seg{appearance:none;border:0;background:none;color:var(--ink);display:inline-flex;align-items:center;gap:8px;padding:0 12px;min-width:44px;height:44px;cursor:pointer;white-space:nowrap;-webkit-tap-highlight-color:transparent}
+.sb-seg:active{background:var(--well)}
+.sb-seg.icon{width:48px;padding:0;justify-content:center}
+.sb-dose{border-right:1px solid var(--rule)}
+.sb-acct,.sb-gear{border-left:1px solid var(--rule)}
+.sb-spacer{flex:1}
+.led-dot{width:8px;height:8px;flex:none;border:1.5px solid var(--c);display:inline-block}
+.led-dot.on{background:var(--c);box-shadow:0 0 0 2px color-mix(in srgb,var(--c) 25%,transparent)}
+.sb-dose .mono{font-size:14px}
+.sb-sync{color:var(--ink2);font-size:12px;cursor:default;display:inline-flex;align-items:center;gap:6px;padding:0 12px}
+.initials{position:relative;display:inline-grid;place-items:center;width:28px;height:28px;background:var(--inv-bg);color:var(--inv-fg);font:600 11px var(--f-eng);letter-spacing:.06em;border-radius:2px}
+.initials i{position:absolute;right:-3px;bottom:-3px;width:8px;height:8px;background:var(--meds);border:2px solid var(--chassis)}
+.signin{flex-direction:column;align-items:flex-start!important;justify-content:center;gap:0!important;line-height:1.15}
+.signin b{font:600 13px var(--f-eng)}
+.signin small{font-size:12px;color:var(--ink2)}
+.acct-pop{top:48px;right:8px}
+
+/* ---------- body grid (phone first) ---------- */
+.body{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr) auto;
+  grid-template-areas:"top" "mid" "modes";gap:8px;padding:8px 8px calc(14px + env(safe-area-inset-bottom))}
+.display-mod{grid-area:top}
+.readout{grid-area:top;display:none}
+.keypad-mod{grid-area:mid;display:flex;flex-direction:column;min-height:0}
+.rack{grid-area:mid;display:none;position:relative;min-height:0}
+.modes{grid-area:modes}
+.app.is-app .display-mod{display:none}
+.app.is-app .readout{display:block}
+.app.is-app .keypad-mod{display:none}
+.app.is-app .rack{display:block}
+
+/* ---------- display module: dark glass inset in a lit bezel ---------- */
+.bezel{background:var(--bezel);padding:5px;border-radius:3px;box-shadow:inset 0 1px 0 var(--bezel-hl),inset 0 0 0 1px rgba(0,0,0,.18)}
+.glass{background:var(--glass);border-radius:2px;box-shadow:inset 0 0 0 1px #000,inset 0 2px 6px rgba(0,0,0,.55);color:var(--g-fg);padding:6px 8px 6px}
+.gcols{display:grid;grid-template-columns:98px repeat(7,minmax(0,1fr));column-gap:2px}
+.g-head{align-items:end;height:18px;border-bottom:1px solid var(--g-rule);padding-bottom:2px;margin-bottom:1px}
+.g-head .hd{font:600 11px/1 var(--f-eng);letter-spacing:.08em;color:var(--g-mu);text-align:center;padding:2px 0}
+.g-head .hd.now{background:var(--g-fg);color:var(--glass)}
+.g-head .hl{text-align:left}
+.g-row{grid-template-rows:auto 26px;row-gap:1px;width:100%;padding:3px 0 3px;border:0;border-bottom:1px solid var(--g-rule);background:none;text-align:left;cursor:pointer;color:var(--g-fg)}
+.g-row:last-child{border-bottom:0}
+.g-l1{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;gap:8px;min-width:0;height:16px}
+.g-l1 .lab{display:inline-flex;align-items:center;gap:5px;color:var(--c);white-space:nowrap}
+.g-l1 .lab .ic{width:13px;height:13px}
+.g-l1 .lab .eng{color:var(--g-fg)}
+.gst{font:400 12px/16px var(--f-eng);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--g-mu)}
+.gst .over{color:var(--c);padding-bottom:3px;background:repeating-linear-gradient(135deg,var(--c) 0 1.5px,transparent 1.5px 3.5px) left bottom/100% 3px no-repeat}
+.gst .lim{background:var(--c);color:var(--glass);font-weight:600;padding:0 4px}
+.g-fig{display:flex;align-items:baseline;gap:3px;color:var(--c);white-space:nowrap;align-self:center}
+.g-fig .dot{font-size:24px}
+.g-fig .figm{font-size:22px}
+.g-fig small{font:400 12px var(--f-mono);color:var(--g-mu)}
+.c{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;height:26px;min-width:0;font:400 12px/1 var(--f-mono);font-variant-numeric:tabular-nums;color:var(--g-fg);letter-spacing:-.03em}
+.c .u{display:block;width:72%;height:3px;background:var(--g-off)}
+.c.ok .u{background:var(--c);opacity:.55}
+.c.over .u{height:4px;background:repeating-linear-gradient(135deg,var(--c) 0 1.5px,transparent 1.5px 3.5px);opacity:1}
+.c.lim{background:var(--c);color:var(--glass);font-weight:500}
+.c.lim .u{background:var(--glass)}
+.c.fut{color:var(--g-mu)}
+.c.now{box-shadow:inset 0 0 0 1px var(--g-fg)}
+.bar{position:relative;width:12px;height:20px;background:var(--g-off)}
+.bar .f{position:absolute;left:0;right:0;bottom:0;background:var(--c)}
+.bar .fh{position:absolute;left:0;right:0;background:repeating-linear-gradient(135deg,var(--c) 0 1.5px,transparent 1.5px 3.5px);box-shadow:inset 0 0 0 1px var(--c)}
+.bar .tk{position:absolute;left:-4px;right:-4px;height:2px;background:var(--g-fg)}
+.c.lim .bar{background:rgba(0,0,0,.3)}
+.c.lim .bar .f{background:var(--glass)}
+.c.lim .bar .tk{background:var(--glass)}
+
+/* readout strip (phone, app open) */
+.readout{padding:4px}
+.ro{display:block;width:100%;border:0;cursor:pointer;text-align:left;padding:5px 6px 2px}
+.ro-grid{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);gap:4px}
+.ro-c{display:flex;flex-direction:column;gap:1px;min-width:0;padding:0 3px;color:var(--g-fg)}
+.ro-n{color:var(--c);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:.04em}
+.ro-v{font:500 13px/16px var(--f-mono);white-space:nowrap;font-variant-numeric:tabular-nums}
+.ro-v small{font:400 12px var(--f-mono);color:var(--g-mu)}
+.ro-l{font:400 12px/15px var(--f-mono);color:var(--g-mu);white-space:nowrap}
+.ro-c.over .ro-v{align-self:flex-start;padding-bottom:3px;background:repeating-linear-gradient(135deg,var(--c) 0 1.5px,transparent 1.5px 3.5px) left bottom/100% 3px no-repeat}
+.ro-c.over .ro-l{color:var(--c)}
+.ro-c.limit{background:var(--c)}
+.ro-c.limit .ro-n,.ro-c.limit .ro-v,.ro-c.limit .ro-v small,.ro-c.limit .ro-l{color:var(--glass)}
+.ro-grip{display:flex;align-items:center;justify-content:center;gap:6px;height:16px;margin-top:2px;color:var(--g-mu);font:600 11px var(--f-eng);letter-spacing:.08em;text-transform:uppercase}
+.ro-grip::before,.ro-grip::after{content:"";width:22px;height:2px;background:var(--g-mu)}
+.ro-msg{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:44px;padding:0 4px 0 8px;margin-top:4px;background:var(--module);color:var(--ink);font-size:13px}
+.ro-msg span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* ---------- keypad ---------- */
+.silk{display:flex;justify-content:space-between;align-items:center;gap:8px;height:44px;padding:0 2px 4px;color:var(--ink2)}
+.silk .legend{font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.silk .msg{flex:1;min-width:0;color:var(--ink);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;gap:6px}
+.silk .msg .ic{color:var(--meds)}
+.kp-hide{display:none}
+.kp{flex:1;min-height:0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));grid-template-rows:repeat(4,minmax(0,1fr));gap:8px 8px}
+.kcell{display:flex;flex-direction:column;min-height:0;min-width:0}
+.key{flex:1;min-height:44px;display:grid;place-items:center;color:var(--c);padding:0}
+.key .hero-n{font-size:28px}
+.key .hero-i .ic{width:28px;height:28px;stroke-width:1.3}
+.kl{display:flex;flex-direction:column;gap:1px;padding:6px 1px 0;min-width:0}
+.kl .eng{color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:.05em}
+.kl .kd{font:400 12px/1.2 var(--f-mono);color:var(--ink2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* ---------- mode strip (LED row reserved inside, no negative offsets) ---------- */
+.modes{display:grid;grid-template-columns:44px repeat(4,minmax(0,1fr)) 48px;column-gap:4px}
+.modes.ai{grid-template-columns:44px repeat(4,minmax(0,1fr)) 48px 54px}
+.mcell{display:flex;flex-direction:column;align-items:stretch;min-width:0}
+.ledrow{height:14px;display:flex;align-items:center;justify-content:center;gap:4px}
+.led{display:block;width:18px;height:3px;background:var(--led-off)}
+.led.lit{background:var(--c,var(--ink))}
+.badge{display:inline-block;min-width:16px;height:14px;padding:0 3px;background:var(--meds);color:var(--on-c);font:500 12px/14px var(--f-mono);text-align:center}
+.ledrow .eng{color:var(--ink2);letter-spacing:.06em}
+.mk{height:50px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:0 1px;min-width:0}
+.mk .eng{font:600 12px/1.1 var(--f-eng);text-transform:none;letter-spacing:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.mk .ic{color:var(--c,currentColor)}
+.mk.inv .ic{color:inherit}
+.ai-key{align-self:center;width:50px;height:50px;border-radius:50%;background:var(--ai);color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;touch-action:none;padding:0}
+.app.dark .ai-key{color:#111}
+.ai-key .ic{width:18px;height:18px}
+.ai-key .eng{font-size:11px;letter-spacing:.06em}
+.ai-key.held{transform:translateY(2px);box-shadow:inset 0 1px 0 var(--hl),0 1px 0 var(--lip)}
+
+/* ---------- rack & modules ---------- */
+.strips{display:none}
+.modules{position:absolute;inset:0}
+.module{position:absolute;inset:0;background:var(--module);display:flex;flex-direction:column;min-height:0;visibility:hidden;pointer-events:none;box-shadow:inset 0 0 0 1px var(--rule)}
+.module.is-focus{visibility:visible;pointer-events:auto}
+.module.enter{animation:bayin 120ms ease-out}
+@keyframes bayin{from{transform:translateY(14px)}to{transform:none}}
+.screw{position:absolute;width:3px;height:3px;border-radius:50%;background:var(--screw)}
+.screw.a{left:5px;top:5px}.screw.b{right:5px;top:5px}.screw.c{left:5px;bottom:5px}.screw.d{right:5px;bottom:5px}
+.mod-head{display:flex;align-items:center;gap:4px;height:52px;padding:0 6px 0 12px;border-bottom:1px solid var(--rule)}
+.mod-title{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;padding-left:10px;position:relative}
+.mod-title::before{content:"";position:absolute;left:0;top:1px;bottom:1px;width:3px;background:var(--c,var(--ink))}
+.mod-title h2{margin:0;display:flex;align-items:center;gap:6px}
+.mod-title h2 .ic{color:var(--c,var(--ink))}
+.mod-title .st{font-size:12px;color:var(--ink2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mod-head .kc{width:44px;height:44px;padding:0;display:grid;place-items:center}
+.tabs{display:flex;gap:6px;padding:6px 10px 9px;border-bottom:1px solid var(--rule);overflow-x:auto;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tabs .kc{flex:1 0 auto;padding:0 10px;font:600 11px var(--f-eng);letter-spacing:.05em;text-transform:uppercase}
+.mod-body{flex:1;min-height:0;overflow:auto;padding:12px 12px 24px;overscroll-behavior:contain}
+
+/* content primitives */
+.sec{margin:0 0 18px}
+.sec>h3{margin:0 0 8px;color:var(--ink2)}
+.rows{border-top:1px solid var(--rule)}
+.row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--rule);min-height:52px}
+.row .grow,.grow{flex:1;min-width:0}
+.row .t{font:400 13px var(--f-mono);color:var(--ink2);width:46px;flex:none}
+.row .title{font-weight:600}
+.meta{font-size:13px;color:var(--ink2)}
+.nowrap{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.spine{border-left:3px solid var(--c);padding-left:10px}
+.chip{display:inline-flex;align-items:center;gap:5px;padding:2px 6px;font:500 12px var(--f-mono);border:1.5px solid var(--c,var(--ink));color:var(--c,var(--ink));border-radius:1px;white-space:nowrap}
+.nh{display:inline-block;width:8px;height:8px;flex:none;background:repeating-linear-gradient(135deg,currentColor 0 1.4px,transparent 1.4px 3px);box-shadow:inset 0 0 0 1px currentColor}
+.note{font-size:13px;color:var(--ink2)}
+.quiet{font-size:13px;color:var(--ink2);padding:8px 0;border-top:1px dashed var(--rule);border-bottom:1px dashed var(--rule)}
+.notice{display:flex;align-items:center;gap:12px;padding:6px 0;margin-bottom:14px;border-top:1px dashed var(--rule);border-bottom:1px dashed var(--rule);font-size:14px}
+.notice .kc{flex:none;padding:0 18px}
+.field{display:flex;flex-direction:column;gap:4px;margin-bottom:12px}
+.field>span:first-child{color:var(--ink2)}
+.inp{height:44px;border:0;border-bottom:2px solid var(--ink2);background:var(--well);color:var(--ink);font:400 15px var(--f-eng);padding:0 10px;border-radius:0;width:100%;min-width:0;box-shadow:inset 0 1px 2px rgba(0,0,0,.08)}
+.inp.num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.inp:focus{outline:2px solid var(--focus);outline-offset:1px}
+.inp::placeholder{color:var(--ink2);opacity:.8}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.three{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.segctl{display:flex;gap:6px;flex-wrap:wrap}
+.segctl .kc{flex:1;min-width:0;padding:0 8px;font-size:14px}
+.sw{display:inline-flex;align-items:center;gap:8px;padding:0 12px;min-width:76px;justify-content:center;font:600 11px var(--f-eng);letter-spacing:.08em}
+.sw i{width:8px;height:8px;border:1.5px solid currentColor;display:inline-block}
+.sw[aria-checked="true"] i{background:currentColor}
+.conv{font:500 14px var(--f-mono);padding:8px 10px;border-left:3px solid var(--sodium);background:var(--well);margin:4px 0 12px}
+.fig-m{font-size:24px;color:var(--c)}
+.fig-m.figm{font-size:21px}
+.card{border-top:3px solid var(--c,var(--ink));padding:10px 0 4px}
+.stepper{display:flex;align-items:center;gap:8px}
+.stepper .inp{text-align:center;font-size:20px;height:52px}
+.stepper .kc{height:52px;min-width:64px;font:500 15px var(--f-mono)}
+.numpad{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:8px 0 12px}
+.numpad .kc{font:500 20px var(--f-mono);height:48px}
+.bpf{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.bpf .inp{height:56px;font-size:24px;text-align:center}
+.bpf .inp::placeholder{font-size:14px}
+.bpf label.sel .inp{outline:2px solid var(--bp);outline-offset:1px}
+.preset{display:flex;align-items:center;gap:10px;width:100%;justify-content:flex-start;padding:0 12px;min-height:52px;margin-bottom:10px;text-align:left}
+.preset .grow{flex:1}
+.preset .mono{font-size:13px;color:var(--ink2)}
+.chart{width:100%;height:auto;display:block;margin:4px 0 8px}
+.chart text{font:400 11px var(--f-mono);fill:var(--ink2)}
+.pill-oval{display:inline-block;width:30px;height:16px;border-radius:50%;background:#D9CCEF;border:1px solid #8E7CB5;vertical-align:middle;flex:none}
+.pill-round{display:inline-block;width:16px;height:16px;border-radius:50%;background:#FFFFFF;border:1px solid #9A968C;vertical-align:middle;flex:none}
+.edit-box{background:var(--well);padding:10px;margin:6px 0 10px}
+/* history ledger */
+.fstrip{display:flex;gap:0;overflow-x:auto;scrollbar-width:none;margin:0 -12px 6px;padding:2px 12px 5px;-webkit-mask-image:linear-gradient(to right,#000 calc(100% - 36px),transparent);mask-image:linear-gradient(to right,#000 calc(100% - 36px),transparent)}
+.fstrip::-webkit-scrollbar{display:none}
+.fstrip .kc{flex:none;min-width:44px;padding:0 8px;font:500 13px var(--f-mono);color:var(--c,var(--ink));border-radius:0;margin-right:-1px}
+.fstrip .kc[aria-pressed="true"]{color:var(--inv-fg)}
+.fshow{font-size:12px;color:var(--ink2);margin:0 0 10px}
+.hrec{border-bottom:1px solid var(--rule)}
+.hrec-b{display:grid;grid-template-columns:44px 18px minmax(0,1fr) 12px;gap:8px;align-items:center;width:100%;min-height:44px;padding:5px 0;background:none;border:0;text-align:left;cursor:pointer;color:var(--ink)}
+.hrec-b .t{font:400 13px var(--f-mono);color:var(--ink2)}
+.hrec-b .title{font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hrec-b .meta{font:400 12px var(--f-mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hrec-b .chev{color:var(--ink2);font:500 12px var(--f-mono)}
+.hrec.open .hrec-b{background:var(--well)}
+.hact{display:flex;gap:8px;padding:6px 0 10px 52px;background:var(--well)}
+/* settings rows: engraved label, value, stepper */
+.srow{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;column-gap:10px;min-height:56px;border-bottom:1px solid var(--rule);padding:4px 0}
+.srow .slab{display:flex;flex-direction:column;gap:2px;min-width:0}
+.srow .slab .eng{color:var(--ink2)}
+.srow .slab .note{font-size:12px}
+.srow .sval{font:500 15px var(--f-mono);text-align:right;min-width:70px;white-space:nowrap}
+.srow .step{display:flex;gap:6px}
+.srow .step .kc{width:44px;padding:0;font:500 18px/1 var(--f-mono)}
+.srow.sw-row{grid-template-columns:minmax(0,1fr) auto}
+.sgh{display:flex;align-items:center;gap:8px;margin:18px 0 0;padding-bottom:6px;border-bottom:1px solid var(--rule)}
+.sgh .eng{color:var(--ink)}
+.sgh .mono{margin-left:auto;font-size:12px;color:var(--ink2)}
+.ufield{display:flex;flex-direction:column;gap:4px;padding:10px 0;border-bottom:1px solid var(--rule)}
+.ufield .eng{color:var(--ink2)}
+.ufield input{height:40px;border:0;border-bottom:2px solid var(--ink2);background:transparent;color:var(--ink);font:400 15px var(--f-mono);padding:0 2px}
+.ufield input:focus{outline:2px solid var(--focus);outline-offset:1px}
+
+/* ---------- overlays ---------- */
+.scrim{position:absolute;inset:0;background:rgba(10,10,10,.35);z-index:20}
+.sheet{position:absolute;inset:0;z-index:30;background:var(--chassis);display:flex;flex-direction:column;padding-top:env(safe-area-inset-top)}
+.sheet.enter{animation:sheetin 150ms ease-out}
+@keyframes sheetin{from{transform:translateY(24px)}to{transform:none}}
+.sheet-head{display:flex;align-items:center;gap:8px;height:52px;padding:0 6px 0 16px;border-bottom:1px solid var(--rule)}
+.sheet-head h2{flex:1;margin:0}
+.sheet-body{flex:1;min-height:0;overflow:auto;padding:4px 16px 32px;user-select:text}
+.grp{border-bottom:1px solid var(--rule)}
+.grp-h{display:flex;width:100%;align-items:center;justify-content:space-between;gap:10px;background:none;border:0;padding:0 2px;min-height:52px;cursor:pointer;text-align:left;color:var(--ink)}
+.grp-h .sum{font-size:12px;color:var(--ink2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:right}
+.grp-h .pm{font:500 14px var(--f-mono);color:var(--ink2);width:12px}
+.grp-b{padding:0 2px 16px}
+.pop{position:absolute;z-index:30;background:var(--module);box-shadow:0 0 0 1px var(--rule),0 3px 0 var(--lip);padding:8px;min-width:250px}
+.pop .kc{width:100%;justify-content:flex-start;display:flex;align-items:center;gap:8px;padding:0 12px;margin-bottom:8px;text-align:left}
+.pop .stat{display:flex;align-items:center;gap:8px;min-height:40px;padding:0 4px 8px;font-size:13px;color:var(--ink2)}
+.switcher{left:8px;right:8px;bottom:calc(86px + env(safe-area-inset-bottom))}
+.sw-list .kc.main{display:flex;align-items:center;gap:10px;padding:6px 12px;text-align:left;min-height:52px;width:100%}
+.sw-list .row2{display:flex;gap:8px;margin-bottom:8px}
+.sw-list .kc.main .grow{flex:1;min-width:0}
+.sw-list .kc.main .st{font-size:12px;color:inherit;opacity:.85;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pop-h{display:flex;justify-content:space-between;align-items:center;min-height:32px;padding:0 4px 6px;color:var(--ink2)}
+.pop-h .note{font-size:12px}
+.mic-panel{position:absolute;z-index:25;left:8px;right:8px;bottom:calc(86px + env(safe-area-inset-bottom));background:var(--bezel);padding:5px;border-radius:3px;box-shadow:inset 0 1px 0 var(--bezel-hl),0 3px 0 var(--lip)}
+.mic-panel .glass{padding:12px}
+.mic-panel .inner{background:var(--module);padding:8px}
+.meter{display:grid;grid-template-columns:repeat(16,1fr);gap:3px;height:18px;margin:10px 0}
+.meter i{background:var(--g-off)}
+.meter i.on{background:var(--ai-g)}
+.mic-h{display:flex;justify-content:space-between;align-items:baseline;color:var(--g-mu);padding-bottom:4px;border-bottom:1px solid var(--g-rule)}
+.mic-tr{font:400 15px/1.4 var(--f-mono);color:var(--g-fg);min-height:42px}
+.mic-hint{font-size:12px;color:var(--g-mu);margin-top:6px}
+.mic-panel.cancel .glass{box-shadow:inset 0 0 0 2px var(--g-fg)}
+.rv-row{display:grid;grid-template-columns:minmax(0,1fr) 44px;gap:6px 8px;padding:8px 0;border-bottom:1px solid var(--rule);align-items:center}
+.rv-h{display:flex;align-items:center;gap:6px}
+.rv-f{display:flex;align-items:center;gap:6px;font:400 13px var(--f-mono);flex-wrap:wrap}
+.rv-row .inp{width:72px;height:44px}
+.rv-row>.kc{grid-column:2;grid-row:1/3;width:44px;padding:0;display:grid;place-items:center}
+
+/* phone: keypad pulled up over an open app */
+.app.is-app.kp-up .keypad-mod{display:flex;position:absolute;left:0;right:0;bottom:calc(78px + env(safe-area-inset-bottom));height:min(430px,58%);z-index:18;background:var(--chassis);padding:4px 8px 8px;border-top:1px solid var(--rule);box-shadow:0 -3px 0 var(--lip)}
+.app.is-app.kp-up .kp-hide{display:inline-flex;align-items:center;gap:6px}
+.app.is-app.kp-up .kp .kl .kd{display:none}
+
+/* ---------- WIDE (container >= 768) ---------- */
+@container app (min-width:768px){
+  .wd-only{display:revert!important}
+  .ph-only{display:none!important}
+  .sysbar .sb-sync.wd-only{display:inline-flex!important}
+  .body{grid-template-columns:460px minmax(0,1fr);grid-template-rows:auto minmax(0,1fr) auto;grid-template-areas:"top rack" "mid rack" "modes rack";gap:10px 14px;padding:10px 14px 14px}
+  .app.is-app .display-mod{display:block}
+  .readout,.app.is-app .readout{display:none!important}
+  .app .keypad-mod,.app.is-app .keypad-mod{display:flex;position:static;height:auto;box-shadow:none;border:0;padding:0;background:none}
+  .kp,.app.is-app .kp{grid-template-columns:repeat(4,minmax(0,1fr));grid-template-rows:repeat(3,minmax(0,1fr))}
+  .app.is-app .kp .kl .kd{display:block}
+  .kp-hide,.app.is-app.kp-up .kp-hide{display:none}
+  .gcols{grid-template-columns:104px repeat(7,minmax(0,1fr))}
+  .modes,.modes.ai{grid-template-columns:repeat(4,minmax(0,1fr))}
+  .modes.ai{grid-template-columns:repeat(4,minmax(0,1fr)) 64px}
+  .rack,.app.is-app .rack{display:flex;grid-area:rack;flex-direction:column;gap:8px}
+  .strips{display:flex;flex-direction:column;gap:6px;flex:none}
+  .strip{position:relative;display:flex;align-items:stretch;height:44px;background:var(--module);box-shadow:inset 0 0 0 1px var(--rule)}
+  .strip .open{flex:1;min-width:0;display:flex;align-items:center;gap:10px;background:none;border:0;cursor:pointer;padding:0 12px 0 18px;color:var(--ink)}
+  .strip .open::before{content:"";width:3px;height:20px;flex:none;background:var(--c,var(--ink))}
+  .strip .open .ic{color:var(--c,var(--ink))}
+  .strip .open .eng{width:112px;flex:none;text-align:left}
+  .strip .open .fig{flex:1;min-width:0;text-align:right;font:500 14px var(--f-mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .strip .x{background:none;border:0;border-left:1px solid var(--rule);width:48px;cursor:pointer;display:grid;place-items:center;color:var(--ink)}
+  .strip .screw.a{top:50%;margin-top:-1.5px;left:7px}.strip .screw.d{top:50%;margin-top:-1.5px;right:auto;left:auto}
+  .modules{position:relative;inset:auto;flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px}
+  .module{position:relative;inset:auto;display:none;visibility:visible;pointer-events:auto}
+  .module.is-exp{display:flex}
+  .module.is-focus{box-shadow:inset 0 0 0 1px var(--rule),inset 0 3px 0 var(--c,var(--ink))}
+  .module.enter{animation:none}
+  .module.is-exp.enter2{animation:bayin 120ms ease-out}
+  .empty-bay{background:transparent;box-shadow:inset 0 0 0 1px var(--rule);position:relative;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:8px;color:var(--ink2);text-align:center;padding:24px}
+  .mic-panel{left:14px;right:auto;width:460px;bottom:92px}
+  .switcher{left:14px;right:auto;width:460px;bottom:92px}
+  .sheet.drawer{left:auto;width:440px;top:44px;border-left:1px solid var(--rule)}
+  .sheet.drawer.enter{animation:drawerin 150ms ease-out}
+  @keyframes drawerin{from{transform:translateX(40px)}to{transform:none}}
+}
+@container app (max-width:767px){ .scrim.wd{display:none} }
+.app.bigtext .mod-body,.app.bigtext .sheet-body{font-size:17px}
+.app.bigtext .meta{font-size:15px}
+.app.rm *,.app.rm *::before{transition:none!important;animation:none!important}
+@media (prefers-reduced-motion:reduce){.app *{transition:none!important;animation:none!important}}
+
+/* ---------- reviewer harness (NOT product UI) — sits in the 14px bottom margin ---------- */
+.hx{position:fixed;left:0;bottom:0;z-index:9999;font:12px/1.35 ui-monospace,Menlo,Consolas,monospace;color:#111;display:flex;flex-direction:column-reverse;gap:4px;align-items:flex-start}
+.hx .hx-tab{height:13px;padding:0 8px;border:0;background:#c0169b;color:#fff;cursor:pointer;font:700 9px/13px ui-monospace,monospace;letter-spacing:.1em}
+.hx:not(.open) details{display:none}
+.hx.open .hx-tab{height:auto;padding:3px 8px;font-size:11px}
+.hx details{background:#fffbe6;border:2px dashed #c0169b;padding:4px 8px;max-width:260px}
+.hx summary{cursor:pointer;font-weight:700;color:#c0169b;list-style:none}
+.hx summary::before{content:"+ "}
+.hx details[open] summary::before{content:"− "}
+.hx .hrow{display:flex;gap:4px;flex-wrap:wrap;margin:5px 0}
+.hx button{font:inherit;padding:3px 7px;border:1px solid #111;background:#fff;cursor:pointer}
+.hx button[aria-pressed="true"]{background:#111;color:#fff}
+.hx a{color:#111;display:block;padding:2px 0}
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="app" id="app">
+    <header class="sysbar chrome" id="r-sysbar" aria-label="System bar"></header>
+    <main class="body">
+      <section class="display-mod" id="r-display" aria-label="Today and this week"></section>
+      <div class="readout bezel" id="r-readout"></div>
+      <section class="keypad-mod" id="r-keypad" aria-label="Quick entry keypad"></section>
+      <section class="rack" id="r-rack" aria-label="Open apps">
+        <div class="strips" id="r-strips"></div>
+        <div class="modules" id="r-modules"></div>
+      </section>
+      <nav class="modes chrome" id="r-modes" aria-label="Apps"></nav>
+    </main>
+    <div id="r-overlay"></div>
+    <div id="r-sheet"></div>
+    <div id="r-live" class="sr" aria-live="polite"></div>
+  </div>
+</div>
+
+<div class="hx" id="hx" aria-label="Reviewer harness (not part of the app)"><button class="hx-tab" id="hx-tab" aria-expanded="false" title="Reviewer harness">REVIEW</button>
+  <details id="hx-concepts"><summary>Concepts</summary>
+    <a href="ward-console.html">ward-console</a>
+    <a href="bedside-monitor.html">bedside-monitor</a>
+    <a href="flight-deck.html">flight-deck</a>
+    <a href="stage-manager.html">stage-manager</a>
+    <a href="field-instrument.html">field-instrument (this)</a>
+    <a href="index.html">index</a>
+  </details>
+  <details id="hx-review" open><summary>Review</summary>
+    <div class="hrow" role="group" aria-label="Viewport"><button data-hx="vp:auto">Fit</button><button data-hx="vp:390">390</button><button data-hx="vp:1280">1280</button></div>
+    <div class="hrow" role="group" aria-label="Theme"><button data-hx="th:light">Light</button><button data-hx="th:dark">Dark</button></div>
+    <div class="hrow" role="group" aria-label="Account"><button data-hx="auth:in">Signed in</button><button data-hx="auth:out">Signed out</button></div>
+    <div class="hrow"><button data-hx="reset">Reset demo</button><button data-hx="demo3">3 windows demo</button></div>
+  </details>
+</div>
+
+<script>
+(function(){
+"use strict";
+const KEY='proto-os-v2-field-instrument';
+const HKEY=KEY+'-harness';
+const app=document.getElementById('app');
+const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+/* numbers: no thousands comma (a dot-matrix comma reads as a decimal point). 4 digits ungrouped; 5+ grouped with a narrow space. */
+const fmt=n=>{n=Math.round(n);const a=Math.abs(n);const s=a>=10000?String(a).replace(/\B(?=(\d{3})+(?!\d))/g,' '):String(a);return (n<0?'−':'')+s};
+/* Doto only for plain integers; anything with a decimal point or slash is drawn in Chivo Mono */
+const FIG=(s,extra='')=>`<span class="${/^\d+$/.test(String(s))?'dot':'figm'} ${extra}">${s}</span>`;
+const num=(v,d)=>{const n=parseFloat(String(v).replace(',','.'));return isFinite(n)?n:d};
+const NOW=18*60+42;
+const uid=()=>Math.random().toString(36).slice(2,9);
+
+/* ---------- icons: 16px monoline, 1.5 stroke, square caps ---------- */
+const P={
+ drop:'M8 2 12.2 8.3A4.4 4.4 0 1 1 3.8 8.3Z',
+ plus:'M8 3v10M3 8h10',
+ custom:'M2.5 5h11M2.5 11h11M5.5 3v4M10.5 9v4',
+ cup:'M2.5 6.5h8.5V10a3 3 0 0 1-3 3H5.5a3 3 0 0 1-3-3ZM11 7.5h1.2a1.6 1.6 0 0 1 0 3.2H11M5 2v2.5M8 2v2.5',
+ tea:'M2.5 6.5h8.5V10a3 3 0 0 1-3 3H5.5a3 3 0 0 1-3-3ZM11 7.5h1.2a1.6 1.6 0 0 1 0 3.2H11M6.5 6.5V2.5h2.5V5',
+ glass:'M4 2.5h8l-1.2 11H5.2ZM4.5 6.5h7',
+ wine:'M4.5 2.5h7v3a3.5 3.5 0 0 1-7 0ZM8 9v4.5M5 13.5h6',
+ food:'M3.5 2v4.5a1.5 1.5 0 0 0 3 0V2M5 2v12M11.5 2c-1.5 1-2 3-2 5.5h2V14',
+ salt:'M4.5 7h7v6.5h-7ZM5.5 7l1-4h3l1 4M7 4.8h0M9 4.8h0',
+ sugar:'M3 5.5 8 3l5 2.5v5L8 13l-5-2.5ZM3 5.5 8 8l5-2.5M8 8v5',
+ heart:'M8 13.5 2.8 8.3a3 3 0 0 1 4.4-4.2L8 5l.8-.9a3 3 0 0 1 4.4 4.2Z',
+ scale:'M2.5 3.5h11v10h-11ZM5.5 7a2.5 2.5 0 0 1 5 0M8 7l1.2-1.4',
+ wee:'M8 2.5 11 7a3 3 0 1 1-6 0ZM3 13.5h10',
+ bowel:'M3 13.5h10M4 13.5c0-2 1.5-3 4-3s4 1 4 3M5.5 10.5c0-1.7 1-2.5 2.5-2.5s2.5.8 2.5 2.5M7 8c0-1.5.5-2.5 1.5-3',
+ more:'M3 3h3.5v3.5H3ZM9.5 3H13v3.5H9.5ZM3 9.5h3.5V13H3ZM9.5 9.5H13V13H9.5Z',
+ pill:'M5.6 13a2.9 2.9 0 0 1-4.1-4.1l6.9-6.9a2.9 2.9 0 0 1 4.1 4.1ZM5 5.4l4 4',
+ metrics:'M2.5 13.5h11M4.5 11V8M8 11V4M11.5 11V6.5',
+ history:'M2.5 3.5h11M2.5 8h11M2.5 12.5h7',
+ profile:'M8 8a2.75 2.75 0 1 0 0-5.5A2.75 2.75 0 0 0 8 8ZM2.5 14c.5-3 2.7-4.5 5.5-4.5s5 1.5 5.5 4.5',
+ home:'M2.5 7.5 8 2.5l5.5 5v6h-11ZM6.5 13.5v-4h3v4',
+ gear:(()=>{const pts=[];for(let k=0;k<8;k++){const a=k*Math.PI/4+Math.PI/8,t=.2;pts.push([5.1,a-t-.17],[6.9,a-t],[6.9,a+t],[5.1,a+t+.17])}return 'M'+pts.map(([r,a])=>(8+r*Math.cos(a)).toFixed(2)+' '+(8+r*Math.sin(a)).toFixed(2)).join('L')+'ZM8 6a2 2 0 1 0 0 4 2 2 0 0 0 0-4Z'})(),
+ mic:'M8 2a2 2 0 0 1 2 2v4a2 2 0 0 1-4 0V4a2 2 0 0 1 2-2ZM4 7.5a4 4 0 0 0 8 0M8 11.5V14M5.5 14h5',
+ windows:'M2.5 5.5h8v8h-8ZM5 5.5V2.5h8.5V11H10.5',
+ x:'M4 4l8 8M12 4l-8 8',
+ left:'M10 3 5 8l5 5',
+ right:'M6 3l5 5-5 5',
+ down:'M3 6l5 5 5-5',
+ min:'M3 12.5h10',
+ ai:'M8 1.5l1.6 4.9 4.9 1.6-4.9 1.6L8 14.5l-1.6-4.9L1.5 8l4.9-1.6Z',
+ check:'M3 8.5l3 3 7-7',
+ leaf:'M3 13c0-6 4-10 10-10 0 6-4 10-10 10ZM3 13l6-6',
+ export:'M8 2v8M5 5l3-3 3 3M3 10v3.5h10V10',
+ edit:'M3 13l1-3.5 7-7 2.5 2.5-7 7ZM9.5 4l2.5 2.5',
+ trash:'M3 4.5h10M6 4.5V2.5h4v2M4.5 4.5l.8 9h5.4l.8-9',
+ sync:'M13 5.5A5.5 5.5 0 0 0 3.2 5M3 10.5a5.5 5.5 0 0 0 9.8.5M3 2.5V5h2.5M13 13.5V11h-2.5'
+};
+const ic=(n,extra='')=>`<svg class="ic" viewBox="0 0 16 16" aria-hidden="true" ${extra}><path d="${P[n]}"/></svg>`;
+
+/* ---------- domain meta ---------- */
+const DOM={
+ water:{name:'Water',ic:'drop'},sodium:{name:'Sodium',ic:'salt'},sugar:{name:'Sugar',ic:'sugar'},caffeine:{name:'Caffeine',ic:'cup'},
+ alcohol:{name:'Alcohol',ic:'wine'},bp:{name:'Blood pressure',ic:'heart'},weight:{name:'Weight',ic:'scale'},bath:{name:'Bathroom',ic:'wee'},
+ meds:{name:'Medications',ic:'pill'},ai:{name:'AI',ic:'ai'},potassium:{name:'Potassium',ic:'leaf'}
+};
+const cv=(d,g)=>`var(--${d}${g?'-g':''})`;
+const APPS={
+ meds:{title:'Medications',short:'Meds',ic:'pill',dom:'meds',tabs:[['schedule','Schedule'],['prescriptions','Prescriptions'],['stock','Stock'],['titrations','Titrations']]},
+ metrics:{title:'Metrics',short:'Metrics',ic:'metrics',dom:null},
+ history:{title:'History',short:'History',ic:'history',dom:null},
+ profile:{title:'Profile',short:'Profile',ic:'profile',dom:null},
+ log:{title:'Log',short:'Log',ic:'plus',dom:null,tabs:[['water','Water'],['drink','Drink'],['food','Food'],['bp','Blood pressure'],['weight','Weight'],['bath','Bathroom']]}
+};
+const MODE_KEYS=['meds','metrics','history','profile'];
+
+const WEEK_BASE={water:[980,1120,890,1010,760,1340],sodium:[1420,1880,1310,1550,1190,2240],sugar:[22,35,18,28,14,44],caffeine:[143,190,95,143,238,95],alcohol:[0,0,0,0,1.4,2.8],potassium:[0,0,0,0,0,0]};
+const DAYS=['Mon 21 Sep','Tue 22 Sep','Wed 23 Sep','Thu 24 Sep','Fri 25 Sep','Sat 26 Sep','Sun 27 Sep'];
+const PRESETS=[
+ {id:'coffee',name:'Coffee',ml:250,caf:95,abv:0},{id:'tea',name:'Tea',ml:250,caf:48,abv:0},{id:'espresso',name:'Espresso',ml:30,caf:63,abv:0},
+ {id:'beer',name:'Beer',ml:330,caf:0,abv:5},{id:'wine',name:'Wine',ml:150,caf:0,abv:12},{id:'spirit',name:'Spirit',ml:45,caf:0,abv:40}
+];
+const stdOf=(ml,abv)=>Math.round(ml*abv/100*0.789/10*10)/10;
+const presetAdds=p=>p.abv?`${p.ml} ml · ${stdOf(p.ml,p.abv).toFixed(1)} std drinks`:`${p.ml} ml · ${p.caf} mg caffeine`;
+const NA_FACTOR={salt:0.393,msg:0.123,sodium:1};
+
+function seedRecords(){
+ const m=(h,mi)=>h*60+mi;
+ return [
+  {kind:'wee',t:m(7,10),size:'Medium',note:''},
+  {kind:'weight',t:m(7,20),kg:78.35},
+  {kind:'bp',t:m(7,30),sys:118,dia:74,hr:58,pos:'Sitting',arm:'Left',irr:false,note:''},
+  {kind:'food',t:m(7,50),desc:'Oats with milk',na:180,sugar:9},
+  {kind:'drink',t:m(8,5),name:'Coffee',ml:250,caf:95,std:0,sugar:0},
+  {kind:'bowel',t:m(8,30),size:'Medium',note:''},
+  {kind:'water',t:m(9,40),ml:250},
+  {kind:'wee',t:m(10,15),size:'Large',note:''},
+  {kind:'food',t:m(12,40),desc:'Chicken wrap',na:740,sugar:6},
+  {kind:'water',t:m(13,5),ml:196},
+  {kind:'wee',t:m(13,40),size:'Medium',note:''},
+  {kind:'food',t:m(15,30),desc:'Apple',na:0,sugar:10},
+  {kind:'drink',t:m(16,20),name:'Tea',ml:250,caf:48,std:0,sugar:0},
+  {kind:'wee',t:m(17,0),size:'Small',note:''},
+  {kind:'food',t:m(18,5),desc:'Salmon, rice and greens',na:683,sugar:0}
+ ].map(r=>Object.assign({id:uid()},r));
+}
+function appDefaults(id){
+ switch(id){
+  case 'meds':return {tab:'schedule',skip:null,refill:null,refillVal:'',correct:null,correctVal:''};
+  case 'metrics':return {range:'7d',insight:false};
+  case 'history':return {filter:'all',editing:null,draft:{},open:null};
+  case 'profile':return {delConfirm:false,name:'Ryan'};
+  case 'log':return {tab:'water',water:{ml:'250'},drink:{sugar:'',name:'',ml:'',osugar:'',caf:'',abv:'',ai:''},
+    food:{desc:'',src:'salt',unit:'g',amt:'',sugar:''},bp:{sys:'',dia:'',hr:'',field:'sys',more:false,pos:'Sitting',arm:'Left',irr:false,note:''},
+    weight:{kg:'78.35'},bath:{size:'',note:'',bsize:'',bnote:''}};
+ }
+ return {};
+}
+function initialState(){
+ return {
+  v:5,signedIn:true,
+  set:{theme:'light',dayStart:2,weekStart:'mon',lim:{water:{target:1000,buffer:500},sodium:{target:1500,buffer:500},sugar:{target:30,buffer:10}},
+       trackers:{sugar:true,potassium:false},weightStep:0.05,bigText:false,reduceMotion:false,region:'auto',timeFmt:'24',reminders:true,tz:'device',
+       keys:{anthropic:'',groq:''},cloud:true,mic:true,notif:true,shareAI:true,groups:{tracking:true}},
+  records:seedRecords(),
+  pastBP:[{d:'Fri 25 Sep',t:'08:10',sys:112,dia:72,hr:64,pos:'Standing',arm:'Left',irr:true,note:'a bit dizzy on standing'},
+          {d:'Sat 26 Sep',t:'07:45',sys:121,dia:76,hr:60,pos:'Sitting',arm:'Left',irr:false,note:''}],
+  pastWeight:[{d:'Mon 21',i:0,kg:78.45},{d:'Wed 23',i:2,kg:78.40},{d:'Fri 25',i:4,kg:78.20}],
+  meds:{doses:[{id:'d1',time:'08:00',med:'entresto',dose:'100 mg',status:'taken',at:'08:12'},{id:'d2',time:'08:00',med:'biso',dose:'2.5 mg',status:'taken',at:'08:12'},{id:'d3',time:'20:00',med:'entresto',dose:'100 mg',status:'due'}],
+        recent:[{when:'Sat 26 20:00',med:'Entresto',status:'taken',at:'20:41'},{when:'Fri 25 20:00',med:'Entresto',status:'missed'},{when:'Thu 24 08:00',med:'Bisoprolol',status:'skipped',reason:'Doctor advised'}],
+        stock:{entresto:38,concor:9},titration:'ready',bisoDose:'2.5 mg'},
+  windows:['meds','metrics'],focus:'home',lastWin:'meds',expanded:['meds','metrics'],
+  apps:{meds:appDefaults('meds'),metrics:appDefaults('metrics')},
+  scroll:{},
+ };
+}
+let S;
+try{S=JSON.parse(localStorage.getItem(KEY)||'null')}catch(e){S=null}
+if(!S||S.v!==5)S=initialState();
+const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}};
+
+/* transient UI state */
+const U={overlay:null,invoker:null,confirm:null,confirmTimer:null,enter:null,sheetAnim:false,lpFired:false,kp:false};
+const M={phase:'idle',t0:0,words:0,level:[],timer:null,entries:[],invoker:null};
+
+/* ---------- derived data ---------- */
+/* one vocabulary everywhere: "target", and "limit = target + buffer" */
+const lim=k=>{const l=S.set.lim[k];if(!l)return null;const target=num(l.target,0),buffer=num(l.buffer,0);return {target,buffer,limit:target+buffer}};
+function status(v,l){
+ if(!l)return {s:'none'};
+ if(v<=l.target)return {s:'ok',left:l.target-v};
+ if(v<=l.limit)return {s:'over',over:v-l.target};
+ return {s:'limit',over:v-l.limit,overT:v-l.target};
+}
+const ds=()=>S.set.dayStart*60;
+const todayRecs=()=>S.records.filter(r=>r.t>=ds());
+const spillRecs=()=>S.records.filter(r=>r.t<ds());
+function totals(recs){
+ const t={water:0,sodium:0,sugar:0,caffeine:0,alcohol:0,potassium:0};
+ for(const r of recs){
+  if(r.kind==='water')t.water+=num(r.ml,0);
+  if(r.kind==='drink'){t.water+=num(r.ml,0);t.caffeine+=num(r.caf,0);t.alcohol+=num(r.std,0);t.sugar+=num(r.sugar,0)}
+  if(r.kind==='food'){t.sodium+=num(r.na,0);t.sugar+=num(r.sugar,0)}
+ }
+ t.alcohol=Math.round(t.alcohol*10)/10;return t;
+}
+function week(k){ // 7 values (null = not yet) in display order + heads + today index
+ const td=totals(todayRecs())[k],sp=totals(spillRecs())[k];
+ const monVals=WEEK_BASE[k].map((v,i)=>i===5?Math.round((v+sp)*10)/10:v).concat([td]);
+ if(S.set.weekStart==='sun')return {vals:[td,null,null,null,null,null,null],heads:['S','M','T','W','T','F','S'],today:0,names:['Sun 27 Sep','Mon 28 Sep','Tue 29 Sep','Wed 30 Sep','Thu 1 Oct','Fri 2 Oct','Sat 3 Oct']};
+ return {vals:monVals,heads:['M','T','W','T','F','S','S'],today:6,names:DAYS};
+}
+const ROWS=[
+ {k:'water',unit:'ml',unitLong:'millilitres',wf:v=>fmt(v),ff:v=>fmt(v)},
+ {k:'sodium',unit:'mg',unitLong:'milligrams',wf:v=>fmt(v),ff:v=>fmt(v)},
+ {k:'sugar',unit:'g',unitLong:'grams',wf:v=>fmt(v),ff:v=>fmt(v),opt:'sugar'},
+ {k:'caffeine',unit:'mg',unitLong:'milligrams',wf:v=>fmt(v),ff:v=>fmt(v)},
+ {k:'alcohol',unit:'std',unitLong:'standard drinks',wf:v=>v.toFixed(1),ff:v=>v.toFixed(1)},
+ {k:'potassium',unit:'mg',unitLong:'milligrams',wf:v=>fmt(v),ff:v=>fmt(v),opt:'potassium'}
+];
+const visRows=()=>ROWS.filter(r=>!r.opt||S.set.trackers[r.opt]);
+function statusLine(r,v){
+ const l=lim(r.k),st=status(v,l);
+ const u=r.k==='alcohol'?'std drinks':r.unit;
+ if(st.s==='none')return {h:'no limit set',plain:'no limit set',aria:'no limit set'};
+ if(st.s==='ok')return {h:`${fmt(st.left)} ${u} left · target ${fmt(l.target)}`,plain:`${fmt(st.left)} ${u} left · target ${fmt(l.target)}`,aria:`${fmt(st.left)} ${u} left before the ${fmt(l.target)} target`};
+ if(st.s==='over')return {h:`<span class="over">${fmt(st.over)} ${u} past target</span> · limit ${fmt(l.limit)}`,plain:`${fmt(st.over)} ${u} past target · limit ${fmt(l.limit)}`,aria:`${fmt(st.over)} ${u} past the ${fmt(l.target)} target; limit is ${fmt(l.limit)}`};
+ return {h:`<span class="lim">▲ ${fmt(st.over)} ${u} over limit</span>`,plain:`▲ ${fmt(st.over)} ${u} over limit (${fmt(l.limit)})`,aria:`${fmt(st.over)} ${u} over the ${fmt(l.limit)} limit`};
+}
+const fmtT=m=>{const h=Math.floor(m/60),mi=m%60;if(S.set.timeFmt==='12'){const hh=h%12||12;return `${hh}:${String(mi).padStart(2,'0')} ${h<12?'am':'pm'}`}return `${String(h).padStart(2,'0')}:${String(mi).padStart(2,'0')}`};
+const parseT=s=>{const m=/^(\d{1,2}):(\d{2})$/.exec(String(s).trim());return m?Math.min(23,+m[1])*60+Math.min(59,+m[2]):null};
+const dueDoses=()=>S.meds.doses.filter(d=>d.status==='due');
+const nextDose=()=>{const d=dueDoses()[0];return d?d.time:'Mon 08:00'};
+const avg=a=>a.reduce((x,y)=>x+y,0)/a.length;
+const naWeekAvg=()=>{const w=WEEK_BASE.sodium.slice();w[5]+=totals(spillRecs()).sodium;return avg(w.concat([totals(todayRecs()).sodium]))};
+
+/* ---------- records & logging ---------- */
+function recText(r){
+ switch(r.kind){
+  case 'water':return {d:'water',title:`Water ${fmt(r.ml)} ml`,meta:''};
+  case 'drink':{const bits=[`${fmt(r.ml)} ml`];if(num(r.caf,0))bits.push(`${fmt(r.caf)} mg caffeine`);if(num(r.std,0))bits.push(`${num(r.std,0).toFixed(1)} std drinks`);if(num(r.sugar,0))bits.push(`${fmt(r.sugar)} g sugar`);
+    return {d:num(r.std,0)?'alcohol':(num(r.caf,0)?'caffeine':'water'),title:r.name,meta:bits.join(' · ')};}
+  case 'food':{const bits=[`sodium ${fmt(r.na)} mg`];if(num(r.sugar,0))bits.push(`sugar ${fmt(r.sugar)} g`);if(r.src)bits.push(r.src);return {d:'sodium',title:r.desc||'Food',meta:bits.join(' · ')};}
+  case 'bp':return {d:'bp',title:`${r.sys}/${r.dia} mmHg${r.hr?` · HR ${r.hr}`:''}`,meta:[r.pos,r.arm&&`${r.arm} arm`,r.irr&&'irregular heartbeat',r.note].filter(Boolean).join(' · ')};
+  case 'weight':return {d:'weight',title:`Weight ${num(r.kg,0).toFixed(2)} kg`,meta:''};
+  case 'wee':return {d:'bath',title:'Urination',meta:[r.size,r.note].filter(Boolean).join(' · ')};
+  case 'bowel':return {d:'bath',title:'Bowel movement',meta:[r.size,r.note].filter(Boolean).join(' · ')};
+ }
+ return {d:'water',title:'',meta:''};
+}
+const recDomains=r=>{
+ const s=new Set();
+ if(r.kind==='water')s.add('water');
+ if(r.kind==='drink'){s.add('water');if(num(r.caf,0))s.add('caffeine');if(num(r.std,0))s.add('alcohol');if(num(r.sugar,0))s.add('sugar')}
+ if(r.kind==='food'){s.add('sodium');if(num(r.sugar,0))s.add('sugar')}
+ if(r.kind==='bp')s.add('bp');if(r.kind==='weight')s.add('weight');if(r.kind==='wee'||r.kind==='bowel')s.add('bath');
+ return s;
+};
+function confirm(msg,undo){
+ clearTimeout(U.confirmTimer);
+ U.confirm={msg,undo};
+ document.getElementById('r-live').textContent=msg;
+ U.confirmTimer=setTimeout(()=>{U.confirm=null;render()},undo?12000:5000);
+}
+function addRecords(recs,msg){
+ const made=recs.map(r=>Object.assign({id:uid(),t:NOW},r));
+ S.records.push(...made);
+ const ids=made.map(r=>r.id);
+ confirm(msg,()=>{S.records=S.records.filter(r=>!ids.includes(r.id));confirm('Undone: '+msg.replace(/^Logged /,''),null)});
+}
+
+/* ---------- windows ---------- */
+function openApp(id,opts){
+ opts=opts||{};
+ if(!S.windows.includes(id)){S.windows.push(id);S.apps[id]=appDefaults(id)}
+ Object.assign(S.apps[id],opts);
+ if(S.focus!==id)U.enter=id;
+ S.focus=id;S.lastWin=id;touchExpand(id);U.kp=false;
+}
+function touchExpand(id){
+ const e=S.expanded.filter(x=>x!==id);e.push(id);
+ while(e.length>2)e.shift();
+ S.expanded=e.filter(x=>S.windows.includes(x));
+}
+function closeApp(id){
+ const i=S.windows.indexOf(id);if(i<0)return;
+ S.windows.splice(i,1);delete S.apps[id];
+ S.expanded=S.expanded.filter(x=>x!==id);
+ const col=S.windows.filter(x=>!S.expanded.includes(x));
+ if(S.expanded.length<2&&col.length)S.expanded.unshift(col[col.length-1]);
+ if(S.focus===id){S.focus=S.windows.length?(S.windows[Math.max(0,i-1)]||S.windows[0]):'home';if(S.focus!=='home')U.enter=S.focus}
+}
+function cycle(d){
+ if(!S.windows.length)return;
+ let i=S.windows.indexOf(S.focus);
+ if(i<0){const j=S.windows.indexOf(S.lastWin);i=j<0?0:j}else i=(i+d+S.windows.length)%S.windows.length;
+ S.focus=S.windows[i];S.lastWin=S.focus;U.enter=S.focus;touchExpand(S.focus);
+}
+const FILTERS=[['all','All','All records',null],['water','W','Water','water'],['sodium','Na','Sodium','sodium'],['sugar','Su','Sugar','sugar'],['caffeine','Caf','Caffeine','caffeine'],['alcohol','Alc','Alcohol','alcohol'],['bp','BP','Blood pressure','bp'],['weight','Wt','Weight','weight'],['bath','Bath','Bathroom','bath']];
+const filterName=f=>{const x=FILTERS.find(y=>y[0]===f);return x?x[2]:(DOM[f]?DOM[f].name:f)};
+function filteredRecs(f){return S.records.filter(r=>f==='all'||recDomains(r).has(f))}
+function logDraft(a){
+ if(a.tab==='bp'&&(a.bp.sys||a.bp.dia))return `BP ${a.bp.sys||'—'}/${a.bp.dia||'—'} not saved yet`;
+ if(a.tab==='food'&&a.food.desc)return `“${a.food.desc}” not saved yet`;
+ return null;
+}
+function winState(id){
+ const a=S.apps[id]||{};
+ switch(id){
+  case 'meds':{const due=dueDoses();const tab=APPS.meds.tabs.find(t=>t[0]===a.tab)[1];return `${tab} · ${due.length?'next dose '+due[0].time:'all doses done today'}`;}
+  case 'metrics':return `${a.range==='today'?'Today':a.range==='all'?'All time':'Last '+a.range.replace('d',' days')} · Na 7-day avg ${fmt(naWeekAvg())} mg`;
+  case 'history':{const n=filteredRecs(a.filter).length;return `${filterName(a.filter)} · ${n} record${n===1?'':'s'}`;}
+  case 'profile':return S.signedIn?'Ryan · signed in':'Ryan · not signed in';
+  case 'log':{const t=APPS.log.tabs.find(x=>x[0]===a.tab)[1];const d=logDraft(a);return d?`${t} · ${d}`:`${t} form`;}
+ }
+ return '';
+}
+const winKeyFigure=id=>{
+ if(id==='meds'){const d=dueDoses();return d.length?`Next dose ${d[0].time} · ${MEDS[d[0].med].name.split(' ')[0]}`:'All doses done today'}
+ if(id==='metrics')return `Na 7-day avg ${fmt(naWeekAvg())} mg`;
+ if(id==='history'){const f=S.apps.history.filter,n=filteredRecs(f).length;return `${n} records · ${filterName(f)}`}
+ if(id==='log'){const a=S.apps.log;return logDraft(a)||`${APPS.log.tabs.find(x=>x[0]===a.tab)[1]} form open`}
+ if(id==='profile')return S.signedIn?'Signed in as Ryan':'Not signed in';
+ return '';
+};
+
+/* ======================= RENDER: system bar ======================= */
+function rSysbar(){
+ const nd=nextDose(),due=dueDoses().length;
+ const acct=S.signedIn
+  ?`<button class="sb-seg sb-acct" id="sb-acct" data-act="account" aria-haspopup="dialog" aria-label="Account: Ryan, signed in, synced 18:40"><span class="initials">RN<i aria-hidden="true"></i></span><span class="wd-only">Ryan</span></button>`
+  :`<button class="sb-seg sb-acct signin" id="sb-acct" data-act="signin" aria-haspopup="dialog" aria-label="Sign in for AI features"><b>Sign in</b><small>for AI features</small></button>`;
+ return `<button class="sb-seg sb-dose" id="sb-dose" data-act="dose" aria-label="Next dose ${nd}${due?', due today':''}. Open Medications schedule"><i class="led-dot ${due?'on':''}" style="--c:var(--meds)" aria-hidden="true"></i><span class="eng">Next dose</span><span class="mono">${nd}</span></button>
+  ${S.signedIn?`<span class="sb-sync wd-only">${ic('sync','style="width:14px;height:14px"')}Synced 18:40</span>`:`<span class="sb-sync wd-only">This device only · not synced</span>`}
+  <span class="sb-spacer"></span>
+  ${acct}
+  <button class="sb-seg icon sb-gear" id="sb-gear" data-act="settings" aria-haspopup="dialog" aria-label="Settings">${ic('gear')}</button>`;
+}
+
+/* ======================= RENDER: Today + week gadget (one row per domain) ======================= */
+function liveBar(v,l){
+ const st=status(v,l);const top=l.limit||1;
+ const pct=x=>Math.max(0,Math.min(100,x/top*100));
+ const solid=pct(Math.min(v,l.target));const hatchTo=st.s==='ok'?solid:pct(v);
+ return `<span class="bar" aria-hidden="true"><i class="f" style="height:${st.s==='limit'?100:solid}%"></i>${st.s==='over'?`<i class="fh" style="bottom:${solid}%;height:${hatchTo-solid}%"></i>`:''}<i class="tk" style="bottom:calc(${pct(l.target)}% - 1px)"></i></span>`;
+}
+function rDisplay(){
+ const t=totals(todayRecs());const w0=week('water');
+ const head=`<div class="g-head gcols" aria-hidden="true"><span class="hd hl">Today</span>${w0.heads.map((h,i)=>`<span class="hd ${i===w0.today?'now':''}">${h}</span>`).join('')}</div>`;
+ const rows=visRows().map(r=>{
+  const v=t[r.k],l=lim(r.k),sl=statusLine(r,v),w=week(r.k);
+  const cells=w.vals.map((x,i)=>{
+   if(i===w.today){
+    if(l){const st=status(x,l);return `<span class="c now ${st.s==='limit'?'lim':''}">${liveBar(x,l)}</span>`}
+    return `<span class="c now">${r.wf(x)}</span>`;
+   }
+   if(x==null)return `<span class="c fut">·</span>`;
+   const st=status(x,l);const cls=st.s==='limit'?'lim':st.s==='over'?'over':st.s==='ok'?'ok':'';
+   return `<span class="c ${cls}">${r.wf(x)}${l?'<i class="u"></i>':''}</span>`;
+  }).join('');
+  const wkAria=w.vals.map((x,i)=>x==null?null:`${w.names[i].slice(0,3)} ${r.wf(x)}${l&&status(x,l).s==='over'?' past target':l&&status(x,l).s==='limit'?' over limit':''}`).filter(Boolean).join(', ');
+  const aria=`${DOM[r.k].name} today ${r.ff(v)} ${r.unitLong}, ${sl.aria}. This week: ${wkAria}. Open ${DOM[r.k].name} history`;
+  return `<button class="g-row gcols" style="--c:${cv(r.k,1)}" data-act="rowhist" data-arg="${r.k}" aria-label="${esc(aria)}">
+   <span class="g-l1"><span class="lab">${ic(DOM[r.k].ic)}<span class="eng">${DOM[r.k].name}</span></span><span class="gst">${sl.h}</span></span>
+   <span class="g-fig">${FIG(r.ff(v))}<small>${r.unit}</small></span>${cells}</button>`;
+ }).join('');
+ return `<div class="bezel"><div class="glass">${head}<div class="g-rows">${rows}</div></div></div>`;
+}
+function rReadout(){
+ const t=totals(todayRecs());
+ const cols=visRows().filter(r=>r.k!=='potassium').map(r=>{const v=t[r.k],l=lim(r.k),st=status(v,l);
+  const lt=!l?'no limit':st.s==='ok'?`of ${fmt(l.target)}`:st.s==='over'?`past ${fmt(l.target)}`:`over ${fmt(l.limit)}`;
+  return `<span class="ro-c ${st.s}" style="--c:${cv(r.k,1)}"><span class="ro-n eng">${DOM[r.k].name}</span><span class="ro-v">${r.ff(v)} <small>${r.unit}</small></span><span class="ro-l">${lt}</span></span>`}).join('');
+ const aria=visRows().map(r=>`${DOM[r.k].name} ${r.ff(t[r.k])} ${r.unit}, ${statusLine(r,t[r.k]).aria}`).join('; ');
+ const msg=U.confirm&&!U.kp?`<div class="ro-msg" role="status"><span>${esc(U.confirm.msg)}</span>${U.confirm.undo?`<button class="kc sm" data-act="undo" id="undo-r">Undo</button>`:''}</div>`:'';
+ return `<button class="glass ro" id="ro-btn" data-act="kp" aria-expanded="${!!U.kp}" aria-label="Today: ${esc(aria)}. ${U.kp?'Hide':'Show'} the quick-entry keypad"><span class="ro-grid">${cols}</span><span class="ro-grip">${U.kp?'Hide keypad':'Keypad'}</span></button>${msg}`;
+}
+
+/* ======================= RENDER: keypad ======================= */
+/* hero = big glyph or number; label engraved below; detail line always lowercase "value unit" words */
+const KEYS=[
+ {id:'w250',hero:'250',name:'Water',det:'+250 ml',d:'water',lp:'log:water'},
+ {id:'w500',hero:'500',name:'Water',det:'+500 ml',d:'water',lp:'log:water'},
+ {id:'custom',ic:'custom',name:'Water',det:'other amount',d:'water',form:'log:water'},
+ {id:'coffee',ic:'cup',name:'Coffee',det:'250 ml · 95 mg',d:'caffeine',lp:'log:drink'},
+ {id:'tea',ic:'tea',name:'Tea',det:'250 ml · 48 mg',d:'caffeine',lp:'log:drink'},
+ {id:'drink',ic:'glass',name:'Other drink',det:'alcohol · other',d:'alcohol',form:'log:drink'},
+ {id:'food',ic:'food',name:'Food',det:'sodium · sugar',d:'sodium',form:'log:food'},
+ {id:'bp',ic:'heart',name:'Blood pressure',det:'last 118/74',d:'bp',form:'log:bp'},
+ {id:'weight',ic:'scale',name:'Weight',det:'last 78.35 kg',d:'weight',form:'log:weight'},
+ {id:'wee',ic:'wee',name:'Urination',det:'logs now',d:'bath',lp:'log:bath'},
+ {id:'bowel',ic:'bowel',name:'Bowel',det:'logs now',d:'bath',lp:'log:bath'},
+ {id:'more',ic:'more',name:'All forms',det:'full list',d:null,form:'log:'}
+];
+const KEY_ARIA={w250:'Log 250 millilitres of water',w500:'Log 500 millilitres of water',custom:'Water, other amount',coffee:'Log coffee, 250 ml, 95 mg caffeine',tea:'Log tea, 250 ml, 48 mg caffeine',drink:'Log another drink: espresso, beer, wine, spirit or other',food:'Log food with sodium and sugar',bp:'Log blood pressure, last 118 over 74',weight:'Log weight, last 78.35 kilograms',wee:'Log urination now',bowel:'Log bowel movement now',more:'All entry forms'};
+function rKeypad(){
+ const keys=KEYS.map(k=>`<div class="kcell" style="--c:${k.d?cv(k.d):'var(--ink)'}"><button class="kc key" id="k-${k.id}" data-key="${k.id}" aria-label="${KEY_ARIA[k.id]}${k.lp?'. Hold for the full form':''}">${k.hero?`<span class="dot hero-n" aria-hidden="true">${k.hero}</span>`:`<span class="hero-i">${ic(k.ic)}</span>`}</button><span class="kl" aria-hidden="true"><span class="eng">${k.name}</span><span class="kd">${k.det}</span></span></div>`).join('');
+ const silk=U.confirm?`<span class="msg" role="status">${ic('check')}<span class="nowrap">${esc(U.confirm.msg)}</span></span>${U.confirm.undo?`<button class="kc sm" data-act="undo" id="undo-k">Undo</button>`:''}`
+  :`<span class="eng">Quick entry</span><span class="legend">Tap logs now · hold for the full form</span>`;
+ return `<div class="silk">${silk}<button class="kc sm kp-hide" data-act="kp" aria-label="Hide keypad">${ic('down')}Hide</button></div><div class="kp">${keys}</div>`;
+}
+
+/* ======================= RENDER: mode strip ======================= */
+function rModes(){
+ const cell=(inner,led,cls)=>`<div class="mcell ${cls||''}"><span class="ledrow" aria-hidden="true">${led||''}</span>${inner}</div>`;
+ const home=cell(`<button class="kc mk ${S.focus==='home'?'inv':''}" id="mk-home" data-act="home" aria-label="Home${S.focus==='home'?', showing':''}">${ic('home')}<span class="eng">Home</span></button>`,'','ph-only');
+ const ks=MODE_KEYS.map(id=>{
+  const A=APPS[id];const open=S.windows.includes(id);const due=id==='meds'?dueDoses().length:0;
+  const aria=`${A.title}${due?`, ${due} dose due`:''}${open?', open':''}`;
+  return cell(`<button class="kc mk ${S.focus===id?'inv':''}" id="mk-${id}" data-act="open" data-arg="${id}" style="--c:${A.dom?cv(A.dom):'var(--ink)'}" aria-label="${aria}">${ic(A.ic)}<span class="eng"><span class="ph-only">${A.short}</span><span class="wd-only">${A.title}</span></span></button>`,
+   `<i class="led ${open?'lit':''}" style="--c:${A.dom?cv(A.dom):'var(--ink)'}"></i>${due?`<b class="badge">${due}</b>`:''}`);
+ }).join('');
+ const wn=S.windows.length;
+ const win=cell(`<button class="kc mk" id="mk-win" data-act="cycle" data-arg="1" data-lp="switcher" aria-haspopup="dialog" aria-keyshortcuts="ArrowUp" aria-label="Windows: ${wn} open. Tap for the next window, hold or press Up for the list">${ic('windows')}<span class="eng">${wn} open</span></button>`,'','ph-only');
+ const ai=S.signedIn?cell(`<button class="kc ai-key" id="ai-key" data-mic="1" aria-label="Hold to talk to the AI logger">${ic('mic')}<span class="eng">AI</span></button>`,`<span class="eng">Hold</span>`):'';
+ app.querySelector('#r-modes').classList.toggle('ai',S.signedIn);
+ return home+ks+win+ai;
+}
+
+/* ======================= RENDER: rack ======================= */
+function rStrips(){
+ const col=S.windows.filter(id=>!S.expanded.includes(id));
+ return col.map(id=>`<div class="strip" style="--c:${APPS[id].dom?cv(APPS[id].dom):'var(--ink)'}"><i class="screw a"></i>
+  <button class="open" data-act="expand" data-arg="${id}" aria-label="Expand ${APPS[id].title}: ${esc(winKeyFigure(id))}">${ic(APPS[id].ic)}<span class="eng">${APPS[id].title}</span><span class="fig">${esc(winKeyFigure(id))}</span></button>
+  <button class="x" data-act="close" data-arg="${id}" aria-label="Close ${APPS[id].title}">${ic('x')}</button></div>`).join('');
+}
+function modHead(id){
+ const A=APPS[id];
+ return `<header class="mod-head">
+  <div class="mod-title"><h2 class="eng">${ic(A.ic)}${A.title}</h2><span class="st mono">${esc(winState(id))}</span></div>
+  <button class="kc wd-only" data-act="collapse" data-arg="${id}" aria-label="Collapse ${A.title} to a strip">${ic('min')}</button>
+  <button class="kc" data-act="close" data-arg="${id}" aria-label="Close ${A.title}">${ic('x')}</button>
+ </header>`;
+}
+function tabs(id,list,cur,act){
+ return `<div class="tabs" role="tablist" aria-label="${APPS[id].title} sections">${list.map(([k,l])=>`<button class="kc" role="tab" aria-selected="${cur===k}" data-act="${act||'tab'}" data-arg="${id}:${k}">${l}</button>`).join('')}</div>`;
+}
+function rModule(id){
+ const a=S.apps[id];let tb='',body='';
+ if(id==='meds'){tb=tabs('meds',APPS.meds.tabs,a.tab);body=bodyMeds(a)}
+ if(id==='metrics'){tb=tabs('metrics',[['today','Today'],['7d','7 days'],['30d','30 days'],['90d','90 days'],['all','All']],a.range,'range');body=bodyMetrics(a)}
+ if(id==='history'){body=bodyHistory(a)}
+ if(id==='profile'){body=bodyProfile(a)}
+ if(id==='log'){tb=tabs('log',APPS.log.tabs,a.tab);body=bodyLog(a)}
+ const sk=`${id}:${a.tab||a.range||a.filter||''}`;
+ return `<i class="screw a"></i><i class="screw b"></i><i class="screw c"></i><i class="screw d"></i>${modHead(id)}${tb}<div class="mod-body" data-scroll-key="${sk}">${body}</div>`;
+}
+
+/* ---------- Medications ---------- */
+const MEDS={
+ entresto:{name:'Entresto 49/51 mg',generic:'sacubitril/valsartan',dose:'100 mg'},
+ biso:{name:'Bisoprolol (Concor)',generic:'bisoprolol',dose:()=>S.meds.bisoDose,note:'after food'}
+};
+const medDose=k=>typeof MEDS[k].dose==='function'?MEDS[k].dose():MEDS[k].dose;
+function doseRow(d){
+ const m=MEDS[d.med];
+ let right='';
+ if(d.status==='taken')right=`<span class="chip" style="--c:var(--meds)">${ic('check','style="width:12px;height:12px"')}Taken ${d.at}</span>${d.undoable?`<button class="kc sm" data-act="dose-undo" data-arg="${d.id}">Undo</button>`:''}`;
+ else if(d.status==='skipped')right=`<span class="chip" style="--c:var(--meds)"><i class="nh"></i>Skipped · ${esc(d.reason)}</span><button class="kc sm" data-act="dose-undo" data-arg="${d.id}">Undo</button>`;
+ else right=`<button class="kc sm pri" data-act="take" data-arg="${d.id}" id="take-${d.id}">Take</button><button class="kc sm" data-act="skip" data-arg="${d.id}" id="skip-${d.id}" aria-expanded="${S.apps.meds.skip===d.id}">Skip</button>`;
+ let skip='';
+ if(S.apps.meds.skip===d.id)skip=`<div class="edit-box" role="group" aria-label="Skip reason"><div class="eng" style="margin-bottom:8px">Why skip this dose?</div><div class="btnrow">${['Forgot','Side effects','Ran out','Doctor advised','Other'].map(r=>`<button class="kc sm" data-act="skipr" data-arg="${d.id}:${r}">${r}</button>`).join('')}<button class="kc sm" data-act="skip" data-arg="${d.id}">Cancel</button></div></div>`;
+ return `<div class="row" style="flex-wrap:wrap;row-gap:8px"><div class="grow spine" style="--c:var(--meds);min-width:150px"><div class="title nowrap">${m.name}</div><div class="meta nowrap">${m.generic} · ${d.dose||medDose(d.med)}${m.note?` · ${m.note}`:''}</div></div><div class="btnrow" style="flex:none">${right}</div></div>${skip}`;
+}
+function bodyMeds(a){
+ const M_=S.meds;
+ if(a.tab==='schedule'){
+  const g=t=>M_.doses.filter(d=>d.time===t).map(doseRow).join('');
+  const rec=M_.recent.map(r=>{const chip=r.status==='taken'?`<span class="chip" style="--c:var(--meds)">${ic('check','style="width:12px;height:12px"')}Taken ${r.at}</span>`:r.status==='missed'?`<span class="chip" style="--c:var(--ink2)">${ic('x','style="width:12px;height:12px"')}Missed</span>`:`<span class="chip" style="--c:var(--meds)"><i class="nh"></i>Skipped · ${r.reason}</span>`;
+   return `<div class="row" style="flex-wrap:wrap;row-gap:4px;min-height:44px"><span class="t" style="width:96px">${r.when}</span><span class="grow" style="min-width:80px">${r.med}</span>${chip}</div>`}).join('');
+  const due=dueDoses();
+  const tit=M_.titration==='ready'?`<div class="notice"><span class="grow"><b style="display:block">Titration ready to start</b><span class="meta">Bisoprolol 5 mg · planned today</span></span><button class="kc sm" data-act="tab" data-arg="meds:titrations">Review</button></div>`:'';
+  return `${tit}<section class="sec"><h3 class="eng">Today 08:00</h3><div class="rows">${g('08:00')}</div></section>
+   <section class="sec"><h3 class="eng">Today 20:00${due.some(d=>d.time==='20:00')?' · due':''}</h3><div class="rows">${g('20:00')}</div></section>
+   <section class="sec"><h3 class="eng">Recent</h3><div class="rows">${rec}</div></section>`;
+ }
+ if(a.tab==='prescriptions'){
+  return `<div class="rows">
+   <div class="row"><div class="grow spine" style="--c:var(--meds)"><div class="title">Sacubitril/Valsartan</div><div class="meta">Entresto 49/51 mg (100 mg) · for heart failure (HFrEF)</div><div class="meta mono">2× daily · 08:00, 20:00</div></div><span class="pill-oval" role="img" aria-label="Oval pale violet tablet"></span></div>
+   <div class="row"><div class="grow spine" style="--c:var(--meds)"><div class="title">Bisoprolol</div><div class="meta">Concor ${S.meds.bisoDose} · for heart failure / rate control · after food</div><div class="meta mono">1× daily · 08:00</div></div><span class="pill-round" role="img" aria-label="Round white tablet"></span></div>
+  </div>`;
+ }
+ if(a.tab==='stock'){
+  const item=(k,name,per,pill,pillTxt)=>{const n=M_.stock[k];const days=Math.floor(n/per);const low=days<=10;
+   const edit=a.refill===k?`<div class="edit-box" style="width:100%"><label class="field"><span class="eng">Tablets added</span><input class="inp num" id="refill-${k}" inputmode="numeric" data-bind="apps.meds.refillVal" value="${esc(a.refillVal)}" placeholder="28"></label><div class="btnrow"><button class="kc sm pri" data-act="refill-save" data-arg="${k}">Add to stock</button><button class="kc sm" data-act="refill" data-arg="">Cancel</button></div></div>`
+     :a.correct===k?`<div class="edit-box" style="width:100%"><label class="field"><span class="eng">Tablets in the pack now</span><input class="inp num" id="correct-${k}" inputmode="numeric" data-bind="apps.meds.correctVal" value="${esc(a.correctVal)}"></label><div class="btnrow"><button class="kc sm pri" data-act="correct-save" data-arg="${k}">Save count</button><button class="kc sm" data-act="correct" data-arg="">Cancel</button></div></div>`:'';
+   return `<div class="row" style="flex-wrap:wrap;align-items:flex-start"><div class="grow spine" style="--c:var(--meds)"><div class="title">${name}</div>
+    <div style="display:flex;align-items:baseline;gap:8px;margin:6px 0;flex-wrap:wrap">${FIG(String(n),'fig-m').replace('class="','style="--c:var(--meds)" class="')}<span class="mono" style="font-size:13px">left · about ${days} days</span>${low?`<span class="chip" style="--c:var(--meds)"><i class="nh"></i>Refill soon</span>`:''}</div>
+    <div class="meta" style="display:flex;align-items:center;gap:8px">${pill} ${pillTxt}</div></div>
+    <div class="btnrow" style="width:100%;margin-top:6px"><button class="kc sm" data-act="refill" data-arg="${k}">Log refill</button><button class="kc sm" data-act="correct" data-arg="${k}">Correct count</button></div>${edit}</div>`};
+  return `<div class="rows">${item('entresto','Entresto 49/51 mg',2,'<span class="pill-oval" aria-hidden="true"></span>','Oval · pale violet · “NVR / L1”')}${item('concor',`Concor ${S.meds.bisoDose}`,1,'<span class="pill-round" aria-hidden="true"></span>','Round · white')}</div>`;
+ }
+ let card='';
+ if(M_.titration==='ready')card=`<div class="card" style="--c:var(--meds)"><div class="eng" style="color:var(--meds)">Ready to start</div><h3 style="margin:6px 0 4px;font-size:18px">Bisoprolol step-up to 5 mg</h3><p class="note" style="margin:0 0 12px">Planned for today. Your current doses stay in effect until you start it.</p><div class="btnrow"><button class="kc sm pri" data-act="tit" data-arg="confirm" id="tit-start">Start now</button><button class="kc sm" data-act="tit" data-arg="snoozed">Not now</button></div></div>`;
+ else if(M_.titration==='confirm')card=`<div class="card" style="--c:var(--meds)"><div class="eng" style="color:var(--meds)">Confirm start</div><p style="margin:6px 0 12px">From the next dose (Mon 08:00) Bisoprolol changes from <b>2.5 mg</b> to <b>5 mg</b> once daily. The 2.5 mg schedule ends today.</p><div class="btnrow"><button class="kc sm pri" data-act="tit" data-arg="started" id="tit-confirm">Confirm start</button><button class="kc sm" data-act="tit" data-arg="ready">Cancel</button></div></div>`;
+ else if(M_.titration==='started')card=`<div class="card" style="--c:var(--meds)"><div class="eng" style="color:var(--meds)">Step started</div><p style="margin:6px 0 12px">Bisoprolol 5 mg from Mon 08:00 · started Sun 27 Sep ${fmtT(NOW)}.</p><button class="kc sm" data-act="tit" data-arg="ready">Undo start</button></div>`;
+ else card=`<div class="card" style="--c:var(--meds)"><div class="eng">Not started</div><p class="note" style="margin:6px 0 12px">Bisoprolol step-up to 5 mg is still planned. Your current dose (2.5 mg) stays in effect.</p><button class="kc sm" data-act="tit" data-arg="ready">Show again</button></div>`;
+ return `${card}<section class="sec" style="margin-top:18px"><h3 class="eng">Plan · Bisoprolol</h3><div class="rows">
+  <div class="row"><span class="t" style="width:56px">Step 1</span><span class="grow">2.5 mg once daily</span><span class="chip" style="--c:var(--meds)">${M_.titration==='started'?'Done':'Current'}</span></div>
+  <div class="row"><span class="t" style="width:56px">Step 2</span><span class="grow">5 mg once daily · planned 27 Sep</span><span class="chip" style="--c:var(--meds)">${M_.titration==='started'?'Current':'<i class="nh"></i>Planned'}</span></div></div></section>
+  <section class="sec"><h3 class="eng">Call your care team if</h3><div class="rows">
+  <div class="row">${ic('heart','style="color:var(--bp)"')}<span class="grow">Resting heart rate below 50</span></div>
+  <div class="row"><span style="width:16px;display:inline-block;text-align:center;font:500 13px var(--f-mono)">!</span><span class="grow">Dizziness or fainting</span></div>
+  <div class="row">${ic('scale','style="color:var(--weight)"')}<span class="grow">Weight gain over 2 kg in 3 days</span></div></div></section>`;
+}
+
+/* ---------- Metrics ---------- */
+function bpAll(){
+ const today=todayRecs().filter(r=>r.kind==='bp').map(r=>({d:'Sun 27 Sep',t:fmtT(r.t),sys:+r.sys,dia:+r.dia,hr:r.hr,pos:r.pos,irr:r.irr,note:r.note}));
+ return S.pastBP.concat(today);
+}
+function wtAll(){
+ const today=todayRecs().filter(r=>r.kind==='weight').map(r=>({d:'Sun 27',i:6,kg:num(r.kg,0)}));
+ return S.pastWeight.concat(today);
+}
+function bodyMetrics(a){
+ const t=totals(todayRecs());
+ const today=a.range==='today';
+ const mon=k=>{const w=WEEK_BASE[k].slice();w[5]+=totals(spillRecs())[k];return w.concat([t[k]])};
+ const cnt=(k,s)=>{const l=lim(k);return mon(k).filter(v=>status(v,l).s===s).length};
+ const bps=today?bpAll().filter(b=>b.d==='Sun 27 Sep'):bpAll();
+ const wts=today?wtAll().filter(w=>w.i===6):wtAll();
+ const bpAvg=bps.length?`${Math.round(avg(bps.map(b=>b.sys)))}/${Math.round(avg(bps.map(b=>b.dia)))}`:'—';
+ const wAvg=wts.length?avg(wts.map(w=>w.kg)).toFixed(2):'—';
+ const line=(k,fig,unit,expl)=>`<div class="row"><span style="color:${cv(k)}">${ic(DOM[k].ic)}</span><span class="grow"><span class="eng">${DOM[k].name}</span><div class="meta">${expl}</div></span><span style="color:${cv(k)}">${FIG(fig,'fig-m')}</span><span class="mono" style="width:40px;font-size:12px">${unit}</span></div>`;
+ const pd=today?'today':'avg per day';
+ const limExpl=k=>{const l=lim(k);return today?statusLine(ROWS.find(r=>r.k===k),t[k]).plain.replace('▲ ',''):`${pd} · target ${fmt(l.target)} · past target ${cnt(k,'over')} of 7 days, over limit ${cnt(k,'limit')}`};
+ let sum='';
+ sum+=line('water',fmt(today?t.water:avg(mon('water'))),'ml',limExpl('water'));
+ sum+=line('sodium',fmt(today?t.sodium:avg(mon('sodium'))),'mg',limExpl('sodium'));
+ if(S.set.trackers.sugar)sum+=line('sugar',fmt(today?t.sugar:avg(mon('sugar'))),'g',limExpl('sugar'));
+ sum+=line('caffeine',fmt(today?t.caffeine:avg(mon('caffeine'))),'mg',`${pd} · no limit set`);
+ sum+=line('alcohol',(today?t.alcohol:mon('alcohol').reduce((x,y)=>x+y,0)).toFixed(1),'std',today?'today · no limit set':'standard drinks over 7 days · no limit set');
+ sum+=line('bp',bpAvg,'mmHg',`average of ${bps.length} reading${bps.length===1?'':'s'}`);
+ sum+=line('weight',wAvg,'kg',`average of ${wts.length} reading${wts.length===1?'':'s'}`);
+ const longNote=(a.range==='30d'||a.range==='90d'||a.range==='all')?`<p class="quiet">Records start Mon 21 Sep, so this range shows the 7 recorded days.</p>`:'';
+ const W=380,H=170,L=34,B=24,T=12,R=6;const lw=lim('water');const maxY=Math.max(1600,lw.limit,...mon('water'))*1.05;
+ const y=v=>T+(H-T-B)*(1-v/maxY);const bw=(W-L-R)/7;
+ let bars='';mon('water').forEach((v,i)=>{const x=L+i*bw+bw*.2,w=bw*.6;const solid=Math.min(v,lw.target);const st=status(v,lw);
+  if(st.s==='limit'){bars+=`<rect x="${x}" y="${y(v)}" width="${w}" height="${y(0)-y(v)}" style="fill:var(--water)"/><text x="${x+w/2}" y="${y(v)-3}" text-anchor="middle">▲</text>`}
+  else{bars+=`<rect x="${x}" y="${y(solid)}" width="${w}" height="${y(0)-y(solid)}" style="fill:var(--water)"/>`;if(v>lw.target)bars+=`<rect x="${x}" y="${y(v)}" width="${w}" height="${y(solid)-y(v)}" fill="url(#hw)" style="stroke:var(--water);stroke-width:1"/>`}
+  bars+=`<text x="${x+w/2}" y="${H-8}" text-anchor="middle">${'MTWTFSS'[i]}</text>`;if(i===6)bars+=`<rect x="${x-3}" y="${T}" width="${w+6}" height="${H-B-T}" fill="none" style="stroke:var(--ink);stroke-width:1" stroke-dasharray="2 2"/>`});
+ const ticks=[0,500,1000,1500].map(v=>`<line x1="${L}" x2="${W-R}" y1="${y(v)}" y2="${y(v)}" style="stroke:var(--rule)"/><text x="${L-4}" y="${y(v)+4}" text-anchor="end">${fmt(v)}</text>`).join('');
+ const fluid=`<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Daily fluid intake Monday to Sunday against the ${fmt(lw.target)} ml target and ${fmt(lw.limit)} ml limit. ${mon('water').map((v,i)=>DAYS[i]+' '+fmt(v)+' ml').join(', ')}"><defs><pattern id="hw" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="1.6" height="5" style="fill:var(--water)"/></pattern></defs>${ticks}
+  <line x1="${L}" x2="${W-R}" y1="${y(lw.target)}" y2="${y(lw.target)}" style="stroke:var(--ink);stroke-width:1.5"/><text x="${W-R}" y="${y(lw.target)-4}" text-anchor="end">target ${fmt(lw.target)}</text>
+  <line x1="${L}" x2="${W-R}" y1="${y(lw.limit)}" y2="${y(lw.limit)}" style="stroke:var(--ink);stroke-width:1.5" stroke-dasharray="5 3"/><text x="${W-R}" y="${y(lw.limit)-4}" text-anchor="end">limit ${fmt(lw.limit)}</text>${bars}<text x="4" y="${T+4}" transform="rotate(-90 8 ${T+60})" text-anchor="end">ml / day</text></svg>`;
+ const allbp=bpAll();const bx=i=>L+20+i*((W-L-40)/Math.max(1,allbp.length-1));const by=v=>T+(H-T-B)*(1-(v-50)/(150-50));
+ let bpm=[50,75,100,125,150].map(v=>`<line x1="${L}" x2="${W-R}" y1="${by(v)}" y2="${by(v)}" style="stroke:var(--rule)"/><text x="${L-4}" y="${by(v)+4}" text-anchor="end">${v}</text>`).join('');
+ allbp.forEach((b,i)=>{const x=bx(i);bpm+=`<line x1="${x}" x2="${x}" y1="${by(b.sys)}" y2="${by(b.dia)}" style="stroke:var(--bp);stroke-width:1.5"/><rect x="${x-4}" y="${by(b.sys)-4}" width="8" height="8" style="fill:var(--bp)"/><rect x="${x-4}" y="${by(b.dia)-4}" width="8" height="8" style="fill:var(--module);stroke:var(--bp);stroke-width:1.5"/><text x="${x}" y="${H-8}" text-anchor="middle">${b.d.slice(4,6)} Sep</text><text x="${x+8}" y="${by(b.sys)+4}">${b.sys}/${b.dia}</text>${b.irr?`<text x="${x}" y="${by(b.sys)-9}" text-anchor="middle" style="fill:var(--bp)">irregular</text>`:''}`});
+ const bpc=`<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Blood pressure readings: ${allbp.map(b=>`${b.d} ${b.sys} over ${b.dia}${b.irr?', irregular heartbeat, '+b.pos+', '+b.note:''}`).join('; ')}">${bpm}<text x="${L}" y="${T-2}">mmHg · ■ systolic □ diastolic</text></svg>`;
+ const irr=allbp.filter(b=>b.irr).map(b=>`<div class="row"><span class="chip" style="--c:var(--bp)">Irregular heartbeat</span><span class="grow meta">${b.d} ${b.t} · ${b.pos} · ${b.sys}/${b.dia} · HR ${b.hr} · “${esc(b.note)}”</span></div>`).join('');
+ const aw=wtAll();const wmin=Math.min(...aw.map(w=>w.kg),78.0)-0.05,wmax=Math.max(...aw.map(w=>w.kg),78.6)+0.05;const wy=v=>T+(H-T-B)*(1-(v-wmin)/(wmax-wmin));const wx=i=>L+10+i*((W-L-20)/6);
+ let wm=[78.0,78.2,78.4,78.6].map(v=>`<line x1="${L}" x2="${W-R}" y1="${wy(v)}" y2="${wy(v)}" style="stroke:var(--rule)"/><text x="${L-4}" y="${wy(v)+4}" text-anchor="end">${v.toFixed(1)}</text>`).join('');
+ wm+=`<polyline fill="none" style="stroke:var(--weight);stroke-width:1.5" points="${aw.map(w=>`${wx(w.i)},${wy(w.kg)}`).join(' ')}"/>`+aw.map(w=>`<rect x="${wx(w.i)-4}" y="${wy(w.kg)-4}" width="8" height="8" style="fill:var(--weight)"/><text x="${wx(w.i)}" y="${wy(w.kg)-8}" text-anchor="middle">${w.kg.toFixed(2)}</text>`).join('')+'MTWTFSS'.split('').map((d,i)=>`<text x="${wx(i)}" y="${H-8}" text-anchor="middle">${d}</text>`).join('');
+ const wc=`<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Weight: ${aw.map(w=>w.d+' '+w.kg.toFixed(2)+' kg').join(', ')}">${wm}<text x="${L}" y="${T-2}">kg</text></svg>`;
+ const ai=S.signedIn?`<section class="sec"><h3 class="eng" style="color:var(--ai)">${ic('ai')} AI summary</h3>${a.insight?`<p style="margin:0 0 8px">Sodium was past target on ${cnt('sodium','over')} of 7 days and over the limit on ${cnt('sodium','limit')} (Saturday, ${fmt(WEEK_BASE.sodium[5])} mg). Water averaged ${fmt(avg(mon('water')))} ml against a ${fmt(lw.target)} ml target. Caffeine peaked on Friday (238 mg).</p><p class="note" style="margin:0">A summary of your own figures. Not medical advice.</p>`:`<button class="kc sm" data-act="insight" style="box-shadow:inset 3px 0 0 var(--ai),inset 0 1px 0 var(--hl),0 3px 0 var(--lip)">${ic('ai','style="color:var(--ai)"')} Summarise this range with AI</button>`}</section>`:`<p class="quiet">Sign in to use AI features.</p>`;
+ return `${longNote}<section class="sec"><h3 class="eng">Summary · ${today?'today':'last 7 days'}</h3><div class="rows">${sum}</div></section>
+ <section class="sec"><h3 class="eng">Daily fluid against target and limit</h3>${fluid}<p class="note" style="margin:0">Solid = within target · hatched = past target · ▲ = over limit (limit = target + ${fmt(lw.buffer)} ml buffer).</p></section>
+ <section class="sec"><h3 class="eng">Blood pressure · ${allbp.length} readings</h3>${bpc}<div class="rows">${irr}</div></section>
+ <section class="sec"><h3 class="eng">Weight</h3>${wc}</section>
+ <section class="sec"><h3 class="eng">Correlations</h3><div class="rows">
+  <div class="row"><span class="grow"><b>Caffeine and blood pressure</b><div class="meta">${allbp.length} readings so far; 10 are needed to compare.</div></span></div>
+  <div class="row"><span class="grow"><b>Alcohol and blood pressure</b><div class="meta">Alcohol on 2 of 7 days; more readings are needed on those days.</div></span></div>
+  <div class="row"><span class="grow"><b>Weight and sodium</b><div class="meta">${aw.length} weights and 7 sodium days. 14 days of both are needed.</div></span></div></div></section>${ai}`;
+}
+
+/* ---------- History (ledger; actions revealed per row) ---------- */
+function bodyHistory(a){
+ const strip=FILTERS.map(([k,l,full,d])=>`<button class="kc" aria-pressed="${a.filter===k}" data-act="hfilter" data-arg="${k}" style="--c:${d?cv(d):'var(--ink)'}" aria-label="Show ${full.toLowerCase()}">${l}</button>`).join('');
+ const recs=filteredRecs(a.filter).slice().sort((x,y)=>y.t-x.t);
+ const group=(title,list)=>list.length?`<section class="sec"><h3 class="eng">${title}</h3><div class="rows">${list.map(r=>{
+   const tx=recText(r);
+   if(a.editing===r.id)return editBox(r,a);
+   const open=a.open===r.id;
+   return `<div class="hrec ${open?'open':''}"><button class="hrec-b" data-act="hopen" data-arg="${r.id}" aria-expanded="${open}" aria-label="${esc(tx.title)} at ${fmtT(r.t)}${tx.meta?', '+esc(tx.meta):''}. ${open?'Hide':'Show'} edit and delete"><span class="t">${fmtT(r.t)}</span><span style="color:${cv(tx.d)}">${ic(r.kind==='food'?'food':r.kind==='bowel'?'bowel':DOM[tx.d].ic)}</span><span style="min-width:0"><span class="title" style="display:block">${esc(tx.title)}</span>${tx.meta?`<span class="meta" style="display:block">${esc(tx.meta)}</span>`:''}</span><span class="chev" aria-hidden="true">${open?'−':'+'}</span></button>
+    ${open?`<div class="hact"><button class="kc sm" data-act="hedit" data-arg="${r.id}">${ic('edit')} Edit</button><button class="kc sm" data-act="hdel" data-arg="${r.id}">${ic('trash')} Delete</button></div>`:''}</div>`}).join('')}</div></section>`:'';
+ const td=recs.filter(r=>r.t>=ds()),sp=recs.filter(r=>r.t<ds());
+ return `<div class="fstrip" role="group" aria-label="Filter by domain">${strip}</div>
+  <p class="fshow">Showing ${filterName(a.filter).toLowerCase()} · ${recs.length} record${recs.length===1?'':'s'} · tap a record to edit or delete</p>
+  ${group(`Today · Sun 27 Sep · from ${fmtT(ds())}`,td)}${group('Sat 26 Sep · after midnight, before the day start',sp)}
+  ${recs.length?'':'<p class="quiet">No records for this filter today.</p>'}
+  <section class="sec"><h3 class="eng">Export</h3><div class="btnrow"><button class="kc sm" data-act="csv">${ic('export')} CSV</button><button class="kc sm" data-act="pdf">${ic('export')} PDF report</button></div></section>`;
+}
+function editBox(r,a){
+ const d=a.draft;const f=(key,label,mode)=>`<label class="field"><span class="eng">${label}</span><input class="inp ${mode?'num':''}" id="ed-${key}" ${mode?`inputmode="${mode}"`:''} data-bind="apps.history.draft.${key}" value="${esc(d[key])}"></label>`;
+ let fields=f('time','Time (HH:MM)','numeric');
+ if(r.kind==='water')fields+=f('ml','Volume ml','numeric');
+ if(r.kind==='drink')fields+=f('name','Name')+`<div class="three">${f('ml','ml','numeric')}${f('caf','Caffeine mg','numeric')}${f('sugar','Sugar g','decimal')}</div>`;
+ if(r.kind==='food')fields+=f('desc','Description')+`<div class="two">${f('na','Sodium mg','numeric')}${f('sugar','Sugar g','decimal')}</div>`;
+ if(r.kind==='bp')fields+=`<div class="three">${f('sys','Systolic','numeric')}${f('dia','Diastolic','numeric')}${f('hr','Heart rate','numeric')}</div>`;
+ if(r.kind==='weight')fields+=f('kg','Weight kg','decimal');
+ if(r.kind==='wee'||r.kind==='bowel')fields+=f('note','Note');
+ return `<div class="edit-box" role="group" aria-label="Edit record">${fields}<div class="btnrow"><button class="kc sm pri" data-act="hsave" data-arg="${r.id}">Save</button><button class="kc sm" data-act="hedit" data-arg="">Cancel</button></div></div>`;
+}
+
+/* ---------- Profile ---------- */
+function bodyProfile(a){
+ const acct=S.signedIn?`<div class="rows"><div class="row"><span class="initials">RN</span><span class="grow"><b>Signed in</b><div class="meta">Cloud sync on · last synced 18:40</div></span></div></div>
+   <div class="btnrow" style="margin-top:10px"><button class="kc sm" data-act="signout">Sign out</button>${a.delConfirm?`<button class="kc sm pri" data-act="delacct-yes">Delete account and cloud copy</button><button class="kc sm" data-act="delacct">Keep account</button>`:`<button class="kc sm" data-act="delacct">Delete account</button>`}</div>${a.delConfirm?'<p class="note">Records on this device stay. The cloud copy is removed.</p>':''}`
+  :`<p class="note">Logging, medications and history work without an account. Signing in adds AI features and cloud sync.</p><button class="kc sm pri" data-act="signin" id="pf-signin">Sign in</button>`;
+ return `<div class="ufield" style="padding-top:0"><span class="eng">Name</span><input id="pf-name" data-bind="apps.profile.name" value="${esc(a.name)}" aria-label="Name"></div>
+ <section class="sec" style="margin-top:16px"><h3 class="eng">Conditions</h3><div class="rows"><div class="row"><span class="grow spine" style="--c:var(--bp)">Heart failure (HFrEF)</span></div></div></section>
+ <section class="sec"><h3 class="eng">Current medications</h3><div class="rows">
+  <div class="row"><span class="grow spine" style="--c:var(--meds)"><b>Entresto 49/51 mg</b><div class="meta">sacubitril/valsartan · 2× daily · ${S.meds.stock.entresto} left</div></span></div>
+  <div class="row"><span class="grow spine" style="--c:var(--meds)"><b>Bisoprolol ${S.meds.bisoDose}</b><div class="meta">Concor · 1× daily · ${S.meds.stock.concor} left</div></span></div></div></section>
+ <section class="sec"><h3 class="eng" style="${S.signedIn?'color:var(--ai)':''}">${S.signedIn?ic('ai')+' ':''}AI features</h3>${S.signedIn?`<div class="row" style="border-top:1px solid var(--rule)"><span class="grow">Share conditions with AI<div class="meta">Adds “heart failure (HFrEF)” to AI estimates</div></span>${sw('set.shareAI','Share conditions with AI')}</div>`:'<p class="quiet">Sign in to use AI features.</p>'}</section>
+ <section class="sec"><h3 class="eng">Account</h3>${acct}</section>`;
+}
+
+/* ---------- Log (detailed entry) ---------- */
+function bodyLog(a){
+ const t=a.tab;
+ if(t==='water'){
+  const ml=num(a.water.ml,0);const l=lim('water');
+  return `<div class="card" style="--c:var(--water)"><div class="eng" style="color:var(--water)">${ic('drop')} Water · other amount</div>
+   <div class="stepper" style="margin:12px 0"><button class="kc" data-act="wstep" data-arg="-50" aria-label="Minus 50 ml">−50</button><input class="inp num" id="lw-ml" inputmode="numeric" data-bind="apps.log.water.ml" value="${esc(a.water.ml)}" aria-label="Water millilitres"><button class="kc" data-act="wstep" data-arg="50" aria-label="Plus 50 ml">+50</button></div>
+   <button class="kc wide pri" data-act="lwater" ${ml>0?'':'disabled'} style="height:52px">Log ${fmt(ml)} ml water</button>
+   <p class="note">Today: ${fmt(totals(todayRecs()).water)} ml · target ${fmt(l.target)} · limit ${fmt(l.limit)}.</p></div>`;
+ }
+ if(t==='drink'){
+  const ps=PRESETS.map(p=>{const d=p.abv?'alcohol':'caffeine';return `<button class="kc preset" data-act="preset" data-arg="${p.id}" aria-label="Log ${p.name}, ${presetAdds(p)}${num(a.drink.sugar,0)?`, plus ${a.drink.sugar} g sugar`:''}"><span style="color:${cv(d)}">${ic(p.abv?'wine':p.id==='tea'?'tea':'cup')}</span><span class="grow"><b>${p.name}</b></span><span class="mono">${presetAdds(p)}</span></button>`}).join('');
+  const aiRow=S.signedIn?`<div class="field"><span class="eng" style="color:var(--ai)">${ic('ai')} AI drink lookup</span><div style="display:flex;gap:8px"><input class="inp" id="ld-ai" data-bind="apps.log.drink.ai" value="${esc(a.drink.ai)}" placeholder="e.g. cola 330 ml"><button class="kc sm" data-act="ailookup">Look up</button></div></div>`:'<p class="quiet">Sign in to use AI features.</p>';
+  return `<label class="field"><span class="eng">Add sugar (optional) · g</span><input class="inp num" id="ld-sugar" inputmode="decimal" data-bind="apps.log.drink.sugar" value="${esc(a.drink.sugar)}" placeholder="0"></label>
+   <div class="eng" style="margin:4px 0 8px;color:var(--ink2)">Presets · one tap logs</div>${ps}
+   <section class="sec" style="margin-top:14px"><h3 class="eng">Other drink</h3>${aiRow}
+   <label class="field"><span>Name</span><input class="inp" id="ld-name" data-bind="apps.log.drink.name" value="${esc(a.drink.name)}"></label>
+   <div class="two"><label class="field"><span>Volume ml</span><input class="inp num" id="ld-ml" inputmode="numeric" data-bind="apps.log.drink.ml" value="${esc(a.drink.ml)}"></label><label class="field"><span>Sugar g</span><input class="inp num" id="ld-osugar" inputmode="decimal" data-bind="apps.log.drink.osugar" value="${esc(a.drink.osugar)}"></label></div>
+   <div class="two"><label class="field"><span>Caffeine mg (optional)</span><input class="inp num" id="ld-caf" inputmode="numeric" data-bind="apps.log.drink.caf" value="${esc(a.drink.caf)}"></label><label class="field"><span>Alcohol % (optional)</span><input class="inp num" id="ld-abv" inputmode="decimal" data-bind="apps.log.drink.abv" value="${esc(a.drink.abv)}"></label></div>
+   <button class="kc wide pri" data-act="lother" ${a.drink.name&&num(a.drink.ml,0)>0?'':'disabled'} style="height:48px">${a.drink.name&&num(a.drink.ml,0)>0?'Log drink':'Enter a name and volume to log'}</button></section>`;
+ }
+ if(t==='food'){
+  const f=a.food;const amt=num(f.amt,0);const mg=(f.unit==='g'?amt*1000:amt);const na=Math.round(mg*NA_FACTOR[f.src]);
+  const srcName={salt:'salt',msg:'MSG',sodium:'sodium'}[f.src];
+  const conv=amt?(f.src==='sodium'?`${f.amt} ${f.unit} sodium = ${fmt(na)} mg sodium`:`${f.amt} ${f.unit} ${srcName} = ${fmt(na)} mg sodium`):`Enter an amount · salt is 39.3% sodium, MSG 12.3%`;
+  const aiRow=S.signedIn?`<button class="kc wide" data-act="aifood" style="justify-content:flex-start;display:flex;align-items:center;gap:8px;padding:0 12px;margin-bottom:14px;box-shadow:inset 3px 0 0 var(--ai),inset 0 1px 0 var(--hl),0 3px 0 var(--lip)"><span style="color:var(--ai)">${ic('ai')}</span>Describe it and AI estimates sodium</button>`:'<p class="quiet" style="margin-bottom:12px">Sign in to use AI features.</p>';
+  return `<label class="field"><span class="eng">What did you eat?</span><input class="inp" id="lf-desc" data-bind="apps.log.food.desc" value="${esc(f.desc)}" placeholder="e.g. ham sandwich"></label>${aiRow}
+   <div class="eng" style="margin-bottom:6px;color:var(--ink2)">Sodium source</div>
+   <div class="segctl" role="group" aria-label="Sodium source" style="margin-bottom:10px">${[['salt','Salt'],['msg','MSG'],['sodium','Sodium']].map(([k,l])=>`<button class="kc" aria-pressed="${f.src===k}" data-act="fsrc" data-arg="${k}">${l}</button>`).join('')}</div>
+   <div style="display:grid;grid-template-columns:1fr 120px;gap:8px;align-items:end"><label class="field" style="margin:0"><span>Amount</span><input class="inp num" id="lf-amt" inputmode="decimal" data-bind="apps.log.food.amt" value="${esc(f.amt)}" placeholder="1.5"></label>
+   <div class="segctl" role="group" aria-label="Unit">${['g','mg'].map(u=>`<button class="kc" aria-pressed="${f.unit===u}" data-act="funit" data-arg="${u}">${u}</button>`).join('')}</div></div>
+   <div class="conv" id="lf-conv" aria-live="polite">${conv}</div>
+   <label class="field"><span>Sugar g (optional)</span><input class="inp num" id="lf-sugar" inputmode="decimal" data-bind="apps.log.food.sugar" value="${esc(f.sugar)}"></label>
+   <button class="kc wide pri" data-act="lfood" ${f.desc||amt?'':'disabled'} style="height:48px">${f.desc||amt?`Log food${amt?` · ${fmt(na)} mg sodium`:''}`:'Describe the food or enter an amount'}</button>`;
+ }
+ if(t==='bp'){
+  const b=a.bp;const pp=(num(b.sys,0)&&num(b.dia,0))?num(b.sys,0)-num(b.dia,0):null;const ok=num(b.sys,0)&&num(b.dia,0);
+  const fld=(k,l,ph)=>`<label class="${b.field===k?'sel':''}"><span class="eng" style="display:block;margin-bottom:4px">${l}</span><input class="inp num" id="bp-${k}" inputmode="numeric" data-bind="apps.log.bp.${k}" data-bpfield="${k}" value="${esc(b[k])}" placeholder="${ph}" aria-label="${l}"></label>`;
+  const more=b.more?`<div class="edit-box"><div class="segctl" role="group" aria-label="Position" style="margin-bottom:8px">${['Sitting','Standing'].map(x=>`<button class="kc" aria-pressed="${b.pos===x}" data-act="bpset" data-arg="pos:${x}">${x}</button>`).join('')}</div>
+   <div class="segctl" role="group" aria-label="Arm" style="margin-bottom:8px">${['Left','Right'].map(x=>`<button class="kc" aria-pressed="${b.arm===x}" data-act="bpset" data-arg="arm:${x}">${x} arm</button>`).join('')}</div>
+   <div class="row" style="border-top:1px solid var(--rule)"><span class="grow">Irregular heartbeat</span>${sw('apps.log.bp.irr','Irregular heartbeat')}</div>
+   <label class="field" style="margin-top:8px"><span>Note</span><input class="inp" id="bp-note" data-bind="apps.log.bp.note" value="${esc(b.note)}"></label></div>`:'';
+  return `<p class="note mono" style="margin:0 0 10px">Last: 118/74 · HR 58 · today 07:30</p>
+   <div class="bpf">${fld('sys','Systolic','e.g. 120')}${fld('dia','Diastolic','e.g. 80')}${fld('hr','Heart rate','optional')}</div>
+   <p class="mono" style="font-size:13px;margin:8px 0 0">Pulse pressure: ${pp!=null?`${pp} mmHg`:'—'}</p>
+   <div class="numpad" role="group" aria-label="Number keys for ${b.field==='sys'?'systolic':b.field==='dia'?'diastolic':'heart rate'}">${['1','2','3','4','5','6','7','8','9','⌫','0','Next'].map(k=>`<button class="kc" data-act="np" data-arg="${k}" aria-label="${k==='⌫'?'Delete digit':k==='Next'?'Next field':k}">${k}</button>`).join('')}</div>
+   <button class="kc sm" data-act="bpmore" aria-expanded="${b.more}" style="margin-bottom:12px">${b.more?'Fewer options':'Position, arm, note'}</button>${more}
+   <button class="kc wide pri" data-act="lbp" ${ok?'':'disabled'} style="height:48px">${ok?'Save reading':'Enter systolic and diastolic to save'}</button>`;
+ }
+ if(t==='weight'){
+  return `<div class="card" style="--c:var(--weight)"><p class="note mono" style="margin:0 0 10px">Last: 78.35 kg · today 07:20</p>
+   <div class="stepper"><button class="kc" data-act="wtstep" data-arg="-1" aria-label="Minus ${S.set.weightStep} kg">−${S.set.weightStep}</button><input class="inp num" id="lwt" inputmode="decimal" data-bind="apps.log.weight.kg" value="${esc(a.weight.kg)}" aria-label="Weight kilograms"><button class="kc" data-act="wtstep" data-arg="1" aria-label="Plus ${S.set.weightStep} kg">+${S.set.weightStep}</button></div>
+   <button class="kc wide pri" data-act="lweight" style="height:52px;margin-top:12px">Log ${num(a.weight.kg,0).toFixed(2)} kg</button></div>`;
+ }
+ const bt=a.bath;
+ const sizes=(key,cur)=>`<div class="segctl" role="group" aria-label="Amount">${['Small','Medium','Large'].map(x=>`<button class="kc" aria-pressed="${cur===x}" data-act="bsize" data-arg="${key}:${x}">${x}</button>`).join('')}</div>`;
+ return `<section class="sec card" style="--c:var(--bath)"><div class="eng" style="color:var(--bath);margin-bottom:8px">${ic('wee')} Urination</div><button class="kc wide pri" data-act="lwee" style="height:52px;margin-bottom:12px">Log urination</button><div class="eng" style="color:var(--ink2);margin-bottom:6px">Optional amount</div>${sizes('size',bt.size)}<label class="field" style="margin-top:10px"><span>Note</span><input class="inp" id="lb-note" data-bind="apps.log.bath.note" value="${esc(bt.note)}"></label></section>
+ <section class="sec card" style="--c:var(--bath)"><div class="eng" style="color:var(--bath);margin-bottom:8px">${ic('bowel')} Bowel movement</div><button class="kc wide pri" data-act="lbowel" style="height:52px;margin-bottom:12px">Log bowel movement</button><div class="eng" style="color:var(--ink2);margin-bottom:6px">Optional amount</div>${sizes('bsize',bt.bsize)}<label class="field" style="margin-top:10px"><span>Note</span><input class="inp" id="lb-bnote" data-bind="apps.log.bath.bnote" value="${esc(bt.bnote)}"></label></section>`;
+}
+
+/* ---------- shared switch ---------- */
+function getPath(p){return p.split('.').reduce((o,k)=>o==null?o:o[k],S)}
+function setPath(p,v){const ks=p.split('.');let o=S;for(let i=0;i<ks.length-1;i++){if(o[ks[i]]==null)o[ks[i]]={};o=o[ks[i]]}o[ks[ks.length-1]]=v}
+function sw(path,label,disabled){const on=!!getPath(path);return `<button class="kc sw" role="switch" aria-checked="${on}" aria-label="${esc(label)}" data-act="toggle" data-arg="${path}" ${disabled?'disabled':''}><i></i>${on?'On':'Off'}</button>`}
+
+/* ======================= overlays ======================= */
+function rOverlay(){
+ let h='';
+ if(U.overlay==='account'){
+  h=`<div class="scrim" data-act="closeov" style="background:transparent"></div><div class="pop acct-pop" role="dialog" aria-label="Account" id="pop-acct">
+   <div class="stat"><span class="initials">RN</span><span><b style="color:var(--ink)">Ryan</b><br>Signed in · AI features available</span></div>
+   <button class="kc" data-act="open" data-arg="profile">${ic('profile')} Profile</button>
+   <div class="stat">${ic('sync')} Synced 18:40 · cloud sync on</div>
+   <button class="kc" data-act="signout">Sign out</button></div>`;
+ }
+ if(U.overlay==='switcher'){
+  const rows=S.windows.map(id=>`<div class="row2"><button class="kc main ${S.focus===id?'inv':''}" data-act="focus" data-arg="${id}" aria-label="${APPS[id].title}: ${esc(winState(id))}"><span style="color:${S.focus===id?'inherit':APPS[id].dom?cv(APPS[id].dom):'var(--ink)'}">${ic(APPS[id].ic)}</span><span class="grow"><span class="eng">${APPS[id].title}</span><div class="st mono">${esc(winState(id))}</div></span></button><button class="kc" style="width:52px" data-act="close" data-arg="${id}" aria-label="Close ${APPS[id].title}">${ic('x')}</button></div>`).join('');
+  h=`<div class="scrim" data-act="closeov"></div><div class="pop switcher sw-list" role="dialog" aria-label="Open apps" id="pop-sw">
+   <div class="pop-h"><span class="eng">Open apps</span><span class="note">Swipe an app sideways to switch</span></div>
+   <div class="row2"><button class="kc main ${S.focus==='home'?'inv':''}" data-act="home">${ic('home')}<span class="grow"><span class="eng">Home</span><div class="st mono">Today, this week and the keypad</div></span></button></div>
+   ${rows||'<p class="note">No apps open. Open one from the keys below.</p>'}</div>`;
+ }
+ if(M.phase!=='idle'){
+  if(M.phase==='review'){
+   const rows=M.entries.map(e=>{
+    const x=`<button class="kc" data-act="rvdel" data-arg="${e.id}" aria-label="Remove ${e.name}">${ic('x')}</button>`;
+    if(e.kind==='drink')return `<div class="rv-row"><div class="rv-h"><span style="color:var(--caffeine)">${ic('cup')}</span><b>${e.name}</b><span class="mono" style="font-size:12px;color:var(--ink2)">${e.time}</span></div>${x}<div class="rv-f"><input class="inp num" id="rv-ml-${e.id}" inputmode="numeric" data-mbind="${e.id}:ml" value="${esc(e.ml)}" aria-label="${e.name} millilitres">ml ·<input class="inp num" id="rv-caf-${e.id}" inputmode="numeric" data-mbind="${e.id}:caf" value="${esc(e.caf)}" aria-label="${e.name} caffeine mg">mg caffeine</div></div>`;
+    const na=Math.round(num(e.salt,0)*1000*0.393);
+    return `<div class="rv-row"><div class="rv-h"><span style="color:var(--sodium)">${ic('food')}</span><b>${e.name}</b><span class="mono" style="font-size:12px;color:var(--ink2)">${e.time}</span></div>${x}<div class="rv-f"><input class="inp num" id="rv-salt-${e.id}" inputmode="decimal" data-mbind="${e.id}:salt" value="${esc(e.salt)}" aria-label="Salt grams">g salt = <b id="rv-na-${e.id}">${fmt(na)}</b> mg sodium</div></div>`;
+   }).join('');
+   h+=`<div class="mic-panel" role="dialog" aria-label="Review AI entries" id="mic-panel"><div class="inner"><div class="eng" style="color:var(--ai)">${ic('ai')} Check before logging</div><p class="mono" style="font-size:12px;color:var(--ink2);margin:4px 0 2px">Heard: “${esc(TRANSCRIPT)}”</p>${rows||'<p class="note">Nothing left to log.</p>'}
+    <div class="btnrow" style="margin-top:12px"><button class="kc sm pri" data-act="rvlog" id="rv-log" ${M.entries.length?'':'disabled'} style="flex:1">Log ${M.entries.length} ${M.entries.length===1?'entry':'entries'}</button><button class="kc sm" data-act="rvdiscard" style="flex:1">Discard</button></div></div></div>`;
+  }else{
+   const secs=Math.floor((performance.now()-M.t0)/1000);
+   const words=TRANSCRIPT.split(' ').slice(0,M.words).join(' ');
+   const meter=Array.from({length:16},(_,i)=>`<i class="${i<M.level?'on':''}"></i>`).join('');
+   h+=`<div class="mic-panel ${M.phase==='cancel'?'cancel':''}" role="dialog" aria-label="AI logger listening" id="mic-panel"><div class="glass">
+    <div class="mic-h"><span class="eng" style="color:var(--ai-g)">${ic('mic')} ${M.phase==='cancel'?'Release to cancel':'Listening'}</span><span class="mono">0:${String(secs).padStart(2,'0')}</span></div>
+    <div class="meter" aria-hidden="true">${meter}</div>
+    <div class="mic-tr" aria-live="polite">${words?esc(words):'<span style="color:var(--g-mu)">Say what you had…</span>'}</div>
+    <div class="mic-hint">${M.phase==='cancel'?'Release now to cancel · slide back to keep':'Release to review · slide away to cancel'}</div></div></div>`;
+  }
+ }
+ return h;
+}
+const TRANSCRIPT='two coffees this morning and a ham sandwich';
+function rSheet(){
+ if(U.overlay==='settings')return settingsSheet();
+ if(U.overlay==='signin')return `<div class="scrim wd" data-act="closeov"></div><div class="sheet drawer ${U.sheetAnim?'enter':''}" role="dialog" aria-modal="true" aria-label="Sign in" id="sheet-signin">
+  <div class="sheet-head chrome"><h2 class="eng">Sign in for AI features</h2><button class="kc" style="width:44px;padding:0;display:grid;place-items:center" data-act="closeov" aria-label="Close sign in">${ic('x')}</button></div>
+  <div class="sheet-body" style="padding-top:16px"><p style="margin:0 0 16px">Logging, medications and history work without an account. Signing in adds AI features and cloud sync.</p>
+   <label class="field"><span>Email</span><input class="inp" id="si-email" type="email" autocomplete="email"></label>
+   <label class="field"><span>Password</span><input class="inp" id="si-pw" type="password" autocomplete="current-password"></label>
+   <button class="kc wide pri" data-act="dosignin" style="height:48px;margin-bottom:12px">Sign in</button>
+   <button class="kc wide" data-act="dosignin" style="height:48px">Continue with Google</button></div></div>`;
+ return '';
+}
+/* settings rows: engraved label, value, stepper — no boxed inputs */
+const ENUMS={
+ 'set.weekStart':[['mon','Monday'],['sun','Sunday']],
+ 'set.theme':[['light','Light'],['dark','Dark'],['system','Match device']],
+ 'set.weightStep':[[0.05,'0.05 kg'],[0.1,'0.1 kg']],
+ 'set.timeFmt':[['24','24-hour'],['12','12-hour']],
+ 'set.region':[['auto','From device'],['za','South Africa'],['uk','United Kingdom'],['us','United States']],
+ 'set.tz':[['device','Device time'],['fixed','Home time']]
+};
+const enumLabel=p=>{const o=ENUMS[p].find(x=>String(x[0])===String(getPath(p)));return o?o[1]:''};
+function srowEnum(path,label,note){const id=path.replace(/\W/g,'-');return `<div class="srow"><span class="slab"><span class="eng" id="lb-${id}">${label}</span>${note?`<span class="note">${note}</span>`:''}</span><span class="sval" id="v-${id}" aria-live="polite">${enumLabel(path)}</span><span class="step"><button class="kc" data-act="cyc" data-arg="${path}|-1" aria-label="${label}: previous option">‹</button><button class="kc" data-act="cyc" data-arg="${path}|1" aria-label="${label}: next option">›</button></span></div>`}
+function srowNum(path,label,val,step,min,max,note,idp){const id=idp||path.replace(/\W/g,'-');return `<div class="srow"><span class="slab"><span class="eng">${label}</span>${note?`<span class="note">${note}</span>`:''}</span><span class="sval" id="v-${id}" aria-live="polite">${val}</span><span class="step"><button class="kc" id="dn-${id}" data-act="stp" data-arg="${path}|${-step}|${min}|${max}" aria-label="${label}: decrease by ${step}" ${num(getPath(path),0)<=min?'disabled':''}>−</button><button class="kc" id="up-${id}" data-act="stp" data-arg="${path}|${step}|${min}|${max}" aria-label="${label}: increase by ${step}" ${num(getPath(path),0)>=max?'disabled':''}>+</button></span></div>`}
+function srowSw(path,label,note,disabled){return `<div class="srow sw-row"><span class="slab"><span class="eng">${label}</span>${note?`<span class="note">${note}</span>`:''}</span>${sw(path,label,disabled)}</div>`}
+function settingsSheet(){
+ const g=(k,title,sum,body)=>{const open=!!S.set.groups[k];return `<div class="grp"><button class="grp-h" data-act="grp" data-arg="${k}" aria-expanded="${open}" id="grp-${k}"><span class="eng" style="font-size:12px">${title}</span><span class="grow sum">${sum}</span><span class="pm" aria-hidden="true">${open?'−':'+'}</span></button>${open?`<div class="grp-b">${body}</div>`:''}</div>`};
+ const dsH=S.set.dayStart;
+ const limGroup=(k,u,step,min)=>{const l=lim(k);return `<div class="sgh" style="--c:${cv(k)}"><span style="color:${cv(k)}">${ic(DOM[k].ic)}</span><span class="eng">${DOM[k].name}</span><span class="mono" id="limsum-${k}">limit ${fmt(l.limit)} ${u}</span></div>
+   ${srowNum(`set.lim.${k}.target`,'Target',`${fmt(l.target)} ${u}`,step,min,99999,'',`tgt-${k}`)}
+   ${srowNum(`set.lim.${k}.buffer`,'Buffer',`${fmt(l.buffer)} ${u}`,step,0,99999,'limit = target + buffer',`buf-${k}`)}`};
+ const tracking=`${srowNum('set.dayStart','Day starts at',fmtT(dsH*60),1,0,8,`Records before ${fmtT(dsH*60)} count toward the previous day`,'ds')}
+  ${srowEnum('set.weekStart','Week starts on')}
+  ${limGroup('water','ml',50,250)}${limGroup('sodium','mg',100,500)}${S.set.trackers.sugar?limGroup('sugar','g',5,5):''}
+  <div class="sgh"><span class="eng">Optional trackers</span></div>
+  ${srowSw('set.trackers.sugar','Sugar','Shown on the home display and in Metrics')}${srowSw('set.trackers.potassium','Potassium','Adds a potassium row, no limit set')}
+  <div class="sgh"><span class="eng">Entry</span></div>
+  ${srowEnum('set.weightStep','Weight step')}
+  <div class="sgh"><span class="eng">Drink presets</span></div>${PRESETS.map(p=>`<div class="srow sw-row" style="min-height:44px"><span class="slab"><span class="eng">${p.name}</span></span><span class="mono" style="font-size:13px">${presetAdds(p)}</span></div>`).join('')}`;
+ const appear=`${srowEnum('set.theme','Theme')}${srowSw('set.bigText','Bigger text')}${srowSw('set.reduceMotion','Reduce motion')}`;
+ const meds=`${srowEnum('set.region','Medicine region')}${srowEnum('set.timeFmt','Clock')}${srowSw('set.reminders','Dose reminders','2 follow-ups, every 10 min')}${srowEnum('set.tz','Dose times follow','Home time keeps dose times fixed when travelling')}`;
+ const ai=S.signedIn?`<p class="note" style="margin:10px 0 0">Your own keys are used for AI estimates and the AI logger.</p><div class="ufield"><span class="eng">Anthropic API key</span><input type="password" id="key-a" data-bind="set.keys.anthropic" value="${esc(S.set.keys.anthropic)}" placeholder="sk-ant-…" aria-label="Anthropic API key"></div><div class="ufield"><span class="eng">Groq API key (speech)</span><input type="password" id="key-g" data-bind="set.keys.groq" value="${esc(S.set.keys.groq)}" placeholder="gsk_…" aria-label="Groq API key"></div>`:'<p class="quiet">Sign in to use AI features.</p>';
+ const data=`${srowSw('set.cloud','Cloud sync',S.signedIn?'Last synced 18:40':'Sign in to sync between devices',!S.signedIn)}
+  <div class="btnrow" style="margin-top:12px"><button class="kc sm" data-act="csv">Export</button><button class="kc sm" data-act="import">Import</button>${U.delData?`<button class="kc sm pri" data-act="deldata-yes">Delete all records</button><button class="kc sm" data-act="deldata">Keep</button>`:`<button class="kc sm" data-act="deldata">Delete data</button>`}</div>`;
+ const priv=`${srowSw('set.mic','Microphone')}${srowSw('set.notif','Notifications')}${srowSw('set.shareAI','Share conditions with AI','',!S.signedIn)}`;
+ const help=`<div class="btnrow" style="margin-top:10px"><button class="kc sm">How targets and limits work</button><button class="kc sm">Send feedback</button></div>`;
+ const about=`<p class="mono" style="font-size:13px;margin:10px 0 0">Intake Tracker 1.37.1 · Field Instrument prototype<br>Records on this device: ${S.records.length}</p>`;
+ return `<div class="scrim wd" data-act="closeov"></div><div class="sheet drawer ${U.sheetAnim?'enter':''}" role="dialog" aria-modal="true" aria-label="Settings" id="sheet-settings">
+  <div class="sheet-head chrome"><span style="display:grid;place-items:center">${ic('gear')}</span><h2 class="eng" style="font-size:13px">Settings</h2><button class="kc" style="display:inline-flex;align-items:center;gap:6px;padding:0 14px" data-act="closeov" id="set-close" aria-label="Close settings">${ic('x')} Close</button></div>
+  <div class="sheet-body" data-scroll-key="settings">
+   ${g('tracking','Tracking',`Day starts ${fmtT(dsH*60)} · week starts ${S.set.weekStart==='mon'?'Monday':'Sunday'}`,tracking)}
+   ${g('appearance','Appearance',enumLabel('set.theme'),appear)}
+   ${g('meds','Medications',`${enumLabel('set.timeFmt')} clock`,meds)}
+   ${g('ai','AI features',S.signedIn?'Available':'Sign in to use',ai)}
+   ${g('data','Data and storage',S.signedIn?'Synced 18:40':'This device only',data)}
+   ${g('privacy','Privacy','',priv)}
+   ${g('help','Help and feedback','',help)}
+   ${g('about','About','Version 1.37.1',about)}
+  </div></div>`;
+}
+
+/* ======================= render orchestration ======================= */
+const regions={sysbar:'r-sysbar',display:'r-display',readout:'r-readout',keypad:'r-keypad',modes:'r-modes',strips:'r-strips',overlay:'r-overlay',sheet:'r-sheet'};
+function patch(id,html){const el=document.getElementById(id);if(el._h!==html){el.innerHTML=html;el._h=html}}
+const isWide=()=>app.clientWidth>=768;
+function applyTheme(){
+ const th=S.set.theme==='system'?(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):S.set.theme;
+ const isApp=S.focus!=='home'&&S.windows.includes(S.focus);
+ if(!isApp)U.kp=false;
+ app.classList.toggle('dark',th==='dark');
+ app.classList.toggle('is-app',isApp);
+ app.classList.toggle('kp-up',!!U.kp&&isApp);
+ app.classList.toggle('bigtext',!!S.set.bigText);
+ app.classList.toggle('rm',!!S.set.reduceMotion);
+}
+function render(){
+ if(S.focus!=='home'&&!S.windows.includes(S.focus))S.focus='home';
+ const ae=document.activeElement;const aid=ae&&ae.id;let sel=null;
+ try{if(ae&&ae.selectionStart!=null)sel=[ae.selectionStart,ae.selectionEnd]}catch(e){}
+ applyTheme();
+ patch(regions.sysbar,rSysbar());
+ patch(regions.display,rDisplay());
+ patch(regions.readout,rReadout());
+ patch(regions.keypad,rKeypad());
+ patch(regions.modes,rModes());
+ patch(regions.strips,rStrips());
+ const host=document.getElementById('r-modules');
+ const wide=isWide();
+ [...host.children].forEach(el=>{if(el.dataset.win&&!S.windows.includes(el.dataset.win))el.remove();if(el.classList.contains('empty-bay'))el.remove()});
+ S.windows.forEach((id,i)=>{
+  let el=host.querySelector(`[data-win="${id}"]`);
+  if(!el){el=document.createElement('section');el.dataset.win=id;el.setAttribute('aria-label',APPS[id].title);host.appendChild(el)}
+  const html=rModule(id);if(el._h!==html){el.innerHTML=html;el._h=html}
+  const exp=S.expanded.includes(id);const foc=S.focus===id;
+  const keep=el.classList.contains('enter')?' enter':'';
+  el.className=`module${foc?' is-focus':''}${exp?' is-exp':''}${keep}`;
+  el.style.order=i;
+  el.style.setProperty('--c',APPS[id].dom?cv(APPS[id].dom):'var(--ink)');
+  el.inert=wide?!exp:!foc;
+ });
+ for(let k=S.windows.filter(x=>S.expanded.includes(x)).length;k<2;k++){
+  const e=document.createElement('div');e.className='empty-bay wd-only';e.style.order=99;
+  e.innerHTML=`<i class="screw a"></i><i class="screw b"></i><i class="screw c"></i><i class="screw d"></i><span class="eng">Empty bay</span><span style="font-size:13px">Open Medications, Metrics, History or Profile from the keys on the left.</span>`;host.appendChild(e);
+ }
+ patch(regions.overlay,rOverlay());
+ patch(regions.sheet,rSheet());
+ U.sheetAnim=false;
+ if(U.enter){const el=host.querySelector(`[data-win="${U.enter}"]`);if(el){el.classList.add('enter');el.addEventListener('animationend',()=>el.classList.remove('enter'),{once:true});setTimeout(()=>el.classList.remove('enter'),200)}U.enter=null}
+ document.querySelectorAll('[data-scroll-key]').forEach(el=>{const v=S.scroll[el.dataset.scrollKey];if(v!=null&&el.clientHeight>0&&Math.abs(el.scrollTop-v)>1)el.scrollTop=v});
+ if(aid&&document.activeElement!==ae){const el=document.getElementById(aid);if(el&&el.offsetParent!==null){el.focus({preventScroll:true});if(sel&&el.setSelectionRange)try{el.setSelectionRange(sel[0],sel[1])}catch(e){}}}
+ save();
+}
+
+/* ======================= actions ======================= */
+function openOverlay(name,invoker){U.overlay=name;U.invoker=invoker||(document.activeElement&&document.activeElement.id)||null;U.sheetAnim=(name==='settings'||name==='signin');render();
+ const first={settings:'set-close',signin:'si-email',account:'pop-acct',switcher:'pop-sw'}[name];
+ requestAnimationFrame(()=>{const el=document.getElementById(first);if(el){if(el.classList.contains('pop')){const b=el.querySelector('button');b&&b.focus()}else el.focus()}});
+}
+function closeOverlay(){const inv=U.invoker;U.overlay=null;U.invoker=null;U.delData=false;render();if(inv){const el=document.getElementById(inv);el&&el.focus()}}
+function logPreset(p,sugar){
+ const s=num(sugar,0);
+ addRecords([{kind:'drink',name:p.name,ml:p.ml,caf:p.caf,std:p.abv?stdOf(p.ml,p.abv):0,sugar:s}],`Logged ${p.name} ${p.ml} ml · ${p.abv?stdOf(p.ml,p.abv).toFixed(1)+' std drinks':p.caf+' mg caffeine'}${s?` · ${s} g sugar`:''}`);
+}
+const ACT={
+ home(){S.focus='home';U.overlay=null;U.kp=false;render();if(isWide()){const d=document.querySelector('.g-row');d&&d.focus()}},
+ open(id){U.overlay=null;openApp(id);render()},
+ focus(id){U.overlay=null;if(S.focus!==id)U.enter=id;S.focus=id;S.lastWin=id;touchExpand(id);render()},
+ expand(id){S.focus=id;S.lastWin=id;touchExpand(id);U.enter=id;render();const el=document.querySelector(`[data-win="${id}"]`);if(el){el.classList.add('enter2');setTimeout(()=>el.classList.remove('enter2'),200)}},
+ collapse(id){S.expanded=S.expanded.filter(x=>x!==id);if(S.focus===id)S.focus=S.expanded[S.expanded.length-1]||'home';render()},
+ close(id){closeApp(id);if(U.overlay==='switcher'&&!S.windows.length)U.overlay=null;render()},
+ cycle(d){if(!S.windows.length){openOverlay('switcher','mk-win');return}U.overlay=null;cycle(+d);render()},
+ switcher(){if(U.overlay==='switcher')closeOverlay();else openOverlay('switcher','mk-win')},
+ kp(){U.kp=!U.kp;render();if(U.kp){const k=document.getElementById('k-w250');k&&k.focus({preventScroll:true})}else{document.getElementById('ro-btn')?.focus()}},
+ tab(arg){const [id,t]=arg.split(':');if(!S.windows.includes(id))openApp(id);S.apps[id].tab=t;render()},
+ range(arg){S.apps.metrics.range=arg.split(':')[1];render()},
+ rowhist(k){openApp('history',{filter:k,editing:null,open:null});render()},
+ dose(){openApp('meds',{tab:'schedule'});U.overlay=null;render()},
+ settings(){if(U.overlay==='settings')closeOverlay();else openOverlay('settings','sb-gear')},
+ account(){openOverlay('account','sb-acct')},
+ signin(){openOverlay('signin',document.activeElement&&document.activeElement.id||'sb-acct')},
+ dosignin(){S.signedIn=true;S.set.cloud=true;U.overlay=null;confirm('Signed in · AI features available',null);render();document.getElementById('sb-acct').focus()},
+ signout(){S.signedIn=false;U.overlay=null;confirm('Signed out · logging still works on this device',null);render()},
+ closeov(){closeOverlay()},
+ undo(){if(U.confirm&&U.confirm.undo){U.confirm.undo();render()}},
+ grp(k){S.set.groups[k]=!S.set.groups[k];render()},
+ toggle(path){setPath(path,!getPath(path));render()},
+ cyc(arg){const [p,d]=arg.split('|');const opts=ENUMS[p];let i=opts.findIndex(o=>String(o[0])===String(getPath(p)));i=(i+ +d+opts.length)%opts.length;setPath(p,opts[i][0]);render()},
+ stp(arg){const [p,d,mn,mx]=arg.split('|');const v=Math.min(+mx,Math.max(+mn,Math.round((num(getPath(p),0)+ +d)*100)/100));setPath(p,v);render()},
+ take(id){S.apps.meds.skip=null;const d=S.meds.doses.find(x=>x.id===id);d.status='taken';d.at=fmtT(NOW);d.undoable=true;S.meds.stock.entresto=Math.max(0,S.meds.stock.entresto-1);confirm(`Taken: Entresto ${d.time} dose at ${d.at}`,()=>{d.status='due';delete d.at;d.undoable=false;S.meds.stock.entresto++});render()},
+ skip(id){S.apps.meds.skip=S.apps.meds.skip===id?null:id;render()},
+ skipr(arg){const [id,r]=arg.split(':');const d=S.meds.doses.find(x=>x.id===id);d.status='skipped';d.reason=r;S.apps.meds.skip=null;confirm(`Skipped: Entresto ${d.time} · ${r}`,()=>{d.status='due';delete d.reason});render()},
+ 'dose-undo'(id){const d=S.meds.doses.find(x=>x.id===id);if(d.status==='taken')S.meds.stock.entresto++;d.status='due';delete d.at;delete d.reason;d.undoable=false;render()},
+ refill(k){S.apps.meds.refill=k||null;S.apps.meds.correct=null;S.apps.meds.refillVal='';render();k&&document.getElementById('refill-'+k)?.focus()},
+ correct(k){S.apps.meds.correct=k||null;S.apps.meds.refill=null;S.apps.meds.correctVal=k?String(S.meds.stock[k]):'';render();k&&document.getElementById('correct-'+k)?.focus()},
+ 'refill-save'(k){const n=Math.round(num(S.apps.meds.refillVal,0));if(n>0){S.meds.stock[k]+=n;confirm(`Refill logged: +${n} tablets`,null)}S.apps.meds.refill=null;render()},
+ 'correct-save'(k){const n=Math.round(num(S.apps.meds.correctVal,-1));if(n>=0){S.meds.stock[k]=n;confirm(`Count corrected to ${n}`,null)}S.apps.meds.correct=null;render()},
+ tit(st){S.meds.titration=st;if(st==='started'){S.meds.bisoDose='5 mg';confirm('Titration started: Bisoprolol 5 mg from Mon 08:00',null)}else if(st==='ready'){S.meds.bisoDose='2.5 mg'}render();const b=document.getElementById(st==='confirm'?'tit-confirm':'tit-start');b&&b.focus()},
+ insight(){S.apps.metrics.insight=true;render()},
+ hfilter(k){S.apps.history.filter=k;S.apps.history.editing=null;S.apps.history.open=null;render()},
+ hopen(id){const a=S.apps.history;a.open=a.open===id?null:id;render()},
+ hedit(id){const a=S.apps.history;a.open=null;if(!id){a.editing=null;render();return}const r=S.records.find(x=>x.id===id);a.editing=id;a.draft=Object.assign({},r,{time:fmtT(r.t)});render();document.getElementById('ed-time')?.focus()},
+ hsave(id){const a=S.apps.history,r=S.records.find(x=>x.id===id),d=a.draft;const t=parseT(d.time);if(t!=null)r.t=t;
+  ['ml','caf','sugar','na','sys','dia','hr','kg'].forEach(k=>{if(d[k]!==undefined&&r[k]!==undefined)r[k]=num(d[k],r[k])});['name','desc','note'].forEach(k=>{if(d[k]!==undefined&&r[k]!==undefined)r[k]=d[k]});
+  a.editing=null;confirm(`Updated ${recText(r).title}`,null);render()},
+ hdel(id){const i=S.records.findIndex(x=>x.id===id);if(i<0)return;const r=S.records[i];S.records.splice(i,1);S.apps.history.open=null;confirm(`Deleted ${recText(r).title} (${fmtT(r.t)})`,()=>{S.records.push(r)});render()},
+ csv(){const rows=[['time','kind','description','value']].concat(S.records.slice().sort((a,b)=>a.t-b.t).map(r=>{const t=recText(r);return [fmtT(r.t),r.kind,t.title,t.meta]}));
+  const blob=new Blob([rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n')],{type:'text/csv'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='intake-2026-09-27.csv';a.click();confirm('Exported intake-2026-09-27.csv',null);render()},
+ pdf(){window.print()},
+ import(){const i=document.createElement('input');i.type='file';i.accept='.csv,.json';i.click()},
+ deldata(){U.delData=!U.delData;render()},
+ 'deldata-yes'(){const old=S.records;S.records=[];U.delData=false;confirm('Deleted all records on this device',()=>{S.records=old});render()},
+ delacct(){S.apps.profile.delConfirm=!S.apps.profile.delConfirm;render()},
+ 'delacct-yes'(){S.apps.profile.delConfirm=false;S.signedIn=false;confirm('Account deleted · records on this device kept',null);render()},
+ wstep(d){const a=S.apps.log.water;a.ml=String(Math.max(0,num(a.ml,0)+ +d));render()},
+ lwater(){const ml=Math.round(num(S.apps.log.water.ml,0));if(ml>0)addRecords([{kind:'water',ml}],`Logged +${fmt(ml)} ml water`);render()},
+ preset(id){const p=PRESETS.find(x=>x.id===id);logPreset(p,S.apps.log.drink.sugar);S.apps.log.drink.sugar='';render()},
+ lother(){const d=S.apps.log.drink;const ml=num(d.ml,0),abv=num(d.abv,0);addRecords([{kind:'drink',name:d.name,ml,caf:num(d.caf,0),std:abv?stdOf(ml,abv):0,sugar:num(d.osugar,0)}],`Logged ${d.name} ${fmt(ml)} ml${num(d.osugar,0)?` · ${d.osugar} g sugar`:''}`);Object.assign(d,{name:'',ml:'',osugar:'',caf:'',abv:''});render()},
+ ailookup(){const d=S.apps.log.drink;Object.assign(d,{name:'Cola',ml:'330',osugar:'35',caf:'32',abv:''});confirm('AI estimate filled in · check the values',null);render()},
+ fsrc(k){S.apps.log.food.src=k;render()},
+ funit(u){S.apps.log.food.unit=u;render()},
+ aifood(){const f=S.apps.log.food;if(!f.desc)f.desc='Ham sandwich';f.src='salt';f.unit='g';f.amt='1.2';confirm('AI estimate: 1.2 g salt · check it',null);render()},
+ lfood(){const f=S.apps.log.food;const amt=num(f.amt,0);const na=Math.round((f.unit==='g'?amt*1000:amt)*NA_FACTOR[f.src]);const srcName={salt:'salt',msg:'MSG',sodium:'sodium'}[f.src];
+  addRecords([{kind:'food',desc:f.desc||'Food',na,sugar:num(f.sugar,0),src:amt?`${f.amt} ${f.unit} ${srcName}`:''}],`Logged ${f.desc||'food'} · ${fmt(na)} mg sodium`);S.apps.log.food=appDefaults('log').food;render()},
+ np(k){const b=S.apps.log.bp;const f=b.field;if(k==='Next'){b.field=f==='sys'?'dia':f==='dia'?'hr':'sys'}else if(k==='⌫'){b[f]=String(b[f]).slice(0,-1)}else if(String(b[f]).length<3){b[f]=String(b[f])+k;if(String(b[f]).length===3&&f!=='hr')b.field=f==='sys'?'dia':'hr'}render()},
+ bpmore(){S.apps.log.bp.more=!S.apps.log.bp.more;render()},
+ bpset(arg){const [k,v]=arg.split(':');S.apps.log.bp[k]=v;render()},
+ lbp(){const b=S.apps.log.bp;const r={kind:'bp',sys:num(b.sys,0),dia:num(b.dia,0),hr:b.hr?num(b.hr,0):null,pos:b.pos,arm:b.arm,irr:b.irr,note:b.note};addRecords([r],`Logged BP ${r.sys}/${r.dia}${r.hr?` · HR ${r.hr}`:''}`);S.apps.log.bp=appDefaults('log').bp;render()},
+ wtstep(d){const a=S.apps.log.weight;a.kg=(Math.round((num(a.kg,78.35)+ +d*S.set.weightStep)*100)/100).toFixed(2);render()},
+ lweight(){const kg=num(S.apps.log.weight.kg,0);addRecords([{kind:'weight',kg}],`Logged weight ${kg.toFixed(2)} kg`);render()},
+ bsize(arg){const [k,v]=arg.split(':');const b=S.apps.log.bath;b[k]=b[k]===v?'':v;render()},
+ lwee(){const b=S.apps.log.bath;addRecords([{kind:'wee',size:b.size,note:b.note}],`Logged urination ${fmtT(NOW)}`);b.size='';b.note='';render()},
+ lbowel(){const b=S.apps.log.bath;addRecords([{kind:'bowel',size:b.bsize,note:b.bnote}],`Logged bowel movement ${fmtT(NOW)}`);b.bsize='';b.bnote='';render()},
+ rvdel(id){M.entries=M.entries.filter(e=>String(e.id)!==id);render()},
+ rvdiscard(){M.phase='idle';M.entries=[];render();focusMicInvoker()},
+ rvlog(){const recs=M.entries.map(e=>e.kind==='drink'?{kind:'drink',name:e.name,ml:num(e.ml,0),caf:num(e.caf,0),std:0,sugar:0,t:parseT(e.time)}:{kind:'food',desc:e.name,na:Math.round(num(e.salt,0)*1000*0.393),sugar:0,src:`${e.salt} g salt (AI)`,t:parseT(e.time)});
+  const n=recs.length;M.phase='idle';M.entries=[];addRecords(recs,`Logged ${n} ${n===1?'entry':'entries'} from AI`);render();focusMicInvoker()}
+};
+function focusMicInvoker(){const el=document.getElementById(M.invoker||'ai-key');el&&el.focus()}
+
+/* keypad keys: tap logs, hold opens the form */
+function keyTap(id){
+ const k=KEYS.find(x=>x.id===id);
+ switch(id){
+  case 'w250':addRecords([{kind:'water',ml:250}],'Logged +250 ml water');break;
+  case 'w500':addRecords([{kind:'water',ml:500}],'Logged +500 ml water');break;
+  case 'coffee':logPreset(PRESETS[0],0);break;
+  case 'tea':logPreset(PRESETS[1],0);break;
+  case 'wee':addRecords([{kind:'wee',size:'',note:''}],`Logged urination ${fmtT(NOW)}`);break;
+  case 'bowel':addRecords([{kind:'bowel',size:'',note:''}],`Logged bowel movement ${fmtT(NOW)}`);break;
+  default:openForm(k.form);return;
+ }
+ render();
+}
+function openForm(f){const tab=f.split(':')[1];openApp('log',tab?{tab}:{});render()}
+
+/* ======================= event wiring ======================= */
+document.addEventListener('click',e=>{
+ if(U.lpFired&&e.target.closest('[data-key],[data-lp]')){U.lpFired=false;return}
+ const k=e.target.closest('[data-key]');
+ if(k){keyTap(k.dataset.key);return}
+ const b=e.target.closest('[data-act]');if(!b||b.disabled)return;
+ const f=ACT[b.dataset.act];if(f){e.preventDefault();f(b.dataset.arg||'',b,e)}
+});
+let lpTimer=null,roSwipe=null,swipe=null;
+document.addEventListener('pointerdown',e=>{
+ const k=e.target.closest('[data-key]');
+ if(k){k.classList.add('down');const def=KEYS.find(x=>x.id===k.dataset.key);U.lpFired=false;clearTimeout(lpTimer);
+  if(def.lp)lpTimer=setTimeout(()=>{U.lpFired=true;k.classList.remove('down');openForm(def.lp)},480);}
+ const lp=e.target.closest('[data-lp]');
+ if(lp){U.lpFired=false;clearTimeout(lpTimer);lpTimer=setTimeout(()=>{U.lpFired=true;const f=ACT[lp.dataset.lp];f&&f()},480)}
+ if(e.target.closest('#ro-btn'))roSwipe={y:e.clientY};
+ const mod=e.target.closest('.module');
+ if(mod&&isWide()){const id=mod.dataset.win;if(S.focus!==id){S.focus=id;S.lastWin=id;touchExpand(id);patch(regions.modes,rModes());patch(regions.sysbar,rSysbar());document.querySelectorAll('.module').forEach(m=>m.classList.toggle('is-focus',m===mod));save()}}
+ if(mod&&!isWide()&&!e.target.closest('input,select,textarea,.numpad,.tabs,.fstrip'))swipe={x:e.clientX,y:e.clientY,t:Date.now()};
+});
+document.addEventListener('pointerup',e=>{
+ clearTimeout(lpTimer);document.querySelectorAll('.key.down').forEach(k=>k.classList.remove('down'));
+ if(roSwipe){const dy=e.clientY-roSwipe.y;roSwipe=null;if(dy<-30&&!U.kp){U.kp=true;render();U.lpFired=false}}
+ if(swipe){const dx=e.clientX-swipe.x,dy=e.clientY-swipe.y;if(Math.abs(dx)>70&&Math.abs(dy)<45&&Date.now()-swipe.t<700&&S.windows.length>1){cycle(dx<0?1:-1);render()}swipe=null}
+});
+document.addEventListener('pointercancel',()=>{clearTimeout(lpTimer);swipe=null;roSwipe=null});
+document.addEventListener('contextmenu',e=>{if(e.target.closest('[data-key],[data-mic],[data-lp]'))e.preventDefault()});
+document.addEventListener('input',e=>{
+ const t=e.target;
+ if(t.dataset.bind){let v=t.value;if(t.dataset.numeric)v=+v;setPath(t.dataset.bind,v);if(t.dataset.bpfield)S.apps.log.bp.field=t.dataset.bpfield;render();return}
+ if(t.dataset.mbind){const [id,k]=t.dataset.mbind.split(':');const en=M.entries.find(x=>String(x.id)===id);if(en){en[k]=t.value;if(k==='salt'){const s=document.getElementById('rv-na-'+id);if(s)s.textContent=fmt(Math.round(num(t.value,0)*1000*0.393))}}}
+});
+document.addEventListener('focusin',e=>{const t=e.target;if(t.dataset&&t.dataset.bpfield&&S.apps.log&&S.apps.log.bp.field!==t.dataset.bpfield){S.apps.log.bp.field=t.dataset.bpfield;render()}});
+document.addEventListener('scroll',e=>{const k=e.target.dataset&&e.target.dataset.scrollKey;if(k){S.scroll[k]=e.target.scrollTop;clearTimeout(scrollSave);scrollSave=setTimeout(save,200)}},true);
+let scrollSave=null;
+document.addEventListener('keydown',e=>{
+ if(e.key==='Escape'){
+  if(M.phase==='review'){ACT.rvdiscard();return}
+  if(U.overlay){closeOverlay();return}
+  if(U.kp){ACT.kp();return}
+  if(S.apps.meds&&S.apps.meds.skip){S.apps.meds.skip=null;render();return}
+ }
+ if(e.key==='ArrowUp'&&e.target.id==='mk-win'){e.preventDefault();ACT.switcher();return}
+ if((e.key===' '||e.key==='Enter')&&e.target.dataset&&e.target.dataset.mic&&!e.repeat){e.preventDefault();micStart(e.target)}
+});
+document.addEventListener('keyup',e=>{if((e.key===' '||e.key==='Enter')&&M.phase!=='idle'&&M.phase!=='review'){e.preventDefault();micEnd(false)}});
+
+/* ---------- press-and-hold AI logger ---------- */
+function micStart(el){
+ if(!S.signedIn)return;
+ M.invoker=el.id;M.phase='listening';M.t0=performance.now();M.words=0;M.level=0;el.classList.add('held');
+ U.overlay=null;render();
+ clearInterval(M.timer);let tick=0;
+ M.timer=setInterval(()=>{tick++;
+  if(tick%2===0&&M.words<TRANSCRIPT.split(' ').length)M.words++;
+  const talking=M.words<TRANSCRIPT.split(' ').length;
+  M.level=talking?[9,12,7,14,10,6,13,8,11][tick%9]:2;
+  patch(regions.overlay,rOverlay());
+ },220);
+}
+function micEnd(cancelled){
+ clearInterval(M.timer);document.querySelectorAll('.ai-key.held').forEach(k=>k.classList.remove('held'));
+ if(cancelled||M.phase==='cancel'){M.phase='idle';confirm('AI logger cancelled · nothing logged',null);render();return}
+ M.phase='review';
+ M.entries=[{id:1,kind:'drink',name:'Coffee',ml:'250',caf:'95',time:'09:00'},{id:2,kind:'drink',name:'Coffee',ml:'250',caf:'95',time:'09:00'},{id:3,kind:'food',name:'Ham sandwich',salt:'1.2',time:fmtT(NOW)}];
+ render();requestAnimationFrame(()=>document.getElementById('rv-log')?.focus());
+}
+document.addEventListener('pointerdown',e=>{
+ const m=e.target.closest('[data-mic]');if(!m)return;
+ e.preventDefault();try{m.setPointerCapture(e.pointerId)}catch(_){}
+ const r=m.getBoundingClientRect();M.cx=r.left+r.width/2;M.cy=r.top+r.height/2;
+ micStart(m);
+});
+document.addEventListener('pointermove',e=>{
+ if(M.phase!=='listening'&&M.phase!=='cancel')return;
+ const d=Math.hypot(e.clientX-M.cx,e.clientY-M.cy);const np=d>90?'cancel':'listening';
+ if(np!==M.phase){M.phase=np;patch(regions.overlay,rOverlay())}
+});
+document.addEventListener('pointerup',e=>{if(M.phase==='listening'||M.phase==='cancel')micEnd(false)});
+document.addEventListener('pointercancel',e=>{if(M.phase==='listening'||M.phase==='cancel'){M.phase='cancel';micEnd(true)}});
+
+/* ---------- harness ---------- */
+let H={vp:'auto'};try{H=Object.assign(H,JSON.parse(localStorage.getItem(HKEY)||'{}'))}catch(e){}
+function applyHarness(){
+ document.body.classList.toggle('framed',H.vp!=='auto');
+ document.body.classList.toggle('f390',H.vp==='390');
+ document.body.classList.toggle('f1280',H.vp==='1280');
+ document.querySelectorAll('[data-hx]').forEach(b=>{const [k,v]=b.dataset.hx.split(':');
+  const on=(k==='vp'&&H.vp===v)||(k==='th'&&(S.set.theme===v))||(k==='auth'&&((v==='in')===S.signedIn));b.setAttribute('aria-pressed',on)});
+ try{localStorage.setItem(HKEY,JSON.stringify(H))}catch(e){}
+}
+document.getElementById('hx-tab').addEventListener('click',()=>{const h=document.getElementById('hx');h.classList.toggle('open');document.getElementById('hx-tab').setAttribute('aria-expanded',h.classList.contains('open'));document.getElementById('hx-tab').textContent=h.classList.contains('open')?'Hide harness':'REVIEW'});
+document.getElementById('hx').addEventListener('click',e=>{
+ const b=e.target.closest('[data-hx]');if(!b)return;const [k,v]=b.dataset.hx.split(':');
+ if(k==='vp')H.vp=v;
+ if(k==='th')S.set.theme=v;
+ if(k==='auth'){S.signedIn=v==='in';if(!S.signedIn&&M.phase!=='idle'){M.phase='idle'}U.overlay=null}
+ if(k==='reset'){try{localStorage.removeItem(KEY)}catch(_){}S=initialState();U.overlay=null;U.confirm=null;U.kp=false;M.phase='idle'}
+ if(k==='demo3'){['meds','metrics','log'].forEach(id=>openApp(id));S.apps.meds.tab='stock';S.apps.metrics.range='30d';S.apps.log.tab='bp';S.apps.log.bp.sys='128';S.apps.log.bp.dia='';S.apps.log.bp.field='dia';S.focus='log';}
+ applyHarness();render();
+});
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>render());
+window.addEventListener('resize',()=>render());
+window.__proto={get S(){return S},render,ACT,get U(){return U}};
+applyHarness();render();
+})();
+</script>
+</body>
+</html>
