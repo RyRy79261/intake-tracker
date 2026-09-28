@@ -34,11 +34,14 @@ let ctx: TestDbContext;
 let oauth: typeof OauthMod;
 let tokens: typeof TokensMod;
 
+// Top-level (Vitest 5 rejects nested vi.mock). The factories read `ctx`
+// lazily: they run on the first import of the mocked module, which is the
+// dynamic import inside beforeAll, after setupTestDb() has assigned it.
+// Swap the drizzle module so the SUT writes through to the testcontainer.
+vi.mock("@intake/db/client", () => ({ db: ctx.db }));
+
 beforeAll(async () => {
   ctx = await setupTestDb();
-
-  // Swap the drizzle module so the SUT writes through to the testcontainer.
-  vi.mock("@intake/db/client", () => ({ db: ctx.db }));
 
   oauth = await import("@/lib/mcp/oauth");
   tokens = await import("@/lib/mcp/tokens");
