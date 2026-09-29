@@ -141,11 +141,17 @@ test.describe("Windows on a wide screen", () => {
     const metrics = windowNamed(page, "Metrics");
     await expect(meds).toBeVisible();
     await expect(metrics).toBeVisible();
+    // Wait for the open animation to settle, then measure the tiles.
+    await expect
+      .poll(async () => {
+        const [x, y] = [await meds.boundingBox(), await metrics.boundingBox()];
+        return Math.abs((x?.width ?? 0) - (y?.width ?? 0));
+      })
+      .toBeLessThanOrEqual(2);
     const a = await meds.boundingBox();
     const b = await metrics.boundingBox();
     expect(a && b).toBeTruthy();
     // Two equal columns, Metrics to the right of Medications, no overlap.
-    // (Sub-pixel slack: the fade-in can still be settling.)
     expect(Math.abs((a?.width ?? 0) - (b?.width ?? 0))).toBeLessThanOrEqual(2);
     expect((a?.x ?? 0) + (a?.width ?? 0)).toBeLessThanOrEqual(b?.x ?? 0);
 
