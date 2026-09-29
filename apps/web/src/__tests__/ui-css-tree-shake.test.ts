@@ -56,6 +56,6 @@ describe.skipIf(!hasBuild && !requireBuild)("@intake/ui compiled-CSS tree-shake 
   it("keeps the dark-mode override block (channel vars re-resolve at runtime)", () => {
     expect(css).toContain(".dark");
     // dark-mode --water channel override from the moved :root/.dark block
-    expect(css).toMatch(/--water:\s*200 90% 50%/);
+    expect(css).toMatch(/--water:\s*206.9 100% 64.5%/);
   });
 });

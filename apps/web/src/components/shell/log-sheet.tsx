@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, type ComponentType, type CSSProperties } from "react";
+import { useCallback, useRef, useState, type ComponentType, type CSSProperties } from "react";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@intake/ui/sheet";
 import { useToast } from "@intake/ui/use-toast";
 import { useIntake } from "@/hooks/use-intake-queries";
@@ -10,6 +10,7 @@ import { formatAmount } from "@/lib/utils";
 import { DOMAIN_CLASSES, domainColor, type Domain } from "@/lib/domain-colors";
 import type { ShellIconName } from "@/lib/nav-routes";
 import { ShellIcon } from "@/components/shell/shell-icon";
+import { LogFormScope } from "@/components/log-form-scope";
 import { LiquidsCard } from "@/components/liquids-card";
 import { FoodSaltCard } from "@/components/food-salt-card";
 import { BloodPressureCard } from "@/components/blood-pressure-card";
@@ -42,8 +43,8 @@ export const WATER_STEP_ML = 50;
 const WATER_MIN_ML = WATER_STEP_ML;
 const WATER_MAX_ML = 2000;
 
-/** Water: a stepper and a one-tap Add, the quickest log in the app. */
-function WaterRow() {
+/** Water: a stepper and a one-tap Add, the quickest log in the app. Closes the sheet once logged. */
+function WaterRow({ onLogged }: { onLogged: () => void }) {
   const waterIncrement = useSettingsStore((s) => s.waterIncrement);
   const water = useIntake("water");
   const { toast } = useToast();
@@ -56,6 +57,7 @@ function WaterRow() {
     try {
       await water.addRecord(ml, "manual");
       toast({ title: `Added ${formatAmount(ml, "ml")}`, description: "Water intake recorded", variant: "success" });
+      onLogged();
     } catch (err) {
       reportSaveError("water", err);
       toast({ title: "Error", description: "Failed to record intake", variant: "destructive" });
@@ -120,10 +122,16 @@ interface LogSheetProps {
 export function LogSheet({ open, onOpenChange }: LogSheetProps) {
   const [form, setForm] = useState<LogFormKey | null>(null);
 
-  const handleOpenChange = (next: boolean) => {
-    if (!next) setForm(null);
-    onOpenChange(next);
-  };
+  const handleOpenChange = useCallback(
+    (next: boolean) => {
+      if (!next) setForm(null);
+      onOpenChange(next);
+    },
+    [onOpenChange],
+  );
+
+  // A successful log closes the sheet, as in the prototype.
+  const close = useCallback(() => handleOpenChange(false), [handleOpenChange]);
 
   const active = form ? LOG_TYPES[form] : null;
   const ActiveForm = active?.Form;
@@ -156,11 +164,13 @@ export function LogSheet({ open, onOpenChange }: LogSheetProps) {
 
         {ActiveForm ? (
           <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-[calc(12px+env(safe-area-inset-bottom,0px))] pt-2.5" data-testid="log-sheet-form">
-            <ActiveForm />
+            <LogFormScope idPrefix="log-sheet-" onLogged={close}>
+              <ActiveForm />
+            </LogFormScope>
           </div>
         ) : (
           <div className="flex flex-col gap-2 px-3 pb-[calc(12px+env(safe-area-inset-bottom,0px))] pt-2.5">
-            <WaterRow />
+            <WaterRow onLogged={close} />
             <div className="grid grid-cols-3 gap-1.5">
               {LOG_KEYS.map((k) => {
                 const t = LOG_TYPES[k];

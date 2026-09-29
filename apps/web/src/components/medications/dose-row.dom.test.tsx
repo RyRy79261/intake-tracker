@@ -4,6 +4,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { DoseRow } from "@/components/medications/dose-row";
+import { TimeSlotGroup } from "@/components/medications/time-slot-group";
 import type { DoseSlot } from "@/hooks/use-medication-queries";
 import {
   makePrescription,
@@ -110,6 +111,46 @@ describe("DoseRow Ward Console markup", () => {
     expect(screen.getByText("Missed")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Take" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Skip" })).toBeInTheDocument();
+  });
+
+  it("gives Take, Skip and Edit a 44px tap target (36px button + 4px hit area above and below)", () => {
+    const slot = { ...takenSlot(), status: "pending" as const };
+    delete slot.existingLog;
+    renderSlot(slot);
+    for (const name of ["Take", "Skip"]) {
+      const btn = screen.getByRole("button", { name });
+      expect(btn).toHaveClass("relative", "h-9", "before:absolute", "before:-inset-y-1", "before:inset-x-0");
+    }
+  });
+
+  it("gives the slot header's Skip All and Mark All a 44px tap target (32px + 6px above and below)", () => {
+    const slot = { ...takenSlot(), status: "pending" as const };
+    delete slot.existingLog;
+    render(
+      <TimeSlotGroup
+        time="08:00"
+        slots={[slot]}
+        isToday={false}
+        isFuture={false}
+        isNextUpcoming={false}
+        onTake={vi.fn()}
+        onRetroactiveTake={vi.fn()}
+        onSkip={vi.fn()}
+        onDoseClick={vi.fn()}
+        onMarkAll={vi.fn()}
+        onSkipAll={vi.fn()}
+        onEditAll={vi.fn()}
+        onEditTime={vi.fn()}
+      />,
+    );
+    for (const name of ["Skip All", "Mark All"]) {
+      expect(screen.getByRole("button", { name })).toHaveClass(
+        "relative",
+        "h-8",
+        "before:absolute",
+        "before:-inset-y-1.5",
+      );
+    }
   });
 
   it("strikes through a skipped dose and shows the reason", () => {

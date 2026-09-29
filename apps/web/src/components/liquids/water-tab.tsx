@@ -12,10 +12,12 @@ import { useIntake } from "@/hooks/use-intake-queries";
 import { computeTwoStageProgress } from "@intake/core/progress";
 import { reportSaveError } from "@/lib/db-recovery";
 import { formatDateTime } from "@/lib/date-utils";
+import { useOnLogged } from "@/components/log-form-scope";
 
 const unit = "ml";
 
 export function WaterTab() {
+  const onLogged = useOnLogged();
   const settings = useSettings();
   const waterIncrement = settings.waterIncrement;
   const waterLimit = settings.waterLimit;
@@ -74,6 +76,7 @@ export function WaterTab() {
           : "Water intake recorded",
         variant: "success",
       });
+      onLogged();
       setPendingAmount(waterIncrement);
       setPendingTimestamp(undefined);
       setPendingNote(undefined);
@@ -88,7 +91,7 @@ export function WaterTab() {
       inFlightRef.current = false;
       setIsSubmitting(false);
     }
-  }, [pendingAmount, pendingTimestamp, pendingNote, waterIntake, toast, waterIncrement]);
+  }, [pendingAmount, pendingTimestamp, pendingNote, waterIntake, toast, waterIncrement, onLogged]);
 
   // "Tap to edit" only edits the pending entry; Confirm is the single commit.
   const handleManualSubmit = useCallback(

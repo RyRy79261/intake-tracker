@@ -1,12 +1,13 @@
 // @vitest-environment jsdom
 import { useState } from "react";
-import { describe, it, expect } from "vitest";
-import { screen, waitFor } from "@testing-library/react";
+import { describe, it, expect, vi } from "vitest";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { Toaster } from "@intake/ui/toaster";
 import { LogDoseDialog } from "@/components/medications/log-dose-dialog";
 import { OtherDosesToday } from "@/components/medications/other-doses-today";
+import { resetUndoToastForTests } from "@/components/medications/undo-toast";
 // The test reads the seeded IndexedDB directly to assert the writes. The
 // "components must use hooks, not db" rule targets component source, not tests.
 // eslint-disable-next-line no-restricted-imports
@@ -120,6 +121,78 @@ describe("LogDoseDialog (extra dose)", () => {
     });
   });
 
+  it("logs last night's dose after midnight: an earlier date lifts the not-after-now cap", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 8, 29, 0, 10));
+    try {
+      const user = userEvent.setup();
+      const r = asNeeded();
+      await renderWithFixtures(<LogDoseDialog open onOpenChange={() => {}} />, {
+        seed: seedOf(r),
+      });
+      const dose = await screen.findByLabelText("Dose");
+      await waitFor(() => expect(dose).toHaveValue("40"));
+      expect(screen.getByLabelText("Date taken")).toHaveValue("2026-09-29");
+
+      fireEvent.change(screen.getByLabelText("Time taken"), { target: { value: "23:40" } });
+      expect(screen.getByRole("alert")).toHaveTextContent("That time hasn't happened yet");
+      expect(screen.getByRole("button", { name: "Log dose" })).toBeDisabled();
+
+      fireEvent.change(screen.getByLabelText("Date taken"), { target: { value: "2026-09-28" } });
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+      await user.click(screen.getByRole("button", { name: "Log dose" }));
+
+      await waitFor(async () => {
+        const logs = await db.doseLogs.where("prescriptionId").equals(r.prescription.id).toArray();
+        expect(logs).toHaveLength(1);
+        expect(logs[0]?.scheduledDate).toBe("2026-09-28");
+        expect(logs[0]?.actionTimestamp).toBe(new Date(2026, 8, 28, 23, 40).getTime());
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("rejects a date in the future", async () => {
+    await renderWithFixtures(<LogDoseDialog open onOpenChange={() => {}} />, {
+      seed: seedOf(asNeeded()),
+    });
+    const dose = await screen.findByLabelText("Dose");
+    await waitFor(() => expect(dose).toHaveValue("40"));
+    fireEvent.change(screen.getByLabelText("Date taken"), { target: { value: "2999-01-01" } });
+    expect(screen.getByRole("alert")).toHaveTextContent("That day hasn't happened yet");
+    expect(screen.getByRole("button", { name: "Log dose" })).toBeDisabled();
+  });
+
+  it("reports a failed Undo even after the dialog has unmounted", async () => {
+    resetUndoToastForTests();
+    const user = userEvent.setup();
+    const r = asNeeded();
+    function Harness() {
+      const [mounted, setMounted] = useState(true);
+      return (
+        <>
+          {mounted && <LogDoseDialog open onOpenChange={() => setMounted(false)} />}
+          <Toaster />
+        </>
+      );
+    }
+    await renderWithFixtures(<Harness />, { seed: seedOf(r) });
+    const dose = await screen.findByLabelText("Dose");
+    await waitFor(() => expect(dose).toHaveValue("40"));
+    await user.click(screen.getByRole("button", { name: "Log dose" }));
+    expect(await screen.findByText("Furosemide extra dose logged")).toBeInTheDocument();
+    // Saving closed (here: unmounted) the dialog, as switching tabs does.
+    await waitFor(() => expect(screen.queryByLabelText("Dose")).not.toBeInTheDocument());
+
+    // Something else (a sync, the Other doses Undo) removed the log first.
+    const [log] = await db.doseLogs.where("prescriptionId").equals(r.prescription.id).toArray();
+    await db.doseLogs.update(log!.id, { deletedAt: Date.now() });
+
+    await user.click(screen.getByRole("button", { name: "Undo" }));
+    expect(await screen.findByText("Failed to undo")).toBeInTheDocument();
+  });
+
   it("offers only active prescriptions", async () => {
     const active = asNeeded("Furosemide");
     const inactive = asNeeded("Digoxin");
@@ -144,6 +217,7 @@ describe("OtherDosesToday", () => {
         <>
           <LogDoseDialog open={open} onOpenChange={setOpen} />
           <OtherDosesToday dateKey={toLocalDateKey(new Date())} isToday />
+          <Toaster />
         </>
       );
     }
@@ -163,5 +237,31 @@ describe("OtherDosesToday", () => {
       expect((await db.inventoryItems.get(r.inventory!.id))?.currentStock).toBe(30),
     );
     await waitFor(() => expect(screen.queryByText("Other doses today")).not.toBeInTheDocument());
+    expect(await screen.findByText("Stock restored")).toBeInTheDocument();
+  });
+
+  it("does not claim stock was restored when the dose deducted none", async () => {
+    const user = userEvent.setup();
+    const r = asNeeded("Paracetamol", null);
+    function Harness() {
+      const [open, setOpen] = useState(true);
+      return (
+        <>
+          <LogDoseDialog open={open} onOpenChange={setOpen} />
+          <OtherDosesToday dateKey={toLocalDateKey(new Date())} isToday />
+          <Toaster />
+        </>
+      );
+    }
+    await renderWithFixtures(<Harness />, { seed: seedOf(r) });
+    await waitFor(() => expect(maths()).toHaveTextContent("No active brand"));
+    await user.type(screen.getByLabelText("Dose"), "500");
+    await user.click(screen.getByRole("button", { name: "Log dose" }));
+
+    await user.click(await screen.findByRole("button", { name: /^Undo Paracetamol at/ }));
+    await user.click(screen.getByRole("button", { name: /^Confirm remove Paracetamol at/ }));
+
+    expect(await screen.findByText("Paracetamol dose removed")).toBeInTheDocument();
+    expect(screen.queryByText("Stock restored")).not.toBeInTheDocument();
   });
 });

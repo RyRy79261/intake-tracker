@@ -187,7 +187,6 @@ export function HoldToTalk({ className }: { className?: string }) {
           <div
             role="dialog"
             aria-label="AI logger listening"
-            aria-live="polite"
             data-testid="hold-to-talk-listening"
             data-cancelling={cancelling || undefined}
             className={cn("border-2 bg-panel", cancelling ? "border-muted-foreground" : "border-ai")}
@@ -199,7 +198,9 @@ export function HoldToTalk({ className }: { className?: string }) {
                   AI · Listening
                 </span>
               </span>
-              <span className="num ml-auto mr-3">
+              {/* Visual only: a live timer would be read out every second
+                  while the user is talking. */}
+              <span className="num ml-auto mr-3" aria-hidden="true" data-testid="hold-to-talk-timer">
                 {Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, "0")}
               </span>
             </div>
@@ -209,12 +210,12 @@ export function HoldToTalk({ className }: { className?: string }) {
                   <i key={i} className={cn("flex-1", i < litBars ? "bg-ai" : "bg-foreground/10")} />
                 ))}
               </div>
-              <p className="mb-2 mt-3 min-h-[3em] text-[1.0625rem] text-muted-foreground">
+              <p className="mb-2 mt-3 min-h-[3em] text-[1.0625rem] text-muted-foreground" aria-live="polite">
                 {recorder.state === "requesting"
                   ? "Waiting for the microphone…"
                   : "Say what you ate or drank"}
               </p>
-              <p className="text-[0.8125rem] text-muted-foreground">
+              <p className="text-[0.8125rem] text-muted-foreground" aria-live="polite">
                 {cancelling
                   ? "Release to cancel · nothing will be logged"
                   : "Release to review · Slide away to cancel"}
