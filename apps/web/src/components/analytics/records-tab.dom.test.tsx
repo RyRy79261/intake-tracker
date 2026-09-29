@@ -98,6 +98,41 @@ describe("RecordsTab", () => {
     expect(screen.queryByText("250 ml")).not.toBeInTheDocument();
   });
 
+  it("follows a filter kept by its parent, and falls back to All for a tracker that is off", async () => {
+    const user = userEvent.setup();
+    const now = Date.now();
+    const onFilterChange = vi.fn();
+    const seed = {
+      intakeRecords: [makeIntakeRecord({ type: "water", amount: 250, timestamp: now })],
+      weightRecords: [makeWeightRecord({ weight: 77, timestamp: now })],
+    };
+    const chip = (name: string) =>
+      within(screen.getByRole("group", { name: "Filter records" })).getByRole("button", { name });
+
+    const { unmount } = await renderWithFixtures(
+      <RecordsTab range={RANGE} filter="weight" onFilterChange={onFilterChange} />,
+      { seed },
+    );
+    expect(await screen.findByText("77 kg")).toBeInTheDocument();
+    expect(screen.queryByText("250 ml")).not.toBeInTheDocument();
+    expect(chip("Weight")).toHaveAttribute("aria-pressed", "true");
+
+    // A chip reports up rather than switching by itself.
+    await user.click(chip("Water"));
+    expect(onFilterChange).toHaveBeenCalledWith("water");
+    expect(chip("Weight")).toHaveAttribute("aria-pressed", "true");
+    unmount();
+
+    // Potassium is off: its filter shows everything under All (the records
+    // seeded above are still in the database).
+    await renderWithFixtures(<RecordsTab range={RANGE} filter="potassium" />, {
+      settings: { optionalTrackers: { sugar: true, potassium: false } },
+    });
+    expect(await screen.findByText("250 ml")).toBeInTheDocument();
+    expect(screen.getByText("77 kg")).toBeInTheDocument();
+    expect(chip("All")).toHaveAttribute("aria-pressed", "true");
+  });
+
   it("opens the edit dialog pre-filled when a record's edit button is clicked", async () => {
     const user = userEvent.setup();
     const now = Date.now();
