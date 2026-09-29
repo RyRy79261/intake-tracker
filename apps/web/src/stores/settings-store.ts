@@ -110,6 +110,11 @@ export interface Settings {
   shakeToReportEnabled: boolean;
   shakeThreshold: number; // acceleration-magnitude jolt delta (m/s²) — lower = more sensitive
   shakeRequiredJolts: number; // jolts within the detection window required to fire
+
+  // Ward Console shell (sys-bar + bottom bar) instead of the legacy header,
+  // swipe nav and floating bars. Staged rollout: device-only, off by default,
+  // toggled from Settings > Debug. Never synced.
+  wardShell: boolean;
 }
 
 interface SettingsActions {
@@ -158,6 +163,8 @@ interface SettingsActions {
   setShakeToReportEnabled: (value: boolean) => void;
   setShakeThreshold: (value: number) => void;
   setShakeRequiredJolts: (value: number) => void;
+  // Ward Console shell (staged rollout, device-only)
+  setWardShell: (value: boolean) => void;
   /**
    * Restore preferences to their defaults. Leaves alone the fields that are
    * data or have their own flows (see RESET_PRESERVED_KEYS).
@@ -205,6 +212,7 @@ const defaultSettings: Settings = {
   reminderFollowUpInterval: 10,
   homeTimezone: null,
   homeTimezoneConfirmedAt: null,
+  wardShell: false,
 };
 
 /**
@@ -446,6 +454,8 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
         set({ shakeThreshold: sanitizeNumericInput(value, 4, 20) }),
       setShakeRequiredJolts: (value) =>
         set({ shakeRequiredJolts: sanitizeNumericInput(value, 2, 8) }),
+
+      setWardShell: (value) => set({ wardShell: value }),
 
       addLiquidPreset: (preset) => {
         const id = crypto.randomUUID();

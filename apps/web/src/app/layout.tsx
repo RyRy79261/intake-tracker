@@ -4,10 +4,7 @@ import "@/app/globals.css";
 import { Toaster } from "@intake/ui/toaster";
 import { Providers } from "@/app/providers";
 import { UpdateNotification } from "@/components/update-notification";
-import { SwipeNav } from "@/components/swipe-nav";
-import { AppHeader } from "@/components/app-header";
-import { HomeFloatingBars } from "@/components/home-floating-bars";
-import { MedicationsFloatingBars } from "@/components/medications-floating-bars";
+import { AppChrome } from "@/components/shell/app-chrome";
 import { SerwistProvider } from "@serwist/turbopack/react";
 
 // The service worker (served at /serwist/sw.js) is registered only on the
@@ -143,14 +140,7 @@ export default function RootLayout({
           options={{ scope: "/" }}
         >
           <Providers>
-            <main className="min-h-screen overflow-x-clip bg-background">
-              <div className="container mx-auto max-w-lg px-4 pt-6">
-                <AppHeader />
-              </div>
-              <SwipeNav>{children}</SwipeNav>
-              <HomeFloatingBars />
-              <MedicationsFloatingBars />
-            </main>
+            <AppChrome>{children}</AppChrome>
           </Providers>
           <UpdateNotification />
           <Toaster />

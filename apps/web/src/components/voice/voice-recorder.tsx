@@ -22,7 +22,8 @@ const PREFERRED_MIME_TYPES = [
   "audio/mp4;codecs=mp4a.40.2",
 ];
 
-function pickMimeType(): string | undefined {
+/** The first audio MIME type this browser's MediaRecorder supports. */
+export function pickMimeType(): string | undefined {
   if (typeof window === "undefined") return undefined;
   if (typeof MediaRecorder === "undefined") return undefined;
   for (const t of PREFERRED_MIME_TYPES) {

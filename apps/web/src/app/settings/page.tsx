@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Accordion } from "@intake/ui/accordion";
 import { Activity, Palette, Pill, Database, Shield, Bug, Download, Sparkles, MessageSquare, BookOpen } from "lucide-react";
 import { DebugPanel } from "@/components/debug-panel";
+import { WardShellToggle } from "@/components/settings/ward-shell-toggle";
 import { AboutDialog } from "@/components/about-dialog";
 import { SettingsAccordionGroup } from "@/components/settings/settings-accordion-group";
 import { AccountSection } from "@/components/settings/account-section";
@@ -122,6 +123,7 @@ function SettingsContent() {
         </SettingsAccordionGroup>
 
         <SettingsAccordionGroup value="debug" icon={Bug} label="Debug" iconColorClass="text-muted-foreground">
+          <WardShellToggle />
           <DebugPanel />
         </SettingsAccordionGroup>
       </Accordion>

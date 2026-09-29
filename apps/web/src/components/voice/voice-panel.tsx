@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Check, Mic, X } from "lucide-react";
 import { Button } from "@intake/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@intake/ui/card";
@@ -69,9 +69,15 @@ function parseNotices(data: VoiceParseResponse): string[] {
 interface VoicePanelProps {
   /** Called once a save commit succeeds so the host can close the modal. */
   onCommitted?: () => void;
+  /**
+   * A clip already recorded by the host (the Ward shell's hold-to-talk
+   * button). It is transcribed and parsed once, on mount, exactly as if the
+   * panel's own recorder had produced it.
+   */
+  initialClip?: { blob: Blob; mimeType: string } | null;
 }
 
-export function VoicePanel({ onCommitted }: VoicePanelProps) {
+export function VoicePanel({ onCommitted, initialClip }: VoicePanelProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -218,6 +224,15 @@ export function VoicePanel({ onCommitted }: VoicePanelProps) {
     },
     [toast, liquidPresets]
   );
+
+  // Process a host-recorded clip once. The ref keeps a StrictMode double
+  // effect (or a re-render) from sending the same audio twice.
+  const processedClipRef = useRef<Blob | null>(null);
+  useEffect(() => {
+    if (!initialClip || processedClipRef.current === initialClip.blob) return;
+    processedClipRef.current = initialClip.blob;
+    void handleRecorded(initialClip.blob, initialClip.mimeType);
+  }, [initialClip, handleRecorded]);
 
   const updateRow = useCallback((index: number, next: Partial<RowState>) => {
     setRows((prev) => prev.map((r, i) => (i === index ? { ...r, ...next } : r)));
