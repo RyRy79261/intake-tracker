@@ -45,11 +45,14 @@ export function OtherDosesToday({ dateKey, isToday }: OtherDosesTodayProps) {
 
   if (rows.length === 0) return null;
 
-  const remove = (id: string, name: string) => {
+  const remove = (id: string, name: string, restoresStock: boolean) => {
     setArmed(null);
     undo.mutate(id, {
       onSuccess: () =>
-        toast({ title: `${name} dose removed`, description: "Stock restored" }),
+        toast({
+          title: `${name} dose removed`,
+          ...(restoresStock && { description: "Stock restored" }),
+        }),
       onError: () => toast({ title: "Failed to remove dose", variant: "destructive" }),
     });
   };
@@ -102,7 +105,7 @@ export function OtherDosesToday({ dateKey, isToday }: OtherDosesTodayProps) {
               <button
                 type="button"
                 disabled={undo.isPending}
-                onClick={() => (isArmed ? remove(log.id, name) : setArmed(log.id))}
+                onClick={() => (isArmed ? remove(log.id, name, !!log.inventoryItemId) : setArmed(log.id))}
                 onBlur={() => isArmed && setArmed(null)}
                 aria-label={`${isArmed ? "Confirm remove" : "Undo"} ${name} at ${time}`}
                 className={cn(
