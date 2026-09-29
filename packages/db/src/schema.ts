@@ -387,6 +387,10 @@ export const prescriptions = pgTable(
     warnings: text("warnings").array(),
     // Combination-drug active ingredients (mirrors Dexie CompoundStrength[]).
     compounds: jsonb("compounds").$type<{ name: string; strength: number }[]>(),
+    // "About this medicine" and the last stored interaction check (mirror
+    // Dexie MedicineInfo / InteractionCheck). Opaque JSON to the server.
+    medicineInfo: jsonb("medicine_info").$type<Record<string, unknown>>(),
+    interactionCheck: jsonb("interaction_check").$type<Record<string, unknown>>(),
     isActive: boolean("is_active").notNull(),
     // NOTE: no timezone column — Prescription interface in @intake/types/records omits it.
     createdAt: bigint("created_at", { mode: "number" }).notNull(),

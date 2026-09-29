@@ -204,7 +204,7 @@ export function useMedicineLookup({ timeoutMs = LOOKUP_TIMEOUT_MS }: { timeoutMs
 
 // ─── Presentation ─────────────────────────────────────────────────────────
 
-function AiIcon({ className }: { className?: string }) {
+export function AiIcon({ className }: { className?: string }) {
   return (
     <svg
       viewBox="0 0 24 24"

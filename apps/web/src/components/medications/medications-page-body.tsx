@@ -13,6 +13,8 @@ import { MedicationSettingsView } from "@/components/medications/medication-sett
 import { DoseDetailDialog } from "@/components/medications/dose-detail-dialog";
 import { CompoundList } from "@/components/medications/compound-list";
 import { PrescriptionsView } from "@/components/medications/prescriptions-view";
+import { AboutMedicineView } from "@/components/medications/about-medicine-view";
+import { usePrescriptions } from "@/hooks/use-medication-queries";
 import { TitrationsView } from "@/components/medications/titrations-view";
 import { TitrationStartPrompt } from "@/components/medications/titrations/titration-start-prompt";
 import type { DoseSlot } from "@/hooks/use-medication-queries";
@@ -47,6 +49,15 @@ export function MedicationsPageBody({ ward = false }: MedicationsPageBodyProps) 
   const { selectedDate, setSelectedDate, todayKey } = useRollingSelectedDate();
 
   const [doseDetailOpen, setDoseDetailOpen] = useState(false);
+  // "About this medicine" replaces the tabs while open (the prototype's
+  // in-window sub-view). The Rx tab stays mounted underneath, hidden, so its
+  // expanded card is still open on the way back.
+  const [aboutId, setAboutId] = useState<string | null>(null);
+  const prescriptions = usePrescriptions();
+  const aboutRx =
+    aboutId && activeTab === "prescriptions"
+      ? (prescriptions.find((p) => p.id === aboutId) ?? null)
+      : null;
   const [selectedSlot, setSelectedSlot] = useState<DoseSlot | null>(null);
 
   useMedicationNotifications();
@@ -66,6 +77,9 @@ export function MedicationsPageBody({ ward = false }: MedicationsPageBodyProps) 
 
   return (
     <>
+      {aboutRx && <AboutMedicineView prescription={aboutRx} onBack={() => setAboutId(null)} />}
+      {/* `contents` keeps the sticky tab bar tied to the window's scroller. */}
+      <div className={aboutRx ? "hidden" : "contents"}>
       {wardTab ? (
         <WardMedTabs activeTab={wardTab} onTabChange={setActiveTab} panelId={panelId} />
       ) : (
@@ -100,12 +114,13 @@ export function MedicationsPageBody({ ward = false }: MedicationsPageBodyProps) 
         )}
 
         {activeTab === "prescriptions" && (
-          <PrescriptionsView onAddMed={handleAddMed} />
+          <PrescriptionsView onAddMed={handleAddMed} onOpenAbout={setAboutId} />
         )}
 
         {activeTab === "titrations" && <TitrationsView />}
 
         {!ward && activeTab === "settings" && <MedicationSettingsView />}
+      </div>
       </div>
 
       <DoseDetailDialog

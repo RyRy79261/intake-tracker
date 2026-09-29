@@ -280,6 +280,40 @@ describe("backup-schemas: 2026-09 schema additions", () => {
     expect(BACKUP_VALIDATORS.prescriptions({ ...makePrescription(), indication: null })).toBe(true);
   });
 
+  it("accepts medicineInfo / interactionCheck absent, null, or with pulled nulls inside", () => {
+    const rx = makePrescription();
+    const info = {
+      fetchedAt: 1_790_000_000_000,
+      drugClass: null,
+      compounds: [{ name: "Ramipril", drugClass: null, forText: "x", howItWorks: null, sideEffects: null }],
+      warnings: null,
+      contraindications: [],
+      foodInstruction: "none",
+      foodNote: null,
+      pillDescription: "",
+    };
+    const ix = {
+      checkedAt: 1_790_000_000_000,
+      medications: ["Furosemide"],
+      summary: null,
+      rows: [{ medication: "Furosemide", severity: "OK", description: "Fine.", notAssessed: null }],
+    };
+    expect(BACKUP_VALIDATORS.prescriptions(rx)).toBe(true);
+    expect(BACKUP_VALIDATORS.prescriptions({ ...rx, medicineInfo: null, interactionCheck: null })).toBe(true);
+    expect(BACKUP_VALIDATORS.prescriptions({ ...rx, medicineInfo: info, interactionCheck: ix })).toBe(true);
+  });
+
+  it("rejects malformed medicineInfo / interactionCheck", () => {
+    const rx = makePrescription();
+    expect(BACKUP_VALIDATORS.prescriptions({ ...rx, medicineInfo: { fetchedAt: "today" } })).toBe(false);
+    expect(
+      BACKUP_VALIDATORS.prescriptions({
+        ...rx,
+        interactionCheck: { checkedAt: 1, medications: [], summary: "", rows: [{ medication: "A", severity: "MAYBE", description: "" }] },
+      }),
+    ).toBe(false);
+  });
+
   it("accepts the optional dose-log snapshot fields, absent or null", () => {
     const base = makeDoseLog("rx", "ph", "sch");
     expect(BACKUP_VALIDATORS.doseLogs(base)).toBe(true);

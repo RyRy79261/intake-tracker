@@ -12,6 +12,8 @@ import type { Prescription } from "@/lib/db";
 
 interface PrescriptionsViewProps {
   onAddMed: () => void;
+  /** Open "About this medicine" for a prescription (the Rx sub-view). */
+  onOpenAbout?: (prescriptionId: string) => void;
 }
 
 /**
@@ -19,7 +21,7 @@ interface PrescriptionsViewProps {
  * Tapping a card expands it in place; the expanded card spans both columns,
  * and so does a card its expansion leaves alone on a row (`rxSpanPlan`).
  */
-export function PrescriptionsView({ onAddMed }: PrescriptionsViewProps) {
+export function PrescriptionsView({ onAddMed, onOpenAbout }: PrescriptionsViewProps) {
   const prescriptions = usePrescriptions();
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [inactiveOpen, setInactiveOpen] = useState(false);
@@ -56,6 +58,7 @@ export function PrescriptionsView({ onAddMed }: PrescriptionsViewProps) {
               prescription={prescription}
               expanded={isExpanded}
               onToggleExpanded={() => setExpandedId(isExpanded ? null : prescription.id)}
+              {...(onOpenAbout && { onOpenAbout: () => onOpenAbout(prescription.id) })}
               className={cn(plan[i] && "col-span-2")}
             />
           );

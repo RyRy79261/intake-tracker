@@ -39,6 +39,8 @@ export const NULLABLE_SYNC_FIELDS: Record<TableName, readonly string[]> = {
     "contraindications",
     "warnings",
     "compounds",
+    "medicineInfo",
+    "interactionCheck",
     "deletedAt",
   ],
   titrationPlans: ["recommendedStartDate", "notes", "warnings", "deletedAt"],

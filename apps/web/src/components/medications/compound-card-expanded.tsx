@@ -19,12 +19,14 @@ import { InventoryItemViewDrawer } from "@/components/medications/inventory-item
 import type { InventoryItem, Prescription } from "@/lib/db";
 import { toLocalDateKey } from "@/lib/date-utils";
 import { cn } from "@/lib/utils";
-import { ArrowRightLeft, Check, ChevronRight, Pencil, X } from "lucide-react";
+import { ArrowRightLeft, Check, ChevronRight, Info, Pencil, X } from "lucide-react";
 
 interface CompoundCardExpandedProps {
   prescription: Prescription;
   /** Extra blocks rendered before the actions (the card's as-needed log). */
   children?: ReactNode;
+  /** Open the "About this medicine" sub-view. No button without it. */
+  onOpenAbout?: () => void;
 }
 
 function getTodayDateStr(): string {
@@ -48,7 +50,7 @@ function clock(ts: number): string {
  * boxes, its schedule, today's doses and the Switch Brand / Prescription
  * Details actions.
  */
-export function CompoundCardExpanded({ prescription, children }: CompoundCardExpandedProps) {
+export function CompoundCardExpanded({ prescription, children, onOpenAbout }: CompoundCardExpandedProps) {
   const [brandPickerOpen, setBrandPickerOpen] = useState(false);
   const [detailDrawerOpen, setDetailDrawerOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
@@ -245,6 +247,12 @@ export function CompoundCardExpanded({ prescription, children }: CompoundCardExp
           <Pencil aria-hidden="true" />
           Prescription Details
         </Button>
+        {onOpenAbout && (
+          <Button variant="outline" className="col-span-full" onClick={onOpenAbout}>
+            <Info aria-hidden="true" />
+            About this medicine
+          </Button>
+        )}
       </div>
 
       {/* Dialogs / Drawers */}

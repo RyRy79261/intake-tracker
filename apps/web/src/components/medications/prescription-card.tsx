@@ -41,6 +41,8 @@ interface PrescriptionCardProps {
   prescription: Prescription;
   expanded?: boolean;
   onToggleExpanded?: () => void;
+  /** Open "About this medicine" for this prescription. */
+  onOpenAbout?: () => void;
   className?: string;
 }
 
@@ -62,7 +64,7 @@ function formatPrnWhen(ts: number, todayKey: string): string {
  * expanded detail; the footer holds the as-needed line and the active brand,
  * pinned to the bottom so cards on a row line up at equal height.
  */
-export function PrescriptionCard({ prescription, expanded: controlledExpanded, onToggleExpanded, className }: PrescriptionCardProps) {
+export function PrescriptionCard({ prescription, expanded: controlledExpanded, onToggleExpanded, onOpenAbout, className }: PrescriptionCardProps) {
   const [internalExpanded, setInternalExpanded] = useState(false);
   const [medDrawerOpen, setMedDrawerOpen] = useState(false);
   const [prnPickerOpen, setPrnPickerOpen] = useState(false);
@@ -298,7 +300,7 @@ export function PrescriptionCard({ prescription, expanded: controlledExpanded, o
       </div>
 
       {expanded && (
-        <CompoundCardExpanded prescription={prescription}>
+        <CompoundCardExpanded prescription={prescription} {...(onOpenAbout && { onOpenAbout })}>
           {/* Recent as-needed doses, each removable (first tap arms, second
               tap confirms). Removing one also puts its pills back in stock. */}
           {isAsNeeded && prnLogs.length > 0 && (
