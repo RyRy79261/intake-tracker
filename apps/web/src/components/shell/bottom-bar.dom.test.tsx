@@ -98,6 +98,17 @@ describe("BottomBar", () => {
     expect(push).not.toHaveBeenCalled();
   });
 
+  it("Home from Settings keeps the window that was open (phone)", () => {
+    mockUseAuthGate.mockReturnValue(false);
+    useWindowStore.getState().open("meds");
+    pathname = "/settings";
+    render(<BottomBar />);
+    fireEvent.click(screen.getByRole("button", { name: "Home" }));
+    expect(useWindowStore.getState().wins.map((w) => w.app)).toEqual(["meds"]);
+    expect(useWindowStore.getState().showHome).toBe(true);
+    expect(push).toHaveBeenCalledWith("/");
+  });
+
   it("Home minimises every window on a wide screen", () => {
     mockUseAuthGate.mockReturnValue(false);
     useWindowStore.setState({ wide: true });

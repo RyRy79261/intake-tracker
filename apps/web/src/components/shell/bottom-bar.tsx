@@ -52,7 +52,7 @@ export function BottomBar() {
           aria-pressed={homeOn}
           aria-label="Home"
           onClick={() => {
-            goHome();
+            goHome(onShell);
             if (!onShell) router.push("/");
           }}
         >
