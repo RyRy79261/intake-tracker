@@ -226,6 +226,22 @@ describe("migration-service", () => {
         expect(tablesUploaded.has(t)).toBe(false);
       }
     });
+
+    it("ignores stored progress without a tableProgress map instead of crashing", async () => {
+      const { resumeMigration, checkInterruptedMigration } = await import(
+        "@/lib/migration-service"
+      );
+      await db.intakeRecords.add(makeIntakeRecord("ir-bad"));
+      localStorage.setItem(
+        PROGRESS_KEY,
+        JSON.stringify({ completedTables: [], startedAt: NOW }),
+      );
+
+      expect(checkInterruptedMigration()).toBe(false);
+      // Falls back to a fresh run rather than throwing on Object.entries(undefined).
+      await expect(resumeMigration()).resolves.toBeUndefined();
+      expect(useMigrationStore.getState().phase).toBe("complete");
+    });
   });
 
   describe("cancel", () => {

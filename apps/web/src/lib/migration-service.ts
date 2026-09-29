@@ -47,7 +47,12 @@ function loadProgress(): PersistedProgress | null {
   const raw = localStorage.getItem(PROGRESS_KEY);
   if (!raw) return null;
   try {
-    return JSON.parse(raw) as PersistedProgress;
+    const parsed = JSON.parse(raw) as Partial<PersistedProgress> | null;
+    // A value without a tableProgress map is not a run we can resume:
+    // treat it as absent rather than crash the resume path on it.
+    const tp = parsed?.tableProgress;
+    if (!tp || typeof tp !== "object" || Array.isArray(tp)) return null;
+    return parsed as PersistedProgress;
   } catch {
     return null;
   }
