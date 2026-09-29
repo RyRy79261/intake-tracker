@@ -9,6 +9,7 @@
     "./analytics-insights": "./src/analytics-insights.ts",
     "./parse": "./src/parse.ts",
     "./medicine-search": "./src/medicine-search.ts",
+    "./medicine-about": "./src/medicine-about.ts",
     "./substance-lookup": "./src/substance-lookup.ts",
     "./interaction-check": "./src/interaction-check.ts",
     "./nutrient-analysis": "./src/nutrient-analysis.ts",

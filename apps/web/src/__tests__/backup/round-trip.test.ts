@@ -226,6 +226,46 @@ describe("backup-service", () => {
     expect(restored?.genericName).toBe("Lisinopril");
   });
 
+  it("round-trip keeps a prescription's medicineInfo and interactionCheck", async () => {
+    const prescription = makePrescription({
+      genericName: "Ramipril",
+      medicineInfo: {
+        fetchedAt: 1_790_000_000_000,
+        drugClass: "ACE inhibitor (a medicine that makes blood vessels wider).",
+        compounds: [
+          {
+            name: "Ramipril",
+            drugClass: "ACE inhibitor",
+            forText: "High blood pressure.",
+            howItWorks: "It relaxes blood vessels.",
+            sideEffects: ["Dry cough"],
+          },
+        ],
+        warnings: [{ risk: "Your face can swell.", whatToDo: "Get emergency help." }],
+        contraindications: ["Do not take it if you are pregnant."],
+        foodInstruction: "none",
+        foodNote: "With or without food.",
+        pillDescription: "White tablet.",
+      },
+      interactionCheck: {
+        checkedAt: 1_790_000_000_000,
+        medications: ["Furosemide"],
+        summary: "Take care.",
+        rows: [{ medication: "Furosemide", severity: "CAUTION", description: "Both lower blood pressure." }],
+      },
+    });
+    await db.prescriptions.add(prescription);
+
+    const blob = await exportBackup();
+    await db.prescriptions.clear();
+    const result = await importBackup(backupDataToFile(await blobToBackupData(blob)), "replace");
+    expect(result.success).toBe(true);
+
+    const restored = await db.prescriptions.get(prescription.id);
+    expect(restored?.medicineInfo).toEqual(prescription.medicineInfo);
+    expect(restored?.interactionCheck).toEqual(prescription.interactionCheck);
+  });
+
   it("merge import: new records added, duplicates skipped", async () => {
     // Insert 2 prescriptions locally
     const p1 = makePrescription({ genericName: "Drug A" });

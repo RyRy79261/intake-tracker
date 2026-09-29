@@ -233,8 +233,8 @@ export function TitrationDrawer({
 
   return (
     <Drawer open={open} onOpenChange={onOpenChange}>
-      <DrawerContent className="max-h-[90dvh] flex flex-col outline-hidden">
-        <DrawerHeader className="border-b shrink-0">
+      <DrawerContent className="flex max-h-[90dvh] flex-col bg-panel shadow-[inset_0_3px_0_hsl(var(--meds))] outline-hidden">
+        <DrawerHeader className="shrink-0 border-b border-line text-left">
           <DrawerTitle>{isEditing ? "Edit Titration Plan" : "New Titration Plan"}</DrawerTitle>
         </DrawerHeader>
 
@@ -259,7 +259,7 @@ export function TitrationDrawer({
 
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
           <div className="space-y-1.5">
-            <Label className="text-sm">Title</Label>
+            <Label className="text-[0.8125rem] font-normal text-muted-foreground">Title</Label>
             <Input
               placeholder="e.g. Heart failure dose increase"
               value={title}
@@ -268,7 +268,7 @@ export function TitrationDrawer({
           </div>
 
           <div className="space-y-1.5">
-            <Label className="text-sm">Start</Label>
+            <Label className="text-[0.8125rem] font-normal text-muted-foreground">Start</Label>
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-2 shrink-0">
                 <Switch
@@ -299,20 +299,19 @@ export function TitrationDrawer({
 
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <Label className="text-sm">Prescriptions</Label>
+              <Label className="text-[0.8125rem] font-normal text-muted-foreground">Prescriptions</Label>
               <Button
                 variant="outline"
                 size="sm"
-                className="h-7 text-xs gap-1"
                 onClick={addEntry}
               >
-                <Plus className="w-3 h-3" />
+                <Plus />
                 Add Rx
               </Button>
             </div>
 
             {entries.length === 0 && (
-              <p className="text-xs text-muted-foreground p-3 border rounded-lg border-dashed text-center">
+              <p className="border border-dashed border-line p-3 text-center text-[0.8125rem] text-muted-foreground">
                 Add at least one prescription to this plan.
               </p>
             )}
@@ -340,15 +339,15 @@ export function TitrationDrawer({
 
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
-              <Label className="text-sm flex items-center gap-1.5">
-                <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
+              <Label className="flex items-center gap-1.5 text-[0.8125rem] font-normal text-muted-foreground">
+                <AlertTriangle className="h-3.5 w-3.5 text-sodium" aria-hidden="true" />
                 Warning Signs
               </Label>
               {showAi && (
                 <Button
                   variant="outline"
                   size="sm"
-                  className="h-7 text-xs gap-1"
+                  className="border-ai text-ai"
                   onClick={handleGenerateWarnings}
                   disabled={aiLoading || entries.filter((e) => e.prescriptionId).length === 0}
                 >
@@ -371,7 +370,7 @@ export function TitrationDrawer({
           </div>
 
           <div className="space-y-1.5">
-            <Label className="text-sm">Notes</Label>
+            <Label className="text-[0.8125rem] font-normal text-muted-foreground">Notes</Label>
             <Textarea
               placeholder="Additional details..."
               value={notes}
@@ -381,9 +380,9 @@ export function TitrationDrawer({
           </div>
         </div>
 
-        <div className="p-4 border-t shrink-0">
+        <div className="sticky bottom-0 shrink-0 border-t border-line bg-panel p-4">
           <Button
-            className="w-full bg-teal-600 hover:bg-teal-700"
+            className="w-full"
             onClick={handleSubmit}
             disabled={!canSubmit || createMutation.isPending || updateMutation.isPending}
           >

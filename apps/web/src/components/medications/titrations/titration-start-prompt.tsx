@@ -1,8 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { CalendarClock, Play } from "lucide-react";
-import { Card } from "@intake/ui/card";
 import { Button } from "@intake/ui/button";
 import {
   AlertDialog,
@@ -71,46 +69,36 @@ export function TitrationStartPrompt({ className }: { className?: string }) {
   return (
     <div className={cn("space-y-2", className)}>
       {visible.map((plan) => (
-        <Card
+        <div
           key={plan.id}
           role="status"
-          className="p-3 border-teal-300 bg-teal-50/60 dark:border-teal-800 dark:bg-teal-950/20"
+          className="flex flex-col gap-1.5 border-2 border-foreground bg-background py-2.5 pl-3.5 pr-3 shadow-[inset_4px_0_0_hsl(var(--meds))]"
         >
-          <div className="flex items-start gap-2">
-            <CalendarClock className="w-4 h-4 mt-0.5 shrink-0 text-teal-600 dark:text-teal-400" />
-            <div className="flex-1 min-w-0 space-y-1">
-              <p className="text-sm font-semibold">
-                Ready to start: {plan.title}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Planned for {formatPlannedDate(plan.recommendedStartDate)}. Your
-                current doses stay in effect until you start it.
-              </p>
-              <div className="flex flex-wrap gap-2 pt-1">
-                <Button
-                  size="sm"
-                  className="h-7 text-xs gap-1 bg-teal-600 hover:bg-teal-700"
-                  disabled={activate.isPending}
-                  onClick={() => setConfirming(plan)}
-                >
-                  <Play className="w-3 h-3" />
-                  Start now
-                </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="h-7 text-xs"
-                  disabled={activate.isPending}
-                  onClick={() =>
-                    setDismissed((prev) => new Set(prev).add(plan.id))
-                  }
-                >
-                  Not now
-                </Button>
-              </div>
-            </div>
+          <p className="text-[0.9375rem] font-semibold leading-snug">
+            Ready to start: {plan.title}
+          </p>
+          <p className="text-[0.8125rem] text-muted-foreground">
+            Planned for {formatPlannedDate(plan.recommendedStartDate)}. Your
+            current doses stay in effect until you start it.
+          </p>
+          <div className="mt-1 flex flex-wrap gap-2">
+            <Button
+              disabled={activate.isPending}
+              onClick={() => setConfirming(plan)}
+            >
+              Start now
+            </Button>
+            <Button
+              variant="outline"
+              disabled={activate.isPending}
+              onClick={() =>
+                setDismissed((prev) => new Set(prev).add(plan.id))
+              }
+            >
+              Not now
+            </Button>
           </div>
-        </Card>
+        </div>
       ))}
 
       <AlertDialog

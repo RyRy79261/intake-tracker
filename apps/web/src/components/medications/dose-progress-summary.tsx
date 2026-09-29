@@ -1,12 +1,22 @@
 "use client";
 
-import { CheckCircle2 } from "lucide-react";
 import type { DoseSlot } from "@/hooks/use-medication-queries";
 import { computeProgress } from "@/lib/medication-ui-utils";
+import { SegmentBar } from "@/components/home/module-card";
 
 interface DoseProgressSummaryProps {
   slots: DoseSlot[];
   lowStockWarnings: string[];
+}
+
+/** A finished day: a card with the meds stripe. */
+function DoneCard({ title, detail }: { title: string; detail: string }) {
+  return (
+    <div className="border border-line bg-background p-3 shadow-[inset_3px_0_0_hsl(var(--meds))]">
+      <p className="mb-1 text-base font-semibold">{title}</p>
+      <p className="text-[0.8125rem] text-muted-foreground">{detail}</p>
+    </div>
+  );
 }
 
 export function DoseProgressSummary({ slots, lowStockWarnings }: DoseProgressSummaryProps) {
@@ -17,44 +27,22 @@ export function DoseProgressSummary({ slots, lowStockWarnings }: DoseProgressSum
   const counts = `${taken} taken · ${skipped} skipped · ${total} total`;
 
   if (allDone && total > 0 && skipped === 0) {
-    return (
-      <div className="rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 p-4 flex items-center gap-3">
-        <CheckCircle2 className="w-6 h-6 text-emerald-600 dark:text-emerald-400 shrink-0" />
-        <div>
-          <p className="font-semibold text-emerald-800 dark:text-emerald-200 text-sm">
-            All done for today!
-          </p>
-          <p className="text-xs text-emerald-600 dark:text-emerald-400">
-            {taken}/{total} doses taken
-          </p>
-        </div>
-      </div>
-    );
+    return <DoneCard title="All done for today!" detail={`${taken}/${total} doses taken`} />;
   }
 
   if (allDone && total > 0) {
-    return (
-      <div className="rounded-xl bg-muted/50 border p-4">
-        <p className="font-semibold text-sm">All doses handled</p>
-        <p className="text-xs text-muted-foreground">{counts}</p>
-      </div>
-    );
+    return <DoneCard title="All doses handled" detail={counts} />;
   }
 
   return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between text-sm">
-        <span className="text-muted-foreground">{counts}</span>
-        <span className="font-medium">{pct}% handled</span>
+    <div>
+      <div className="mb-1.5 flex items-center justify-between gap-2 text-[0.8125rem] text-muted-foreground">
+        <span>{counts}</span>
+        <span className="whitespace-nowrap">{pct}% handled</span>
       </div>
-      <div className="h-2 rounded-full bg-muted overflow-hidden">
-        <div
-          className="h-full rounded-full bg-teal-500 transition-all duration-300"
-          style={{ width: `${pct}%` }}
-        />
-      </div>
+      <SegmentBar value={taken + skipped} limit={total} domain="meds" aria-label="Doses handled today" />
       {lowStockWarnings.length > 0 && (
-        <p className="text-xs text-amber-600 dark:text-amber-400">
+        <p className="mt-1.5 text-[0.8125rem] text-sodium">
           Low stock: {lowStockWarnings.join(", ")}
         </p>
       )}

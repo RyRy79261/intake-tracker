@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
-import { Cat, ChevronDown, Plus } from "lucide-react";
-import { motion, AnimatePresence } from "motion/react";
+import { useState, type ReactNode } from "react";
+import { Pill, Plus } from "lucide-react";
 import { Button } from "@intake/ui/button";
 import { MedicationCard } from "@/components/medications/compound-card";
+import { CollapseHead, SecHead, addFullClass } from "@/components/medications/ward-bits";
 import { InteractionSearch } from "@/components/medications/interaction-search";
 import { useAuthGate } from "@/components/auth-guard";
 import { usePrescriptions, useAllInventoryItems } from "@/hooks/use-medication-queries";
@@ -35,12 +35,11 @@ export function CompoundList({ onAddMed }: CompoundListProps) {
 
   if (nonArchived.length === 0 && archived.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-20 px-4 text-center">
-        <Cat className="w-16 h-16 text-muted-foreground/40 mb-4" />
-        <p className="text-muted-foreground text-sm mb-4">
-          No medications yet
-        </p>
-        <Button variant="outline" size="sm" onClick={onAddMed}>
+      <div className="flex flex-col items-center gap-1.5 px-3 py-7 text-center">
+        <Pill className="h-12 w-12 opacity-50" strokeWidth={1.5} aria-hidden="true" />
+        <p className="text-lg font-semibold">No medications yet</p>
+        <Button className="mt-2" onClick={onAddMed}>
+          <Plus aria-hidden="true" />
           Add your first medication
         </Button>
       </div>
@@ -74,130 +73,58 @@ export function CompoundList({ onAddMed }: CompoundListProps) {
   // Out of stock: alphabetical
   outOfStock.sort((a, b) => a.brandName.localeCompare(b.brandName));
 
+  const card = (item: InventoryItem) => (
+    <MedicationCard
+      key={item.id}
+      item={item}
+      prescription={prescriptionMap.get(item.prescriptionId)}
+    />
+  );
+
   return (
-    <div className="space-y-4 pb-24 px-4">
+    <div className="pb-6">
       {showAi && <InteractionSearch />}
 
       {/* Active medications — always expanded */}
       {active.length > 0 && (
         <section>
-          <h3 className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider mb-2 ml-1">
-            Active
-          </h3>
-          <div className="space-y-2">
-            {active.map((item) => (
-              <MedicationCard
-                key={item.id}
-                item={item}
-                prescription={prescriptionMap.get(item.prescriptionId)}
-              />
-            ))}
-          </div>
+          <SecHead>Active</SecHead>
+          {active.map(card)}
         </section>
       )}
 
       {/* Other medications — grouped by compound */}
       {inactiveByCompound.length > 0 && (
         <section>
-          <h3 className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider mb-2 ml-1">
-            Other
-          </h3>
-          <div className="space-y-2">
-            {inactiveByCompound.map(({ compoundName, items }) => (
-              <CompoundGroup
-                key={compoundName}
-                compoundName={compoundName}
-                items={items}
-                prescriptionMap={prescriptionMap}
-              />
-            ))}
-          </div>
+          <SecHead>Other</SecHead>
+          {inactiveByCompound.map(({ compoundName, items }) => (
+            <CompoundGroup key={compoundName} compoundName={compoundName} items={items} card={card} />
+          ))}
         </section>
       )}
 
       {/* Out of stock — collapsible */}
       {outOfStock.length > 0 && (
         <section>
-          <Button
-            variant="ghost"
-            className="flex items-center gap-1.5 w-full justify-start h-auto px-1 py-0 mb-2"
-            onClick={() => setOutOfStockOpen(!outOfStockOpen)}
-          >
-            <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
-              Out of stock ({outOfStock.length})
-            </span>
-            <motion.div
-              animate={{ rotate: outOfStockOpen ? 180 : 0 }}
-              transition={{ duration: 0.2 }}
-            >
-              <ChevronDown className="w-3 h-3 text-muted-foreground" />
-            </motion.div>
-          </Button>
-          <AnimatePresence>
-            {outOfStockOpen && (
-              <motion.div
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: "auto", opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                transition={{ duration: 0.2 }}
-                className="overflow-hidden space-y-2"
-              >
-                {outOfStock.map((item) => (
-                  <MedicationCard
-                    key={item.id}
-                    item={item}
-                    prescription={prescriptionMap.get(item.prescriptionId)}
-                  />
-                ))}
-              </motion.div>
-            )}
-          </AnimatePresence>
+          <CollapseHead open={outOfStockOpen} onToggle={() => setOutOfStockOpen(!outOfStockOpen)}>
+            OUT OF STOCK ({outOfStock.length})
+          </CollapseHead>
+          {outOfStockOpen && outOfStock.map(card)}
         </section>
       )}
 
       {/* Archived — collapsible */}
       {archived.length > 0 && (
         <section>
-          <Button
-            variant="ghost"
-            className="flex items-center gap-1.5 w-full justify-start h-auto px-1 py-0 mb-2"
-            onClick={() => setArchivedOpen(!archivedOpen)}
-            aria-expanded={archivedOpen}
-          >
-            <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
-              Archived ({archived.length})
-            </span>
-            <motion.div
-              animate={{ rotate: archivedOpen ? 180 : 0 }}
-              transition={{ duration: 0.2 }}
-            >
-              <ChevronDown className="w-3 h-3 text-muted-foreground" />
-            </motion.div>
-          </Button>
-          <AnimatePresence>
-            {archivedOpen && (
-              <motion.div
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: "auto", opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                transition={{ duration: 0.2 }}
-                className="overflow-hidden space-y-2"
-              >
-                {archived.map((item) => (
-                  <MedicationCard
-                    key={item.id}
-                    item={item}
-                    prescription={prescriptionMap.get(item.prescriptionId)}
-                  />
-                ))}
-              </motion.div>
-            )}
-          </AnimatePresence>
+          <CollapseHead open={archivedOpen} onToggle={() => setArchivedOpen(!archivedOpen)}>
+            ARCHIVED ({archived.length})
+          </CollapseHead>
+          {archivedOpen && archived.map(card)}
         </section>
       )}
 
-      <Button variant="outline" size="sm" onClick={onAddMed} className="w-full">
-        <Plus className="w-4 h-4 mr-2" /> Add another medication
+      <Button variant="outline" onClick={onAddMed} className={addFullClass}>
+        <Plus aria-hidden="true" /> Add another medication
       </Button>
     </div>
   );
@@ -233,53 +160,20 @@ function groupByPrescription(
 function CompoundGroup({
   compoundName,
   items,
-  prescriptionMap,
+  card,
 }: {
   compoundName: string;
   items: InventoryItem[];
-  prescriptionMap: Map<string, Prescription>;
+  card: (item: InventoryItem) => ReactNode;
 }) {
   const [open, setOpen] = useState(false);
 
   return (
     <div>
-      <Button
-        variant="ghost"
-        className="flex items-center gap-2 w-full justify-start h-auto p-2 rounded-lg"
-        onClick={() => setOpen(!open)}
-      >
-        <div className="flex-1 min-w-0 text-left">
-          <span className="text-xs font-medium">{compoundName}</span>
-          <span className="text-[10px] text-muted-foreground ml-2">
-            {items.length} {items.length === 1 ? "medication" : "medications"}
-          </span>
-        </div>
-        <motion.div
-          animate={{ rotate: open ? 180 : 0 }}
-          transition={{ duration: 0.2 }}
-        >
-          <ChevronDown className="w-4 h-4 text-muted-foreground" />
-        </motion.div>
-      </Button>
-      <AnimatePresence>
-        {open && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="overflow-hidden space-y-2 mt-1"
-          >
-            {items.map((item) => (
-              <MedicationCard
-                key={item.id}
-                item={item}
-                prescription={prescriptionMap.get(item.prescriptionId)}
-              />
-            ))}
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <CollapseHead sub open={open} onToggle={() => setOpen(!open)}>
+        {compoundName} · {items.length} {items.length === 1 ? "medication" : "medications"}
+      </CollapseHead>
+      {open && items.map(card)}
     </div>
   );
 }

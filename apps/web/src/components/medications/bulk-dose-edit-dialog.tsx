@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Drawer, DrawerContent, DrawerTitle } from "@intake/ui/drawer";
+import { Button } from "@intake/ui/button";
 import { PillIconWithBadge } from "@/components/medications/pill-icon";
 import { useUntakeAllDoses, useEditAllDoseTimes } from "@/hooks/use-medication-queries";
 import { useTodayKey } from "@/hooks/use-today-key";
@@ -119,45 +120,48 @@ export function BulkDoseEditDialog({ open, onOpenChange, time, slots, date }: Bu
   return (
     <>
       <Drawer open={open} onOpenChange={onOpenChange}>
-        <DrawerContent className="max-h-[85vh]" aria-describedby={undefined}>
-          <div className="p-6">
+        <DrawerContent className="max-h-[85vh] bg-panel" aria-describedby={undefined}>
+          <div className="px-4 pb-[calc(20px+env(safe-area-inset-bottom,0px))] pt-3">
             {/* Header */}
-            <div className="flex items-center justify-between mb-4">
-              <div className="w-8" />
-              <DrawerTitle className="text-lg font-bold">{formatTime12(time)}</DrawerTitle>
+            <div className="mb-3 flex items-center justify-between">
+              <DrawerTitle className="font-mono text-base font-semibold">{formatTime12(time)}</DrawerTitle>
               <button
+                type="button"
                 onClick={() => onOpenChange(false)}
-                className="w-8 h-8 flex items-center justify-center text-muted-foreground"
+                className="-mr-2 flex h-11 w-11 items-center justify-center text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:-outline-offset-4 focus-visible:outline-ring"
                 aria-label="Close"
               >
-                <X className="w-5 h-5" />
+                <X className="h-5 w-5" />
               </button>
             </div>
 
             {/* Dose list */}
-            <div className="space-y-3 mb-6 max-h-[50vh] overflow-y-auto">
+            <div className="mb-3 max-h-[50vh] overflow-y-auto border border-line bg-background">
               {slots.map((slot) => {
                 const doseLabel = formatDoseAmount(slot);
                 return (
-                  <div key={`${slot.scheduleId}-${slot.localTime}`} className="flex items-center gap-3">
+                  <div
+                    key={`${slot.scheduleId}-${slot.localTime}`}
+                    className="grid grid-cols-[34px_minmax(0,1fr)] items-center gap-2.5 border-t border-line/60 p-2.5 first:border-t-0"
+                  >
                     <PillIconWithBadge
                       shape={slot.inventory?.pillShape || "round"}
                       color={slot.inventory?.pillColor || "#ccc"}
-                      size={36}
+                      size={34}
                       status={slot.status === "missed" ? "pending" : slot.status}
                     />
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-sm leading-tight">
+                    <div className="min-w-0">
+                      <p className="text-[0.9375rem] font-semibold leading-snug">
                         {slot.prescription.genericName}
                       </p>
-                      <p className="text-xs text-muted-foreground mt-0.5">{doseLabel}</p>
+                      <p className="text-[0.8125rem] leading-snug text-muted-foreground">{doseLabel}</p>
                       {slot.status === "taken" && slot.existingLog?.actionTimestamp && (
-                        <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-0.5">
+                        <p className="mt-0.5 text-[0.8125rem] font-semibold text-meds">
                           Taken at {formatLoggedTime(slot.existingLog.actionTimestamp)}
                         </p>
                       )}
                       {slot.status === "skipped" && (
-                        <p className="text-xs text-muted-foreground mt-0.5">
+                        <p className="mt-0.5 text-[0.8125rem] text-muted-foreground">
                           {slot.existingLog?.skipReason || "Skipped"}
                         </p>
                       )}
@@ -168,28 +172,25 @@ export function BulkDoseEditDialog({ open, onOpenChange, time, slots, date }: Bu
             </div>
 
             {/* Action buttons */}
-            <div className="flex justify-center gap-6">
-              <button
+            <div className="grid grid-cols-2 gap-2">
+              <Button
+                variant="outline"
                 onClick={handleUntakeAll}
                 disabled={!hasTaken}
-                className="flex flex-col items-center gap-1.5 disabled:opacity-40"
+                className="border-bp text-bp hover:text-bp"
               >
-                <div className="w-12 h-12 rounded-full border-2 border-red-500 dark:border-red-400 bg-red-500 dark:bg-red-500 flex items-center justify-center">
-                  <RotateCcw className="w-5 h-5 text-white" />
-                </div>
-                <span className="text-xs font-medium text-red-500 dark:text-red-400">UN-TAKE</span>
-              </button>
+                <RotateCcw aria-hidden="true" />
+                <span>UN-TAKE</span>
+              </Button>
 
-              <button
+              <Button
+                variant="outline"
                 onClick={() => setEditPickerOpen(true)}
                 disabled={!hasTaken}
-                className="flex flex-col items-center gap-1.5 disabled:opacity-40"
               >
-                <div className="w-12 h-12 rounded-full border-2 border-gray-400 flex items-center justify-center">
-                  <Clock className="w-5 h-5 text-gray-400" />
-                </div>
-                <span className="text-xs font-medium text-muted-foreground">EDIT RECORD</span>
-              </button>
+                <Clock aria-hidden="true" />
+                <span>EDIT RECORD</span>
+              </Button>
             </div>
           </div>
         </DrawerContent>
