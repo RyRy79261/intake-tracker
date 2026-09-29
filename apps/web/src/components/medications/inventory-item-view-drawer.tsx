@@ -31,7 +31,17 @@ import { isLive } from "@intake/core/lifecycle";
 import { isCombo, formatCompoundShort, formatCompoundFull, compoundsMismatch } from "@intake/core/compound";
 import type { Prescription, InventoryItem, InventoryTransaction } from "@/lib/db";
 import { toLocalDateKey } from "@/lib/date-utils";
-import { Loader2, Archive, ArchiveRestore, Plus, Pencil, Trash2, Check, X, CheckCircle2, AlertTriangle } from "lucide-react";
+import { Bdg, WarnBox } from "@/components/medications/ward-bits";
+import { Loader2, Archive, ArchiveRestore, Plus, Pencil, Trash2, Check, X, CheckCircle2 } from "lucide-react";
+
+/** A Color / Shape / Markings tile (`.tiles > div`). */
+const tileClass = "border border-line bg-background px-2 py-1.5";
+/** Section heading inside the drawer. */
+const drawerH3 = "mt-1 text-[0.9375rem] font-semibold";
+/** 44px square icon button (`.ibtn`). */
+const iconBtn =
+  "inline-flex h-11 w-11 items-center justify-center text-muted-foreground hover:bg-foreground/6 hover:text-foreground disabled:opacity-40 " +
+  "focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring";
 
 interface InventoryItemViewDrawerProps {
   /** The specific inventory item (pill brand) being viewed. */
@@ -51,15 +61,15 @@ export function InventoryItemViewDrawer({ item, prescription, open, onOpenChange
 
   return (
     <Drawer open={open} onOpenChange={onOpenChange}>
-      <DrawerContent className="max-h-[90dvh] flex flex-col">
-        <DrawerHeader className="border-b shrink-0">
-          <DrawerTitle>
+      <DrawerContent className="flex max-h-[90dvh] flex-col bg-panel shadow-[inset_0_3px_0_hsl(var(--meds))]">
+        <DrawerHeader className="shrink-0 border-b border-line text-left">
+          <DrawerTitle className="text-base font-semibold">
             {current.brandName}{" "}
             {isCombo(current)
               ? formatCompoundShort(current.compounds, current.unit)
               : `${current.strength}${current.unit}`}
           </DrawerTitle>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-[0.8125rem] text-muted-foreground">
             {prescription ? `For ${prescription.genericName}` : "Medicine"}
             {current.isActive ? " · Active brand" : " · Not active"}
             {current.isArchived && " · Archived"}
@@ -68,20 +78,20 @@ export function InventoryItemViewDrawer({ item, prescription, open, onOpenChange
 
         <div className="flex-1 overflow-y-auto">
           <Tabs defaultValue="details" className="w-full h-full flex flex-col">
-            <div className="px-4 pt-4 shrink-0 border-b">
-              <TabsList className="w-full grid grid-cols-3 mb-4">
-                <TabsTrigger value="details" className="py-2 text-xs">Details</TabsTrigger>
-                <TabsTrigger value="inventory" className="py-2 text-xs">Stock</TabsTrigger>
-                <TabsTrigger value="manage" className="py-2 text-xs">Manage</TabsTrigger>
+            <div className="shrink-0 px-4 pt-3">
+              <TabsList className="grid w-full grid-cols-3">
+                <TabsTrigger value="details">Details</TabsTrigger>
+                <TabsTrigger value="inventory">Stock</TabsTrigger>
+                <TabsTrigger value="manage">Manage</TabsTrigger>
               </TabsList>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-4">
-              <TabsContent value="details" className="mt-0 space-y-6">
+            <div className="flex-1 overflow-y-auto px-4 pb-5 pt-3 text-sm">
+              <TabsContent value="details" className="mt-0">
                 <DetailsTab item={current} prescription={prescription} />
               </TabsContent>
 
-              <TabsContent value="inventory" className="mt-0 space-y-6">
+              <TabsContent value="inventory" className="mt-0">
                 <InventoryTab item={current} siblings={siblings} prescription={prescription} />
               </TabsContent>
 
@@ -101,13 +111,12 @@ function DetailsTab({ item, prescription }: { item: InventoryItem; prescription:
   const effectivePhase = selectEffectivePhase(phases);
 
   return (
-    <div className="space-y-6">
-      <div className="p-4 rounded-xl border bg-card space-y-4">
-        <div className="flex items-start gap-4">
+    <div className="flex flex-col gap-3">
+        <div className="flex items-center gap-3">
           <PillIcon shape={item.pillShape} color={item.pillColor} size={40} />
           <div>
-            <p className="font-medium">{item.brandName}</p>
-            <p className="text-sm text-muted-foreground">
+            <p className="font-semibold">{item.brandName}</p>
+            <p className="text-[0.8125rem] text-muted-foreground">
               {isCombo(item)
                 ? `${formatCompoundFull(item.compounds, item.unit)} per pill`
                 : `${item.strength}${item.unit} per pill`}
@@ -115,60 +124,49 @@ function DetailsTab({ item, prescription }: { item: InventoryItem; prescription:
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-2 text-sm">
-          <div className="p-2 bg-muted/50 rounded-lg">
-            <p className="text-muted-foreground text-xs mb-1">Color</p>
-            <p className="font-medium capitalize">{item.pillColor}</p>
+        <div className="grid grid-cols-2 gap-1.5">
+          <div className={tileClass}>
+            <p className="text-[0.6875rem] text-muted-foreground">Color</p>
+            <p className="capitalize">{item.pillColor}</p>
           </div>
-          <div className="p-2 bg-muted/50 rounded-lg">
-            <p className="text-muted-foreground text-xs mb-1">Shape</p>
-            <p className="font-medium capitalize">{item.pillShape}</p>
+          <div className={tileClass}>
+            <p className="text-[0.6875rem] text-muted-foreground">Shape</p>
+            <p className="capitalize">{item.pillShape}</p>
           </div>
+          {item.visualIdentification && (
+            <div className={`${tileClass} col-span-2`}>
+              <p className="text-[0.6875rem] text-muted-foreground">Markings</p>
+              <p>{item.visualIdentification}</p>
+            </div>
+          )}
         </div>
 
-        {item.visualIdentification && (
-          <div className="p-2 bg-muted/50 rounded-lg text-sm">
-            <p className="text-muted-foreground text-xs mb-1">Markings</p>
-            <p className="font-medium">{item.visualIdentification}</p>
-          </div>
-        )}
-
         {prescription && compoundsMismatch(prescription.compounds, item.compounds) && (
-          <p className="flex gap-2 text-xs text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 p-2.5 rounded-lg border border-amber-200 dark:border-amber-800">
-            <AlertTriangle className="w-4 h-4 shrink-0" />
+          <WarnBox title="Ratio doesn't match">
             <span>
               This brand&apos;s ingredients ({formatCompoundFull(item.compounds, item.unit)}) differ
               from this prescription ({formatCompoundFull(prescription.compounds, item.unit)}).
               Doses are labelled and counted from this brand&apos;s tablets; check it is the
               right medicine.
             </span>
-          </p>
+          </WarnBox>
         )}
-      </div>
 
-      <div className="space-y-2">
-        <h3 className="font-semibold text-sm">Current Dosing</h3>
+        <h3 className={drawerH3}>Current Dosing</h3>
         {effectivePhase ? (
-          <div className="p-4 rounded-xl border bg-card/50">
-            <div className="flex items-center justify-between mb-2">
-              <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-                effectivePhase.type === "titration"
-                  ? "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
-                  : "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
-              }`}>
-                {effectivePhase.type === "titration" ? "On titration" : "Maintenance"}
-              </span>
-            </div>
-            <p className="text-sm text-muted-foreground">
-              Doses are measured in {effectivePhase.unit}
-            </p>
-          </div>
+          <p className="flex flex-wrap items-center gap-2">
+            {effectivePhase.type === "titration" ? (
+              <Bdg tone="sodium" kind="fill">On titration</Bdg>
+            ) : (
+              <Bdg tone="water">Maintenance</Bdg>
+            )}
+            <span>Doses are measured in {effectivePhase.unit}</span>
+          </p>
         ) : (
-          <p className="text-sm text-muted-foreground bg-muted/30 p-3 rounded-lg border">
+          <p className="text-[0.8125rem] text-muted-foreground">
             No active schedule for this prescription.
           </p>
         )}
-      </div>
     </div>
   );
 }
@@ -244,49 +242,50 @@ function InventoryTab({
     status === null ? "—" : status.daysLeft === null ? "∞" : String(status.daysLeft);
 
   return (
-    <div className="space-y-6">
-      <div className="p-4 rounded-xl border bg-card flex items-center justify-between">
-        <div>
-          <p className="text-sm text-muted-foreground">Current Stock</p>
-          <p className="text-3xl font-bold">{item.currentStock ?? 0} <span className="text-lg font-normal text-muted-foreground">pills</span></p>
+    <div className="flex flex-col gap-3">
+      <div className="grid grid-cols-2 border border-line bg-background">
+        <div className="flex flex-col items-start gap-[3px] px-3 py-2.5">
+          <p className="text-xs text-muted-foreground">Current Stock</p>
+          <p className={`font-mono text-lg font-semibold ${(item.currentStock ?? 0) < 0 ? "text-bp" : ""}`}>
+            {item.currentStock ?? 0} <span className="text-[0.8125rem] font-normal text-muted-foreground">pills</span>
+          </p>
         </div>
-        <div className="text-right">
-          <p className="text-sm text-muted-foreground">Est. Supply</p>
+        <div className="flex flex-col items-end gap-[3px] border-l border-line px-3 py-2.5 text-right">
+          <p className="text-xs text-muted-foreground">Est. Supply</p>
           {(item.currentStock ?? 0) <= 0 ? (
-            <p className="text-xl font-semibold text-red-500" data-testid="est-supply">Out of stock</p>
+            <p className="font-mono text-lg font-semibold text-bp" data-testid="est-supply">Out of stock</p>
           ) : (
-            <p className="text-xl font-semibold" data-testid="est-supply">{supplyText} <span className="text-sm font-normal text-muted-foreground">days</span></p>
+            <p className="font-mono text-lg font-semibold" data-testid="est-supply">{supplyText} <span className="text-[0.8125rem] font-normal text-muted-foreground">days</span></p>
           )}
           {status?.isLow && (item.currentStock ?? 0) > 0 && (
-            <p className="text-xs text-amber-600 dark:text-amber-400">Refill soon</p>
+            <Bdg tone="sodium" kind="tint">Refill soon</Bdg>
           )}
         </div>
       </div>
 
       {spares.length > 0 && (
-        <p className="text-xs text-muted-foreground bg-muted/30 p-2.5 rounded-lg border">
+        <p className="text-[0.8125rem] text-muted-foreground">
           Spare boxes: {spareStock} pills in {spares.map((i) => i.brandName).join(", ")}.
           Not counted in this box&apos;s supply.
         </p>
       )}
 
       {!activeBrand && !item.isArchived && (
-        <p className="flex gap-2 text-xs text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 p-2.5 rounded-lg border border-amber-200 dark:border-amber-800">
-          <AlertTriangle className="w-4 h-4 shrink-0" />
+        <WarnBox>
           This prescription has no active brand, so doses are not deducted from
           any stock. Set a brand as active from the Manage tab.
-        </p>
+        </WarnBox>
       )}
 
       {activeBrand && !isActiveBrand && (
-        <p className="text-xs text-muted-foreground bg-muted/30 p-2.5 rounded-lg border">
+        <WarnBox title="Not the active brand">
           This brand is not active, so its stock is not deducted when doses are
           taken. Set it as the active brand from the Manage tab.
-        </p>
+        </WarnBox>
       )}
 
-      <div className="space-y-3">
-        <h3 className="font-semibold text-sm">Log Refill</h3>
+      <div className="flex flex-col gap-2">
+        <h3 className={drawerH3}>Log Refill</h3>
         <div className="flex gap-2">
           <Input
             type="number"
@@ -296,7 +295,7 @@ function InventoryTab({
             aria-label="Refill amount"
             value={refillAmount}
             onChange={(e) => setRefillAmount(e.target.value)}
-            className="w-24"
+            className="w-24 font-mono"
           />
           <Input
             placeholder="Optional note..."
@@ -326,14 +325,14 @@ function InventoryTab({
             disabled={
               refillMutation.isPending || parsedRefill === null || parsedRefill <= 0 || refillDate > todayKey
             }
-            className="bg-teal-600 hover:bg-teal-700 shrink-0"
+            className="shrink-0"
           >
-            {refillMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4 mr-1" />}
+            {refillMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
             Add
           </Button>
         </div>
         <div className="flex items-center gap-2">
-          <label htmlFor={`refill-date-${item.id}`} className="text-xs text-muted-foreground">
+          <label htmlFor={`refill-date-${item.id}`} className="text-[0.8125rem] text-muted-foreground">
             Collected on
           </label>
           <Input
@@ -343,14 +342,14 @@ function InventoryTab({
             max={todayKey}
             value={refillDate}
             onChange={(e) => setRefillDate(e.target.value || todayKey)}
-            className="w-40"
+            className="w-44 font-mono"
           />
         </div>
       </div>
 
-      <div className="space-y-3">
-        <h3 className="font-semibold text-sm">Correct Count</h3>
-        <p className="text-xs text-muted-foreground">
+      <div className="flex flex-col gap-2">
+        <h3 className={drawerH3}>Correct Count</h3>
+        <p className="text-[0.8125rem] text-muted-foreground">
           Counted the box? Enter how many pills are left and the difference is
           recorded as an adjustment.
         </p>
@@ -364,7 +363,7 @@ function InventoryTab({
             aria-label="Counted pills"
             value={countedAmount}
             onChange={(e) => setCountedAmount(e.target.value)}
-            className="w-24"
+            className="w-24 font-mono"
           />
           <Button
             variant="outline"
@@ -388,9 +387,9 @@ function InventoryTab({
       </div>
 
       {transactions.length > 0 && (
-        <div className="space-y-3 pt-4 border-t">
-          <h3 className="font-semibold text-sm">History</h3>
-          <div className="space-y-2 max-h-[40vh] overflow-y-auto pr-2">
+        <div>
+          <h3 className={drawerH3}>History</h3>
+          <div className="mt-1 max-h-[40vh] overflow-y-auto">
             {transactions.map(tx => (
               <TransactionRow key={tx.id} tx={tx} />
             ))}
@@ -447,7 +446,7 @@ function TransactionRow({ tx }: { tx: Pick<InventoryTransaction, "id" | "type" |
 
   if (editing) {
     return (
-      <div className="p-3 rounded-lg border bg-muted/30 text-sm space-y-2">
+      <div className="flex flex-col gap-2 border-t border-line py-2 text-sm">
         <div className="flex gap-2 items-center">
           <Input
             type="number"
@@ -456,21 +455,21 @@ function TransactionRow({ tx }: { tx: Pick<InventoryTransaction, "id" | "type" |
             aria-label="Transaction amount"
             value={editAmount}
             onChange={(e) => setEditAmount(e.target.value)}
-            className="w-24 h-8 text-sm"
+            className="w-24 font-mono"
           />
           <Input
             placeholder="Note..."
             value={editNote}
             onChange={(e) => setEditNote(e.target.value)}
-            className="flex-1 h-8 text-sm"
+            className="flex-1"
           />
         </div>
         <div className="flex gap-1 justify-end">
-          <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setEditing(false)}>
-            <X className="w-3 h-3 mr-1" /> Cancel
+          <Button variant="outline" size="sm" onClick={() => setEditing(false)}>
+            <X /> Cancel
           </Button>
-          <Button size="sm" className="h-7 text-xs bg-teal-600 hover:bg-teal-700" onClick={handleSave} disabled={updateMutation.isPending || !canSave}>
-            {updateMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3 mr-1" />}
+          <Button size="sm" onClick={handleSave} disabled={updateMutation.isPending || !canSave}>
+            {updateMutation.isPending ? <Loader2 className="animate-spin" /> : <Check />}
             Save
           </Button>
         </div>
@@ -479,40 +478,38 @@ function TransactionRow({ tx }: { tx: Pick<InventoryTransaction, "id" | "type" |
   }
 
   return (
-    <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/30 text-sm">
-      <div className="flex-1 min-w-0">
-        <p className="font-medium">
-          {tx.type === "refill" ? "Refill" : tx.type === "consumed" ? "Consumed" : tx.type === "initial" ? "Initial" : "Adjusted"}
-          <span className={tx.amount > 0 ? "text-emerald-600 ml-2" : "text-red-500 ml-2"}>
-            {tx.amount > 0 ? "+" : ""}{tx.amount}
-          </span>
+    <div className="grid min-h-12 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 border-t border-line py-0.5 text-sm">
+      <div className="flex min-w-0 flex-col gap-px">
+        <p className={`font-mono text-[0.8125rem] font-semibold ${tx.amount > 0 ? "text-weight" : tx.amount < 0 ? "text-bp" : ""}`}>
+          {tx.type === "refill" ? "Refill" : tx.type === "consumed" ? "Consumed" : tx.type === "initial" ? "Initial" : "Adjusted"}{" "}
+          {tx.amount > 0 ? "+" : ""}{tx.amount}
         </p>
-        {tx.note && <p className="text-xs text-muted-foreground mt-0.5">{tx.note}</p>}
+        <p className="text-xs text-muted-foreground">
+          {tx.note && <><span>{tx.note}</span>{" · "}</>}
+          {new Date(tx.timestamp).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+        </p>
       </div>
-      <div className="flex items-center gap-1 shrink-0">
-        <span className="text-xs text-muted-foreground mr-1">
-          {new Date(tx.timestamp).toLocaleDateString()}
-        </span>
-        {isEditable && (
-          <>
-            <button
-              onClick={() => { setEditAmount(String(tx.amount)); setEditNote(tx.note ?? ""); setEditing(true); }}
-              className="p-1 rounded hover:bg-muted transition-colors"
-              aria-label="Edit transaction"
-            >
-              <Pencil className="w-3 h-3 text-muted-foreground" />
-            </button>
-            <button
-              onClick={handleDelete}
-              className="p-1 rounded hover:bg-muted transition-colors"
-              disabled={deleteMutation.isPending}
-              aria-label="Delete transaction"
-            >
-              {deleteMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3 text-muted-foreground" />}
-            </button>
-          </>
-        )}
-      </div>
+      {isEditable && (
+        <div className="flex">
+          <button
+            type="button"
+            onClick={() => { setEditAmount(String(tx.amount)); setEditNote(tx.note ?? ""); setEditing(true); }}
+            className={iconBtn}
+            aria-label="Edit transaction"
+          >
+            <Pencil className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            onClick={handleDelete}
+            className={iconBtn}
+            disabled={deleteMutation.isPending}
+            aria-label="Delete transaction"
+          >
+            {deleteMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -571,16 +568,21 @@ function ManageTab({
   };
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-3">
+      <h3 className={drawerH3}>Active Brand</h3>
+      {item.isActive && !item.isArchived && (
+        <p className="flex items-center gap-2">
+          <Bdg tone="weight" kind="fill">Active</Bdg> Doses are deducted from this box.
+        </p>
+      )}
       {canActivate && (
-        <div className="space-y-2">
-          <h3 className="font-semibold text-sm">Active Brand</h3>
-          <p className="text-xs text-muted-foreground">
+        <div className="flex flex-col gap-2">
+          <p className="text-[0.8125rem] text-muted-foreground">
             Make this the brand doses are deducted from. Switch deliberately
             when you start taking pills from a different box.
           </p>
           <Button
-            className="w-full bg-teal-600 hover:bg-teal-700"
+            className="w-full"
             onClick={handleSetActive}
             disabled={setActiveMutation.isPending}
           >
@@ -588,7 +590,7 @@ function ManageTab({
               <Loader2 className="w-4 h-4 animate-spin" />
             ) : (
               <>
-                <CheckCircle2 className="w-4 h-4 mr-2" />
+                <CheckCircle2 />
                 Set as active brand
               </>
             )}
@@ -596,16 +598,18 @@ function ManageTab({
         </div>
       )}
 
-      <div className="space-y-4">
-        <h3 className="font-semibold text-sm">Archive Medicine</h3>
-        <p className="text-xs text-muted-foreground">
+      <div className="flex flex-col gap-2">
+        <h3 className={drawerH3}>Archive Medicine</h3>
+        <p className="text-[0.8125rem] text-muted-foreground">
           Archiving hides this medicine from the active list but keeps its history.
           {item.isActive && !item.isArchived && replacementCandidates.length === 0 &&
             " This is the only brand, so doses will stop being deducted from stock."}
         </p>
         {choosingReplacement ? (
           <div className="space-y-2">
-            <p className="text-xs font-medium">Which brand do you take from now?</p>
+            <WarnBox title="Which brand do you take from now?">
+              This is the active brand. Pick the box doses come from next.
+            </WarnBox>
             {replacementCandidates.map((candidate) => (
               <Button
                 key={candidate.id}
@@ -620,14 +624,14 @@ function ManageTab({
                   : `${candidate.strength}${candidate.unit}`}
               </Button>
             ))}
-            <Button variant="ghost" className="w-full" onClick={() => setChoosingReplacement(false)}>
+            <Button variant="outline" className="w-full" onClick={() => setChoosingReplacement(false)}>
               Cancel
             </Button>
           </div>
         ) : (
           <Button
-            variant={item.isArchived ? "outline" : "destructive"}
-            className="w-full"
+            variant="outline"
+            className={item.isArchived ? "w-full" : "w-full border-bp text-bp"}
             onClick={handleArchiveToggle}
             disabled={archivePending}
           >
@@ -635,12 +639,12 @@ function ManageTab({
               <Loader2 className="w-4 h-4 animate-spin" />
             ) : item.isArchived ? (
               <>
-                <ArchiveRestore className="w-4 h-4 mr-2" />
+                <ArchiveRestore />
                 Unarchive
               </>
             ) : (
               <>
-                <Archive className="w-4 h-4 mr-2" />
+                <Archive />
                 Archive
               </>
             )}

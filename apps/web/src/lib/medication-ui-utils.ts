@@ -1,8 +1,9 @@
 import type { DoseSlot } from "@/lib/dose-schedule-service";
-import type { MedicationPhase } from "@/lib/db";
+import type { InventoryItem, MedicationPhase } from "@/lib/db";
 import { isCleanFraction } from "@/lib/dose-log-service";
 import {
   isCombo,
+  isValidPillStrength,
   scaleCompounds,
   formatCompoundShort,
 } from "@intake/core/compound";
@@ -121,6 +122,37 @@ export function formatDoseAmount(slot: DoseSlot): string {
     ? `${count} of ${perPill}`
     : `${count} of ${perPill} (= ${total})`;
   return isCleanFraction(pillsPerDose) ? label : `${label} \u00B7 uneven split`;
+}
+
+/**
+ * Pill maths for a dose that is not on the schedule (an extra dose): how many
+ * tablets of `brand` it is, labelled like `formatDoseAmount` ("2 tablets of
+ * 50mg (= 100mg)"). `pills` is undefined when there is nothing to deduct from:
+ * no brand, an unusable tablet strength or a dose that isn't above zero —
+ * the same cases `logPrnDose` skips the stock write for.
+ */
+export function describeBrandDose(
+  doseMg: number,
+  unit: string,
+  brand: Pick<InventoryItem, "strength" | "unit" | "compounds"> | null | undefined,
+): { label: string; pills: number | undefined } {
+  const valid = Number.isFinite(doseMg) && doseMg > 0;
+  if (!brand || !valid || !isValidPillStrength(brand.strength)) {
+    return { label: valid ? `${doseMg}${unit}` : "", pills: undefined };
+  }
+  const pills = Math.round((doseMg / brand.strength) * 10000) / 10000;
+  const count = formatPillCount(pills);
+  let perPill: string;
+  let total: string;
+  if (isCombo(brand)) {
+    perPill = formatCompoundShort(brand.compounds, unit);
+    total = formatCompoundShort(scaleCompounds(brand.compounds, pills), unit);
+  } else {
+    perPill = `${brand.strength}${brand.unit || unit}`;
+    total = `${doseMg}${unit}`;
+  }
+  const label = pills === 1 ? `${count} of ${perPill}` : `${count} of ${perPill} (= ${total})`;
+  return { label: isCleanFraction(pills) ? label : `${label} · uneven split`, pills };
 }
 
 /**

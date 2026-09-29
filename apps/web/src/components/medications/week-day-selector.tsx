@@ -78,43 +78,51 @@ export function WeekDaySelector({ selectedDate, onSelectDate }: WeekDaySelectorP
   });
 
   return (
-    <div className="mb-4">
-      <div className="flex items-center">
+    <div className="mb-3">
+      <div className="flex items-stretch border border-line bg-background">
         <Button
           variant="ghost"
           size="icon"
-          className="shrink-0 h-8 w-8"
+          className="h-auto min-h-11 w-9 shrink-0 text-muted-foreground"
           onClick={() => shiftWeek(-1)}
           aria-label="Previous week"
         >
-          <ChevronLeft className="w-4 h-4" />
+          <ChevronLeft className="h-4 w-4" />
         </Button>
 
-        <div className="flex-1 grid grid-cols-7 gap-0.5">
+        <div className="grid flex-1 grid-cols-7 border-x border-line">
           {weekDays.map((day, i) => {
             const isSelected = isSameDay(day, selectedDate);
             const isToday = isSameDay(day, today);
             return (
               <button
                 key={i}
+                type="button"
                 onClick={() => onSelectDate(day)}
+                aria-pressed={isSelected}
+                aria-current={isToday ? "date" : undefined}
                 className={cn(
-                  "flex flex-col items-center py-1.5 rounded-lg transition-colors",
-                  "hover:bg-muted/80 active:scale-95",
-                  isSelected && "bg-teal-600 text-white hover:bg-teal-700",
-                  !isSelected && isToday && "ring-1 ring-teal-500"
+                  "flex min-h-11 flex-col items-center justify-center py-1 transition-colors",
+                  "focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring",
+                  i > 0 && "border-l border-line/60",
+                  isSelected ? "bg-meds text-on-domain" : "hover:bg-foreground/6",
+                  !isSelected && isToday && "shadow-[inset_0_0_0_2px_hsl(var(--meds))]",
                 )}
               >
-                <span className={cn(
-                  "text-[10px] font-medium",
-                  isSelected ? "text-teal-100" : "text-muted-foreground"
-                )}>
+                <span
+                  className={cn(
+                    "text-[0.6875rem] font-medium leading-tight",
+                    isSelected ? "text-on-domain" : "text-muted-foreground",
+                  )}
+                >
                   {DAY_LABELS[day.getDay()]}
                 </span>
-                <span className={cn(
-                  "text-sm font-semibold mt-0.5",
-                  isSelected ? "text-white" : isToday ? "text-teal-600 dark:text-teal-400" : ""
-                )}>
+                <span
+                  className={cn(
+                    "font-mono text-sm font-semibold leading-tight",
+                    !isSelected && isToday && "text-meds",
+                  )}
+                >
                   {day.getDate()}
                 </span>
               </button>
@@ -125,15 +133,15 @@ export function WeekDaySelector({ selectedDate, onSelectDate }: WeekDaySelectorP
         <Button
           variant="ghost"
           size="icon"
-          className="shrink-0 h-8 w-8"
+          className="h-auto min-h-11 w-9 shrink-0 text-muted-foreground"
           onClick={() => shiftWeek(1)}
           aria-label="Next week"
         >
-          <ChevronRight className="w-4 h-4" />
+          <ChevronRight className="h-4 w-4" />
         </Button>
       </div>
 
-      <p className="text-center text-sm font-medium text-teal-600 dark:text-teal-400 mt-1.5">
+      <p className="mt-1.5 text-center text-[0.8125rem] font-medium text-meds">
         {isSameDay(selectedDate, today) ? `Today, ${fullDate}` : `${dateLabel}, ${fullDate}`}
       </p>
     </div>

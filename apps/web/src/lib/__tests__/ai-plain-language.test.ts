@@ -11,6 +11,7 @@ import { describe, it, expect } from "vitest";
 import { STE_FIELD_SUFFIX } from "@intake/ai-prompts/plain-language";
 import * as medicineSearch from "@intake/ai-prompts/medicine-search";
 import * as interactionCheck from "@intake/ai-prompts/interaction-check";
+import * as medicineAbout from "@intake/ai-prompts/medicine-about";
 import * as titrationWarnings from "@intake/ai-prompts/titration-warnings";
 import * as nutrientAnalysis from "@intake/ai-prompts/nutrient-analysis";
 import {
@@ -66,6 +67,42 @@ describe("ASD-STE100 plain-language output", () => {
     // "exactly as the user wrote it" copied the bracketed class into the
     // name, so the UI showed "ibuprofen vs bisoprolol (Beta blocker)".
     expect(row.medication.description).toMatch(/without the drug class/);
+  });
+
+  it("medicine about asks for plain English in its prompt and every prose field", () => {
+    expectPlainLanguageSection(medicineAbout.SYSTEM_PROMPT);
+    const p = medicineAbout.MEDICINE_ABOUT_TOOL.input_schema.properties;
+    const c = p.compounds.items.properties;
+    const w = p.warnings.items.properties;
+    for (const field of [
+      p.drugClass,
+      c.drugClass,
+      c.forText,
+      c.howItWorks,
+      c.sideEffects,
+      w.risk,
+      w.whatToDo,
+      p.contraindications,
+      p.foodNote,
+      p.pillDescription,
+      p.visualIdentification,
+    ]) {
+      expectSte(field.description);
+    }
+    // The ingredient name is copied, never rewritten.
+    expect(c.name.description).not.toContain("ASD-STE100");
+    expect(c.name.description).toMatch(/exactly/);
+  });
+
+  it("medicine about is a strict tool the premium model can fill without forcing", () => {
+    const tool = medicineAbout.MEDICINE_ABOUT_TOOL;
+    expect(tool.strict).toBe(true);
+    expect(tool.input_schema.additionalProperties).toBe(false);
+    expect([...tool.input_schema.required].sort()).toEqual(
+      Object.keys(tool.input_schema.properties).sort(),
+    );
+    const c = tool.input_schema.properties.compounds.items;
+    expect([...c.required].sort()).toEqual(Object.keys(c.properties).sort());
   });
 
   it("titration warnings ask for plain English in the prompt and each warning", () => {

@@ -5,8 +5,8 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogFooter,
 } from "@intake/ui/dialog";
+import { bottomSheetClass } from "@/components/medications/sheet-classes";
 import { Button } from "@intake/ui/button";
 import { useState } from "react";
 import { useNowTick } from "@intake/ui/use-now-tick";
@@ -57,34 +57,34 @@ export function RetroactiveTimePicker({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-xs">
-        <DialogHeader>
-          <DialogTitle className="text-center">
+      <DialogContent className={bottomSheetClass} aria-describedby={undefined}>
+        <DialogHeader className="text-left">
+          <DialogTitle className="text-base font-semibold">
             When did you take {compoundName}?
           </DialogTitle>
         </DialogHeader>
 
-        <div className="py-4">
+        <div>
           <input
             type="time"
             value={selectedTime}
             onChange={(e) => setSelectedTime(e.target.value)}
             max={maxTime}
+            aria-label="Time taken"
             aria-invalid={!isValid}
-            className="w-full px-3 py-2 rounded-lg border bg-background text-center text-lg"
+            className="h-12 w-full rounded-none border border-input bg-background px-3 text-center font-mono text-xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
           />
           {!isValid && (
-            <p className="mt-2 text-center text-xs text-destructive">
+            <p className="mt-2 text-[0.8125rem] text-bp">
               {isWellFormed ? "That time hasn't happened yet" : "Enter a time"}
             </p>
           )}
         </div>
 
-        <DialogFooter className="flex gap-2 sm:gap-0">
+        <div className="grid grid-cols-2 gap-2">
           <Button
             variant="outline"
             onClick={() => onOpenChange(false)}
-            className="flex-1"
           >
             Cancel
           </Button>
@@ -95,11 +95,10 @@ export function RetroactiveTimePicker({
               onConfirm(selectedTime);
               onOpenChange(false);
             }}
-            className="flex-1 bg-teal-600 hover:bg-teal-700 text-white"
           >
             Log Dose
           </Button>
-        </DialogFooter>
+        </div>
       </DialogContent>
     </Dialog>
   );
