@@ -22,6 +22,13 @@ interface DoseRowProps {
 
 const LATE_THRESHOLD_MINUTES = 30;
 
+/**
+ * The row's buttons look 36px tall (the prototype's `.btn.sm`) but take taps
+ * over 44px: an invisible ::before reaches 4px above and below, into the
+ * row's padding. Not sideways, so Skip and Take never overlap.
+ */
+const rowButton = "relative h-9 before:absolute before:inset-x-0 before:-inset-y-1 before:content-['']";
+
 function isLateDose(scheduledTime: string): boolean {
   const now = new Date();
   const nowMinutes = now.getHours() * 60 + now.getMinutes();
@@ -128,7 +135,7 @@ export function DoseRow({ slot, isToday, isFuture, onTake, onRetroactiveTake, on
             <Button
               size="sm"
               variant="outline"
-              className="h-9 px-2.5 text-[0.8125rem]"
+              className={cn(rowButton, "px-2.5 text-[0.8125rem]")}
               onClick={(e) => {
                 e.stopPropagation();
                 onSkip(slot);
@@ -138,7 +145,7 @@ export function DoseRow({ slot, isToday, isFuture, onTake, onRetroactiveTake, on
             </Button>
             <Button
               size="sm"
-              className="h-9 px-3"
+              className={cn(rowButton, "px-3")}
               onClick={(e) => {
                 e.stopPropagation();
                 handleTakeClick();
@@ -151,7 +158,7 @@ export function DoseRow({ slot, isToday, isFuture, onTake, onRetroactiveTake, on
           <Button
             size="sm"
             variant="outline"
-            className="h-9 shrink-0 px-2.5 text-[0.8125rem]"
+            className={cn(rowButton, "shrink-0 px-2.5 text-[0.8125rem]")}
             onClick={(e) => {
               e.stopPropagation();
               setEditPickerOpen(true);

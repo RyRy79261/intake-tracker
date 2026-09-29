@@ -30,8 +30,13 @@ function formatTime12(time24: string): string {
   return `${h12}:${String(m).padStart(2, "0")} ${ampm}`;
 }
 
-/** The prototype's `.btn.sm`: 32px outlined, compact type. */
-const slotButton = "h-8 px-2.5 text-[0.8125rem]";
+/**
+ * The prototype's `.btn.sm`: 32px outlined, compact type. An invisible
+ * ::before reaches 6px above and below so the tap target is 44px (the
+ * header is 44px tall); not sideways, so Skip All and Mark All never overlap.
+ */
+const slotButton =
+  "relative h-8 px-2.5 text-[0.8125rem] before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']";
 
 function isTimeOverdue(time24: string): boolean {
   const parts = time24.split(":").map(Number);

@@ -27,6 +27,7 @@ import {
 import { showUndoToast } from "@/components/medications/undo-toast";
 
 const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
+const YMD = /^\d{4}-\d{2}-\d{2}$/;
 
 const fieldClass =
   "h-10 w-full rounded-none border border-input bg-background px-2.5 text-[0.9375rem] text-foreground " +
@@ -63,6 +64,7 @@ export function LogDoseDialog({ open, onOpenChange }: LogDoseDialogProps) {
 
   const [rxId, setRxId] = useState("");
   const [dose, setDose] = useState("");
+  const [date, setDate] = useState(todayKey);
   const [time, setTime] = useState(getCurrentTimeHHMM());
   const [note, setNote] = useState("");
   const [wasOpen, setWasOpen] = useState(false);
@@ -81,6 +83,7 @@ export function LogDoseDialog({ open, onOpenChange }: LogDoseDialogProps) {
   if (open !== wasOpen) {
     setWasOpen(open);
     if (open) {
+      setDate(todayKey);
       setTime(getCurrentTimeHHMM());
       setNote("");
       setSeeded(false);
@@ -104,7 +107,10 @@ export function LogDoseDialog({ open, onOpenChange }: LogDoseDialogProps) {
   const doseNum = dose.trim() === "" ? NaN : Number(dose);
   const doseValid = Number.isFinite(doseNum) && doseNum > 0;
   const timeWellFormed = HHMM.test(time);
-  const timeValid = timeWellFormed && time <= maxTime;
+  const dateValid = YMD.test(date) && date <= todayKey;
+  // Only a dose dated today is capped at now: last night's dose, logged just
+  // after midnight, is dated the day before and may be any time.
+  const timeValid = timeWellFormed && (date !== todayKey || time <= maxTime);
   const { label, pills } = describeBrandDose(doseNum, unit, brand);
 
   let maths: ReactNode;
@@ -134,7 +140,7 @@ export function LogDoseDialog({ open, onOpenChange }: LogDoseDialogProps) {
     );
   }
 
-  const canSave = !!rx && doseValid && timeValid && !logPrn.isPending;
+  const canSave = !!rx && doseValid && dateValid && timeValid && !logPrn.isPending;
 
   const save = async () => {
     if (!rx || !canSave) return;
@@ -144,7 +150,7 @@ export function LogDoseDialog({ open, onOpenChange }: LogDoseDialogProps) {
     try {
       const log = await logPrn.mutateAsync({
         prescriptionId: rx.id,
-        date: todayKey,
+        date,
         time,
         doseMg: doseNum,
         dosageMg: doseNum,
@@ -162,10 +168,13 @@ export function LogDoseDialog({ open, onOpenChange }: LogDoseDialogProps) {
         brand && pills !== undefined
           ? `${formatPillCount(pills)} deducted`
           : "Dose logged -- no stock tracked",
+      // mutateAsync, not mutate's per-call onError: the toast outlives this
+      // dialog (switching tabs unmounts it), and React Query drops per-call
+      // callbacks once their component has gone.
       onUndo: () =>
-        undoPrn.mutate(logId, {
-          onError: () => toast({ title: "Failed to undo", variant: "destructive" }),
-        }),
+        void undoPrn
+          .mutateAsync(logId)
+          .catch(() => toast({ title: "Failed to undo", variant: "destructive" })),
     });
   };
 
@@ -177,7 +186,7 @@ export function LogDoseDialog({ open, onOpenChange }: LogDoseDialogProps) {
         <div className="flex-none px-4 pb-2.5 pr-12 pt-3.5">
           <DialogTitle className="text-base font-semibold leading-snug">Log a dose</DialogTitle>
           <DialogDescription className="mt-1 text-[0.8125rem] leading-normal">
-            Recorded on today&apos;s schedule, under Other doses today.
+            Recorded under Other doses on the day it was taken.
           </DialogDescription>
         </div>
 
@@ -252,6 +261,20 @@ export function LogDoseDialog({ open, onOpenChange }: LogDoseDialogProps) {
 
           <div className="flex items-end gap-2">
             <div className="min-w-0 flex-1">
+              <label htmlFor="ld-date" className="mb-1 block text-[0.8125rem] text-muted-foreground">
+                Date taken
+              </label>
+              <input
+                id="ld-date"
+                type="date"
+                className={`${fieldClass} font-mono`}
+                value={date}
+                max={todayKey}
+                onChange={(e) => setDate(e.target.value)}
+                aria-invalid={!dateValid}
+              />
+            </div>
+            <div className="min-w-0 flex-1">
               <label htmlFor="ld-time" className="mb-1 block text-[0.8125rem] text-muted-foreground">
                 Time taken
               </label>
@@ -260,28 +283,34 @@ export function LogDoseDialog({ open, onOpenChange }: LogDoseDialogProps) {
                 type="time"
                 className={`${fieldClass} font-mono`}
                 value={time}
-                max={maxTime}
+                max={date === todayKey ? maxTime : undefined}
                 onChange={(e) => setTime(e.target.value)}
                 aria-invalid={!timeValid}
               />
             </div>
-            <div className="min-w-0 flex-1">
-              <label htmlFor="ld-note" className="mb-1 block text-[0.8125rem] text-muted-foreground">
-                Note (optional)
-              </label>
-              <input
-                id="ld-note"
-                className={fieldClass}
-                placeholder="e.g. headache"
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-              />
-            </div>
           </div>
-          {!timeValid && (
+          <div>
+            <label htmlFor="ld-note" className="mb-1 block text-[0.8125rem] text-muted-foreground">
+              Note (optional)
+            </label>
+            <input
+              id="ld-note"
+              className={fieldClass}
+              placeholder="e.g. headache"
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+            />
+          </div>
+          {!dateValid ? (
             <p role="alert" className="text-[0.8125rem] text-bp">
-              {timeWellFormed ? "That time hasn't happened yet" : "Enter a time"}
+              {YMD.test(date) ? "That day hasn't happened yet" : "Enter a date"}
             </p>
+          ) : (
+            !timeValid && (
+              <p role="alert" className="text-[0.8125rem] text-bp">
+                {timeWellFormed ? "That time hasn't happened yet" : "Enter a time"}
+              </p>
+            )
           )}
         </form>
 

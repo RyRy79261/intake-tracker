@@ -1,5 +1,6 @@
 "use client";
 
+import type { KeyboardEvent } from "react";
 import { useDueDoseCount } from "@/components/shell/sys-bar";
 import { useDueTitrationPlans } from "@/hooks/use-medication-queries";
 import { useTodayKey } from "@/hooks/use-today-key";
@@ -19,6 +20,13 @@ const TABS: { id: WardMedTab; label: string }[] = [
 interface WardMedTabsProps {
   activeTab: WardMedTab;
   onTabChange: (tab: WardMedTab) => void;
+  /** id of the tabpanel the tabs control; each tab's id is `${panelId}-${tab}`. */
+  panelId: string;
+}
+
+/** The tab's element id, for the panel's aria-labelledby. */
+export function wardMedTabId(panelId: string, tab: WardMedTab): string {
+  return `${panelId}-${tab}`;
 }
 
 /**
@@ -26,16 +34,35 @@ interface WardMedTabsProps {
  * under the title bar, the active one underlined in ink. Schedule carries a
  * pip with today's open doses; Titrations one with the plans ready to start.
  */
-export function WardMedTabs({ activeTab, onTabChange }: WardMedTabsProps) {
+export function WardMedTabs({ activeTab, onTabChange, panelId }: WardMedTabsProps) {
   const due = useDueDoseCount();
   const todayKey = useTodayKey();
   const ready = useDueTitrationPlans(todayKey).length;
   const pips: Partial<Record<WardMedTab, number>> = { schedule: due, titrations: ready };
 
+  // WAI-ARIA tabs: one tab stop (the selected tab); arrows, Home and End
+  // move between tabs and select them.
+  const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    const i = TABS.findIndex((t) => t.id === activeTab);
+    const last = TABS.length - 1;
+    const next =
+      e.key === "ArrowRight" ? (i + 1) % TABS.length
+      : e.key === "ArrowLeft" ? (i - 1 + TABS.length) % TABS.length
+      : e.key === "Home" ? 0
+      : e.key === "End" ? last
+      : -1;
+    if (next < 0) return;
+    e.preventDefault();
+    const tab = TABS[next]!.id;
+    onTabChange(tab);
+    document.getElementById(wardMedTabId(panelId, tab))?.focus();
+  };
+
   return (
     <div
       role="tablist"
       aria-label="Medications"
+      onKeyDown={onKeyDown}
       className="sticky top-0 z-[2] -mx-4 mb-3 flex border-b border-line bg-panel"
     >
       {TABS.map((tab) => {
@@ -46,7 +73,10 @@ export function WardMedTabs({ activeTab, onTabChange }: WardMedTabsProps) {
             key={tab.id}
             type="button"
             role="tab"
+            id={wardMedTabId(panelId, tab.id)}
             aria-selected={on}
+            aria-controls={panelId}
+            tabIndex={on ? 0 : -1}
             onClick={() => onTabChange(tab.id)}
             className={cn(
               "flex min-h-11 min-w-0 flex-1 basis-0 items-center justify-center whitespace-nowrap px-1 text-sm font-medium",

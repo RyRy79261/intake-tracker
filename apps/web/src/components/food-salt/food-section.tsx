@@ -56,6 +56,7 @@ import {
 } from "@/lib/date-utils";
 import { useOptionalTrackerEnabled } from "@/lib/optional-trackers";
 import { waterContentPercentFromAbv } from "@intake/core/alcohol";
+import { useFieldId, useOnLogged } from "@/components/log-form-scope";
 
 const theme = CARD_THEMES.eating;
 
@@ -129,6 +130,8 @@ function SodiumUnitSelect({
 }
 
 export function FoodSection() {
+  const onLogged = useOnLogged();
+  const fid = useFieldId();
   const { toast } = useToast();
   const showAi = useAuthGate();
   const addComposableEntry = useAddComposableEntry();
@@ -482,6 +485,7 @@ export function FoodSection() {
           timestamp,
         });
         toast({ title: "Logged", description: "Drink recorded", variant: "success" });
+        onLogged();
         resetForm();
         return;
       }
@@ -549,6 +553,7 @@ export function FoodSection() {
         description: note ? "Meal with details recorded" : "Eating event recorded",
         variant: "success",
       });
+      onLogged();
       resetForm();
     } catch {
       toast({
@@ -560,6 +565,7 @@ export function FoodSection() {
       setIsSubmitting(false);
     }
   }, [
+    onLogged,
     isSubmitting,
     canSave,
     saveAsDrink,
@@ -634,12 +640,12 @@ export function FoodSection() {
       <div className="space-y-3">
         {/* Weight in grams */}
         <div className="space-y-1">
-          <Label htmlFor="eating-grams" className="text-[0.8125rem] text-muted-foreground">
+          <Label htmlFor={fid("eating-grams")} className="text-[0.8125rem] text-muted-foreground">
             Weight (g){" "}
             <span className="font-normal">(optional)</span>
           </Label>
           <Input
-            id="eating-grams"
+            id={fid("eating-grams")}
             type="number"
             min="1"
             max="10000"
@@ -651,12 +657,12 @@ export function FoodSection() {
 
         {/* Sodium section */}
         <div className="space-y-1">
-          <Label htmlFor="eating-sodium" className="text-[0.8125rem] text-muted-foreground">
+          <Label htmlFor={fid("eating-sodium")} className="text-[0.8125rem] text-muted-foreground">
             Sodium
           </Label>
           <div className="flex gap-2">
             <Input
-              id="eating-sodium"
+              id={fid("eating-sodium")}
               type="number"
               min="0"
               step="any"
@@ -688,12 +694,12 @@ export function FoodSection() {
         {/* Sugar section — optional tracker */}
         {sugarEnabled && (
           <div className="space-y-1" data-testid="eating-sugar-field">
-            <Label htmlFor="eating-sugar" className="text-[0.8125rem] text-muted-foreground">
+            <Label htmlFor={fid("eating-sugar")} className="text-[0.8125rem] text-muted-foreground">
               Sugar (g){" "}
               <span className="font-normal">(optional)</span>
             </Label>
             <Input
-              id="eating-sugar"
+              id={fid("eating-sugar")}
               type="number"
               min="0"
               placeholder="g"
@@ -706,12 +712,12 @@ export function FoodSection() {
         {/* Potassium section — optional tracker */}
         {potassiumEnabled && (
           <div className="space-y-1" data-testid="eating-potassium-field">
-            <Label htmlFor="eating-potassium" className="text-[0.8125rem] text-muted-foreground">
+            <Label htmlFor={fid("eating-potassium")} className="text-[0.8125rem] text-muted-foreground">
               Potassium (mg){" "}
               <span className="font-normal">(optional)</span>
             </Label>
             <Input
-              id="eating-potassium"
+              id={fid("eating-potassium")}
               type="number"
               min="0"
               placeholder="mg"
@@ -723,12 +729,12 @@ export function FoodSection() {
 
         {/* Water content */}
         <div className="space-y-1">
-          <Label htmlFor="eating-water" className="text-[0.8125rem] text-muted-foreground">
+          <Label htmlFor={fid("eating-water")} className="text-[0.8125rem] text-muted-foreground">
             Water content (ml){" "}
             <span className="font-normal">(optional)</span>
           </Label>
           <Input
-            id="eating-water"
+            id={fid("eating-water")}
             type="number"
             min="0"
             placeholder="ml"
@@ -811,9 +817,9 @@ export function FoodSection() {
               </p>
             )}
             <div className="space-y-1">
-              <Label htmlFor="edit-eating-grams" className="text-xs text-muted-foreground">Weight (g)</Label>
+              <Label htmlFor={fid("edit-eating-grams")} className="text-xs text-muted-foreground">Weight (g)</Label>
               <Input
-                id="edit-eating-grams"
+                id={fid("edit-eating-grams")}
                 type="number"
                 placeholder="optional"
                 value={editGrams}
@@ -822,10 +828,10 @@ export function FoodSection() {
               />
             </div>
             <div className="space-y-1">
-              <Label htmlFor="edit-eating-sodium" className="text-xs text-muted-foreground">Sodium</Label>
+              <Label htmlFor={fid("edit-eating-sodium")} className="text-xs text-muted-foreground">Sodium</Label>
               <div className="flex gap-2">
                 <Input
-                  id="edit-eating-sodium"
+                  id={fid("edit-eating-sodium")}
                   type="number"
                   min="0"
                   step="any"
@@ -850,9 +856,9 @@ export function FoodSection() {
             </div>
             {sugarEnabled && (
               <div className="space-y-1">
-                <Label htmlFor="edit-eating-sugar" className="text-xs text-muted-foreground">Sugar (g)</Label>
+                <Label htmlFor={fid("edit-eating-sugar")} className="text-xs text-muted-foreground">Sugar (g)</Label>
                 <Input
-                  id="edit-eating-sugar"
+                  id={fid("edit-eating-sugar")}
                   type="number"
                   min="0"
                   placeholder="optional"
@@ -864,9 +870,9 @@ export function FoodSection() {
             )}
             {potassiumEnabled && (
               <div className="space-y-1">
-                <Label htmlFor="edit-eating-potassium" className="text-xs text-muted-foreground">Potassium (mg)</Label>
+                <Label htmlFor={fid("edit-eating-potassium")} className="text-xs text-muted-foreground">Potassium (mg)</Label>
                 <Input
-                  id="edit-eating-potassium"
+                  id={fid("edit-eating-potassium")}
                   type="number"
                   min="0"
                   placeholder="optional"
@@ -877,9 +883,9 @@ export function FoodSection() {
               </div>
             )}
             <div className="space-y-1">
-              <Label htmlFor="edit-eating-water" className="text-xs text-muted-foreground">Water content (ml)</Label>
+              <Label htmlFor={fid("edit-eating-water")} className="text-xs text-muted-foreground">Water content (ml)</Label>
               <Input
-                id="edit-eating-water"
+                id={fid("edit-eating-water")}
                 type="number"
                 min="0"
                 placeholder="optional"

@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useId } from "react";
 import { useRollingSelectedDate } from "@/hooks/use-today-key";
 import { toLocalDateKey } from "@/lib/date-utils";
 import { cn } from "@/lib/utils";
 import { WeekDaySelector } from "@/components/medications/week-day-selector";
 import { MedTabBar } from "@/components/medications/med-footer";
-import { WardMedTabs } from "@/components/medications/med-tabs";
+import { WardMedTabs, wardMedTabId } from "@/components/medications/med-tabs";
 import { ScheduleView } from "@/components/medications/schedule-view";
 import { OtherDosesToday } from "@/components/medications/other-doses-today";
 import { MedicationSettingsView } from "@/components/medications/medication-settings-view";
@@ -40,6 +40,8 @@ export function MedicationsPageBody({ ward = false }: MedicationsPageBodyProps) 
   // Settings › Medications. Until then a "settings" tab left over from the
   // legacy page falls back to Schedule in the window.
   const activeTab = ward && storedTab === "settings" ? "schedule" : storedTab;
+  const wardTab = ward && activeTab !== "settings" ? activeTab : null;
+  const panelId = useId();
   // Ticks over at midnight, so a screen left open overnight moves its
   // "today" (and a today selection) to the new day.
   const { selectedDate, setSelectedDate, todayKey } = useRollingSelectedDate();
@@ -64,39 +66,47 @@ export function MedicationsPageBody({ ward = false }: MedicationsPageBodyProps) 
 
   return (
     <>
-      {ward && activeTab !== "settings" ? (
-        <WardMedTabs activeTab={activeTab} onTabChange={setActiveTab} />
+      {wardTab ? (
+        <WardMedTabs activeTab={wardTab} onTabChange={setActiveTab} panelId={panelId} />
       ) : (
         <MedTabBar activeTab={activeTab} onTabChange={setActiveTab} />
       )}
 
-      {activeTab === "schedule" && (
-        // The "+" button floats over the bottom right corner: leave room under
-        // the last row so it never covers a Take button.
-        <div className={cn(ward ? "pb-[68px]" : "pb-24")}>
-          <WeekDaySelector selectedDate={selectedDate} onSelectDate={setSelectedDate} />
-          {/* A planned titration step waits for the user to confirm it. */}
-          <TitrationStartPrompt className={ward ? "mb-3" : "px-1 mb-4"} />
-          <ScheduleView
-            selectedDate={selectedDate}
-            onDoseClick={handleDoseClick}
-            onAddMed={handleAddMed}
-          />
-          {ward && <OtherDosesToday dateKey={selectedKey} isToday={isToday} />}
-        </div>
-      )}
+      <div
+        {...(wardTab && {
+          role: "tabpanel",
+          id: panelId,
+          "aria-labelledby": wardMedTabId(panelId, wardTab),
+        })}
+      >
+        {activeTab === "schedule" && (
+          // The "+" button floats over the bottom right corner: leave room under
+          // the last row so it never covers a Take button.
+          <div className={cn(ward ? "pb-[68px]" : "pb-24")}>
+            <WeekDaySelector selectedDate={selectedDate} onSelectDate={setSelectedDate} />
+            {/* A planned titration step waits for the user to confirm it. */}
+            <TitrationStartPrompt className={ward ? "mb-3" : "px-1 mb-4"} />
+            <ScheduleView
+              selectedDate={selectedDate}
+              onDoseClick={handleDoseClick}
+              onAddMed={handleAddMed}
+            />
+            {ward && <OtherDosesToday dateKey={selectedKey} isToday={isToday} />}
+          </div>
+        )}
 
-      {activeTab === "medications" && (
-        <CompoundList onAddMed={handleAddMed} />
-      )}
+        {activeTab === "medications" && (
+          <CompoundList onAddMed={handleAddMed} />
+        )}
 
-      {activeTab === "prescriptions" && (
-        <PrescriptionsView onAddMed={handleAddMed} />
-      )}
+        {activeTab === "prescriptions" && (
+          <PrescriptionsView onAddMed={handleAddMed} />
+        )}
 
-      {activeTab === "titrations" && <TitrationsView />}
+        {activeTab === "titrations" && <TitrationsView />}
 
-      {!ward && activeTab === "settings" && <MedicationSettingsView />}
+        {!ward && activeTab === "settings" && <MedicationSettingsView />}
+      </div>
 
       <DoseDetailDialog
         open={doseDetailOpen}
