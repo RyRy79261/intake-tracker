@@ -320,7 +320,8 @@ export function NutrientAnalysisCard() {
           aria-controls="nutrient-focus-input"
           className="wm-link"
         >
-          {focusOpen ? "Hide focus ▴" : "Focus a nutrient ▾"}
+          {focusOpen ? "Hide focus" : "Focus a nutrient"}
+          <span aria-hidden="true">{focusOpen ? " ▴" : " ▾"}</span>
         </button>
       </div>
 
