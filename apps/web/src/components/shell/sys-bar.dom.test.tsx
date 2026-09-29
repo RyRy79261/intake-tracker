@@ -4,9 +4,11 @@ import { render, screen, fireEvent } from "@testing-library/react";
 
 const push = vi.fn();
 let pathname = "/";
+let search = "";
 vi.mock("next/navigation", () => ({
   usePathname: () => pathname,
   useRouter: () => ({ push }),
+  useSearchParams: () => new URLSearchParams(search),
 }));
 
 type AuthState =
@@ -29,6 +31,7 @@ describe("SysBar", () => {
   beforeEach(() => {
     push.mockReset();
     pathname = "/";
+    search = "";
     auth = { ready: true, authenticated: false, user: null };
     slots = [];
   });
@@ -96,13 +99,28 @@ describe("SysBar", () => {
     pathname = "/analytics";
     render(<SysBar />);
     expect(screen.getByRole("button", { name: "Metrics" })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("button", { name: "History" })).not.toHaveAttribute("aria-current");
 
     fireEvent.click(screen.getByRole("button", { name: "Medications" }));
     fireEvent.click(screen.getByRole("button", { name: "History" }));
     fireEvent.click(screen.getByRole("button", { name: "Settings" }));
     // Already on /analytics: no push for Metrics.
     fireEvent.click(screen.getByRole("button", { name: "Metrics" }));
-    expect(push.mock.calls.map((c) => c[0])).toEqual(["/medications", "/history", "/settings"]);
+    // History opens the Records tab directly, not the /history redirect
+    // (which sits outside the chrome and would flicker the bars).
+    expect(push.mock.calls.map((c) => c[0])).toEqual(["/medications", "/analytics?tab=records", "/settings"]);
+  });
+
+  it("lights History, not Metrics, on the Records tab, and Metrics leaves it", () => {
+    pathname = "/analytics";
+    search = "tab=records";
+    render(<SysBar />);
+    expect(screen.getByRole("button", { name: "History" })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("button", { name: "Metrics" })).not.toHaveAttribute("aria-current");
+
+    fireEvent.click(screen.getByRole("button", { name: "History" }));
+    fireEvent.click(screen.getByRole("button", { name: "Metrics" }));
+    expect(push.mock.calls.map((c) => c[0])).toEqual(["/analytics"]);
   });
 });
 

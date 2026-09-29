@@ -20,6 +20,7 @@ import { computeTwoStageProgress } from "@intake/core/progress";
 import { reportSaveError } from "@/lib/db-recovery";
 import { useOptionalTrackerEnabled } from "@/lib/optional-trackers";
 import { formatDateTime } from "@/lib/date-utils";
+import { useFieldId, useOnLogged } from "@/components/log-form-scope";
 
 /** Parse the optional sugar field into rounded grams (0 when empty/invalid). */
 function parseSugarGrams(value: string): number {
@@ -56,6 +57,8 @@ const theme = CARD_THEMES.water;
 const unit = "ml";
 
 export function BeverageTab() {
+  const onLogged = useOnLogged();
+  const fid = useFieldId();
   const settings = useSettings();
   const waterIncrement = settings.waterIncrement;
 
@@ -136,6 +139,7 @@ export function BeverageTab() {
           : "Beverage intake recorded",
         variant: "success",
       });
+      onLogged();
       setPendingAmount(waterIncrement);
       setPendingTimestamp(undefined);
       setPendingNote(undefined);
@@ -152,7 +156,7 @@ export function BeverageTab() {
       inFlightRef.current = false;
       setIsSubmitting(false);
     }
-  }, [pendingAmount, pendingTimestamp, pendingNote, logBeverage, toast, waterIncrement]);
+  }, [pendingAmount, pendingTimestamp, pendingNote, logBeverage, toast, waterIncrement, onLogged]);
 
   // "Tap to edit" only edits the pending entry; Log Beverage is the single
   // commit, so the name/sugar reset happens in exactly one place.
@@ -271,12 +275,12 @@ export function BeverageTab() {
       {/* Optional sugar content */}
       {sugarEnabled && (
         <div className="mt-4 space-y-1">
-          <Label htmlFor="beverage-sugar" className="text-sm">
+          <Label htmlFor={fid("beverage-sugar")} className="text-sm">
             Sugar (g){" "}
             <span className="text-muted-foreground font-normal">(optional)</span>
           </Label>
           <Input
-            id="beverage-sugar"
+            id={fid("beverage-sugar")}
             type="number"
             min="0"
             inputMode="decimal"

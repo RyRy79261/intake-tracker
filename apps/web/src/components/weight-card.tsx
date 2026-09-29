@@ -30,10 +30,13 @@ import {
   dateTimeLocalToTimestamp,
   formatDateTime,
 } from "@/lib/date-utils";
+import { useFieldId, useOnLogged } from "@/components/log-form-scope";
 
 const theme = CARD_THEMES.weight;
 
 export function WeightCard() {
+  const onLogged = useOnLogged();
+  const fid = useFieldId();
   const { toast } = useToast();
   const settings = useSettings();
   const [pendingWeight, setPendingWeight] = useState<number | null>(null);
@@ -141,6 +144,7 @@ export function WeightCard() {
         description: `${pendingWeight.toFixed(2)} kg logged successfully`,
         variant: "success",
       });
+      onLogged();
       // Keep current value as starting point for next entry
       setNote("");
       setShowTimeInput(false);
@@ -247,7 +251,7 @@ export function WeightCard() {
             onChange={setCustomTime}
             expanded={showTimeInput}
             onToggle={() => setShowTimeInput(!showTimeInput)}
-            id="weight-time"
+            id={fid("weight-time")}
           />
           {fieldErrors.timestamp && (
             <p className="text-sm text-destructive text-center">{fieldErrors.timestamp}</p>

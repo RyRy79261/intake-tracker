@@ -1,11 +1,11 @@
 "use client";
 
 import type { CSSProperties } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/components/auth-guard";
 import { useDailyDoseSchedule } from "@/hooks/use-medication-queries";
 import { useTodayKey } from "@/hooks/use-today-key";
-import { SHELL_APPS, SYS_BAR_APPS, type ShellAppId } from "@/lib/nav-routes";
+import { SHELL_APPS, SYS_BAR_APPS, isShellAppOn, type ShellAppId } from "@/lib/nav-routes";
 import { ShellIcon, ShellLogo } from "@/components/shell/shell-icon";
 import { cn } from "@/lib/utils";
 
@@ -44,17 +44,18 @@ const hbOn = "shadow-[inset_0_-3px_0_var(--c,currentColor)]";
 export function SysBar() {
   const pathname = usePathname();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const due = useDueDoseCount();
   const { ready, authenticated, user } = useAuth();
 
-  const go = (path: string) => {
-    if (pathname !== path) router.push(path);
+  const go = (path: string, on: boolean) => {
+    if (!on) router.push(path);
   };
 
   const appButton = (id: ShellAppId) => {
     const app = SHELL_APPS[id];
     const pip = id === "meds" ? due : 0;
-    const on = pathname === app.path;
+    const on = isShellAppOn(id, pathname, searchParams);
     return (
       <button
         key={id}
@@ -63,7 +64,7 @@ export function SysBar() {
         style={app.color ? ({ "--c": app.color } as CSSProperties) : undefined}
         aria-label={pip ? `${app.title}, ${pip} open` : app.title}
         aria-current={on ? "page" : undefined}
-        onClick={() => go(app.path)}
+        onClick={() => go(app.path, on)}
       >
         <ShellIcon name={app.icon} size={20} />
         {pip > 0 && (
@@ -94,7 +95,7 @@ export function SysBar() {
         className={cn(hbBase, profileOn && hbOn)}
         aria-label={`Profile: ${user.name || user.email}, signed in`}
         aria-current={profileOn ? "page" : undefined}
-        onClick={() => go("/profile")}
+        onClick={() => go("/profile", profileOn)}
       >
         <span
           aria-hidden="true"
@@ -110,7 +111,7 @@ export function SysBar() {
         type="button"
         className={hbBase}
         aria-label="Sign in for AI features"
-        onClick={() => go("/auth")}
+        onClick={() => go("/auth", false)}
       >
         <ShellIcon name="profile" size={20} />
       </button>
@@ -136,7 +137,7 @@ export function SysBar() {
           className={cn(hbBase, settingsOn && hbOn)}
           aria-label="Settings"
           aria-current={settingsOn ? "page" : undefined}
-          onClick={() => go("/settings")}
+          onClick={() => go("/settings", settingsOn)}
         >
           <ShellIcon name="gear" size={20} />
         </button>

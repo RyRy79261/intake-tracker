@@ -72,10 +72,35 @@ export interface ShellApp {
 export const SHELL_APPS: Record<ShellAppId, ShellApp> = {
   meds: { id: "meds", title: "Medications", icon: "pill", color: "var(--color-meds)", size: "M", path: "/medications" },
   metrics: { id: "metrics", title: "Metrics", icon: "metrics", color: null, size: "L", path: "/analytics" },
-  history: { id: "history", title: "History", icon: "history", color: null, size: "M", path: "/history" },
+  // The Records tab of Metrics. Not /history: that route is only a redirect
+  // outside the chrome, so the bars would flicker and History never light up.
+  history: { id: "history", title: "History", icon: "history", color: null, size: "M", path: "/analytics?tab=records" },
   profile: { id: "profile", title: "Profile", icon: "profile", color: null, size: "M", path: "/profile" },
   help: { id: "help", title: "User Manual", icon: "book", color: null, size: "M", path: "/help" },
 };
 
 /** Apps with their own sys-bar button, in order (Profile is the avatar). */
 export const SYS_BAR_APPS = ["meds", "metrics", "history"] as const satisfies readonly ShellAppId[];
+
+/**
+ * Whether the app's route is the current page. An app whose path carries a
+ * query (History: `/analytics?tab=records`) is on only when that query
+ * matches; an app on the same pathname without one (Metrics) is on otherwise.
+ */
+export function isShellAppOn(
+  id: ShellAppId,
+  pathname: string | null,
+  searchParams: { get(name: string): string | null } | null,
+): boolean {
+  const matches = (path: string) => {
+    const [base, query] = path.split("?");
+    if (base !== pathname) return false;
+    if (!query) return true;
+    return [...new URLSearchParams(query)].every(([k, v]) => searchParams?.get(k) === v);
+  };
+  const path = SHELL_APPS[id].path;
+  if (!matches(path)) return false;
+  if (path.includes("?")) return true;
+  // A query-specific sibling on the same pathname takes precedence.
+  return !Object.values(SHELL_APPS).some((a) => a.path.includes("?") && matches(a.path));
+}
