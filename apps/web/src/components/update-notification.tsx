@@ -6,9 +6,11 @@ import { RefreshCw, X } from "lucide-react";
 
 /**
  * "Update available" banner (the prototype's `.upd`): a flat water-coloured
- * strip pinned just under the sys-bar, full width on a phone and a 420px
- * block on the right on a wide screen. It sits above the window layer but
- * below the sys-bar, bottom bar and dialogs.
+ * strip pinned 10px above the bottom bar, full width on a phone and a 420px
+ * block on the right on a wide screen. The bottom bar shows at every width
+ * here (the prototype drops it on wide), so the banner always clears it and
+ * never covers Log or Hold to talk. It sits above the window layer but below
+ * the sys-bar, bottom bar and dialogs.
  */
 export function UpdateNotification() {
   const { isUpdateAvailable, serverVersion, applyUpdate, dismissUpdate } = useVersionCheck();
@@ -23,7 +25,7 @@ export function UpdateNotification() {
       role="status"
       aria-live="polite"
       data-testid="update-banner"
-      className="fixed inset-x-3 top-[calc(44px+env(safe-area-inset-top,0px)+8px)] z-[45] flex min-h-14 items-center gap-2.5 bg-water py-1.5 pl-2.5 pr-1 text-on-domain md:left-auto md:right-4 md:w-[420px] motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-top-2"
+      className="fixed inset-x-3 bottom-[calc(56px+env(safe-area-inset-bottom,0px)+10px)] z-[45] flex min-h-14 items-center gap-2.5 bg-water py-1.5 pl-2.5 pr-1 text-on-domain md:left-auto md:right-4 md:w-[420px] motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-2"
     >
       <span
         aria-hidden="true"

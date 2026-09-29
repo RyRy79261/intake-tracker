@@ -36,13 +36,13 @@ describe("UpdateNotification", () => {
     expect(screen.queryByTestId("update-banner")).not.toBeInTheDocument();
   });
 
-  it("shows a status banner under the sys-bar with the new version", () => {
+  it("shows a status banner just above the bottom bar with the new version", () => {
     render(<UpdateNotification />);
     const banner = screen.getByRole("status");
     expect(banner).toHaveAttribute("data-testid", "update-banner");
     expect(banner).toHaveTextContent("Update available");
     expect(banner).toHaveTextContent("v1.39.0 is available — tap to refresh");
-    expect(banner.className).toContain("top-[calc(44px");
+    expect(banner.className).toContain("bottom-[calc(56px");
     expect(banner.className).not.toMatch(/rounded/);
   });
 
