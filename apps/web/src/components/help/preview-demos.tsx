@@ -1,14 +1,18 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useId, useState } from "react";
 import { Plus } from "lucide-react";
 import { RecordsTab } from "@/components/analytics/records-tab";
 import { TimeRangeSelector } from "@/components/analytics/time-range-selector";
 import type { TimeRange, TimeScope } from "@intake/types/analytics";
 import { AddMedicationWizard } from "@/components/medications/add-medication-wizard";
+import { CompoundList } from "@/components/medications/compound-list";
 import { DoseDetailDialog } from "@/components/medications/dose-detail-dialog";
+import { WardMedTabs, wardMedTabId, type WardMedTab } from "@/components/medications/med-tabs";
+import { OtherDosesToday } from "@/components/medications/other-doses-today";
 import { PrescriptionsView } from "@/components/medications/prescriptions-view";
 import { ScheduleView } from "@/components/medications/schedule-view";
+import { TitrationsView } from "@/components/medications/titrations-view";
 import { WeekDaySelector } from "@/components/medications/week-day-selector";
 import { useTimeScopeRange } from "@/hooks/use-analytics-queries";
 import type { DoseSlot } from "@/hooks/use-medication-queries";
@@ -57,11 +61,14 @@ export function RecordsDemo() {
 }
 
 /**
- * The Medications window: the Schedule tab (week strip, doses by time,
- * dose dialog) or the Rx cards, with the "+" button that opens the
- * Add medication wizard.
+ * The Medications window: its tab bar (the tab is demo-local state, starting
+ * on `tab`), the Schedule tab (week strip, doses by time, dose dialog, other
+ * doses today), the Rx cards, Meds and Titrations, with the "+" button that
+ * opens the Add medication wizard.
  */
-export function MedsDemo({ tab }: { tab: "schedule" | "prescriptions" }) {
+export function MedsDemo({ tab: initialTab }: { tab: "schedule" | "prescriptions" }) {
+  const [tab, setTab] = useState<WardMedTab>(initialTab);
+  const panelId = useId();
   const [selectedDate, setSelectedDate] = useState(() => new Date());
   const [wizardOpen, setWizardOpen] = useState(false);
   const [slot, setSlot] = useState<DoseSlot | null>(null);
@@ -78,14 +85,22 @@ export function MedsDemo({ tab }: { tab: "schedule" | "prescriptions" }) {
 
   return (
     <div>
-      {tab === "schedule" ? (
-        <>
-          <WeekDaySelector selectedDate={selectedDate} onSelectDate={setSelectedDate} />
-          <ScheduleView selectedDate={selectedDate} onDoseClick={openDose} onAddMed={addMed} />
-        </>
-      ) : (
-        <PrescriptionsView onAddMed={addMed} />
-      )}
+      {/* The bar bleeds 16px each side (the window's padding); the preview pads 10px. */}
+      <div className="px-1.5">
+        <WardMedTabs activeTab={tab} onTabChange={setTab} panelId={panelId} />
+      </div>
+      <div role="tabpanel" id={panelId} aria-labelledby={wardMedTabId(panelId, tab)}>
+        {tab === "schedule" && (
+          <>
+            <WeekDaySelector selectedDate={selectedDate} onSelectDate={setSelectedDate} />
+            <ScheduleView selectedDate={selectedDate} onDoseClick={openDose} onAddMed={addMed} />
+            <OtherDosesToday dateKey={selectedKey} isToday={selectedKey === todayKey} />
+          </>
+        )}
+        {tab === "prescriptions" && <PrescriptionsView onAddMed={addMed} />}
+        {tab === "medications" && <CompoundList onAddMed={addMed} />}
+        {tab === "titrations" && <TitrationsView />}
+      </div>
 
       <div className="mt-2.5 flex justify-end">
         <button

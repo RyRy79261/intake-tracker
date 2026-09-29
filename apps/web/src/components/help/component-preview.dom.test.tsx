@@ -25,6 +25,7 @@ import { db } from "@/lib/db";
 import { makeQueryClient } from "@/lib/query-client";
 import { seedLiquidsPreview } from "@/lib/help/preview-data";
 import { useSettingsStore } from "@/stores/settings-store";
+import { useMedicationUIStore } from "@/stores/medication-ui-store";
 import { generateId, syncFields } from "@/lib/utils";
 
 /**
@@ -103,6 +104,20 @@ describe("ComponentPreview", () => {
       await screen.findAllByText("Furosemide", undefined, { timeout: 5000 }),
     ).not.toHaveLength(0);
     expect(within(demo()).getByRole("button", { name: "Add medication" })).toBeInTheDocument();
+  });
+
+  it("switches the medication-schedule demo's tabs without touching the real window's tab", async () => {
+    const before = useMedicationUIStore.getState().activeTab;
+    renderPreview("medication-schedule");
+
+    const tabs = await within(demo()).findByRole("tablist", { name: "Medications" }, { timeout: 5000 });
+    expect(within(tabs).getAllByRole("tab").map((t) => t.textContent)).toEqual(
+      expect.arrayContaining([expect.stringMatching(/^Schedule/), "Rx", "Meds", expect.stringMatching(/^Titrations/)]),
+    );
+    expect(within(tabs).queryByRole("tab", { name: /settings/i })).toBeNull();
+    fireEvent.click(within(tabs).getByRole("tab", { name: "Rx" }));
+    expect(within(tabs).getByRole("tab", { name: "Rx" })).toHaveAttribute("aria-selected", "true");
+    expect(useMedicationUIStore.getState().activeTab).toBe(before);
   });
 
   it("opens the Add medication wizard from the + button for adding-medication", async () => {

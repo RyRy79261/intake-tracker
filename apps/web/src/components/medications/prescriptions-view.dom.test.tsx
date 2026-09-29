@@ -40,6 +40,30 @@ describe("PrescriptionsView", () => {
     expect(screen.queryByText(/no prescriptions yet/i)).not.toBeInTheDocument();
   });
 
+  it("spans an expanded right-column card and the neighbour it leaves alone", async () => {
+    const user = userEvent.setup();
+    const names = ["Amlodipine", "Bisoprolol", "Candesartan"];
+    await renderWithFixtures(<PrescriptionsView onAddMed={() => {}} />, {
+      seed: { prescriptions: names.map((genericName) => makePrescription({ genericName })) },
+    });
+
+    await screen.findByText("Candesartan");
+    const cards = () => screen.getAllByTestId("rx-card");
+    const spans = () => cards().map((c) => c.className.includes("col-span-2"));
+    expect(spans()).toEqual([false, false, false]);
+
+    // Bisoprolol sits in the right column: it spans, and Amlodipine (left
+    // alone on its row) spans too. Candesartan starts a new row.
+    await user.click(screen.getByRole("button", { name: /bisoprolol/i, expanded: false }));
+    expect(await screen.findByText("Medicines")).toBeInTheDocument();
+    expect(spans()).toEqual([true, true, false]);
+    expect(cards()[1]).toHaveAttribute("data-expanded", "true");
+
+    // Collapsing restores the plain 2-column grid.
+    await user.click(screen.getByRole("button", { name: /bisoprolol/i, expanded: true }));
+    expect(spans()).toEqual([false, false, false]);
+  });
+
   it("never lists a soft-deleted prescription", async () => {
     const ghost = makePrescription({
       genericName: "Ghostamine",

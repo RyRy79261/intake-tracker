@@ -393,11 +393,11 @@ export const MANUALS: Manual[] = [
     domain: "medications",
     icon: PlusCircle,
     summary: "Add a prescription with the step-by-step wizard.",
-    whereToFind: "Medications page → + button",
+    whereToFind: "Medications → Rx → Add prescription",
     sections: [
       {
         heading: "Starting the wizard",
-        body: "Tap the + button on the Medications page to open the Add medication wizard. It walks you through a few steps, one screen at a time, and you can move back to an earlier step at any point.",
+        body: "Open Medications, go to the Rx tab and tap Add prescription to open the Add medication wizard. It walks you through a few steps, one screen at a time, and you can move back to an earlier step at any point. The + button on the Schedule tab logs an extra dose instead.",
       },
       {
         heading: "The steps",

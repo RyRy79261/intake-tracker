@@ -375,7 +375,7 @@ export function ScheduleView({ selectedDate, onDoseClick, onAddMed }: ScheduleVi
   }
 
   return (
-    <div className="space-y-4 pb-24 px-1">
+    <div className="space-y-3">
       {isToday && (
         <DoseProgressSummary slots={slots} lowStockWarnings={lowStockWarnings} />
       )}

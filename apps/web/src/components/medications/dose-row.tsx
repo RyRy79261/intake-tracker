@@ -22,6 +22,13 @@ interface DoseRowProps {
 
 const LATE_THRESHOLD_MINUTES = 30;
 
+/**
+ * The row's buttons look 36px tall (the prototype's `.btn.sm`) but take taps
+ * over 44px: an invisible ::before reaches 4px above and below, into the
+ * row's padding. Not sideways, so Skip and Take never overlap.
+ */
+const rowButton = "relative h-9 before:absolute before:inset-x-0 before:-inset-y-1 before:content-['']";
+
 function isLateDose(scheduledTime: string): boolean {
   const now = new Date();
   const nowMinutes = now.getHours() * 60 + now.getMinutes();
@@ -68,13 +75,11 @@ export function DoseRow({ slot, isToday, isFuture, onTake, onRetroactiveTake, on
   return (
     <>
       <div
+        data-status={status}
         className={cn(
-          "rounded-xl border p-3 transition-all",
-          status === "taken" && "bg-emerald-50/50 border-emerald-200 dark:bg-emerald-950/20 dark:border-emerald-800",
-          status === "skipped" && "bg-gray-50/50 border-gray-200 dark:bg-gray-950/20 dark:border-gray-800 opacity-70",
-          status === "missed" && "bg-amber-50/30 border-amber-200 dark:bg-amber-950/10 dark:border-amber-800",
-          status === "pending" && "bg-card border-border",
-          !isActionable && "cursor-pointer hover:bg-muted/50",
+          "grid grid-cols-[34px_minmax(0,1fr)_auto] items-center gap-2.5 border-t border-line/60 p-2.5 first:border-t-0",
+          status === "missed" && "shadow-[inset_3px_0_0_hsl(var(--sodium))]",
+          !isActionable && "cursor-pointer hover:bg-foreground/4 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring",
         )}
         onClick={!isActionable ? () => onDoseClick(slot) : undefined}
         role={!isActionable ? "button" : undefined}
@@ -88,82 +93,82 @@ export function DoseRow({ slot, isToday, isFuture, onTake, onRetroactiveTake, on
           }
         } : undefined}
       >
-        <div className="flex items-center gap-3">
-          <PillIconWithBadge
-            shape={inventory?.pillShape || "round"}
-            color={inventory?.pillColor || "#ccc"}
-            size={36}
-            status={status === "missed" ? "pending" : status}
-          />
+        <PillIconWithBadge
+          shape={inventory?.pillShape || "round"}
+          color={inventory?.pillColor || "#ccc"}
+          size={34}
+          status={status === "missed" ? "pending" : status}
+        />
 
-          <div className="flex-1 min-w-0">
-            <p className={cn(
-              "font-semibold text-sm leading-tight",
-              status === "skipped" && "line-through"
-            )}>
-              {prescription.genericName}
-            </p>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              {doseLabel}
-              {foodInstruction && ` -- ${foodInstruction} eating`}
-            </p>
-
-            {status === "taken" && (
-              <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-1 flex items-center gap-1">
-                <Check className="w-3 h-3" />
-                Taken at {takenAtDisplay}
-              </p>
-            )}
-
-            {status === "skipped" && (
-              <p className="text-xs text-muted-foreground mt-1">
-                {slot.existingLog?.skipReason || "Skipped"}
-              </p>
-            )}
-          </div>
-
-          {isActionable && (
-            <div className="flex items-center gap-1.5 shrink-0">
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-8 px-3 text-xs text-muted-foreground"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onSkip(slot);
-                }}
-              >
-                Skip
-              </Button>
-              <Button
-                size="sm"
-                className="h-8 px-3 text-xs bg-teal-600 hover:bg-teal-700 text-white"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleTakeClick();
-                }}
-              >
-                Take
-              </Button>
-            </div>
-          )}
+        <div className="min-w-0">
+          <p className={cn(
+            "text-[0.9375rem] font-semibold leading-snug",
+            status === "skipped" && "text-muted-foreground line-through"
+          )}>
+            {prescription.genericName}
+          </p>
+          <p className="text-[0.8125rem] leading-snug text-muted-foreground">
+            {doseLabel}
+            {foodInstruction && ` -- ${foodInstruction} eating`}
+          </p>
 
           {status === "taken" && (
-            <div className="flex items-center shrink-0">
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-8 px-3 text-xs text-muted-foreground"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setEditPickerOpen(true);
-                }}
-              >
-                Edit
-              </Button>
-            </div>
+            <p className="mt-0.5 flex items-center gap-1 text-[0.8125rem] font-semibold text-meds">
+              <Check className="h-3.5 w-3.5" strokeWidth={2.5} />
+              Taken at {takenAtDisplay}
+            </p>
+          )}
+
+          {status === "skipped" && (
+            <p className="mt-0.5 text-[0.8125rem] text-muted-foreground">
+              {slot.existingLog?.skipReason || "Skipped"}
+            </p>
+          )}
+
+          {status === "missed" && (
+            <p className="mt-0.5 text-[0.8125rem] font-medium text-sodium">Missed</p>
           )}
         </div>
+
+        {isActionable ? (
+          <div className="flex shrink-0 items-center gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              className={cn(rowButton, "px-2.5 text-[0.8125rem]")}
+              onClick={(e) => {
+                e.stopPropagation();
+                onSkip(slot);
+              }}
+            >
+              Skip
+            </Button>
+            <Button
+              size="sm"
+              className={cn(rowButton, "px-3")}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleTakeClick();
+              }}
+            >
+              Take
+            </Button>
+          </div>
+        ) : status === "taken" ? (
+          <Button
+            size="sm"
+            variant="outline"
+            className={cn(rowButton, "shrink-0 px-2.5 text-[0.8125rem]")}
+            onClick={(e) => {
+              e.stopPropagation();
+              setEditPickerOpen(true);
+            }}
+          >
+            Edit
+          </Button>
+        ) : (
+          <span />
+        )}
       </div>
 
       {/* A late dose today defaults to now; a past-date back-fill defaults

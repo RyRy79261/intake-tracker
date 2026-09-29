@@ -1,14 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { motion, AnimatePresence } from "motion/react";
-import { Card } from "@intake/ui/card";
-import { Badge } from "@intake/ui/badge";
+import { ChevronDown } from "lucide-react";
 import { CompoundCardExpanded } from "@/components/medications/compound-card-expanded";
 import { InventoryItemViewDrawer } from "@/components/medications/inventory-item-view-drawer";
 import { RetroactiveTimePicker } from "@/components/medications/retroactive-time-picker";
-import { ChevronDown } from "lucide-react";
-import { PillIconWithBadge } from "@/components/medications/pill-icon";
+import { PillIcon } from "@/components/medications/pill-icon";
+import { Bdg } from "@/components/medications/ward-bits";
 import {
   formatDoseAmount,
   getEffectivePhase,
@@ -31,10 +29,11 @@ import { computeRefillStatus } from "@/lib/refill-status";
 import { selectEffectivePhase } from "@intake/core/effective-phase";
 import { useTodayKey } from "@/hooks/use-today-key";
 import { useToast } from "@intake/ui/use-toast";
+import { cn } from "@/lib/utils";
 import type { Prescription } from "@/lib/db";
 import { toLocalDateKey } from "@/lib/date-utils";
 
-/** How far back the as-needed dose list on the card reaches, in days. */
+/** How far back the as-needed dose list reaches, in days. */
 const PRN_LIST_DAYS = 7;
 const PRN_LIST_MAX = 5;
 
@@ -42,6 +41,8 @@ interface PrescriptionCardProps {
   prescription: Prescription;
   expanded?: boolean;
   onToggleExpanded?: () => void;
+  /** Open "About this medicine" for this prescription. */
+  onOpenAbout?: () => void;
   className?: string;
 }
 
@@ -58,7 +59,12 @@ function formatPrnWhen(ts: number, todayKey: string): string {
   return `${d.toLocaleDateString("en-US", { month: "short", day: "numeric" })} ${clock}`;
 }
 
-export function PrescriptionCard({ prescription, expanded: controlledExpanded, onToggleExpanded, className }: PrescriptionCardProps) {
+/**
+ * A compact Rx card (the prototype's `.rxk`). The header button toggles the
+ * expanded detail; the footer holds the as-needed line and the active brand,
+ * pinned to the bottom so cards on a row line up at equal height.
+ */
+export function PrescriptionCard({ prescription, expanded: controlledExpanded, onToggleExpanded, onOpenAbout, className }: PrescriptionCardProps) {
   const [internalExpanded, setInternalExpanded] = useState(false);
   const [medDrawerOpen, setMedDrawerOpen] = useState(false);
   const [prnPickerOpen, setPrnPickerOpen] = useState(false);
@@ -105,6 +111,12 @@ export function PrescriptionCard({ prescription, expanded: controlledExpanded, o
   // fast click could log a PRN dose against the wrong regimen.
   const isAsNeeded = phasesLoaded && !effectivePhase;
 
+  const brandStrength = activeInventory
+    ? isCombo(activeInventory)
+      ? formatCompoundShort(activeInventory.compounds, activeInventory.unit)
+      : `${activeInventory.strength}${activeInventory.unit}`
+    : undefined;
+
   const handleLogPrnDose = (time: string) => {
     logPrn.mutate(
       {
@@ -139,6 +151,7 @@ export function PrescriptionCard({ prescription, expanded: controlledExpanded, o
   };
 
   let nextDoseLabel: string;
+  let nextDue = false;
   if (isAsNeeded) {
     nextDoseLabel = "As needed";
   } else if (prescriptionSlots.length === 0) {
@@ -147,9 +160,12 @@ export function PrescriptionCard({ prescription, expanded: controlledExpanded, o
     nextDoseLabel = "All done";
   } else if (nextDoseTime) {
     nextDoseLabel = `Next: ${nextDoseTime}`;
+    nextDue = nextDoseTime <= getCurrentTimeHHMM();
   } else {
     nextDoseLabel = "No doses today";
   }
+
+  const chip = isAsNeeded ? (brandStrength ?? "—") : (dosageChip ?? "—");
 
   // Shared with the inventory drawer and the refill notifier (pill OR days
   // threshold, over the phase that drives today's doses).
@@ -163,174 +179,168 @@ export function PrescriptionCard({ prescription, expanded: controlledExpanded, o
   // Scheduled but nothing to deduct from: doses stop being tracked silently.
   const hasUntrackedStock = !activeInventory && !!refillPhase && inventoryItems.length > 0;
 
-  return (
-    <motion.div
-      whileTap={{ scale: 0.98 }}
-      transition={{ duration: 0.1 }}
-      className={className}
-    >
-      <Card
-        className="p-2.5 cursor-pointer hover:bg-muted/40 transition-colors h-full"
-        onClick={toggleExpanded}
-      >
-        <div className="flex items-start justify-between gap-1">
-          <div className="min-w-0 flex-1">
-            <h3 className="font-semibold text-xs truncate leading-tight">
-              {prescription.genericName}
-            </h3>
-            {prescription.indication && (
-              <p className="text-[10px] text-muted-foreground truncate">
-                {prescription.indication}
-              </p>
-            )}
-          </div>
-          <motion.div
-            animate={{ rotate: expanded ? 180 : 0 }}
-            transition={{ duration: 0.2 }}
-            className="shrink-0 mt-0.5"
-          >
-            <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />
-          </motion.div>
-        </div>
+  const hasBadges = !!(activeTitration || pendingTitration || isNegativeStock || isLowStock || hasUntrackedStock);
+  const food = effectivePhase?.foodInstruction && effectivePhase.foodInstruction !== "none"
+    ? ` · ${effectivePhase.foodInstruction} eating`
+    : "";
+  const lastPrn = prnLogs[0];
 
-        <div className="flex items-center gap-1.5 flex-wrap mt-1">
-          {dosageChip !== undefined && (
-            <span className="text-[10px] text-muted-foreground">
-              {dosageChip}
+  const brandDoseLine = isAsNeeded
+    ? "1 tablet as needed"
+    : firstSlot?.pillsPerDose != null && dosageMg != null
+      ? `${formatDoseAmount(firstSlot)}${food}`
+      : null;
+
+  return (
+    <div
+      data-testid="rx-card"
+      data-expanded={expanded || undefined}
+      className={cn(
+        "flex min-w-0 flex-col border border-line bg-background",
+        expanded && "border-muted-foreground shadow-[inset_3px_0_0_hsl(var(--meds))]",
+        className,
+      )}
+    >
+      <button
+        type="button"
+        aria-expanded={expanded}
+        onClick={toggleExpanded}
+        className={cn(
+          "flex min-h-11 w-full flex-none flex-col items-stretch gap-[7px] py-2.5 pl-2.5 pr-1.5 text-left",
+          "hover:bg-foreground/4 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring",
+        )}
+      >
+        <span className="flex items-start gap-1">
+          <span className="min-w-0 flex-1">
+            <span className="block text-[0.8125rem] font-semibold leading-tight [overflow-wrap:anywhere]">
+              {prescription.genericName}
             </span>
-          )}
-          <span className="text-[10px] text-muted-foreground">
+            {prescription.indication && (
+              <span className="mt-0.5 block text-[0.6875rem] leading-snug text-muted-foreground">
+                {prescription.indication}
+              </span>
+            )}
+          </span>
+          <ChevronDown
+            aria-hidden="true"
+            className={cn("h-[18px] w-[18px] shrink-0 text-muted-foreground transition-transform", expanded && "rotate-180")}
+          />
+        </span>
+
+        <span className="flex flex-wrap items-center justify-between gap-x-1.5 gap-y-1 pr-1">
+          <span className="whitespace-nowrap border border-line bg-panel px-[5px] py-1 font-mono text-xs font-semibold leading-none">
+            {chip}
+          </span>
+          <span className={cn("whitespace-nowrap text-[0.6875rem]", nextDue ? "font-semibold text-meds" : "text-muted-foreground")}>
             {nextDoseLabel}
           </span>
-        </div>
+        </span>
 
-        {isAsNeeded && (
+        {hasBadges && (
+          <span className="flex flex-wrap gap-1">
+            {activeTitration && <Bdg tone="sodium" kind="fill">On titration</Bdg>}
+            {!activeTitration && pendingTitration && <Bdg tone="water">Titration planned</Bdg>}
+            {isNegativeStock && <Bdg tone="bp" kind="fill">Negative</Bdg>}
+            {isLowStock && <Bdg tone="sodium" kind="tint">Low</Bdg>}
+            {hasUntrackedStock && <Bdg tone="sodium">No active brand</Bdg>}
+          </span>
+        )}
+      </button>
+
+      <div className="mt-auto flex flex-col">
+        {isAsNeeded && prescription.isActive && (
+          <div className="mx-2 mb-2 flex min-h-11 items-center gap-2 border border-dashed border-line py-1 pl-2 pr-1 text-xs leading-snug text-muted-foreground">
+            <span className="min-w-0 flex-1">
+              As needed · {lastPrn
+                ? `last ${formatPrnWhen(lastPrn.actionTimestamp ?? lastPrn.createdAt, todayDateStr)}`
+                : "no doses logged yet"}
+            </span>
+            <button
+              type="button"
+              aria-label={`Log an as-needed dose of ${prescription.genericName}`}
+              onClick={() => setPrnPickerOpen(true)}
+              disabled={logPrn.isPending}
+              className="inline-flex min-h-9 shrink-0 items-center border border-meds px-2 text-xs font-semibold text-meds hover:bg-meds/10 disabled:opacity-50"
+            >
+              Log dose
+            </button>
+          </div>
+        )}
+
+        {/* Active brand — tap to open that box */}
+        {activeInventory && (
           <button
             type="button"
-            aria-label={`Log an as-needed dose of ${prescription.genericName}`}
-            onClick={(e) => {
-              e.stopPropagation();
-              setPrnPickerOpen(true);
-            }}
-            disabled={logPrn.isPending}
-            className="mt-1.5 w-full text-[11px] font-medium py-1 rounded-md bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white transition-colors"
+            aria-label={`${activeInventory.brandName}, active brand. Open the box`}
+            onClick={() => setMedDrawerOpen(true)}
+            className={cn(
+              "mx-2 mb-2 grid min-h-11 min-w-0 grid-cols-[20px_minmax(0,1fr)_auto] items-center gap-x-1.5 gap-y-[3px] px-2 py-1.5 text-left",
+              "border border-[color-mix(in_srgb,hsl(var(--weight))_50%,hsl(var(--line)))] bg-weight/9",
+              "focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring",
+            )}
           >
-            Log dose now
-          </button>
-        )}
-
-        {/* Recent as-needed doses, each removable (first tap arms, second
-            tap confirms). Removing one also puts its pills back in stock. */}
-        {isAsNeeded && prnLogs.length > 0 && (
-          <ul className="mt-1.5 space-y-0.5" aria-label="Recent as-needed doses">
-            {prnLogs.slice(0, PRN_LIST_MAX).map((log) => {
-              const when = formatPrnWhen(log.actionTimestamp ?? log.createdAt, todayDateStr);
-              const armed = confirmUndoId === log.id;
-              return (
-                <li key={log.id} className="flex items-center justify-between gap-1 text-[10px] text-muted-foreground">
-                  <span className="truncate">{when}</span>
-                  <button
-                    type="button"
-                    aria-label={armed ? `Confirm undo as-needed dose at ${when}` : `Undo as-needed dose at ${when}`}
-                    disabled={undoPrn.isPending}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (armed) handleUndoPrn(log.id);
-                      else setConfirmUndoId(log.id);
-                    }}
-                    className="shrink-0 px-1 rounded text-[10px] font-medium text-red-600 dark:text-red-400 hover:underline disabled:opacity-60"
-                  >
-                    {armed ? "Remove?" : "Undo"}
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-
-        <div className="flex items-center gap-1 flex-wrap mt-1">
-          {activeTitration && (
-            <Badge className="text-[9px] px-1 py-0 bg-amber-500 hover:bg-amber-600 text-white">
-              On titration
-            </Badge>
-          )}
-          {!activeTitration && pendingTitration && (
-            <Badge variant="outline" className="text-[9px] px-1 py-0 border-blue-400 text-blue-600 dark:text-blue-400">
-              Titration planned
-            </Badge>
-          )}
-          {isNegativeStock && (
-            <Badge variant="destructive" className="text-[9px] px-1 py-0">
-              Negative
-            </Badge>
-          )}
-          {isLowStock && (
-            <Badge className="text-[9px] px-1 py-0 bg-amber-500 hover:bg-amber-600 text-white">
-              Low
-            </Badge>
-          )}
-          {hasUntrackedStock && (
-            <Badge variant="outline" className="text-[9px] px-1 py-0 border-amber-500 text-amber-600 dark:text-amber-400">
-              No active brand
-            </Badge>
-          )}
-        </div>
-
-        {/* Active medicine mini-card — tap to open that medicine's details */}
-        {activeInventory && (
-          <div
-            role="button"
-            tabIndex={0}
-            onClick={(e) => { e.stopPropagation(); setMedDrawerOpen(true); }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") {
-                e.stopPropagation();
-                e.preventDefault();
-                setMedDrawerOpen(true);
-              }
-            }}
-            className="mt-1.5 p-1.5 rounded-md bg-emerald-50/60 dark:bg-emerald-950/30 border border-emerald-200/60 dark:border-emerald-800/40 flex items-center gap-1.5 cursor-pointer hover:bg-emerald-100/80 dark:hover:bg-emerald-900/40 transition-colors"
-          >
-            <PillIconWithBadge
+            <PillIcon
               shape={activeInventory.pillShape ?? "round"}
               color={activeInventory.pillColor ?? "#94a3b8"}
               size={18}
             />
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-1.5">
-                <span className="text-[10px] font-medium text-emerald-800 dark:text-emerald-300 truncate">
-                  {activeInventory.brandName}
-                </span>
-                <span className="text-[9px] text-emerald-600 dark:text-emerald-400 shrink-0 ml-auto">
-                  {isCombo(activeInventory)
-                    ? formatCompoundShort(activeInventory.compounds, activeInventory.unit)
-                    : `${activeInventory.strength}${activeInventory.unit}`}
-                </span>
-              </div>
-              {firstSlot?.pillsPerDose != null && dosageMg != null && (
-                <p className="text-[9px] text-emerald-600 dark:text-emerald-400">
-                  {formatDoseAmount(firstSlot)}
-                  {effectivePhase?.foodInstruction && effectivePhase.foodInstruction !== "none" && ` · ${effectivePhase.foodInstruction} eating`}
-                </p>
-              )}
-            </div>
-          </div>
+            <b className="text-xs font-semibold leading-tight [overflow-wrap:anywhere]">
+              {activeInventory.brandName}
+            </b>
+            <span className="whitespace-nowrap font-mono text-[0.6875rem] text-muted-foreground">
+              {brandStrength}
+            </span>
+            {brandDoseLine && (
+              <span className="col-span-full text-[0.6875rem] leading-snug text-muted-foreground">
+                {brandDoseLine}
+              </span>
+            )}
+          </button>
         )}
+      </div>
 
-        <AnimatePresence>
-          {expanded && (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: "auto", opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={{ duration: 0.2 }}
-              className="overflow-hidden"
-            >
-              <CompoundCardExpanded prescription={prescription} />
-            </motion.div>
+      {expanded && (
+        <CompoundCardExpanded prescription={prescription} {...(onOpenAbout && { onOpenAbout })}>
+          {/* Recent as-needed doses, each removable (first tap arms, second
+              tap confirms). Removing one also puts its pills back in stock. */}
+          {isAsNeeded && prnLogs.length > 0 && (
+            <div>
+              <p className="mb-1.5 text-[0.6875rem] font-semibold tracking-[0.06em] text-muted-foreground">
+                RECENT DOSES
+              </p>
+              <ul aria-label="Recent as-needed doses">
+                {prnLogs.slice(0, PRN_LIST_MAX).map((log) => {
+                  const when = formatPrnWhen(log.actionTimestamp ?? log.createdAt, todayDateStr);
+                  const armed = confirmUndoId === log.id;
+                  return (
+                    <li
+                      key={log.id}
+                      className="flex min-h-11 items-center justify-between gap-2 border-t border-line/60 text-[0.8125rem] first:border-t-0"
+                    >
+                      <span className="font-mono text-muted-foreground">{when}</span>
+                      <button
+                        type="button"
+                        aria-label={armed ? `Confirm undo as-needed dose at ${when}` : `Undo as-needed dose at ${when}`}
+                        disabled={undoPrn.isPending}
+                        onClick={() => {
+                          if (armed) handleUndoPrn(log.id);
+                          else setConfirmUndoId(log.id);
+                        }}
+                        className={cn(
+                          "inline-flex min-h-9 items-center border px-2.5 text-[0.8125rem] font-medium disabled:opacity-50",
+                          armed ? "border-bp text-bp" : "border-input hover:bg-foreground/6",
+                        )}
+                      >
+                        {armed ? "Remove?" : "Undo"}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
           )}
-        </AnimatePresence>
-      </Card>
+        </CompoundCardExpanded>
+      )}
 
       <InventoryItemViewDrawer
         item={activeInventory ?? null}
@@ -347,6 +357,6 @@ export function PrescriptionCard({ prescription, expanded: controlledExpanded, o
         onConfirm={handleLogPrnDose}
         notAfterNow
       />
-    </motion.div>
+    </div>
   );
 }

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
@@ -45,6 +45,22 @@ describe("CompoundCardExpanded", () => {
     expect(await screen.findByText("Norvasc")).toBeInTheDocument();
     expect(screen.getByText("27 pills")).toBeInTheDocument();
     expect(screen.getByText("Active")).toBeInTheDocument();
+  });
+
+  it("offers About this medicine only when the host can open it", async () => {
+    const prescription = makePrescription({ genericName: "Ramipril" });
+    const onOpenAbout = vi.fn();
+    const { unmount } = await renderWithFixtures(
+      <CompoundCardExpanded prescription={prescription} onOpenAbout={onOpenAbout} />,
+      { seed: { prescriptions: [prescription] } },
+    );
+    await userEvent.setup().click(await screen.findByRole("button", { name: "About this medicine" }));
+    expect(onOpenAbout).toHaveBeenCalledTimes(1);
+    unmount();
+
+    await renderWithFixtures(<CompoundCardExpanded prescription={prescription} />);
+    await screen.findByRole("button", { name: "Prescription Details" });
+    expect(screen.queryByRole("button", { name: "About this medicine" })).toBeNull();
   });
 
   it("renders a schedule summary from the seeded phase schedule", async () => {

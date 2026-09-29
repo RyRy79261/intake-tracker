@@ -15,69 +15,75 @@ export function AppearanceStep({
 }) {
   const { pillShape: shape, pillColor: color, visualIdentification } = formState;
   return (
-    <div className="space-y-6">
-      <div className="flex justify-center py-4">
-        <PillIcon shape={shape} color={color} size={80} />
+    <div className="flex flex-col gap-3.5">
+      <div className="flex min-h-14 items-center gap-3 border border-line bg-background px-2.5 py-2 font-semibold">
+        <PillIcon shape={shape} color={color} size={44} />
+        <span>{formState.brandName || formState.genericName || "Your pill"}</span>
       </div>
 
       <div>
-        <Label className="text-sm font-medium mb-2 block">Shape</Label>
-        <div className="flex gap-2 flex-wrap">
+        <Label className="mb-1 block text-[0.8125rem] font-normal text-muted-foreground">Shape</Label>
+        <div className="grid grid-cols-3 gap-1.5" role="radiogroup" aria-label="Shape">
           {PILL_SHAPES.map((s) => (
             <button
               key={s.value}
+              type="button"
+              role="radio"
+              aria-checked={shape === s.value}
               onClick={() => onFieldChange("pillShape", s.value)}
               className={cn(
-                "flex flex-col items-center gap-1.5 p-2 rounded-lg border transition-colors min-w-[60px]",
-                shape === s.value
-                  ? "bg-teal-50 border-teal-300 dark:bg-teal-950/40 dark:border-teal-700"
-                  : "border-border hover:bg-muted"
+                "flex min-h-[60px] flex-col items-center justify-center gap-1 border text-[0.8125rem]",
+                shape === s.value ? "border-foreground bg-foreground text-background" : "border-line hover:bg-foreground/6",
               )}
             >
-              <PillIcon shape={s.value} color={color} size={28} />
-              <span className="text-[10px] font-medium">{s.label}</span>
+              <PillIcon shape={s.value} color={color} size={24} />
+              <span>{s.label}</span>
             </button>
           ))}
         </div>
       </div>
 
       <div>
-        <Label className="text-sm font-medium mb-2 block">Color</Label>
-        <div className="flex gap-2 flex-wrap px-0.5 py-0.5">
+        <Label className="mb-1 block text-[0.8125rem] font-normal text-muted-foreground">Colour</Label>
+        <div className="flex flex-wrap gap-2 p-0.5" role="radiogroup" aria-label="Colour">
           {PRESET_COLORS.map((c) => (
             <button
               key={c}
+              type="button"
+              role="radio"
+              aria-checked={color === c}
+              aria-label={`Colour ${c}`}
               onClick={() => onFieldChange("pillColor", c)}
               className={cn(
-                "w-8 h-8 rounded-full border-2 transition-all",
-                color === c ? "border-teal-500 scale-110" : "border-transparent hover:scale-105",
-                c === "#FFFFFF" && "border-gray-300"
+                "h-10 w-10 border border-[#5E5A70]",
+                color === c && "shadow-[0_0_0_2px_hsl(var(--panel)),0_0_0_4px_hsl(var(--fg))]",
               )}
               style={{ backgroundColor: c }}
             />
           ))}
         </div>
         <div className="flex items-center gap-2 mt-2">
-          <Label className="text-xs">Custom:</Label>
+          <Label className="text-[0.8125rem] font-normal text-muted-foreground">Custom:</Label>
           <input
             type="color"
             value={color}
             onChange={(e) => onFieldChange("pillColor", e.target.value)}
-            className="w-8 h-8 rounded cursor-pointer"
+            aria-label="Custom colour"
+            className="h-10 w-10 cursor-pointer border border-line bg-transparent"
           />
-          <span className="text-xs text-muted-foreground">{color}</span>
+          <span className="font-mono text-xs text-muted-foreground">{color}</span>
         </div>
       </div>
 
       <div>
-        <Label className="text-sm font-medium mb-1.5 block">Visual Identification Details</Label>
+        <Label className="mb-1 block text-[0.8125rem] font-normal text-muted-foreground">Markings (optional)</Label>
         <Textarea
           value={visualIdentification}
           onChange={(e) => onFieldChange("visualIdentification", e.target.value)}
           placeholder="e.g. Scored on one side, '10' imprinted on the other"
           rows={2}
         />
-        <p className="text-xs text-muted-foreground mt-1">Optional. Markings, imprints, or coating details.</p>
+        <p className="mt-1 text-[0.8125rem] text-muted-foreground">Imprints, a score line or coating details.</p>
       </div>
     </div>
   );

@@ -202,6 +202,9 @@ describe("PrescriptionCard", () => {
       expect((await db.inventoryItems.get(inventory.id))?.currentStock).toBe(29);
     });
 
+    // The recent-dose list lives in the expanded card.
+    await user.click(screen.getByRole("button", { name: /furosemide/i, expanded: false }));
+
     // First tap arms the removal, the second confirms it.
     await user.click(await screen.findByRole("button", { name: /^undo as-needed dose/i }));
     expect((await db.inventoryItems.get(inventory.id))?.currentStock).toBe(29);
