@@ -24,12 +24,21 @@ vi.mock("@/components/shell/log-sheet", () => ({
   LogSheet: ({ open }: { open: boolean }) => (open ? <div role="dialog" aria-label="Log sheet" /> : null),
 }));
 
+// The switcher's contents are covered by windows-switcher.dom.test.
+vi.mock("@/components/shell/windows-switcher", () => ({
+  WindowsSwitcher: ({ open }: { open: boolean }) =>
+    open ? <div role="dialog" aria-label="Windows switcher" /> : null,
+}));
+
 import { BottomBar } from "@/components/shell/bottom-bar";
+import { useWindowStore } from "@/stores/window-store";
 
 describe("BottomBar", () => {
   beforeEach(() => {
     push.mockReset();
     pathname = "/";
+    useWindowStore.setState({ wins: [], focus: null, showHome: true, wide: false, z: 0, nextId: 1 });
+    window.history.replaceState(null, "", "/");
     mockUseAuthGate.mockReset();
   });
 
@@ -67,7 +76,7 @@ describe("BottomBar", () => {
     expect(screen.getByRole("button", { name: "Home" })).toHaveAttribute("aria-pressed", "true");
     unmount();
 
-    pathname = "/medications";
+    pathname = "/settings";
     render(<BottomBar />);
     const home = screen.getByRole("button", { name: "Home" });
     expect(home).toHaveAttribute("aria-pressed", "false");
@@ -75,11 +84,41 @@ describe("BottomBar", () => {
     expect(push).toHaveBeenCalledWith("/");
   });
 
-  it("keeps the Windows slot as a disabled placeholder with a count", () => {
+  it("Home closes the window on screen (phone)", () => {
     mockUseAuthGate.mockReturnValue(false);
+    useWindowStore.getState().open("meds");
+    pathname = "/medications";
     render(<BottomBar />);
-    const windows = screen.getByRole("button", { name: "Windows, 0 open" });
-    expect(windows).toBeDisabled();
-    expect(windows).toHaveTextContent("0");
+    const home = screen.getByRole("button", { name: "Home" });
+    expect(home).toHaveAttribute("aria-pressed", "false");
+    fireEvent.click(home);
+    expect(useWindowStore.getState().wins).toHaveLength(0);
+    expect(useWindowStore.getState().showHome).toBe(true);
+    expect(home).toHaveAttribute("aria-pressed", "true");
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it("Home minimises every window on a wide screen", () => {
+    mockUseAuthGate.mockReturnValue(false);
+    useWindowStore.setState({ wide: true });
+    useWindowStore.getState().open("meds");
+    useWindowStore.getState().open("metrics");
+    render(<BottomBar />);
+    fireEvent.click(screen.getByRole("button", { name: "Home" }));
+    expect(useWindowStore.getState().wins.every((w) => w.min)).toBe(true);
+  });
+
+  it("counts the open windows and opens the switcher", () => {
+    mockUseAuthGate.mockReturnValue(false);
+    useWindowStore.getState().open("meds");
+    useWindowStore.getState().open("profile");
+    render(<BottomBar />);
+    const windows = screen.getByRole("button", { name: "Windows, 2 open" });
+    expect(windows).toBeEnabled();
+    expect(windows).toHaveTextContent("2");
+    expect(windows).toHaveAttribute("aria-expanded", "false");
+    fireEvent.click(windows);
+    expect(windows).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByRole("dialog", { name: "Windows switcher" })).toBeInTheDocument();
   });
 });

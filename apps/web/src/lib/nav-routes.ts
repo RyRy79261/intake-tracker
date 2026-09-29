@@ -66,8 +66,8 @@ export interface ShellApp {
 }
 
 /**
- * The apps the Ward Console shell can open. Until the window manager lands
- * (PR 3), the sys-bar buttons navigate to `path`.
+ * The apps the Ward Console shell can open. The sys-bar buttons open them as
+ * windows; `path` is the route that deep-links to each one.
  */
 export const SHELL_APPS: Record<ShellAppId, ShellApp> = {
   meds: { id: "meds", title: "Medications", icon: "pill", color: "var(--color-meds)", size: "M", path: "/medications" },
@@ -79,3 +79,59 @@ export const SHELL_APPS: Record<ShellAppId, ShellApp> = {
 
 /** Apps with their own sys-bar button, in order (Profile is the avatar). */
 export const SYS_BAR_APPS = ["meds", "metrics", "history"] as const satisfies readonly ShellAppId[];
+
+// ---------------------------------------------------------------------------
+// Ward Console windows
+// ---------------------------------------------------------------------------
+
+/** Apps that open as a window. History is not one: it opens Metrics › Records. */
+export type WindowAppId = "meds" | "metrics" | "profile";
+
+/** Per-window state, e.g. `{ tab: "records" }` for Metrics. */
+export type WindowState = Record<string, string | number | boolean | null>;
+
+/** The window an app opens, after mapping History onto Metrics › Records. */
+export function resolveWindowApp(
+  app: ShellAppId,
+  st?: WindowState,
+): { app: WindowAppId; st: WindowState } | null {
+  if (app === "history") return { app: "metrics", st: { ...st, tab: "records" } };
+  if (app === "meds" || app === "metrics" || app === "profile") return { app, st: { ...st } };
+  return null;
+}
+
+/**
+ * Routes that open a window over Home when the shell is on. With the shell
+ * off they stay ordinary pages, so deep links, PWA shortcuts and e2e `goto`
+ * keep working either way.
+ */
+const WINDOW_ROUTE_APPS: Readonly<Record<string, ShellAppId>> = {
+  "/medications": "meds",
+  "/analytics": "metrics",
+  "/history": "history",
+  "/profile": "profile",
+};
+
+export function isWindowRoute(pathname: string | null): boolean {
+  return pathname !== null && Object.hasOwn(WINDOW_ROUTE_APPS, pathname);
+}
+
+/** `/analytics?tab=records` -> the Metrics window on Records. */
+export function windowForRoute(
+  pathname: string | null,
+  search: URLSearchParams | null,
+): { app: WindowAppId; st: WindowState } | null {
+  if (!isWindowRoute(pathname)) return null;
+  const id = WINDOW_ROUTE_APPS[pathname as string] as ShellAppId;
+  const tab = search?.get("tab");
+  return resolveWindowApp(id, tab && id === "metrics" ? { tab } : undefined);
+}
+
+/** The deep link for a window, so the address bar follows the open window. */
+export function windowHref(app: WindowAppId, st?: WindowState): string {
+  if (app === "metrics") {
+    const tab = typeof st?.tab === "string" ? st.tab : null;
+    return tab && tab !== "summary" ? `/analytics?tab=${encodeURIComponent(tab)}` : "/analytics";
+  }
+  return app === "meds" ? "/medications" : "/profile";
+}

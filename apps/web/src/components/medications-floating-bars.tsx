@@ -5,7 +5,6 @@ import { usePathname } from "next/navigation";
 import { Plus } from "lucide-react";
 import { AddMedicationWizard } from "@/components/medications/add-medication-wizard";
 import { useMedicationUIStore } from "@/stores/medication-ui-store";
-import { cn } from "@/lib/utils";
 
 /**
  * Renders the medications-page floating chrome (the "+" FAB and the
@@ -13,12 +12,7 @@ import { cn } from "@/lib/utils";
  * position:fixed resolves against the viewport. The FAB is only shown on the
  * schedule tab — the other tabs have inline "Add" controls.
  */
-export function MedicationsFloatingBars({
-  aboveBottomBar = false,
-}: {
-  /** Lift the FAB clear of the Ward shell's bottom bar. */
-  aboveBottomBar?: boolean;
-} = {}) {
+export function MedicationsFloatingBars() {
   const pathname = usePathname();
   const activeTab = useMedicationUIStore((s) => s.activeTab);
   const wizardOpen = useMedicationUIStore((s) => s.wizardOpen);
@@ -41,11 +35,7 @@ export function MedicationsFloatingBars({
         <button
           type="button"
           onClick={() => setWizardOpen(true)}
-          className={cn(
-            "fixed right-4 z-30",
-            aboveBottomBar ? "bottom-[calc(56px+env(safe-area-inset-bottom,0px)+16px)]" : "bottom-20",
-            "w-14 h-14 rounded-full bg-teal-600 hover:bg-teal-700 text-white shadow-lg flex items-center justify-center transition-colors active:scale-95",
-          )}
+          className="fixed bottom-20 right-4 z-30 w-14 h-14 rounded-full bg-teal-600 hover:bg-teal-700 text-white shadow-lg flex items-center justify-center transition-colors active:scale-95"
           aria-label="Add medication"
         >
           <Plus className="w-6 h-6" />

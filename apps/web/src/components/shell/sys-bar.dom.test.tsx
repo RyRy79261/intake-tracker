@@ -24,11 +24,14 @@ vi.mock("@/hooks/use-medication-queries", () => ({
 }));
 
 import { SysBar, initialsFor } from "@/components/shell/sys-bar";
+import { useWindowStore } from "@/stores/window-store";
 
 describe("SysBar", () => {
   beforeEach(() => {
     push.mockReset();
     pathname = "/";
+    useWindowStore.setState({ wins: [], focus: null, showHome: true, wide: false, z: 0, nextId: 1 });
+    window.history.replaceState(null, "", "/");
     auth = { ready: true, authenticated: false, user: null };
     slots = [];
   });
@@ -83,7 +86,10 @@ describe("SysBar", () => {
     const avatar = screen.getByRole("button", { name: /Profile: Ryan Noble, signed in/ });
     expect(avatar).toHaveTextContent("RN");
     fireEvent.click(avatar);
-    expect(push).toHaveBeenCalledWith("/profile");
+    // Profile opens as a window over Home; the address bar follows it.
+    expect(push).not.toHaveBeenCalled();
+    expect(useWindowStore.getState().wins.map((w) => w.app)).toEqual(["profile"]);
+    expect(window.location.pathname).toBe("/profile");
   });
 
   it("disables the account button while auth is loading", () => {
@@ -92,17 +98,41 @@ describe("SysBar", () => {
     expect(screen.getByRole("button", { name: "Loading account" })).toBeDisabled();
   });
 
-  it("navigates each app button to its route and marks the current one", () => {
-    pathname = "/analytics";
+  it("opens each app as a window and marks the one on screen", () => {
     render(<SysBar />);
-    expect(screen.getByRole("button", { name: "Metrics" })).toHaveAttribute("aria-current", "page");
+    const meds = screen.getByRole("button", { name: "Medications" });
+    const metrics = screen.getByRole("button", { name: "Metrics" });
+    const history = screen.getByRole("button", { name: "History" });
 
-    fireEvent.click(screen.getByRole("button", { name: "Medications" }));
-    fireEvent.click(screen.getByRole("button", { name: "History" }));
+    fireEvent.click(meds);
+    expect(useWindowStore.getState().wins.map((w) => w.app)).toEqual(["meds"]);
+    expect(window.location.pathname).toBe("/medications");
+    expect(meds).toHaveAttribute("aria-pressed", "true");
+
+    fireEvent.click(metrics);
+    expect(metrics).toHaveAttribute("aria-pressed", "true");
+    expect(meds).toHaveAttribute("aria-pressed", "false");
+
+    // History is Metrics on Records: the same window, not a new one.
+    fireEvent.click(history);
+    expect(useWindowStore.getState().wins.map((w) => w.app)).toEqual(["meds", "metrics"]);
+    expect(history).toHaveAttribute("aria-pressed", "true");
+    expect(metrics).toHaveAttribute("aria-pressed", "false");
+
+    // Settings is still a route.
     fireEvent.click(screen.getByRole("button", { name: "Settings" }));
-    // Already on /analytics: no push for Metrics.
-    fireEvent.click(screen.getByRole("button", { name: "Metrics" }));
-    expect(push.mock.calls.map((c) => c[0])).toEqual(["/medications", "/history", "/settings"]);
+    expect(push.mock.calls.map((c) => c[0])).toEqual(["/settings"]);
+  });
+
+  it("returns to an open window from another route", () => {
+    useWindowStore.getState().open("meds");
+    pathname = "/settings";
+    render(<SysBar />);
+    const meds = screen.getByRole("button", { name: "Medications" });
+    // Not "on" while Settings covers the windows.
+    expect(meds).toHaveAttribute("aria-pressed", "false");
+    fireEvent.click(meds);
+    expect(push).toHaveBeenCalledWith("/medications");
   });
 });
 

@@ -5,7 +5,16 @@ import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth-guard";
 import { useDailyDoseSchedule } from "@/hooks/use-medication-queries";
 import { useTodayKey } from "@/hooks/use-today-key";
-import { SHELL_APPS, SYS_BAR_APPS, type ShellAppId } from "@/lib/nav-routes";
+import {
+  SHELL_APPS,
+  SYS_BAR_APPS,
+  isWindowRoute,
+  resolveWindowApp,
+  windowHref,
+  type ShellAppId,
+} from "@/lib/nav-routes";
+import { openWindow } from "@/hooks/use-window-history";
+import { useWindowStore } from "@/stores/window-store";
 import { ShellIcon, ShellLogo } from "@/components/shell/shell-icon";
 import { cn } from "@/lib/utils";
 
@@ -38,23 +47,45 @@ const hbOn = "shadow-[inset_0_-3px_0_var(--c,currentColor)]";
 /**
  * Ward Console system bar: logo and title on the left, then the app buttons
  * (Medications with a due-dose pip, Metrics, History), the account avatar and
- * the Settings gear. Until the window manager lands (PR 3) the buttons
- * navigate to the app's route.
+ * the Settings gear. The app buttons and the avatar open windows; History
+ * opens Metrics on Records. Settings and sign-in are still routes.
  */
 export function SysBar() {
   const pathname = usePathname();
   const router = useRouter();
   const due = useDueDoseCount();
   const { ready, authenticated, user } = useAuth();
+  const wins = useWindowStore((s) => s.wins);
+  const focus = useWindowStore((s) => s.focus);
+  const showHome = useWindowStore((s) => s.showHome);
+  const onShell = pathname === "/" || isWindowRoute(pathname);
 
   const go = (path: string) => {
     if (pathname !== path) router.push(path);
   };
 
+  const open = (id: ShellAppId) => {
+    const res = openWindow(id);
+    // An already-open window from another route (e.g. /settings): go back
+    // to the windows. A new one pushed its own route already.
+    if (res && !res.created && !onShell) router.push(windowHref(res.win.app, res.win.st));
+  };
+
+  /** Is this app's window the one on screen? History = Metrics on Records. */
+  const isOn = (id: ShellAppId): boolean => {
+    if (!onShell || showHome) return false;
+    const target = resolveWindowApp(id);
+    const w = target && wins.find((x) => x.app === target.app);
+    if (!w || w.min || w.id !== focus) return false;
+    if (id === "history") return w.st.tab === "records";
+    if (id === "metrics") return w.st.tab !== "records";
+    return true;
+  };
+
   const appButton = (id: ShellAppId) => {
     const app = SHELL_APPS[id];
     const pip = id === "meds" ? due : 0;
-    const on = pathname === app.path;
+    const on = isOn(id);
     return (
       <button
         key={id}
@@ -62,8 +93,8 @@ export function SysBar() {
         className={cn(hbBase, on && hbOn)}
         style={app.color ? ({ "--c": app.color } as CSSProperties) : undefined}
         aria-label={pip ? `${app.title}, ${pip} open` : app.title}
-        aria-current={on ? "page" : undefined}
-        onClick={() => go(app.path)}
+        aria-pressed={on}
+        onClick={() => open(id)}
       >
         <ShellIcon name={app.icon} size={20} />
         {pip > 0 && (
@@ -79,7 +110,7 @@ export function SysBar() {
     );
   };
 
-  const profileOn = pathname === "/profile";
+  const profileOn = isOn("profile");
   let account;
   if (!ready) {
     account = (
@@ -93,8 +124,8 @@ export function SysBar() {
         type="button"
         className={cn(hbBase, profileOn && hbOn)}
         aria-label={`Profile: ${user.name || user.email}, signed in`}
-        aria-current={profileOn ? "page" : undefined}
-        onClick={() => go("/profile")}
+        aria-pressed={profileOn}
+        onClick={() => open("profile")}
       >
         <span
           aria-hidden="true"

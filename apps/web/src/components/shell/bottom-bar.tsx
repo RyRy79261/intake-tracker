@@ -6,6 +6,10 @@ import { useAuthGate } from "@/components/auth-guard";
 import { HoldToTalk } from "@/components/shell/hold-to-talk";
 import { LogSheet } from "@/components/shell/log-sheet";
 import { ShellIcon } from "@/components/shell/shell-icon";
+import { WindowsSwitcher } from "@/components/shell/windows-switcher";
+import { goHome } from "@/hooks/use-window-history";
+import { isWindowRoute } from "@/lib/nav-routes";
+import { useWindowStore } from "@/stores/window-store";
 
 /** Bottom bar height above the safe area; content pads by this much. */
 export const BOTTOM_BAR_HEIGHT_PX = 56;
@@ -19,17 +23,21 @@ const cellBase =
 
 /**
  * Ward Console bottom bar: Home, Windows (count), Hold to talk (signed in
- * only) and Log. Windows is a placeholder until the window manager (PR 3).
+ * only) and Log. Home closes the window on screen (phone) or minimises every
+ * window (wide); Windows opens the switcher.
  */
 export function BottomBar() {
   const pathname = usePathname();
   const router = useRouter();
   const showAi = useAuthGate();
   const [logOpen, setLogOpen] = useState(false);
+  const [switcherOpen, setSwitcherOpen] = useState(false);
+  const windowCount = useWindowStore((s) => s.wins.length);
+  const showHome = useWindowStore((s) => s.showHome);
 
-  // No windows exist yet (PR 3); Home is "on" whenever the home route shows.
-  const windowCount = 0;
-  const homeOn = pathname === "/" && !logOpen;
+  // Home and the window routes all show Home under the windows.
+  const onShell = pathname === "/" || isWindowRoute(pathname);
+  const homeOn = onShell && (showHome || windowCount === 0) && !logOpen && !switcherOpen;
 
   return (
     <>
@@ -44,7 +52,8 @@ export function BottomBar() {
           aria-pressed={homeOn}
           aria-label="Home"
           onClick={() => {
-            if (pathname !== "/") router.push("/");
+            goHome();
+            if (!onShell) router.push("/");
           }}
         >
           <ShellIcon name="home" size={20} />
@@ -55,7 +64,8 @@ export function BottomBar() {
           className={cellBase}
           aria-label={`Windows, ${windowCount} open`}
           aria-haspopup="dialog"
-          disabled
+          aria-expanded={switcherOpen}
+          onClick={() => setSwitcherOpen(true)}
         >
           <span className="flex items-center gap-[5px]">
             <ShellIcon name="windows" size={20} />
@@ -79,6 +89,14 @@ export function BottomBar() {
         </button>
       </nav>
       <LogSheet open={logOpen} onOpenChange={setLogOpen} />
+      <WindowsSwitcher
+        open={switcherOpen}
+        onOpenChange={setSwitcherOpen}
+        onSwitch={() => {
+          // Switching from another route (e.g. /settings) returns to the windows.
+          if (!onShell) router.push("/");
+        }}
+      />
     </>
   );
 }
