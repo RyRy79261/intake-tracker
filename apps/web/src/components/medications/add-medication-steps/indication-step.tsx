@@ -1,26 +1,20 @@
 "use client";
 
-import { Button } from "@intake/ui/button";
 import { Input } from "@intake/ui/input";
 import { Label } from "@intake/ui/label";
 import { Textarea } from "@intake/ui/textarea";
-import { Loader2, Search } from "lucide-react";
-import { useAuthGate } from "@/components/auth-guard";
 import { cn } from "@/lib/utils";
 import type { FoodInstruction } from "@/lib/db";
 import type { AddMedicationFormState } from "@/hooks/use-add-medication-form";
 import type { FieldChange } from "@/components/medications/add-medication-steps/types";
 
+/** Indication, safety notes, food and notes. The AI lookup sits above it. */
 export function IndicationStep({
   formState, onFieldChange,
-  onRefreshAI, isRefreshing = false,
 }: {
   formState: AddMedicationFormState;
   onFieldChange: FieldChange;
-  onRefreshAI?: () => void;
-  isRefreshing?: boolean;
 }) {
-  const showAi = useAuthGate();
   const { indication, contraindications, warnings, foodInstruction, foodNote, notes, selectedPrescriptionId } = formState;
   const isExistingPrescription = selectedPrescriptionId !== "new";
   const foodOptions: { value: FoodInstruction; label: string }[] = [
@@ -34,21 +28,7 @@ export function IndicationStep({
       {!isExistingPrescription && (
         <>
           <div>
-            <div className="mb-1 flex items-center justify-between">
-              <Label className="text-[0.8125rem] font-normal text-muted-foreground">Indication</Label>
-              {showAi && onRefreshAI && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={onRefreshAI}
-                  disabled={isRefreshing}
-                  className="border-ai text-ai"
-                >
-                  {isRefreshing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Search className="w-3 h-3" />}
-                  AI Suggest
-                </Button>
-              )}
-            </div>
+            <Label className="mb-1 block text-[0.8125rem] font-normal text-muted-foreground">Indication</Label>
             <Textarea
               value={indication}
               onChange={(e) => onFieldChange("indication", e.target.value)}

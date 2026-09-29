@@ -1,11 +1,9 @@
 "use client";
 
-import { Button } from "@intake/ui/button";
+import type { ReactNode } from "react";
 import { Input } from "@intake/ui/input";
 import { Label } from "@intake/ui/label";
 import { Switch } from "@intake/ui/switch";
-import { Loader2, Search } from "lucide-react";
-import { useAuthGate } from "@/components/auth-guard";
 import type { Prescription, CompoundStrength } from "@/lib/db";
 import type { AddMedicationFormState } from "@/hooks/use-add-medication-form";
 import type { MedicineStrengthOption } from "@/hooks/use-medicine-search";
@@ -16,20 +14,18 @@ import type { FieldChange } from "@/components/medications/add-medication-steps/
 export function SearchStep({
   formState, onFieldChange, errors,
   existingPrescriptions, onSelectPrescription,
-  onSearch, isSearching, searchError,
+  lookup,
 }: {
   formState: AddMedicationFormState;
   onFieldChange: FieldChange;
   errors: Record<string, string>;
   existingPrescriptions: Prescription[];
   onSelectPrescription: (id: string) => void;
-  onSearch: () => void;
-  isSearching: boolean;
-  searchError?: string;
+  /** The AI medicine lookup panel (sign-in gated by the panel itself). */
+  lookup?: ReactNode;
 }) {
-  const showAi = useAuthGate();
   const {
-    searchQuery, searchResult: result, brandName, genericName,
+    searchResult: result, brandName, genericName,
     dosageStrength, selectedPrescriptionId, isCombination, compounds,
   } = formState;
 
@@ -71,66 +67,7 @@ export function SearchStep({
         </div>
       )}
 
-      {showAi && (
-        <div>
-          <Label className="text-[0.8125rem] font-normal text-muted-foreground mb-1 block">Search medication</Label>
-          <div className="flex gap-2">
-            <Input
-              placeholder="e.g. Aviolix, Clopidogrel..."
-              value={searchQuery}
-              onChange={(e) => onFieldChange("searchQuery", e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  (e.target as HTMLElement).blur();
-                  onSearch();
-                }
-              }}
-            />
-            <Button
-              onClick={onSearch}
-              disabled={isSearching || !searchQuery.trim()}
-              size="icon"
-              aria-label="Search"
-              className="h-10 w-11 shrink-0"
-            >
-              {isSearching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
-            </Button>
-          </div>
-          {searchError && <p role="alert" className="mt-1 text-[0.8125rem] text-bp">{searchError}</p>}
-        </div>
-      )}
-
-      {showAi && result && (
-        <div className="space-y-1 border border-line bg-background p-3 text-sm shadow-[inset_3px_0_0_hsl(var(--ai))]">
-          <p className="font-semibold">Found: {result.genericName}</p>
-          {result.isGenericFallback && (
-            <div className="mb-2 mt-1 border border-sodium bg-sodium/10 px-2 py-1 text-xs">
-              Could not find physical details for that specific brand. Showing appearance for the generic equivalent.
-            </div>
-          )}
-          {result.drugClass && <p className="text-xs text-muted-foreground">Class: {result.drugClass}</p>}
-          {result.activeIngredients && result.activeIngredients.length > 1 && (
-            <p className="text-xs text-muted-foreground">
-              Combination drug: {result.activeIngredients.join(" + ")}
-            </p>
-          )}
-          {result.localAlternatives && result.localAlternatives.length > 0 && (
-            <p className="text-xs text-muted-foreground">
-              Local: {result.localAlternatives.join(", ")}
-            </p>
-          )}
-          {result.dosageStrengths.length > 0 && (
-            <p className="text-xs text-muted-foreground">
-              Strengths: {result.dosageStrengths.join(", ")}
-            </p>
-          )}
-          {result.pillDescription && (
-            <p className="text-xs text-muted-foreground">
-              Appearance: {result.pillDescription}
-            </p>
-          )}
-        </div>
-      )}
+      {lookup}
 
       <div className="flex flex-col gap-3.5">
         <div>

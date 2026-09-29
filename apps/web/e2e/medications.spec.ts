@@ -31,26 +31,26 @@ test.describe('Medications', () => {
     // Wait for the wizard drawer
     await expect(page.locator('text=Search Medicine')).toBeVisible();
 
-    // Type in the search query
-    await page.fill('input[placeholder="e.g. Aviolix, Clopidogrel..."]', 'Aviolix 75mg');
+    // Type in the AI lookup field
+    await page.getByLabel('Medicine name or brand').fill('Aviolix 75mg');
 
     // Press Enter to trigger search
     await page.keyboard.press('Enter');
 
-    // Wait for the mock response to populate
+    // Wait for the mock result, then apply it to the form
     await expect(page.locator('text=Found: Aviolix Compound')).toBeVisible();
-    await expect(page.locator('text=Appearance: A purple reddish round pill')).toBeVisible();
+    await expect(page.locator('text=A purple reddish round pill')).toBeVisible();
+    await page.getByRole('button', { name: 'Apply to form' }).click();
 
-    // Verify Brand Name input is populated (set from full search query)
-    await expect(page.getByPlaceholder('e.g. Aviolix', { exact: true })).toHaveValue('Aviolix 75mg');
+    // Brand name = the brand found + the picked strength
+    await expect(page.getByPlaceholder('e.g. Aviolix', { exact: true })).toHaveValue('Aviolix 75');
 
     // Step 2: Appearance
     await page.click('button:has-text("Next")');
     await expect(page.locator('text=Pill Appearance')).toBeVisible();
 
-    // We expect "purple" and "round" to be active. In the UI, the custom color text might show the hex
-    // #9C27B0 is purple from COLOR_NAME_MAP
-    await expect(page.locator('text=#9C27B0').or(page.locator('text=purple'))).toBeVisible();
+    // "purple" maps to #9C27B0 (COLOR_NAME_MAP) and is the checked colour
+    await expect(page.getByRole('radio', { name: 'Colour #9C27B0' })).toHaveAttribute('aria-checked', 'true');
 
     // Step 3: Indication
     await page.click('button:has-text("Next")');
@@ -118,9 +118,10 @@ test.describe('Medications', () => {
     await page.click('button:has-text("Add a prescription")');
     await expect(page.locator('text=Search Medicine')).toBeVisible();
 
-    await page.fill('input[placeholder="e.g. Aviolix, Clopidogrel..."]', 'Aviolix 75mg');
+    await page.getByLabel('Medicine name or brand').fill('Aviolix 75mg');
     await page.keyboard.press('Enter');
     await expect(page.locator('text=Found: Aviolix Compound')).toBeVisible();
+    await page.getByRole('button', { name: 'Apply to form' }).click();
 
     // Step 2: Appearance
     await page.click('button:has-text("Next")');
@@ -217,9 +218,10 @@ test.describe('Medications', () => {
     // === Create an AS-NEEDED medication via the wizard ===
     await page.click('button:has-text("Add a prescription")');
     await expect(page.locator('text=Search Medicine')).toBeVisible();
-    await page.fill('input[placeholder="e.g. Aviolix, Clopidogrel..."]', 'Furosemide 40mg');
+    await page.getByLabel('Medicine name or brand').fill('Furosemide 40mg');
     await page.keyboard.press('Enter');
     await expect(page.locator('text=Found: Furosemide')).toBeVisible();
+    await page.getByRole('button', { name: 'Apply to form' }).click();
 
     // Appearance
     await page.click('button:has-text("Next")');

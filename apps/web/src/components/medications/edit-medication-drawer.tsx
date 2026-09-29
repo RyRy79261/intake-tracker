@@ -25,6 +25,12 @@ import type { Prescription, FoodInstruction, InventoryItem, PillShape, CompoundS
 import { Loader2, Plus, Clock, Edit2, Check, X, Trash2 } from "lucide-react";
 import { WarnBox } from "@/components/medications/ward-bits";
 import { useMedicineSearch } from "@/hooks/use-medicine-search";
+import {
+  MedicineLookupPanel,
+  useMedicineLookup,
+  type ApplyContext,
+} from "@/components/medications/medicine-lookup-panel";
+import { applyToDetails, type LookupGroup } from "@/components/medications/medicine-lookup";
 import { STRENGTH_UNITS, convertStrength, normalizeStrengthUnit, parseStrength } from "@intake/core/strength";
 import { compoundSum, formatCompoundShort, isCombo } from "@intake/core/compound";
 import { isLive } from "@intake/core/lifecycle";
@@ -772,6 +778,14 @@ function MedicineEditForm({
 // Details Tab — name, indication, notes, active toggle, delete.
 // ============================================================================
 
+/** What the AI lookup offers on Prescription Details (prototype `rxEdit`). */
+const DETAILS_LOOKUP_GROUPS: LookupGroup[] = ["generic", "compounds", "indication", "food"];
+/** Offered groups this form has no field for, and where they are edited. */
+const DETAILS_LOOKUP_ELSEWHERE: Partial<Record<LookupGroup, string>> = {
+  compounds: "Set each brand's compounds on the Medicine tab",
+  food: "Set the food instruction on the Schedule tab",
+};
+
 function DetailsTab({ prescription, onOpenChange }: { prescription: Prescription, onOpenChange: (open: boolean) => void }) {
   const [isEditing, setIsEditing] = useState(false);
   const [name, setName] = useState(prescription.genericName);
@@ -781,6 +795,8 @@ function DetailsTab({ prescription, onOpenChange }: { prescription: Prescription
 
   const updatePrescription = useUpdatePrescription();
   const deletePrescription = useDeletePrescription();
+  const lookup = useMedicineLookup();
+  const { clear: clearLookup } = lookup;
 
   useEffect(() => {
     setName(prescription.genericName);
@@ -788,7 +804,14 @@ function DetailsTab({ prescription, onOpenChange }: { prescription: Prescription
     setNotes(prescription.notes || "");
     setIsActive(prescription.isActive);
     setIsEditing(false);
-  }, [prescription]);
+    clearLookup();
+  }, [prescription, clearLookup]);
+
+  const applyLookup = ({ groups, result }: ApplyContext) => {
+    const p = applyToDetails(groups, result);
+    if (p.name !== undefined) setName(p.name);
+    if (p.indication !== undefined) setIndication(p.indication);
+  };
 
   const handleSave = async () => {
     await updatePrescription.mutateAsync({
@@ -835,6 +858,14 @@ function DetailsTab({ prescription, onOpenChange }: { prescription: Prescription
 
       {isEditing ? (
         <div className="flex flex-col gap-3">
+          <MedicineLookupPanel
+            lookup={lookup}
+            groups={DETAILS_LOOKUP_GROUPS}
+            fallbackQuery={name}
+            placeholder={`e.g. ${prescription.genericName}`}
+            unavailable={DETAILS_LOOKUP_ELSEWHERE}
+            onApply={applyLookup}
+          />
           <div className="flex items-center justify-between gap-3 border border-line bg-background p-3">
             <div className="space-y-0.5">
               <Label className="text-sm font-semibold">Active Prescription</Label>

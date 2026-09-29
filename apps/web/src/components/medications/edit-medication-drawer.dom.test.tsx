@@ -2,12 +2,23 @@
 import { describe, it, expect, vi } from "vitest";
 import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import type * as AuthGuardMod from "@/components/auth-guard";
 
-// The Info tab's "Refresh AI Data" path calls the medicine-search hook; the
-// other tabs (Schedule, Details) under test never touch it, but the module is
-// imported eagerly so provide a harmless stub.
+// The Info tab's "Refresh AI Data" path calls the medicine-search hook and the
+// Details tab's lookup panel calls `searchMedicine`; stub both so nothing
+// reaches the network.
+const searchMock = vi.hoisted(() => vi.fn());
 vi.mock("@/hooks/use-medicine-search", () => ({
   useMedicineSearch: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  searchMedicine: (...args: unknown[]) => searchMock(...args),
+  MedicineSearchCancelledError: class MedicineSearchCancelledError extends Error {},
+  MedicineSearchError: class MedicineSearchError extends Error {},
+}));
+
+// Signed in, so the Details tab offers the AI lookup.
+vi.mock("@/components/auth-guard", async (importActual) => ({
+  ...(await importActual<typeof AuthGuardMod>()),
+  useAuthGate: () => true,
 }));
 
 import { PrescriptionViewDrawer } from "@/components/medications/edit-medication-drawer";
@@ -171,6 +182,55 @@ describe("PrescriptionViewDrawer", () => {
     await vi.waitFor(async () => {
       const rx = await db.prescriptions.get(prescription.id);
       expect(rx?.genericName).toBe("Lisinopril XR");
+    });
+  });
+
+  it("Details edit mode: the AI lookup fills the name and reason for use, and explains what it can't", async () => {
+    searchMock.mockResolvedValue({
+      brandNames: ["Zestril"],
+      genericName: "lisinopril",
+      activeIngredients: ["Lisinopril"],
+      dosageStrengths: ["10 mg"],
+      commonIndications: ["High blood pressure (hypertension)"],
+      foodInstruction: "none",
+      pillColor: "pink",
+      pillShape: "round",
+    });
+    const user = userEvent.setup();
+    const { prescription, phase, schedule } = regimen();
+    await renderWithFixtures(
+      <PrescriptionViewDrawer prescription={prescription} open onOpenChange={() => {}} />,
+      { seed: { prescriptions: [prescription], medicationPhases: [phase], phaseSchedules: [schedule] } },
+    );
+
+    await user.click(screen.getByRole("tab", { name: /details/i }));
+    // Read-only view: no lookup until editing.
+    expect(screen.queryByText("Look up with AI")).not.toBeInTheDocument();
+    await user.click(await screen.findByRole("button", { name: /^edit$/i }));
+
+    // The field is empty, so the lookup uses the name in the form.
+    await user.click(screen.getByRole("button", { name: "Look up with AI" }));
+    expect(searchMock).toHaveBeenCalledWith(expect.objectContaining({ query: "Lisinopril" }));
+    expect(await screen.findByText("Found: lisinopril")).toBeInTheDocument();
+
+    const food = screen.getByRole("checkbox", { name: /Food instruction/ });
+    expect(food).toHaveAttribute("aria-disabled", "true");
+    expect(food).toHaveTextContent("Set the food instruction on the Schedule tab");
+    // A single drug: nothing to say about where compounds are edited.
+    expect(screen.getByRole("checkbox", { name: /Compounds/ })).toHaveTextContent(
+      "Single drug: no compounds to fill in",
+    );
+
+    await user.click(screen.getByRole("button", { name: "Apply to form" }));
+    expect(screen.getByText("Filled in from AI lookup")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("High blood pressure")).toBeInTheDocument();
+
+    const headerRow = screen.getByText("Prescription Details").parentElement!;
+    await user.click(within(headerRow).getByRole("button", { name: /save details/i }));
+    await vi.waitFor(async () => {
+      const rx = await db.prescriptions.get(prescription.id);
+      expect(rx?.indication).toBe("High blood pressure");
+      expect(rx?.genericName).toBe("Lisinopril");
     });
   });
 
