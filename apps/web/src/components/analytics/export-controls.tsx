@@ -51,23 +51,13 @@ export function ExportControls({ range }: ExportControlsProps) {
   };
 
   return (
-    <div className="flex gap-2">
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={handlePDF}
-        disabled={pdfLoading}
-      >
-        <FileText className="h-4 w-4 mr-1" />
+    <div className="wm-exp">
+      <Button variant="outline" onClick={handlePDF} disabled={pdfLoading}>
+        <FileText />
         {pdfLoading ? "Generating..." : "Export PDF"}
       </Button>
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={handleCSV}
-        disabled={csvLoading}
-      >
-        <Download className="h-4 w-4 mr-1" />
+      <Button variant="outline" onClick={handleCSV} disabled={csvLoading}>
+        <Download />
         {csvLoading ? "Exporting..." : "Export CSV"}
       </Button>
     </div>

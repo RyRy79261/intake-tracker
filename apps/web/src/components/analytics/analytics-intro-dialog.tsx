@@ -30,20 +30,20 @@ export function AnalyticsIntroDialog() {
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) setSeen(true); }}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
+      <DialogContent className="wm-dialog w-[calc(100%-24px)] border-line sm:max-w-md">
+        <DialogHeader className="pr-8 text-left">
           <DialogTitle>Your analytics</DialogTitle>
           <DialogDescription>
             A quick look at what this page can do.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 text-sm">
-          <div className="flex gap-3">
-            <BarChart3 className="w-5 h-5 shrink-0 text-sky-600 dark:text-sky-400 mt-0.5" />
+        <div className="flex flex-col gap-3">
+          <div className="wm-ib">
+            <BarChart3 className="text-water" aria-hidden="true" />
             <div>
-              <p className="font-medium">On this device</p>
-              <p className="text-muted-foreground text-xs mt-0.5">
+              <h3>On this device</h3>
+              <p>
                 A summary of your key metrics, blood pressure and weight trends,
                 fluid balance, and pre-built correlations — all computed
                 privately on your device from your logged records.
@@ -51,19 +51,19 @@ export function AnalyticsIntroDialog() {
             </div>
           </div>
 
-          <div className="flex gap-3">
-            <Cloud className="w-5 h-5 shrink-0 text-violet-600 dark:text-violet-400 mt-0.5" />
+          <div className="wm-ib">
+            <Cloud className="text-ai" aria-hidden="true" />
             <div>
-              <p className="font-medium flex items-center gap-1.5">
+              <h3>
                 With CloudSync
-                <Sparkles className="w-3.5 h-3.5 text-violet-500" />
-              </p>
-              <p className="text-muted-foreground text-xs mt-0.5">
+                <Sparkles className="h-4 w-4 text-ai" aria-hidden="true" />
+              </h3>
+              <p>
                 If you enable CloudSync, your data is also analysed on the
                 server — unlocking AI-enhanced analytics and deeper,
                 predefined analytic queries that go beyond what runs locally.
               </p>
-              <p className="text-muted-foreground text-xs mt-1.5">
+              <p>
                 CloudSync is optional and can be enabled any time from the
                 Settings page.
               </p>
@@ -72,7 +72,9 @@ export function AnalyticsIntroDialog() {
         </div>
 
         <DialogFooter>
-          <Button onClick={() => setSeen(true)}>Got it</Button>
+          <Button className="w-full" onClick={() => setSeen(true)}>
+            Got it
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

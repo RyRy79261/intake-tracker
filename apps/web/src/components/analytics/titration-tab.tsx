@@ -1,12 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type CSSProperties, type ReactNode } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
-import { Card, CardContent, CardHeader, CardTitle } from "@intake/ui/card";
-import { Button } from "@intake/ui/button";
 import {
   ChevronDown,
-  ChevronRight,
   Pill,
   TrendingUp,
   TrendingDown,
@@ -145,35 +142,33 @@ function formatDate(ts: number): string {
 }
 
 function TrendArrow({ direction }: { direction: TrendDirection["direction"] }) {
-  if (direction === "rising") {
-    return <TrendingUp className="w-3.5 h-3.5 text-rose-500" />;
-  }
-  if (direction === "falling") {
-    return <TrendingDown className="w-3.5 h-3.5 text-emerald-500" />;
-  }
-  return <Minus className="w-3.5 h-3.5 text-muted-foreground" />;
+  const Icon =
+    direction === "rising" ? TrendingUp : direction === "falling" ? TrendingDown : Minus;
+  const color =
+    direction === "rising"
+      ? "hsl(var(--bp))"
+      : direction === "falling"
+        ? "hsl(var(--weight))"
+        : "hsl(var(--muted-fg))";
+  return (
+    <span className="inline-flex" style={{ color }} role="img" aria-label={`trend ${direction}`}>
+      <Icon />
+    </span>
+  );
 }
 
-function AdherenceBadge({ rate }: { rate: number }) {
+function AdherenceValue({ rate }: { rate: number }) {
   const pct = Math.round(rate * 100);
   const color =
-    pct >= 90
-      ? "text-emerald-600 dark:text-emerald-400"
-      : pct >= 70
-        ? "text-amber-600 dark:text-amber-400"
-        : "text-rose-600 dark:text-rose-400";
-  return <span className={cn("font-mono text-sm font-medium", color)}>{pct}%</span>;
+    pct >= 90 ? "hsl(var(--weight))" : pct >= 70 ? "hsl(var(--sodium))" : "hsl(var(--bp))";
+  return <span style={{ color }}>{pct}%</span>;
 }
 
 function PhaseTypeBadge({ type }: { type: PhaseType }) {
   return (
     <span
-      className={cn(
-        "text-[10px] font-medium px-1.5 py-0.5 rounded-full uppercase tracking-wider",
-        type === "maintenance"
-          ? "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300"
-          : "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300",
-      )}
+      className="wm-pill"
+      style={{ "--c": `hsl(var(--${type === "titration" ? "sodium" : "water"}))` } as CSSProperties}
     >
       {type}
     </span>
@@ -191,100 +186,72 @@ function PhaseSnapshotCard({ snapshot }: { snapshot: PhaseSnapshot }) {
     phase.endDate ? formatDate(phase.endDate) : "present"
   }`;
 
-  if (!snapshot.hasData) {
-    return (
-      <div className="border rounded-lg p-3 bg-muted/30">
-        <div className="flex items-center gap-2 mb-1">
-          <PhaseTypeBadge type={phase.type} />
-          {isActive && (
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-          )}
-          <span className="text-xs text-muted-foreground">{dateLabel}</span>
-        </div>
-        <p className="text-xs text-muted-foreground">
-          No health data recorded during this phase
-        </p>
-      </div>
-    );
+  const metrics: { key: string; label: string; value: ReactNode }[] = [];
+  if (snapshot.hasData) {
+    if (snapshot.adherenceTotal > 0) {
+      metrics.push({ key: "ad", label: "Adherence", value: <AdherenceValue rate={snapshot.adherenceRate} /> });
+    }
+    if (snapshot.bpAvg.systolic > 0) {
+      metrics.push({
+        key: "bp",
+        label: "Avg BP",
+        value: (
+          <>
+            {Math.round(snapshot.bpAvg.systolic)}/{Math.round(snapshot.bpAvg.diastolic)}
+            <TrendArrow direction={snapshot.bpTrend.direction} />
+          </>
+        ),
+      });
+    }
+    if (snapshot.weightAvg > 0) {
+      metrics.push({
+        key: "wt",
+        label: "Avg Weight",
+        value: (
+          <>
+            {snapshot.weightAvg.toFixed(1)} kg
+            <TrendArrow direction={snapshot.weightTrend.direction} />
+          </>
+        ),
+      });
+    }
+    if (snapshot.fluidAvgBalance !== 0) {
+      metrics.push({
+        key: "fb",
+        label: "Avg Fluid Balance",
+        value: `${Math.round(snapshot.fluidAvgBalance)} ml`,
+      });
+    }
   }
 
   return (
-    <div
-      className={cn(
-        "border rounded-lg p-3",
-        isActive
-          ? "border-emerald-200 dark:border-emerald-800 bg-emerald-50/50 dark:bg-emerald-900/10"
-          : "bg-muted/30",
-      )}
-    >
-      {/* Header */}
-      <div className="flex items-center gap-2 mb-2">
+    <div className={cn("wm-ph", isActive && "act")}>
+      <div className="wm-ph-h">
         <PhaseTypeBadge type={phase.type} />
-        {isActive && (
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-        )}
-        <span className="text-xs text-muted-foreground">{dateLabel}</span>
+        {isActive && <span className="wm-pdot" role="img" aria-label="Active phase" />}
+        <span className="dt">{dateLabel}</span>
       </div>
 
-      {/* Metrics grid */}
-      <div className="grid grid-cols-2 gap-2 text-xs">
-        {/* Adherence */}
-        {snapshot.adherenceTotal > 0 && (
-          <div>
-            <span className="text-muted-foreground">Adherence</span>
-            <div className="flex items-center gap-1 mt-0.5">
-              <AdherenceBadge rate={snapshot.adherenceRate} />
-            </div>
-          </div>
-        )}
+      {!snapshot.hasData && (
+        <p className="wm-p mt-2">No health data recorded during this phase</p>
+      )}
 
-        {/* BP */}
-        {snapshot.bpAvg.systolic > 0 && (
-          <div>
-            <span className="text-muted-foreground">Avg BP</span>
-            <div className="flex items-center gap-1 mt-0.5">
-              <span className="font-mono text-sm">
-                {Math.round(snapshot.bpAvg.systolic)}/{Math.round(snapshot.bpAvg.diastolic)}
-              </span>
-              <TrendArrow direction={snapshot.bpTrend.direction} />
+      {metrics.length > 0 && (
+        <div className="wm-ph-m">
+          {metrics.map((m) => (
+            <div key={m.key}>
+              <span className="k">{m.label}</span>
+              <span className="v">{m.value}</span>
             </div>
-          </div>
-        )}
-
-        {/* Weight */}
-        {snapshot.weightAvg > 0 && (
-          <div>
-            <span className="text-muted-foreground">Avg Weight</span>
-            <div className="flex items-center gap-1 mt-0.5">
-              <span className="font-mono text-sm">
-                {snapshot.weightAvg.toFixed(1)} kg
-              </span>
-              <TrendArrow direction={snapshot.weightTrend.direction} />
-            </div>
-          </div>
-        )}
-
-        {/* Fluid balance */}
-        {snapshot.fluidAvgBalance !== 0 && (
-          <div>
-            <span className="text-muted-foreground">Avg Fluid Balance</span>
-            <div className="mt-0.5">
-              <span className="font-mono text-sm">
-                {Math.round(snapshot.fluidAvgBalance)} ml
-              </span>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Anomalies */}
-      {snapshot.anomalyCount > 0 && (
-        <div className="mt-2 flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
-          <Activity className="w-3 h-3" />
-          <span>
-            {snapshot.anomalyCount} anomal{snapshot.anomalyCount === 1 ? "y" : "ies"} detected
-          </span>
+          ))}
         </div>
+      )}
+
+      {snapshot.anomalyCount > 0 && (
+        <p className="wm-ph-an">
+          <Activity aria-hidden="true" />
+          {snapshot.anomalyCount} anomal{snapshot.anomalyCount === 1 ? "y" : "ies"} detected
+        </p>
       )}
     </div>
   );
@@ -298,44 +265,30 @@ function PrescriptionSection({ report }: { report: PrescriptionReport }) {
   const [expanded, setExpanded] = useState(report.prescription.isActive);
 
   return (
-    <Card className="bg-card border-line">
-      <CardHeader className="pt-3 pb-1 px-3">
-        <Button
-          variant="ghost"
-          className="w-full flex items-center justify-between p-0 h-auto hover:bg-transparent"
-          onClick={() => setExpanded(!expanded)}
-        >
-          <div className="flex items-center gap-2">
-            <Pill className="w-4 h-4 text-muted-foreground" />
-            <CardTitle className="text-sm font-medium">
-              {report.prescription.genericName}
-            </CardTitle>
-            {!report.prescription.isActive && (
-              <span className="text-[10px] text-muted-foreground">(inactive)</span>
-            )}
-          </div>
-          {expanded ? (
-            <ChevronDown className="w-4 h-4 text-muted-foreground" />
-          ) : (
-            <ChevronRight className="w-4 h-4 text-muted-foreground" />
+    <section className="wm-tx">
+      <button type="button" aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>
+        <Pill aria-hidden="true" />
+        <span>
+          {report.prescription.genericName}
+          {!report.prescription.isActive && (
+            <span className="font-normal text-muted-foreground"> (inactive)</span>
           )}
-        </Button>
-      </CardHeader>
+        </span>
+        <ChevronDown className="chev" aria-hidden="true" />
+      </button>
 
       {expanded && (
-        <CardContent className="px-3 pb-3 space-y-2">
+        <div className="wm-txb">
           {report.phases.length === 0 ? (
-            <p className="text-xs text-muted-foreground py-2">
-              No phases in the selected range
-            </p>
+            <p className="wm-p">No phases in the selected range</p>
           ) : (
             report.phases.map((snapshot) => (
               <PhaseSnapshotCard key={snapshot.phase.id} snapshot={snapshot} />
             ))
           )}
-        </CardContent>
+        </div>
       )}
-    </Card>
+    </section>
   );
 }
 
@@ -347,32 +300,24 @@ export function TitrationTab({ range }: { range: TimeRange }) {
   const reports = useTitrationData(range);
 
   if (!reports) {
-    return (
-      <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
-        Loading titration data...
-      </div>
-    );
+    return <p className="wm-p py-8 text-center">Loading titration data...</p>;
   }
 
   if (reports.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-8 text-center">
-        <Pill className="w-8 h-8 text-muted-foreground mb-2" />
-        <p className="text-sm text-muted-foreground">
-          No prescriptions to analyze
-        </p>
-        <p className="text-xs text-muted-foreground mt-1">
-          Add prescriptions in the Medications tab to see titration reports
-        </p>
+      <div className="wm-empty">
+        <Pill aria-hidden="true" />
+        <p className="t">No prescriptions to analyze</p>
+        <p className="wm-p">Add prescriptions in the Medications tab to see titration reports</p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-3">
+    <>
       {reports.map((report) => (
         <PrescriptionSection key={report.prescription.id} report={report} />
       ))}
-    </div>
+    </>
   );
 }

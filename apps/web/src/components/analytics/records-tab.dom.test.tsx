@@ -36,7 +36,7 @@ afterEach(() => {
 
 /** The Delete button on the row whose measurement text matches. */
 async function deleteButtonFor(text: string | RegExp) {
-  const row = (await screen.findByText(text)).closest('[role="button"]') as HTMLElement;
+  const row = (await screen.findByText(text)).closest('[data-testid="record-row"]') as HTMLElement;
   return within(row).getByRole("button", { name: "Delete entry" });
 }
 
@@ -164,7 +164,7 @@ describe("RecordsTab", () => {
     if (!meal.success) throw new Error("add failed");
     await renderWithFixtures(<RecordsTab range={RANGE} />);
 
-    const row = (await screen.findByText(/Dinner/)).closest('[role="button"]') as HTMLElement;
+    const row = (await screen.findByText(/Dinner/)).closest('[data-testid="record-row"]') as HTMLElement;
     await user.click(within(row).getByRole("button", { name: "Edit entry" }));
     const dialog = await screen.findByRole("dialog");
     const noteInput = within(dialog).getByDisplayValue("Dinner");

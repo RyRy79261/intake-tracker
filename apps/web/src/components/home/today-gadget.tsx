@@ -10,6 +10,7 @@ import { getProgressStatus } from "@intake/core/progress";
 import { domainColor, type Domain } from "@/lib/domain-colors";
 import { openWindow } from "@/hooks/use-window-history";
 import { cn } from "@/lib/utils";
+import type { FilterType } from "@/lib/history-types";
 import {
   bucketByLogicalDay,
   dayKeyWeekday,
@@ -125,8 +126,19 @@ function weekAria(m: Metric, dayKeys: string[], todayIndex: number): string {
     .join(", ");
 }
 
-const openMetrics = () => {
-  openWindow("metrics");
+/** Today row -> the Records filter for its domain. */
+const RECORDS_FILTER: Record<string, FilterType> = {
+  water: "water",
+  sodium: "salt",
+  sugar: "sugar",
+  potassium: "potassium",
+  caffeine: "caffeine",
+  alcohol: "alcohol",
+};
+
+/** Open Metrics › Records filtered to the row's domain. */
+const openRecords = (key: string) => {
+  openWindow("metrics", { tab: "records", filter: RECORDS_FILTER[key] ?? "all" });
 };
 
 /**
@@ -226,7 +238,7 @@ export function TodayGadget() {
               aria-label={aria}
               data-testid={`today-row-${m.key}`}
               data-status={st.status}
-              onClick={openMetrics}
+              onClick={() => openRecords(m.key)}
             >
               <span className="wc-tg-l">{m.label}</span>
               <DayCells m={m} dayKeys={dayKeys} todayIndex={todayIndex} />
@@ -265,7 +277,7 @@ export function TodayGadget() {
               style={{ "--c": m.color } as CSSProperties}
               aria-label={aria}
               data-testid={`today-row-${m.key}`}
-              onClick={openMetrics}
+              onClick={() => openRecords(m.key)}
             >
               <span className="wc-tg-l">
                 {m.label}

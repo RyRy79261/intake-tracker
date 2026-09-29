@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect, useMemo } from "react";
+import { useState, useCallback, useEffect, useMemo, type CSSProperties } from "react";
 import { Button } from "@intake/ui/button";
 import { RecordRow } from "@/components/history/record-row";
 import { useSettings } from "@/hooks/use-settings";
@@ -50,7 +50,7 @@ import {
 } from "@/hooks/use-composable-entry";
 import { useToast } from "@intake/ui/use-toast";
 import { useKeyboardAwareScroll } from "@/hooks/use-keyboard-scroll";
-import { cn } from "@/lib/utils";
+import { domainColor } from "@/lib/domain-colors";
 import { getDeviceTimezone } from "@/lib/timezone";
 import { timestampToDateTimeLocal } from "@/lib/date-utils";
 import type { TimeRange } from "@intake/types/analytics";
@@ -78,6 +78,13 @@ function entriesLabel(count: number): string {
 
 interface RecordsTabProps {
   range: TimeRange;
+  /**
+   * The domain filter, when the parent keeps it (the Metrics window, so
+   * Home's Today rows can open Records filtered). Left out, the tab keeps
+   * its own, starting at "All".
+   */
+  filter?: FilterType | undefined;
+  onFilterChange?: ((filter: FilterType) => void) | undefined;
 }
 
 // Optional-tracker filter tabs are gated on user settings — see
@@ -101,21 +108,13 @@ const FILTER_TABS: {
   { value: "alcohol", label: "Alcohol" },
 ];
 
-const filterColorMap: Record<string, string> = {
-  water: CARD_THEMES.water.buttonBg,
-  salt: CARD_THEMES.salt.buttonBg,
-  sugar: CARD_THEMES.sugar.buttonBg,
-  potassium: CARD_THEMES.potassium.buttonBg,
-  weight: CARD_THEMES.weight.buttonBg,
-  bp: CARD_THEMES.bp.buttonBg,
-  eating: CARD_THEMES.eating.buttonBg,
-  urination: CARD_THEMES.urination.buttonBg,
-  defecation: CARD_THEMES.defecation.buttonBg,
-  caffeine: CARD_THEMES.caffeine.buttonBg,
-  alcohol: CARD_THEMES.alcohol.buttonBg,
-};
+/** A filter chip's colour: its domain, ink for All and potassium. */
+function filterColor(filter: FilterType): string {
+  if (filter === "all" || filter === "potassium") return "hsl(var(--fg))";
+  return domainColor(CARD_THEMES[filter].domain);
+}
 
-export function RecordsTab({ range }: RecordsTabProps) {
+export function RecordsTab({ range, filter: filterProp, onFilterChange }: RecordsTabProps) {
   const { toast } = useToast();
   const { onFocus: scrollOnFocus } = useKeyboardAwareScroll();
   const settings = useSettings();
@@ -128,13 +127,23 @@ export function RecordsTab({ range }: RecordsTabProps) {
       (t.optional === "potassium" && potassiumEnabled),
   );
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [filter, setFilter] = useState<FilterType>("all");
+  const [ownFilter, setOwnFilter] = useState<FilterType>("all");
   const [page, setPage] = useState(1);
+  // A filter for a tracker that is switched off falls back to All.
+  const requested = filterProp ?? ownFilter;
+  const filter: FilterType = visibleFilterTabs.some((t) => t.value === requested)
+    ? requested
+    : "all";
+  const setFilter = (next: FilterType) => {
+    if (onFilterChange) onFilterChange(next);
+    else setOwnFilter(next);
+  };
 
-  // Reset page when range changes
+  // Reset page when range or filter changes (the filter can change from
+  // outside, e.g. a Today row opening Records filtered).
   useEffect(() => {
     setPage(1);
-  }, [range.start, range.end]);
+  }, [range.start, range.end, filter]);
 
   // Fetch all domain records via hook
   const { data: allRecords } = useRecordsTabData(range);
@@ -430,73 +439,66 @@ export function RecordsTab({ range }: RecordsTabProps) {
   return (
     <>
       {/* Domain filter */}
-      <div className="mb-4">
-        <div className="flex gap-1 overflow-x-auto pb-1">
-          {visibleFilterTabs.map((f) => (
-            <Button
-              key={f.value}
-              variant={filter === f.value ? "default" : "outline"}
-              size="sm"
-              className={cn(
-                "text-xs shrink-0",
-                filter === f.value && f.value !== "all" && filterColorMap[f.value]
-              )}
-              onClick={() => { setFilter(f.value); setPage(1); }}
-            >
-              {f.label}
-            </Button>
-          ))}
-        </div>
+      <div className="wm-chips" role="group" aria-label="Filter records">
+        {visibleFilterTabs.map((f) => (
+          <button
+            key={f.value}
+            type="button"
+            aria-pressed={filter === f.value}
+            data-filter={f.value}
+            style={{ "--c": filterColor(f.value) } as CSSProperties}
+            onClick={() => { setFilter(f.value); setPage(1); }}
+          >
+            {f.value !== "all" && <span className="mark" aria-hidden="true" />}
+            {f.label}
+          </button>
+        ))}
       </div>
 
       {/* Records list */}
-      <div className="min-h-[40vh]">
-        {filteredRecords.length === 0 ? (
-          <div className="text-center py-12 text-muted-foreground">
-            <ClipboardList className="w-12 h-12 mx-auto mb-4 opacity-30" />
-            <p>No records in this time range</p>
-          </div>
-        ) : (
-          <div className="space-y-6">
-            {dateGroups.map(([date, dayRecords]) => (
-              <div key={date}>
-                <div className="flex items-center gap-2 mb-3 text-sm font-medium text-muted-foreground">
-                  <Calendar className="w-4 h-4" />
-                  {date}
-                  <span className="text-xs bg-muted px-2 py-0.5 rounded-full">
-                    {entriesLabel(dayCounts.get(date) ?? dayRecords.length)}
-                  </span>
-                </div>
-                <div className="border-t border-border/50">
-                  {dayRecords.map((unified) => (
-                    <RecordRow
-                      key={unified.record.id}
-                      unified={unified}
-                      onDelete={() => handleDelete(unified)}
-                      onEdit={() => openEdit(unified)}
-                      isDeleting={deletingId === unified.record.id}
-                      liquidPresets={settings.liquidPresets}
-                    />
-                  ))}
-                </div>
+      {filteredRecords.length === 0 ? (
+        <div className="wm-empty rec">
+          <ClipboardList aria-hidden="true" />
+          <p>No records in this time range</p>
+        </div>
+      ) : (
+        <>
+          {dateGroups.map(([date, dayRecords]) => (
+            <div key={date} className="min-w-0">
+              <h3 className="wm-day">
+                <Calendar aria-hidden="true" />
+                <span>{date}</span>
+                <span className="wm-cnt">
+                  {entriesLabel(dayCounts.get(date) ?? dayRecords.length)}
+                </span>
+              </h3>
+              <div className="wm-list">
+                {dayRecords.map((unified) => (
+                  <RecordRow
+                    key={unified.record.id}
+                    unified={unified}
+                    onDelete={() => handleDelete(unified)}
+                    onEdit={() => openEdit(unified)}
+                    isDeleting={deletingId === unified.record.id}
+                    liquidPresets={settings.liquidPresets}
+                  />
+                ))}
               </div>
-            ))}
+            </div>
+          ))}
 
-            {hasMore && (
-              <div className="flex justify-center pt-4 pb-8">
-                <Button
-                  variant="outline"
-                  onClick={() => setPage((p) => p + 1)}
-                  className="gap-2"
-                >
-                  <ChevronDown className="w-4 h-4" />
-                  Load More
-                </Button>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
+          {hasMore && (
+            <Button
+              variant="outline"
+              onClick={() => setPage((p) => p + 1)}
+              className="wm-full mt-0"
+            >
+              <ChevronDown />
+              Load More
+            </Button>
+          )}
+        </>
+      )}
 
       {/* Edit dialogs */}
       <EditIntakeDialog

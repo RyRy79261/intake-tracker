@@ -8,6 +8,7 @@ import { AnalyticsPageBody, isAnalyticsTab } from "@/components/analytics/analyt
 import { ProfilePageBody } from "@/components/profile/profile-page-body";
 import { useMedicationUIStore } from "@/stores/medication-ui-store";
 import { useWindowStore, type Win } from "@/stores/window-store";
+import { isFilterType } from "@/lib/history-types";
 import type { WindowAppId } from "@/lib/nav-routes";
 
 export interface WindowBodyProps {
@@ -56,11 +57,23 @@ function MedsOverlay() {
   );
 }
 
-/** Metrics: the Analytics screen, its tab kept in the window's state. */
+/**
+ * Metrics: the Analytics screen, its tab and Records filter kept in the
+ * window's state (so History and Home's Today rows can open it on Records,
+ * filtered to a domain).
+ */
 function MetricsBody({ win }: WindowBodyProps) {
   const setSt = useWindowStore((s) => s.setSt);
   const tab = isAnalyticsTab(win.st.tab) ? win.st.tab : "summary";
-  return <AnalyticsPageBody activeTab={tab} onTabChange={(next) => setSt(win.id, { tab: next })} />;
+  const filter = isFilterType(win.st.filter) ? win.st.filter : "all";
+  return (
+    <AnalyticsPageBody
+      activeTab={tab}
+      onTabChange={(next) => setSt(win.id, { tab: next })}
+      recordsFilter={filter}
+      onRecordsFilterChange={(next) => setSt(win.id, { filter: next })}
+    />
+  );
 }
 
 function ProfileBody() {
@@ -73,6 +86,6 @@ function ProfileBody() {
  */
 export const WINDOW_APPS: Record<WindowAppId, WindowApp> = {
   meds: { Body: MedsBody, Overlay: MedsOverlay, flushTop: true },
-  metrics: { Body: MetricsBody },
+  metrics: { Body: MetricsBody, flushTop: true },
   profile: { Body: ProfileBody },
 };

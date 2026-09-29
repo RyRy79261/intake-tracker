@@ -1,18 +1,15 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type CSSProperties } from "react";
 import { formatDistanceToNow } from "date-fns";
 import {
   Apple,
   Loader2,
   ChevronDown,
-  ChevronUp,
-  ChevronRight,
   AlertCircle,
   Check,
   X,
 } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@intake/ui/card";
 import { Button } from "@intake/ui/button";
 import { Input } from "@intake/ui/input";
 import {
@@ -63,28 +60,27 @@ interface ScanRecord extends NutrientAnalysisResult {
   focus?: string;
 }
 
+const C_WEIGHT = { "--c": "hsl(var(--weight))" } as CSSProperties;
+const C_AI = { "--c": "hsl(var(--ai))" } as CSSProperties;
+
 function StatusBadge({ status }: { status: NutrientFinding["status"] }) {
   const config = {
-    high: {
-      label: "High",
-      classes:
-        "bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300",
-    },
-    low: {
-      label: "Low",
-      classes: "bg-sky-100 text-sky-800 dark:bg-sky-950/50 dark:text-sky-300",
-    },
-    balanced: {
-      label: "Balanced",
-      classes:
-        "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300",
-    },
+    high: { label: "High", color: "hsl(var(--sodium))" },
+    low: { label: "Low", color: "hsl(var(--water))" },
+    balanced: { label: "Balanced", color: "hsl(var(--weight))" },
   }[status];
   return (
-    <span
-      className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium ${config.classes}`}
-    >
+    <span className="wm-pill" style={{ "--c": config.color } as CSSProperties}>
       {config.label}
+    </span>
+  );
+}
+
+/** Outlined focus-nutrient marker. */
+function FocusPill({ focus }: { focus: string }) {
+  return (
+    <span className="wm-pill max-w-40 truncate" style={C_AI} title={`Focus: ${focus}`}>
+      {focus}
     </span>
   );
 }
@@ -100,33 +96,15 @@ function ScanPreview({
   onOpen: (record: ScanRecord) => void;
 }) {
   return (
-    <button
-      type="button"
-      onClick={() => onOpen(record)}
-      className="w-full text-left rounded-md border border-line bg-background hover:bg-foreground/5 transition-colors px-2.5 py-2"
-    >
-      <div className="flex items-center justify-between gap-2 mb-1">
-        <div className="flex items-center gap-1.5 min-w-0 flex-1">
-          <span className="text-[11px] text-muted-foreground truncate">
-            {formatDistanceToNow(record.generatedAt, { addSuffix: true })}
-          </span>
-          {record.focus && (
-            <span
-              className="shrink-0 inline-flex items-center rounded-full bg-violet-100 dark:bg-violet-950/50 text-violet-700 dark:text-violet-300 px-1.5 py-0.5 text-[10px] font-medium truncate max-w-40"
-              title={`Focus: ${record.focus}`}
-            >
-              {record.focus}
-            </span>
-          )}
-        </div>
-        <span className="shrink-0 inline-flex items-center gap-0.5 text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
-          Read
-          <ChevronRight className="w-3 h-3" />
+    <button type="button" onClick={() => onOpen(record)} className="wm-prev" style={C_WEIGHT}>
+      <span className="wm-pt">
+        <span className="truncate">
+          {formatDistanceToNow(record.generatedAt, { addSuffix: true })}
         </span>
-      </div>
-      <p className="text-xs text-muted-foreground line-clamp-2">
-        {record.summary}
-      </p>
+        {record.focus && <FocusPill focus={record.focus} />}
+        <span className="rd">Read ›</span>
+      </span>
+      <span className="wm-clamp">{record.summary}</span>
     </button>
   );
 }
@@ -136,31 +114,22 @@ function ScanPreview({
  *  container handles overflow. */
 function ScanContent({ record }: { record: ScanRecord }) {
   return (
-    <div className="space-y-3">
+    <div className="flex flex-col gap-3">
       <p className="text-sm text-foreground whitespace-pre-line">
         {record.summary}
       </p>
 
       {record.findings.length > 0 && (
-        <ul className="space-y-2">
+        <ul className="flex flex-col gap-2">
           {record.findings.map((f, i) => (
-            <li
-              key={i}
-              className="rounded-md border border-line bg-background px-2.5 py-2 space-y-1"
-            >
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-sm font-medium text-foreground">
-                  {f.nutrient}
-                </span>
+            <li key={i} className="wm-find">
+              <div className="h">
+                <span>{f.nutrient}</span>
                 <StatusBadge status={f.status} />
               </div>
-              <p className="text-xs text-muted-foreground">
-                {f.detail}
-              </p>
+              <p>{f.detail}</p>
               {f.exampleFoods.length > 0 && (
-                <p className="text-[11px] text-muted-foreground">
-                  From: {f.exampleFoods.join(", ")}
-                </p>
+                <p>From: {f.exampleFoods.join(", ")}</p>
               )}
             </li>
           ))}
@@ -168,20 +137,20 @@ function ScanContent({ record }: { record: ScanRecord }) {
       )}
 
       {record.caveats.length > 0 && (
-        <div className="rounded-md border border-amber-200 dark:border-amber-900/60 bg-amber-50/70 dark:bg-amber-950/30 px-2.5 py-2 space-y-1">
-          <p className="flex items-center gap-1 text-[11px] font-medium text-amber-900 dark:text-amber-200">
-            <AlertCircle className="w-3 h-3" />
+        <div className="wm-warn">
+          <b className="flex items-center gap-1">
+            <AlertCircle className="h-3.5 w-3.5" aria-hidden="true" />
             Caveats
-          </p>
-          <ul className="space-y-0.5 text-[11px] text-amber-900/90 dark:text-amber-200/90">
+          </b>
+          <ul>
             {record.caveats.map((c, i) => (
-              <li key={i}>• {c}</li>
+              <li key={i}>{c}</li>
             ))}
           </ul>
         </div>
       )}
 
-      <p className="text-[11px] text-muted-foreground">
+      <p className="wm-note mt-0">
         Observational only — not medical advice. Estimates are based on food
         descriptions, not measured nutrient amounts.
       </p>
@@ -310,129 +279,108 @@ export function NutrientAnalysisCard() {
   };
 
   return (
-    <Card className="bg-card border-line">
-      <CardHeader className="pt-3 pb-1 px-3">
-        <CardTitle className="text-sm font-medium flex items-center gap-1.5">
-          <Apple className="w-3.5 h-3.5 text-emerald-500" />
-          Food nutrient check
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="px-3 pb-3 space-y-3">
-        {latest ? (
-          <ScanPreview record={latest} onOpen={setReadingScan} />
-        ) : (
-          <p className="text-xs text-muted-foreground">
-            Scan your last {WINDOW_DAYS} days of food entries for nutrient
-            biases — e.g. too much potassium, low fiber. The model can
-            web-search any branded or regional items it doesn&apos;t
-            recognise, so this can take 5-15 seconds. Only food descriptions
-            are sent; timestamps stay on device.
-          </p>
-        )}
+    <section className="wm-card" style={C_WEIGHT} aria-label="Food nutrient check">
+      <h3 className="wm-ct">
+        <Apple className="text-weight" aria-hidden="true" />
+        Food nutrient check
+      </h3>
+      {latest ? (
+        <ScanPreview record={latest} onOpen={setReadingScan} />
+      ) : (
+        <p className="wm-p">
+          Scan your last {WINDOW_DAYS} days of food entries for nutrient
+          biases — e.g. too much potassium, low fiber. The model can
+          web-search any branded or regional items it doesn&apos;t
+          recognise, so this can take 5-15 seconds. Only food descriptions
+          are sent; timestamps stay on device.
+        </p>
+      )}
 
-        {personalised && (
-          <p className="text-[11px] text-muted-foreground">
-            Personalised with your medical profile
-            {shareConditions && sendsMedications
-              ? " (conditions + medications)"
-              : shareConditions
-                ? " (conditions)"
-                : " (medications)"}
-            .
-          </p>
-        )}
+      {personalised && (
+        <p className="wm-note">
+          Personalised with your medical profile
+          {shareConditions && sendsMedications
+            ? " (conditions + medications)"
+            : shareConditions
+              ? " (conditions)"
+              : " (medications)"}
+          .
+        </p>
+      )}
 
-        <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-          <span>
-            {foods.length} food {foods.length === 1 ? "entry" : "entries"} in
-            the last {WINDOW_DAYS} days
-          </span>
-          <button
-            type="button"
-            onClick={() => setFocusOpen((v) => !v)}
-            aria-expanded={focusOpen}
-            aria-controls="nutrient-focus-input"
-            className="inline-flex items-center gap-0.5 text-violet-600 dark:text-violet-400 hover:underline"
-          >
-            {focusOpen ? (
-              <>
-                Hide focus
-                <ChevronUp className="w-3 h-3" />
-              </>
-            ) : (
-              <>
-                Focus a nutrient
-                <ChevronDown className="w-3 h-3" />
-              </>
-            )}
-          </button>
-        </div>
-
-        {focusOpen && (
-          <Input
-            id="nutrient-focus-input"
-            value={focus}
-            onChange={(e) => setFocus(e.target.value.slice(0, 200))}
-            placeholder="e.g. potassium, iron, fiber"
-            className="h-8 text-xs"
-            disabled={pending}
-          />
-        )}
-
-        <Button
-          variant={latest ? "outline" : "default"}
-          size="sm"
-          onClick={() => setConfirmOpen(true)}
-          disabled={!canAnalyze}
-          className="w-full"
+      <div className="wm-row">
+        <span>
+          {foods.length} food {foods.length === 1 ? "entry" : "entries"} in
+          the last {WINDOW_DAYS} days
+        </span>
+        <button
+          type="button"
+          onClick={() => setFocusOpen((v) => !v)}
+          aria-expanded={focusOpen}
+          aria-controls="nutrient-focus-input"
+          className="wm-link"
         >
-          {pending ? (
-            <>
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              Analyzing…
-            </>
-          ) : foods.length === 0 ? (
-            "No food entries yet"
-          ) : latest ? (
-            "Run another scan"
-          ) : (
-            "Analyze nutrient balance"
-          )}
-        </Button>
+          {focusOpen ? "Hide focus ▴" : "Focus a nutrient ▾"}
+        </button>
+      </div>
 
-        {history.length > 0 && (
-          <Collapsible open={historyOpen} onOpenChange={setHistoryOpen}>
-            <CollapsibleTrigger asChild>
-              <button
-                type="button"
-                className="flex w-full items-center justify-between text-xs font-medium text-muted-foreground hover:text-foreground"
-              >
-                <span>Previous scans ({history.length})</span>
-                <ChevronDown
-                  className={`w-3.5 h-3.5 transition-transform ${
-                    historyOpen ? "rotate-180" : ""
-                  }`}
-                />
-              </button>
-            </CollapsibleTrigger>
-            <CollapsibleContent className="space-y-2 pt-2">
-              {history.map((record) => (
-                <ScanPreview
-                  key={record.id}
-                  record={record}
-                  onOpen={setReadingScan}
-                />
-              ))}
-            </CollapsibleContent>
-          </Collapsible>
+      {focusOpen && (
+        <Input
+          id="nutrient-focus-input"
+          aria-label="Nutrient to focus on"
+          value={focus}
+          onChange={(e) => setFocus(e.target.value.slice(0, 200))}
+          placeholder="e.g. potassium, iron, fiber"
+          className="mt-1.5"
+          disabled={pending}
+        />
+      )}
+
+      <Button
+        variant={latest ? "outline" : "default"}
+        onClick={() => setConfirmOpen(true)}
+        disabled={!canAnalyze}
+        className="wm-full"
+      >
+        {pending ? (
+          <>
+            <Loader2 className="animate-spin" />
+            Analyzing…
+          </>
+        ) : foods.length === 0 ? (
+          "No food entries yet"
+        ) : latest ? (
+          "Run another scan"
+        ) : (
+          "Analyze nutrient balance"
         )}
-      </CardContent>
+      </Button>
+
+      {history.length > 0 && (
+        <Collapsible open={historyOpen} onOpenChange={setHistoryOpen} className="wm-hist">
+          <CollapsibleTrigger asChild>
+            <button type="button">
+              Previous scans ({history.length})
+              <ChevronDown aria-hidden="true" />
+            </button>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            {history.map((record) => (
+              <ScanPreview
+                key={record.id}
+                record={record}
+                onOpen={setReadingScan}
+              />
+            ))}
+          </CollapsibleContent>
+        </Collapsible>
+      )}
 
       <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-1.5">
-              <Apple className="w-4 h-4 text-emerald-500" />
+        <DialogContent className="wm-dialog wm-dlg w-[calc(100%-24px)] border-line max-w-sm" style={C_WEIGHT}>
+          <DialogHeader className="pr-8 text-left">
+            <DialogTitle className="wm-dh">
+              <Apple className="text-weight" aria-hidden="true" />
               What goes into this scan
             </DialogTitle>
             <DialogDescription>
@@ -442,22 +390,20 @@ export function NutrientAnalysisCard() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-3 text-sm">
-            <div className="space-y-1.5">
-              <p className="font-medium text-foreground">
-                Food data (last {WINDOW_DAYS} days)
-              </p>
-              <ul className="space-y-1 text-muted-foreground">
-                <li className="flex gap-1.5">
-                  <Check className="w-3.5 h-3.5 mt-0.5 shrink-0 text-emerald-500" />
+          <div className="flex flex-col gap-3 text-sm">
+            <div>
+              <h3>Food data (last {WINDOW_DAYS} days)</h3>
+              <ul className="wm-ul">
+                <li className="wm-li ok">
+                  <Check aria-hidden="true" />
                   <span>
                     {foods.length} food{" "}
                     {foods.length === 1 ? "entry" : "entries"} — descriptions
                     and approximate portions in grams when logged
                   </span>
                 </li>
-                <li className="flex gap-1.5">
-                  <X className="w-3.5 h-3.5 mt-0.5 shrink-0 text-muted-foreground" />
+                <li className="wm-li no">
+                  <X aria-hidden="true" />
                   <span>
                     Timestamps, notes, and any other tracked categories (water,
                     BP, weight, etc.) are NOT sent
@@ -467,11 +413,9 @@ export function NutrientAnalysisCard() {
             </div>
 
             {focus.trim() !== "" && (
-              <div className="space-y-1.5">
-                <p className="font-medium text-foreground">
-                  Focus
-                </p>
-                <p className="text-muted-foreground">
+              <div>
+                <h3>Focus</h3>
+                <p className="mt-1 text-[0.8125rem] text-muted-foreground">
                   Findings will lead with:{" "}
                   <span className="text-foreground font-medium">
                     {focus.trim()}
@@ -480,17 +424,11 @@ export function NutrientAnalysisCard() {
               </div>
             )}
 
-            <div className="space-y-1.5">
-              <p className="font-medium text-foreground">
-                Your medical profile
-              </p>
-              <ul className="space-y-1 text-muted-foreground">
-                <li className="flex gap-1.5">
-                  {shareConditions ? (
-                    <Check className="w-3.5 h-3.5 mt-0.5 shrink-0 text-emerald-500" />
-                  ) : (
-                    <X className="w-3.5 h-3.5 mt-0.5 shrink-0 text-muted-foreground" />
-                  )}
+            <div>
+              <h3>Your medical profile</h3>
+              <ul className="wm-ul">
+                <li className={shareConditions ? "wm-li ok" : "wm-li no"}>
+                  {shareConditions ? <Check aria-hidden="true" /> : <X aria-hidden="true" />}
                   <span>
                     {shareConditions ? (
                       <>
@@ -504,11 +442,15 @@ export function NutrientAnalysisCard() {
                     )}
                   </span>
                 </li>
-                <li className="flex gap-1.5">
+                <li
+                  className={
+                    shareMedications && sharedMedicationCount !== 0 ? "wm-li ok" : "wm-li no"
+                  }
+                >
                   {shareMedications && sharedMedicationCount !== 0 ? (
-                    <Check className="w-3.5 h-3.5 mt-0.5 shrink-0 text-emerald-500" />
+                    <Check aria-hidden="true" />
                   ) : (
-                    <X className="w-3.5 h-3.5 mt-0.5 shrink-0 text-muted-foreground" />
+                    <X aria-hidden="true" />
                   )}
                   <span>
                     {!shareMedications
@@ -521,7 +463,7 @@ export function NutrientAnalysisCard() {
               </ul>
             </div>
 
-            <p className="text-xs text-muted-foreground">
+            <p className="wm-note mt-0">
               Food descriptions are sent to our server, where common PII
               patterns (emails, phone numbers, ID-like number sequences) are
               redacted before the descriptions reach the AI model. The model
@@ -531,14 +473,10 @@ export function NutrientAnalysisCard() {
           </div>
 
           <DialogFooter className="gap-2 sm:gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setConfirmOpen(false)}
-            >
+            <Button variant="outline" onClick={() => setConfirmOpen(false)}>
               Cancel
             </Button>
-            <Button size="sm" onClick={analyze} disabled={pending || !canAnalyze}>
+            <Button onClick={analyze} disabled={pending || !canAnalyze}>
               {latest ? "Run scan" : "Start analysis"}
             </Button>
           </DialogFooter>
@@ -551,19 +489,15 @@ export function NutrientAnalysisCard() {
           if (!open) setReadingScan(null);
         }}
       >
-        <DialogContent className="max-w-lg max-h-[85vh] flex flex-col">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-1.5">
-              <Apple className="w-4 h-4 text-emerald-500" />
+        <DialogContent
+          className="wm-dialog w-[calc(100%-24px)] border-line max-w-lg max-h-[85vh] flex flex-col"
+          style={C_WEIGHT}
+        >
+          <DialogHeader className="pr-8 text-left">
+            <DialogTitle className="wm-dh">
+              <Apple className="text-weight" aria-hidden="true" />
               Nutrient scan
-              {readingScan?.focus && (
-                <span
-                  className="ml-1 inline-flex items-center rounded-full bg-violet-100 dark:bg-violet-950/50 text-violet-700 dark:text-violet-300 px-1.5 py-0.5 text-[10px] font-medium"
-                  title={`Focus: ${readingScan.focus}`}
-                >
-                  {readingScan.focus}
-                </span>
-              )}
+              {readingScan?.focus && <FocusPill focus={readingScan.focus} />}
             </DialogTitle>
             {readingScan && (
               <DialogDescription>
@@ -582,6 +516,6 @@ export function NutrientAnalysisCard() {
           )}
         </DialogContent>
       </Dialog>
-    </Card>
+    </section>
   );
 }

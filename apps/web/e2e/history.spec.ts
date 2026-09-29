@@ -18,6 +18,12 @@ async function dismissAnalyticsIntro(page: Page) {
  */
 const metricsWindow = (page: Page) => page.getByTestId('window');
 
+/** A Records domain chip (the range row has its own "All"). */
+const recordsFilter = (page: Page, name: string) =>
+  metricsWindow(page)
+    .getByRole('group', { name: 'Filter records' })
+    .getByRole('button', { name, exact: true });
+
 test.describe('History / Analytics', () => {
 
   test('should load analytics page with all four tabs', async ({ page }) => {
@@ -152,7 +158,7 @@ test.describe('History / Analytics', () => {
     await page.locator('[role="tab"]', { hasText: 'Records' }).click();
 
     for (const filterLabel of ['Water', 'Weight', 'BP', 'Eating', 'Urination', 'Defecation']) {
-      await page.getByRole('button', { name: filterLabel, exact: true }).click();
+      await recordsFilter(page, filterLabel).click();
       await expect(
         page.getByRole('button', { name: 'Edit entry', exact: true }).first(),
         `${filterLabel} record should appear in the Records tab`,
@@ -179,7 +185,7 @@ test.describe('History / Analytics', () => {
     await page.goto('/analytics');
     await dismissAnalyticsIntro(page);
     await page.locator('[role="tab"]', { hasText: 'Records' }).click();
-    await page.getByRole('button', { name: 'Weight', exact: true }).click();
+    await recordsFilter(page, 'Weight').click();
     await expect(metricsWindow(page).getByText('71.35 kg')).toBeVisible();
 
     await metricsWindow(page).getByRole('button', { name: 'Edit entry', exact: true }).first().click();
@@ -192,6 +198,38 @@ test.describe('History / Analytics', () => {
     await expect(metricsWindow(page).getByText('71.35 kg')).toHaveCount(0);
   });
 
+  test('the History icon opens Metrics on Records, unfiltered', async ({ page }) => {
+    await page.goto('/');
+    await page.getByTestId('sys-bar').getByRole('button', { name: 'History' }).click();
+    await dismissAnalyticsIntro(page);
+
+    await expect(metricsWindow(page).getByRole('tab', { name: 'Records' })).toHaveAttribute('data-state', 'active');
+    await expect(recordsFilter(page, 'All')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page).toHaveURL(/\/analytics\?tab=records$/);
+  });
+
+  test('a Today row opens Records filtered to its domain', async ({ page }) => {
+    await page.goto('/');
+    await page.locator('#section-water').locator('button', { hasText: 'Confirm Entry' }).click();
+    await expect(page.getByText('Water intake recorded', { exact: true })).toBeVisible();
+
+    await page.getByTestId('today-row-water').click();
+    await dismissAnalyticsIntro(page);
+
+    await expect(metricsWindow(page).getByRole('tab', { name: 'Records' })).toHaveAttribute('data-state', 'active');
+    await expect(recordsFilter(page, 'Water')).toHaveAttribute('aria-pressed', 'true');
+    await expect(recordsFilter(page, 'All')).toHaveAttribute('aria-pressed', 'false');
+    await expect(
+      metricsWindow(page).getByRole('button', { name: 'Edit entry', exact: true }).first(),
+    ).toBeVisible();
+
+    // Another domain with nothing logged today shows the empty list.
+    await page.getByRole('navigation', { name: 'Bottom bar' }).getByRole('button', { name: 'Home' }).click();
+    await page.getByTestId('today-row-sodium').click();
+    await expect(recordsFilter(page, 'Sodium')).toHaveAttribute('aria-pressed', 'true');
+    await expect(metricsWindow(page).getByText('No records in this time range')).toBeVisible();
+  });
+
   test('delete a record from the Records tab removes it (D-14)', async ({ page }) => {
     await page.goto('/');
     await page.locator('#section-water').locator('button', { hasText: 'Confirm Entry' }).click();
@@ -200,7 +238,7 @@ test.describe('History / Analytics', () => {
     await page.goto('/analytics');
     await dismissAnalyticsIntro(page);
     await page.locator('[role="tab"]', { hasText: 'Records' }).click();
-    await page.getByRole('button', { name: 'Water', exact: true }).click();
+    await recordsFilter(page, 'Water').click();
 
     const deleteBtn = metricsWindow(page).getByRole('button', { name: 'Delete entry', exact: true }).first();
     await expect(deleteBtn).toBeVisible();

@@ -1,16 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@intake/ui/card";
+import { useId, useState, type CSSProperties } from "react";
 import { Button } from "@intake/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@intake/ui/select";
-import { Input } from "@intake/ui/input";
 import { BarChart3, ArrowRightLeft } from "lucide-react";
 import {
   useSaltVsWeight,
@@ -24,6 +15,12 @@ import {
 import type { TimeRange, Domain, CorrelationResult, AnalyticsResult } from "@intake/types/analytics";
 import { useOptionalTrackerEnabled } from "@/lib/optional-trackers";
 import { CorrelationChart } from "@/components/analytics/correlation-chart";
+import {
+  AXIS_PROPS,
+  CHART_COLOR,
+  GRID_PROPS,
+  TOOLTIP_PROPS,
+} from "@/components/analytics/chart-theme";
 import {
   ResponsiveContainer,
   BarChart,
@@ -94,6 +91,7 @@ function interpretCorrelation(result: CorrelationResult): string {
   return `These measures ${qualifier} ${direction} (r=${coefficient.toFixed(2)}).`;
 }
 
+
 // ---------------------------------------------------------------------------
 // Correlation card
 // ---------------------------------------------------------------------------
@@ -114,23 +112,17 @@ function CorrelationCard({
   unitB: string;
 }) {
   return (
-    <Card className="bg-card border-line">
-      <CardHeader className="pt-3 pb-1 px-3">
-        <CardTitle className="text-sm font-medium">{title}</CardTitle>
-      </CardHeader>
-      <CardContent className="px-3 pb-3">
-        <CorrelationChart
-          result={result.value}
-          labelA={labelA}
-          labelB={labelB}
-          unitA={unitA}
-          unitB={unitB}
-        />
-        <p className="text-xs text-muted-foreground mt-2">
-          {interpretCorrelation(result.value)}
-        </p>
-      </CardContent>
-    </Card>
+    <section className="wm-card">
+      <h3 className="wm-ct">{title}</h3>
+      <CorrelationChart
+        result={result.value}
+        labelA={labelA}
+        labelB={labelB}
+        unitA={unitA}
+        unitB={unitB}
+      />
+      <p className="wm-p mt-1">{interpretCorrelation(result.value)}</p>
+    </section>
   );
 }
 
@@ -138,31 +130,20 @@ function CorrelationCard({
 // Fluid balance card
 // ---------------------------------------------------------------------------
 
-const TOOLTIP_STYLE = {
-  backgroundColor: "hsl(var(--card))",
-  border: "1px solid hsl(var(--border))",
-  borderRadius: "8px",
-  fontSize: 12,
-};
-
 // Fluid balance target: ml of intake above estimated output per day.
 const FLUID_TARGET_ML = 500;
+
+const WATER_C = { "--c": CHART_COLOR.water } as CSSProperties;
 
 function FluidBalanceCard({ range }: { range: TimeRange }) {
   const data = useFluidBalance(range);
 
   if (!data || data.value.daily.length === 0) {
     return (
-      <Card className="bg-card border-line">
-        <CardHeader className="pt-3 pb-1 px-3">
-          <CardTitle className="text-sm font-medium">Fluid Balance</CardTitle>
-        </CardHeader>
-        <CardContent className="px-3 pb-3">
-          <div className="flex items-center justify-center h-[200px] text-sm text-muted-foreground">
-            No fluid data for this period
-          </div>
-        </CardContent>
-      </Card>
+      <section className="wm-card" style={WATER_C}>
+        <h3 className="wm-ct">Fluid Balance</h3>
+        <div className="wm-nodata h-[200px]">No fluid data for this period</div>
+      </section>
     );
   }
 
@@ -173,60 +154,58 @@ function FluidBalanceCard({ range }: { range: TimeRange }) {
   }));
 
   return (
-    <Card className="bg-card border-line">
-      <CardHeader className="pt-3 pb-1 px-3">
-        <CardTitle className="text-sm font-medium">Fluid Balance</CardTitle>
-      </CardHeader>
-      <CardContent className="px-3 pb-3">
+    <section className="wm-card" style={WATER_C}>
+      <h3 className="wm-ct">Fluid Balance</h3>
+      <div className="wm-chart">
         <ResponsiveContainer width="100%" height={200}>
-          <BarChart data={barData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-            <XAxis
-              dataKey="date"
-              tick={{ fontSize: 10 }}
-              tickLine={false}
-              axisLine={false}
-            />
+          <BarChart data={barData} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
+            <CartesianGrid {...GRID_PROPS} />
+            <XAxis dataKey="date" {...AXIS_PROPS} />
             <YAxis
-              tick={{ fontSize: 10 }}
-              tickLine={false}
+              {...AXIS_PROPS}
               axisLine={false}
               tickFormatter={(v: number) => `${v}ml`}
             />
-            <Tooltip contentStyle={TOOLTIP_STYLE} />
-            <ReferenceLine y={0} stroke="hsl(var(--border))" />
+            <Tooltip
+              {...TOOLTIP_PROPS}
+              formatter={(v) => [`${Math.round(Number(v))} ml`, "Balance"]}
+            />
+            <ReferenceLine y={0} stroke={CHART_COLOR.line} />
             <ReferenceLine
               y={FLUID_TARGET_ML}
-              stroke="hsl(160 84% 39%)"
+              stroke={CHART_COLOR.weight}
               strokeDasharray="4 4"
               label={{
                 value: `Target +${FLUID_TARGET_ML}ml`,
                 position: "insideTopRight",
                 fontSize: 9,
-                fill: "hsl(160 84% 39%)",
+                fill: CHART_COLOR.weight,
               }}
             />
             <Bar
               dataKey="balance"
               name="Balance"
-              fill="hsl(199 89% 48%)"
-              radius={[2, 2, 0, 0]}
+              fill={CHART_COLOR.water}
+              radius={0}
+              maxBarSize={28}
               isAnimationActive={false}
             />
           </BarChart>
         </ResponsiveContainer>
-        <div className="flex items-center justify-between text-xs text-muted-foreground mt-1 px-1">
-          <span>Avg: {Math.round(data.value.avgBalance)} ml/day</span>
-          <span>
-            {data.value.daysAboveTarget}/{data.value.daysTotal} days on target
-          </span>
-        </div>
-        <p className="text-[10px] text-muted-foreground mt-1 px-1">
-          Balance = water intake − estimated urination output. Output is
-          estimated from logged amount categories.
-        </p>
-      </CardContent>
-    </Card>
+      </div>
+      <div className="wm-stats justify-between">
+        <span>
+          Avg: <b className="num font-medium">{Math.round(data.value.avgBalance)} ml/day</b>
+        </span>
+        <span className="text-muted-foreground">
+          {data.value.daysAboveTarget}/{data.value.daysTotal} days on target
+        </span>
+      </div>
+      <p className="wm-note">
+        Balance = water intake − estimated urination output. Output is
+        estimated from logged amount categories.
+      </p>
+    </section>
   );
 }
 
@@ -235,6 +214,7 @@ function FluidBalanceCard({ range }: { range: TimeRange }) {
 // ---------------------------------------------------------------------------
 
 function CustomComparison({ range }: { range: TimeRange }) {
+  const lagId = useId();
   const sugarEnabled = useOptionalTrackerEnabled("sugar");
   const potassiumEnabled = useOptionalTrackerEnabled("potassium");
   const visibleOptions = DOMAIN_OPTIONS.filter(
@@ -259,79 +239,66 @@ function CustomComparison({ range }: { range: TimeRange }) {
   const domainLabel = (d: Domain) =>
     DOMAIN_OPTIONS.find((o) => o.value === d)?.label ?? d;
 
-  return (
-    <Card className="bg-card border-line">
-      <CardHeader className="pt-3 pb-1 px-3">
-        <div className="flex items-center gap-2">
-          <ArrowRightLeft className="w-4 h-4 text-muted-foreground" />
-          <CardTitle className="text-sm font-medium">Custom Comparison</CardTitle>
-        </div>
-      </CardHeader>
-      <CardContent className="px-3 pb-3 space-y-3">
-        <div className="flex items-center gap-2">
-          <Select value={domainA} onValueChange={(v) => { setDomainA(v as Domain); setActive(false); }}>
-            <SelectTrigger className="flex-1 h-8 text-xs">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {visibleOptions.map((opt) => (
-                <SelectItem key={opt.value} value={opt.value}>
-                  {opt.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <span className="text-xs text-muted-foreground">vs</span>
-          <Select value={domainB} onValueChange={(v) => { setDomainB(v as Domain); setActive(false); }}>
-            <SelectTrigger className="flex-1 h-8 text-xs">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {visibleOptions.map((opt) => (
-                <SelectItem key={opt.value} value={opt.value}>
-                  {opt.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="flex items-center gap-2">
-          <label className="text-xs text-muted-foreground whitespace-nowrap">
-            Lag (days):
-          </label>
-          <Input
-            type="number"
-            min={0}
-            max={14}
-            value={lagDays}
-            onChange={(e) => { setLagDays(Number(e.target.value)); setActive(false); }}
-            className="w-20 h-8 text-xs"
-          />
-          <Button
-            size="sm"
-            className="h-8 text-xs"
-            onClick={() => setActive(true)}
-          >
-            Compare
-          </Button>
-        </div>
+  const select = (value: Domain, onChange: (d: Domain) => void, label: string) => (
+    <select
+      className="wm-field"
+      aria-label={label}
+      value={value}
+      onChange={(e) => {
+        onChange(e.target.value as Domain);
+        setActive(false);
+      }}
+    >
+      {visibleOptions.map((opt) => (
+        <option key={opt.value} value={opt.value}>
+          {opt.label}
+        </option>
+      ))}
+    </select>
+  );
 
-        {active && correlationData && (
-          <div className="mt-2">
-            <CorrelationChart
-              result={correlationData.value}
-              labelA={domainLabel(domainA)}
-              labelB={domainLabel(domainB)}
-              unitA={DOMAIN_UNITS[domainA]}
-              unitB={DOMAIN_UNITS[domainB]}
-            />
-            <p className="text-xs text-muted-foreground mt-2">
-              {interpretCorrelation(correlationData.value)}
-            </p>
-          </div>
-        )}
-      </CardContent>
-    </Card>
+  return (
+    <section className="wm-card" data-testid="custom-comparison">
+      <div className="wm-cc">
+        {select(domainA, setDomainA, "First measure")}
+        <span className="text-muted-foreground">vs</span>
+        {select(domainB, setDomainB, "Second measure")}
+      </div>
+      <div className="wm-lag">
+        <label htmlFor={lagId}>Lag (days):</label>
+        <input
+          id={lagId}
+          type="number"
+          inputMode="numeric"
+          min={0}
+          max={14}
+          step={1}
+          value={lagDays}
+          onChange={(e) => {
+            setLagDays(Number(e.target.value));
+            setActive(false);
+          }}
+          className="wm-field"
+        />
+        <Button onClick={() => setActive(true)}>Compare</Button>
+      </div>
+
+      {active && correlationData && (
+        <div className="mt-3">
+          <h4 className="wm-ct">
+            {domainLabel(domainA)} vs {domainLabel(domainB)}
+          </h4>
+          <CorrelationChart
+            result={correlationData.value}
+            labelA={domainLabel(domainA)}
+            labelB={domainLabel(domainB)}
+            unitA={DOMAIN_UNITS[domainA]}
+            unitB={DOMAIN_UNITS[domainB]}
+          />
+          <p className="wm-p mt-1">{interpretCorrelation(correlationData.value)}</p>
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -349,12 +316,11 @@ export function CorrelationsTab({ range }: { range: TimeRange }) {
   const alcoholVsBP = useAlcoholVsBP(range);
 
   return (
-    <div className="space-y-3">
-      {/* Section header */}
-      <div className="flex items-center gap-2 px-1">
-        <BarChart3 className="w-4 h-4 text-muted-foreground" />
-        <h3 className="text-sm font-medium">Pre-configured Correlations</h3>
-      </div>
+    <>
+      <h3 className="wm-h">
+        <BarChart3 aria-hidden="true" />
+        Pre-configured Correlations
+      </h3>
 
       <CorrelationCard
         title="Weight vs Sodium Intake"
@@ -409,12 +375,12 @@ export function CorrelationsTab({ range }: { range: TimeRange }) {
       <FluidBalanceCard range={range} />
 
       {/* Custom comparison section */}
-      <div className="flex items-center gap-2 px-1 pt-2">
-        <ArrowRightLeft className="w-4 h-4 text-muted-foreground" />
-        <h3 className="text-sm font-medium">Custom Comparison</h3>
-      </div>
+      <h3 className="wm-h">
+        <ArrowRightLeft aria-hidden="true" />
+        Custom Comparison
+      </h3>
 
       <CustomComparison range={range} />
-    </div>
+    </>
   );
 }

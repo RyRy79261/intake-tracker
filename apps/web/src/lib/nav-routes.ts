@@ -95,7 +95,8 @@ export function resolveWindowApp(
   app: ShellAppId,
   st?: WindowState,
 ): { app: WindowAppId; st: WindowState } | null {
-  if (app === "history") return { app: "metrics", st: { ...st, tab: "records" } };
+  // History = Metrics on Records, unfiltered unless the caller filters it.
+  if (app === "history") return { app: "metrics", st: { filter: "all", ...st, tab: "records" } };
   if (app === "meds" || app === "metrics" || app === "profile") return { app, st: { ...st } };
   return null;
 }
