@@ -18,16 +18,14 @@ import { AppUpdatesSection } from "@/components/settings/app-updates-section";
 import { HelpSection } from "@/components/settings/help-section";
 import { ReportBugSection } from "@/components/settings/report-bug-section";
 import { AboutSection } from "@/components/settings/about-section";
-import { WardShellToggle } from "@/components/settings/ward-shell-toggle";
 import { LiquidPresetsSection } from "@/components/settings/liquid-presets-section";
 
 /** Set by the ErrorBoundary crash screen before it navigates to /settings. */
 const CRASH_REPORT_KEY = "intake-tracker:crash-report";
 
 /**
- * The settings groups, in the prototype's order. The swipe-navigation,
- * quick-nav and animation-timing sections are retired from the UI (their
- * store keys stay until the cleanup PR).
+ * The settings groups, in the prototype's order. The retired swipe-navigation,
+ * quick-nav and animation-timing sections keep their (synced) store keys.
  */
 const GROUPS: ReadonlyArray<{ id: SettingsGroupId; title: string }> = [
   { id: "tracking", title: "Tracking" },
@@ -81,12 +79,7 @@ function GroupBody({ id }: { id: SettingsGroupId }) {
     case "about":
       return <AboutSection />;
     case "debug":
-      return (
-        <>
-          <WardShellToggle />
-          <DebugPanel />
-        </>
-      );
+      return <DebugPanel />;
   }
 }
 
@@ -144,10 +137,7 @@ export function SettingsGroups() {
   );
 }
 
-/**
- * What the Settings sheet (and the legacy `/settings` page) shows: the
- * groups, or the Drink presets page.
- */
+/** What the Settings sheet shows: the groups, or the Drink presets page. */
 export function SettingsBody() {
   const page = useSettingsSheetStore((s) => s.page);
   return page === "presets" ? <LiquidPresetsSection /> : <SettingsGroups />;

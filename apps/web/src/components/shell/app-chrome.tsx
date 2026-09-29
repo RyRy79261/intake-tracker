@@ -2,17 +2,12 @@
 
 import { Suspense, useSyncExternalStore, type ReactNode } from "react";
 import { usePathname } from "next/navigation";
-import { useSettingsStore } from "@/stores/settings-store";
 import { useWindowStore } from "@/stores/window-store";
 import { isChromeRoute, isWindowRoute } from "@/lib/nav-routes";
 import { useWindowHistory } from "@/hooks/use-window-history";
 import { HomePageBody } from "@/components/home-page-body";
 import { WindowLayer, useIsWide } from "@/components/shell/window-layer";
 import { cn } from "@/lib/utils";
-import { AppHeader } from "@/components/app-header";
-import { SwipeNav } from "@/components/swipe-nav";
-import { HomeFloatingBars } from "@/components/home-floating-bars";
-import { MedicationsFloatingBars } from "@/components/medications-floating-bars";
 import { SysBar } from "@/components/shell/sys-bar";
 import { BottomBar } from "@/components/shell/bottom-bar";
 import { SettingsSheet } from "@/components/settings/settings-sheet";
@@ -30,28 +25,24 @@ function useIsClient(): boolean {
 }
 
 /**
- * The app frame around every page.
+ * The app frame around every page: the Ward Console shell (the sys-bar on
+ * top, the windows, and the bottom bar with Home, Windows, Hold to talk and
+ * Log).
  *
- * With the `wardShell` setting on (Settings > Debug, device-only) it renders
- * the Ward Console shell: the sys-bar on top and the bottom bar (Home,
- * Windows, Hold to talk, Log). Otherwise it renders the legacy header, swipe
- * navigation and floating bars, unchanged. The server always renders the
- * legacy frame (the setting lives in localStorage), so the shell swaps in
- * right after hydration.
+ * The shell reads device-only state (open windows in sessionStorage, the
+ * screen width), so the server render and hydration show a plain frame and
+ * the shell swaps in right after. Non-shell pages (`/privacy`, `/auth`, ...)
+ * render their content in that frame, so it is in the server HTML.
  */
 export function AppChrome({ children }: { children: ReactNode }) {
-  const wardShell = useSettingsStore((s) => s.wardShell);
   const isClient = useIsClient();
+  const pathname = usePathname();
 
-  if (!(isClient && wardShell)) {
+  if (!isClient) {
+    const onShell = pathname === "/" || pathname === SETTINGS_PATH || isWindowRoute(pathname);
     return (
       <main className="min-h-screen overflow-x-clip bg-background">
-        <div className="container mx-auto max-w-lg px-4 pt-6">
-          <AppHeader />
-        </div>
-        <SwipeNav>{children}</SwipeNav>
-        <HomeFloatingBars />
-        <MedicationsFloatingBars />
+        {!onShell && <div className="container mx-auto max-w-lg px-4 pb-6 pt-6">{children}</div>}
       </main>
     );
   }

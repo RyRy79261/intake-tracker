@@ -13,7 +13,7 @@ export const metadata: Metadata = {
 // (app-store reviewers and prospective users need the policy URL before
 // signing in). Plain server component — no client hooks — so the route can
 // export metadata and prerender. Content lives inside the layout's shared
-// max-w-lg container provided by SwipeNav.
+// max-w-lg container provided by the app shell (AppChrome).
 //
 // NOTE: this reflects the app's actual data flows as of the effective date
 // below. If you change what leaves the device (sync targets, AI providers,

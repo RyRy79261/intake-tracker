@@ -31,7 +31,7 @@ export interface WindowApp {
 }
 
 function MedsBody() {
-  return <MedicationsPageBody ward />;
+  return <MedicationsPageBody />;
 }
 
 /**
@@ -49,8 +49,7 @@ function MedsOverlay() {
 
   return (
     <>
-      {/* "settings" falls back to Schedule in the window (see MedicationsPageBody). */}
-      {(activeTab === "schedule" || activeTab === "settings") && <LogDoseFab />}
+      {activeTab === "schedule" && <LogDoseFab />}
       <AddMedicationWizard open={wizardOpen} onOpenChange={setWizardOpen} />
     </>
   );

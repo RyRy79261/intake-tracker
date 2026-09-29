@@ -5,12 +5,10 @@ import { useDueDoseCount } from "@/components/shell/sys-bar";
 import { useDueTitrationPlans } from "@/hooks/use-medication-queries";
 import { useTodayKey } from "@/hooks/use-today-key";
 import { cn } from "@/lib/utils";
-import type { MedTab } from "@/components/medications/med-footer";
-
 /** The Medications window's tabs. Medication settings live in the global Settings sheet. */
-export type WardMedTab = Exclude<MedTab, "settings">;
+export type MedTab = "schedule" | "prescriptions" | "medications" | "titrations";
 
-const TABS: { id: WardMedTab; label: string }[] = [
+const TABS: { id: MedTab; label: string }[] = [
   { id: "schedule", label: "Schedule" },
   { id: "prescriptions", label: "Rx" },
   { id: "medications", label: "Meds" },
@@ -18,14 +16,14 @@ const TABS: { id: WardMedTab; label: string }[] = [
 ];
 
 interface WardMedTabsProps {
-  activeTab: WardMedTab;
-  onTabChange: (tab: WardMedTab) => void;
+  activeTab: MedTab;
+  onTabChange: (tab: MedTab) => void;
   /** id of the tabpanel the tabs control; each tab's id is `${panelId}-${tab}`. */
   panelId: string;
 }
 
 /** The tab's element id, for the panel's aria-labelledby. */
-export function wardMedTabId(panelId: string, tab: WardMedTab): string {
+export function wardMedTabId(panelId: string, tab: MedTab): string {
   return `${panelId}-${tab}`;
 }
 
@@ -38,7 +36,7 @@ export function WardMedTabs({ activeTab, onTabChange, panelId }: WardMedTabsProp
   const due = useDueDoseCount();
   const todayKey = useTodayKey();
   const ready = useDueTitrationPlans(todayKey).length;
-  const pips: Partial<Record<WardMedTab, number>> = { schedule: due, titrations: ready };
+  const pips: Partial<Record<MedTab, number>> = { schedule: due, titrations: ready };
 
   // WAI-ARIA tabs: one tab stop (the selected tab); arrows, Home and End
   // move between tabs and select them.

@@ -1,13 +1,12 @@
 import { create } from "zustand";
-import type { MedTab } from "@/components/medications/med-footer";
+import type { MedTab } from "@/components/medications/med-tabs";
 
 /**
- * Ephemeral UI state for the medications page. Shared with the layout-level
- * MedicationsFloatingBars so the FAB can be rendered outside the SwipeNav's
- * transform layer (where position: fixed against the viewport works) while
- * still reacting to the page's active tab and opening the same wizard.
+ * Ephemeral UI state for the Medications window: the active tab and the
+ * Add-medication wizard, shared between the window body and its overlay
+ * (the "+" button and the wizard), and read by the Windows switcher.
  *
- * Not persisted — same lifetime semantics as the previous useState pair.
+ * Not persisted.
  */
 interface MedicationUIState {
   activeTab: MedTab;

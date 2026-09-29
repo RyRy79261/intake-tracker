@@ -1,12 +1,12 @@
 import { test, expect, type Page } from "@playwright/test";
 
 /**
- * Ward Console window manager (behind the device-only `wardShell` setting).
+ * Ward Console window manager.
  * Phone (390×844): one full-screen window at a time, Back closes it.
  * Wide (1280×800): windows tile side by side.
  */
 
-async function enableWardShell(page: Page) {
+async function skipAnalyticsIntro(page: Page) {
   await page.addInitScript(() => {
     const key = "intake-tracker-settings";
     let parsed: { state?: Record<string, unknown>; version?: number } = {};
@@ -15,7 +15,7 @@ async function enableWardShell(page: Page) {
     } catch {
       // Unparseable persisted settings: start fresh.
     }
-    parsed.state = { ...(parsed.state ?? {}), wardShell: true, analyticsIntroSeen: true };
+    parsed.state = { ...(parsed.state ?? {}), analyticsIntroSeen: true };
     parsed.version ??= 18;
     localStorage.setItem(key, JSON.stringify(parsed));
   });
@@ -34,7 +34,7 @@ async function openHome(page: Page) {
 
 test.describe("Windows on a phone", () => {
   test.use({ viewport: { width: 390, height: 844 } });
-  test.beforeEach(async ({ page }) => enableWardShell(page));
+  test.beforeEach(async ({ page }) => skipAnalyticsIntro(page));
 
   test("a header icon opens its window full screen", async ({ page }) => {
     await openHome(page);
@@ -141,7 +141,7 @@ test.describe("Windows on a phone", () => {
 
 test.describe("Windows on a wide screen", () => {
   test.use({ viewport: { width: 1280, height: 800 } });
-  test.beforeEach(async ({ page }) => enableWardShell(page));
+  test.beforeEach(async ({ page }) => skipAnalyticsIntro(page));
 
   test("windows tile side by side and Esc closes the focused one", async ({ page }) => {
     await openHome(page);

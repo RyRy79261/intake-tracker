@@ -156,9 +156,9 @@ export const MANUALS: Manual[] = [
       {
         heading: "Getting around",
         bullets: [
-          "Five tabs sit along the top: Intake (home), Medications, Analytics, Settings and Profile.",
-          "Swipe left or right anywhere to move between those tabs.",
-          "The quick-nav bar at the bottom of the home screen jumps straight to a card.",
+          "The bar along the top opens the apps: Medications, Metrics, History and your Profile, plus Settings. Each app opens in its own window.",
+          "On a phone a window fills the screen; Home (or Back) closes it. On a wide screen windows sit side by side, and Esc closes the one in front.",
+          "The bottom bar has Home, Windows (switch between or close open windows), Hold to talk (when signed in) and Log.",
           "Shaking your device opens the bug reporter — and from there you can reach this manual.",
         ],
       },

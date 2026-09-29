@@ -9,7 +9,7 @@ import { closeWindow } from "@/hooks/use-window-history";
 import { useWindowStore, type Win } from "@/stores/window-store";
 import { useMedicationUIStore } from "@/stores/medication-ui-store";
 import { useDueDoseCount } from "@/components/shell/sys-bar";
-import type { MedTab } from "@/components/medications/med-footer";
+import type { MedTab } from "@/components/medications/med-tabs";
 import { cn } from "@/lib/utils";
 
 const METRICS_TABS: Record<string, string> = {
@@ -24,7 +24,6 @@ const MED_TABS: Record<MedTab, string> = {
   prescriptions: "Rx",
   medications: "Meds",
   titrations: "Titrations",
-  settings: "Settings",
 };
 
 /**

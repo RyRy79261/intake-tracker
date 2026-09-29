@@ -77,7 +77,7 @@ import { UrinationCard } from "@/components/urination-card";
 import { DefecationCard } from "@/components/defecation-card";
 // Medications-page components (round 2 — see file-level history).
 import { WeekDaySelector } from "@/components/medications/week-day-selector";
-import { MedTabBar } from "@/components/medications/med-footer";
+import { WardMedTabs, wardMedTabId } from "@/components/medications/med-tabs";
 import { EmptySchedule } from "@/components/medications/empty-schedule";
 import { CompoundList } from "@/components/medications/compound-list";
 import { AddMedicationWizard } from "@/components/medications/add-medication-wizard";
@@ -166,9 +166,12 @@ const COMPONENTS: { label: string; element: () => React.ReactElement }[] = [
     ),
   },
   {
-    label: "MedTabBar",
+    label: "WardMedTabs",
     element: () => (
-      <MedTabBar activeTab="schedule" onTabChange={() => {}} />
+      <>
+        <WardMedTabs activeTab="schedule" onTabChange={() => {}} panelId="a11y-meds-panel" />
+        <div role="tabpanel" id="a11y-meds-panel" aria-labelledby={wardMedTabId("a11y-meds-panel", "schedule")} />
+      </>
     ),
   },
   {

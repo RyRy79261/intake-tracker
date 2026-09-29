@@ -118,7 +118,12 @@ const DrawerContent = React.forwardRef<
       target.tagName === "SELECT"
     ) {
       window.setTimeout(() => {
-        target.scrollIntoView({ behavior: "smooth", block: "center" });
+        // No smooth scroll under reduced motion (the OS setting, or the
+        // app's Reduce motion switch, which sets `html.reduce-motion`).
+        const reduced =
+          document.documentElement.classList.contains("reduce-motion") ||
+          window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+        target.scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "center" });
       }, 300);
     }
   };

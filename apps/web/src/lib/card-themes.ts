@@ -19,70 +19,30 @@ export interface CardTheme {
   icon: LucideIcon;
   /** The Ward Console domain whose colour this theme uses. */
   domain: Domain;
-  gradient: string;
-  border: string;
-  iconBg: string;
+  /** Domain-coloured text (headings, accents). */
   iconColor: string;
+  /** Solid domain-coloured button. */
   buttonBg: string;
-  outlineBorder: string;
-  outlineText: string;
-  progressGradient: string;
-  progressExtended: string;
-  progressOverLimit: string;
-  hoverBg: string;
-  inputBg: string;
-  inputText: string;
-  loadingBg: string;
-  latestValueColor: string;
-  activeToggle: string;
-  sectionId: string;
 }
 
-/**
- * Flat Ward Console styling for a domain. The field names are kept from the
- * old gradient themes so the cards need no restructuring (that is PR 4):
- * `gradient` is now a flat panel, `iconBg` no longer paints a pastel chip, and
- * every accent comes from the domain token via `DOMAIN_CLASSES`.
- */
-function flatTheme(
-  domain: Domain,
-  meta: { label: string; icon: LucideIcon; sectionId: string },
-): CardTheme {
+/** A domain's label, icon and the two accent classes the cards still use. */
+function theme(domain: Domain, meta: { label: string; icon: LucideIcon }): CardTheme {
   const c = DOMAIN_CLASSES[domain];
-  return {
-    ...meta,
-    domain,
-    gradient: "bg-card",
-    border: "border-line",
-    iconBg: "bg-transparent",
-    iconColor: c.text,
-    buttonBg: c.solid,
-    outlineBorder: c.border,
-    outlineText: c.text,
-    progressGradient: c.fill,
-    progressExtended: `${c.fill} opacity-60`,
-    progressOverLimit: "bg-bp",
-    hoverBg: c.hover,
-    inputBg: c.tint,
-    inputText: c.text,
-    loadingBg: "bg-foreground/10",
-    latestValueColor: c.text,
-    activeToggle: c.active,
-  };
+  return { ...meta, domain, iconColor: c.text, buttonBg: c.solid };
 }
 
 export const CARD_THEMES = {
-  water: flatTheme("water", { label: "Water", icon: Droplets, sectionId: "section-water" }),
-  salt: flatTheme("sodium", { label: "Sodium", icon: Sparkles, sectionId: "section-salt" }),
-  sugar: flatTheme("sugar", { label: "Sugar", icon: Candy, sectionId: "section-food-salt" }),
-  potassium: flatTheme("alcohol", { label: "Potassium", icon: Banana, sectionId: "section-food-salt" }),
-  weight: flatTheme("weight", { label: "Weight", icon: Scale, sectionId: "section-weight" }),
-  bp: flatTheme("bp", { label: "Blood Pressure", icon: Heart, sectionId: "section-bp" }),
-  eating: flatTheme("sodium", { label: "Eating", icon: Utensils, sectionId: "section-food-salt" }),
-  urination: flatTheme("bath", { label: "Urination", icon: Droplet, sectionId: "section-urination" }),
-  defecation: flatTheme("bath", { label: "Defecation", icon: CircleDot, sectionId: "section-defecation" }),
-  caffeine: flatTheme("caffeine", { label: "Caffeine", icon: Coffee, sectionId: "section-caffeine" }),
-  alcohol: flatTheme("alcohol", { label: "Alcohol", icon: Wine, sectionId: "section-alcohol" }),
+  water: theme("water", { label: "Water", icon: Droplets }),
+  salt: theme("sodium", { label: "Sodium", icon: Sparkles }),
+  sugar: theme("sugar", { label: "Sugar", icon: Candy }),
+  potassium: theme("alcohol", { label: "Potassium", icon: Banana }),
+  weight: theme("weight", { label: "Weight", icon: Scale }),
+  bp: theme("bp", { label: "Blood Pressure", icon: Heart }),
+  eating: theme("sodium", { label: "Eating", icon: Utensils }),
+  urination: theme("bath", { label: "Urination", icon: Droplet }),
+  defecation: theme("bath", { label: "Defecation", icon: CircleDot }),
+  caffeine: theme("caffeine", { label: "Caffeine", icon: Coffee }),
+  alcohol: theme("alcohol", { label: "Alcohol", icon: Wine }),
 } as const satisfies Record<string, CardTheme>;
 
 export type CardThemeKey = keyof typeof CARD_THEMES;

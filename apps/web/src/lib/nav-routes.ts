@@ -1,24 +1,9 @@
-import { Droplets, Pill, BarChart3, Settings, CircleUser, type LucideIcon } from "lucide-react";
+/** The routes that show the shell's bars: Home, the app deep links and Settings. */
+const CHROME_ROUTES: ReadonlySet<string> = new Set(["/profile", "/", "/medications", "/analytics", "/settings"]);
 
-export interface NavRoute {
-  path: string;
-  icon: LucideIcon;
-  label: string;
-  title: string;
-  subtitle: string;
-}
-
-export const NAV_ROUTES = [
-  { path: "/profile", icon: CircleUser, label: "Profile", title: "Profile", subtitle: "Account & medical context" },
-  { path: "/", icon: Droplets, label: "Intake", title: "Intake Tracker", subtitle: "Daily budget tracking" },
-  { path: "/medications", icon: Pill, label: "Meds", title: "Medications", subtitle: "Medicine schedule & tracking" },
-  { path: "/analytics", icon: BarChart3, label: "Analytics", title: "Analytics", subtitle: "Insights & record browsing" },
-  { path: "/settings", icon: Settings, label: "Settings", title: "Settings", subtitle: "Configure preferences" },
-] as const satisfies readonly NavRoute[];
-
-/** Routes that show the app chrome (legacy header or the Ward Console shell). */
+/** Routes that show the Ward Console shell's sys-bar and bottom bar. */
 export function isChromeRoute(pathname: string | null): boolean {
-  return NAV_ROUTES.some((r) => r.path === pathname);
+  return pathname !== null && CHROME_ROUTES.has(pathname);
 }
 
 // ---------------------------------------------------------------------------

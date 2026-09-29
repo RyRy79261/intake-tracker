@@ -111,12 +111,6 @@ export interface Settings {
   shakeThreshold: number; // acceleration-magnitude jolt delta (m/s²) — lower = more sensitive
   shakeRequiredJolts: number; // jolts within the detection window required to fire
 
-  // Ward Console shell (sys-bar + bottom bar) instead of the legacy header,
-  // swipe nav and floating bars. Staged rollout: device-only, on by default
-  // (a stored value wins, so the Settings > Debug switch can turn it off).
-  // Never synced.
-  wardShell: boolean;
-
   // Display preferences (Settings > Appearance). Device-only, never synced.
   // Bigger text scales the root font size; Reduce motion turns animations
   // and transitions off (see components/display-prefs.tsx).
@@ -170,8 +164,6 @@ interface SettingsActions {
   setShakeToReportEnabled: (value: boolean) => void;
   setShakeThreshold: (value: number) => void;
   setShakeRequiredJolts: (value: number) => void;
-  // Ward Console shell (staged rollout, device-only)
-  setWardShell: (value: boolean) => void;
   // Display preferences (device-only)
   setBigText: (value: boolean) => void;
   setReduceMotion: (value: boolean) => void;
@@ -222,7 +214,6 @@ const defaultSettings: Settings = {
   reminderFollowUpInterval: 10,
   homeTimezone: null,
   homeTimezoneConfirmedAt: null,
-  wardShell: true,
   bigText: false,
   reduceMotion: false,
 };
@@ -467,7 +458,6 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
       setShakeRequiredJolts: (value) =>
         set({ shakeRequiredJolts: sanitizeNumericInput(value, 2, 8) }),
 
-      setWardShell: (value) => set({ wardShell: value }),
       setBigText: (value) => set({ bigText: value }),
       setReduceMotion: (value) => set({ reduceMotion: value }),
 

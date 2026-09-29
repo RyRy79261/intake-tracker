@@ -60,6 +60,12 @@ Each data domain has a service file in `src/lib/` (e.g., `intake-service.ts`, `m
 - `/history` — Analytics/charts (Recharts)
 - `/settings` — App configuration
 
+### Shell and windows
+
+`components/shell/app-chrome.tsx` wraps every page in the Ward Console shell: the sys-bar (app buttons, profile, Settings), Home (`home-page-body.tsx`, always mounted) and the bottom bar (Home, Windows, Hold to talk, Log).
+Apps (Medications, Metrics, History, Profile, Help) open as windows over Home: `stores/window-store.ts` (Zustand, sessionStorage) holds them, `window-layer.tsx`/`window-frame.tsx` render them, and `app-registry.tsx` maps each app to its body. On a phone one window fills the screen and Back closes it; from 768px they tile, and Esc closes the focused one.
+The routes above are deep links: `hooks/use-window-history.ts` opens the matching window (or the Settings sheet for `/settings`) and keeps browser Back in sync; the shell never renders those route pages' own content.
+
 ### API Routes (`src/app/api/`)
 
 - `POST /api/ai/parse` — Sends food/drink descriptions to Anthropic Claude API for nutritional parsing
@@ -77,7 +83,7 @@ API routes handle server-side Claude API calls (key never exposed to client). PI
 
 - **shadcn/ui** components in `src/components/ui/`
 - **Tailwind CSS** with custom color tokens (water/salt themes in `tailwind.config.ts`)
-- **Outfit** font via next/font
+- **IBM Plex Sans** and **IBM Plex Mono** (every number) via next/font
 - Path alias: `@/*` → `src/*`
 
 ### Medication Data Model

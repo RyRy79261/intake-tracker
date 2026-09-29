@@ -23,16 +23,6 @@ const slideAnimationVariants = {
     animate: { x: 0, opacity: 1 },
     exit: { x: "100%", opacity: 0 },
   },
-  left: {
-    initial: { x: "-100%", opacity: 1 },
-    animate: { x: 0, opacity: 1 },
-    exit: { x: "-100%", opacity: 0 },
-  },
-  top: {
-    initial: { y: "-100%", opacity: 1 },
-    animate: { y: 0, opacity: 1 },
-    exit: { y: "-100%", opacity: 0 },
-  },
   bottom: {
     initial: { y: "100%", opacity: 1 },
     animate: { y: 0, opacity: 1 },
@@ -73,9 +63,7 @@ const sheetVariants = cva(
   {
     variants: {
       side: {
-        top: "inset-x-0 top-0 border-b-2 border-b-foreground",
         bottom: "inset-x-0 bottom-0 border-t-2 border-t-foreground",
-        left: "inset-y-0 left-0 h-full w-3/4 border-r border-r-line sm:max-w-sm",
         right: "inset-y-0 right-0 h-full w-3/4 border-l border-l-line sm:max-w-sm",
         full: "inset-0 h-full w-full",
       },

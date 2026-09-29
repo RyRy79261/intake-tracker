@@ -39,7 +39,6 @@ vi.mock("@/lib/push-notification-service", () => ({
 }));
 
 import { MedicationPrefsSection } from "@/components/settings/medication-prefs-section";
-import { MedicationSettingsView } from "@/components/medications/medication-settings-view";
 import { renderWithFixtures } from "@/__tests__/react-test-utils";
 import { useSettingsStore } from "@/stores/settings-store";
 
@@ -116,13 +115,5 @@ describe("MedicationPrefsSection (Settings › Medications)", () => {
 
     expect(screen.getByText(/United States/)).toBeInTheDocument();
     expect(screen.getByText("Not Specified (Global Search)")).toBeInTheDocument();
-  });
-});
-
-describe("MedicationSettingsView (legacy Medications tab)", () => {
-  it("wraps the same controls under its heading", async () => {
-    await renderWithFixtures(<MedicationSettingsView />);
-    expect(screen.getByRole("heading", { name: /medication settings/i })).toBeInTheDocument();
-    expect(screen.getByRole("radiogroup", { name: "Time format" })).toBeInTheDocument();
   });
 });

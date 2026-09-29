@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { useLiveQuery } from "@/hooks/use-live-query";
@@ -24,7 +24,6 @@ import {
 import { db } from "@/lib/db";
 import { makeQueryClient } from "@/lib/query-client";
 import { seedLiquidsPreview } from "@/lib/help/preview-data";
-import { useSettingsStore } from "@/stores/settings-store";
 import { useMedicationUIStore } from "@/stores/medication-ui-store";
 import { generateId, syncFields } from "@/lib/utils";
 
@@ -44,10 +43,6 @@ function renderPreview(slug: string) {
 }
 
 const demo = () => screen.getByTestId("manual-demo");
-
-beforeEach(() => {
-  useSettingsStore.setState({ wardShell: false });
-});
 
 describe("ComponentPreview", () => {
   it("renders a live component against a seeded, isolated preview database", async () => {
@@ -80,8 +75,7 @@ describe("ComponentPreview", () => {
     ).toBeInTheDocument();
   });
 
-  it("shows the Today gadget for how-it-works when the shell is on", async () => {
-    useSettingsStore.setState({ wardShell: true });
+  it("shows the Today gadget for how-it-works", async () => {
     renderPreview("how-it-works");
 
     const water = await screen.findByTestId("today-row-water", undefined, { timeout: 5000 });
