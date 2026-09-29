@@ -35,12 +35,15 @@ import {
   estimateRecordSchema,
   normalizeAmountEstimate,
 } from "@intake/core/record-schemas";
+import { useFieldId, useOnLogged } from "@/components/log-form-scope";
 
 const AMOUNT_OPTIONS = URINATION_AMOUNT_OPTIONS;
 
 const theme = CARD_THEMES.urination;
 
 export function UrinationCard() {
+  const onLogged = useOnLogged();
+  const fid = useFieldId();
   const { toast } = useToast();
   const settings = useSettings();
   const [showDetails, setShowDetails] = useState(false);
@@ -103,6 +106,7 @@ export function UrinationCard() {
           void removeQuickLoggedRecord("urination", record.id);
         },
       });
+      onLogged();
     } catch {
       toast({
         title: "Error",
@@ -152,6 +156,7 @@ export function UrinationCard() {
         description: "Urination recorded",
         variant: "success",
       });
+      onLogged();
       setShowDetails(false);
       setAmount(settings.urinationDefaultAmount);
       setNote("");
@@ -229,9 +234,9 @@ export function UrinationCard() {
             </Select>
           </div>
           <div className="space-y-1">
-            <Label htmlFor="urination-note" className="text-[0.8125rem] text-muted-foreground">Note (optional)</Label>
+            <Label htmlFor={fid("urination-note")} className="text-[0.8125rem] text-muted-foreground">Note (optional)</Label>
             <Textarea
-              id="urination-note"
+              id={fid("urination-note")}
               placeholder="e.g. colour, urgency"
               value={note}
               onChange={(e) => setNote(e.target.value)}
@@ -239,9 +244,9 @@ export function UrinationCard() {
             />
           </div>
           <div className="space-y-1">
-            <Label htmlFor="urination-time" className="text-[0.8125rem] text-muted-foreground">When</Label>
+            <Label htmlFor={fid("urination-time")} className="text-[0.8125rem] text-muted-foreground">When</Label>
             <Input
-              id="urination-time"
+              id={fid("urination-time")}
               type="datetime-local"
               value={detailTime}
               onChange={(e) => setDetailTime(e.target.value)}

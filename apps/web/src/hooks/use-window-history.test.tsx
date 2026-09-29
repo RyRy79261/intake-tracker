@@ -106,6 +106,35 @@ describe("useWindowHistory", () => {
     expect(window.location.pathname).toBe("/");
   });
 
+  it("Back from Settings returns to the window that was open", async () => {
+    const { rerender } = render(<Sync />);
+    openWindow("meds");
+    // router.push("/settings"): a new untagged entry the route sync tags.
+    window.history.pushState(null, "", "/settings");
+    pathname = "/settings";
+    rerender(<Sync />);
+    await waitFor(() => expect(window.history.state?.wardOff).toBe(true));
+
+    await back();
+    expect(apps()).toEqual(["meds"]);
+    const s = useWindowStore.getState();
+    expect(s.showHome).toBe(false);
+    expect(s.focus).toBe(s.wins[0]?.id);
+    expect(window.location.pathname).toBe("/medications");
+  });
+
+  it("Back closes the window whose entry it leaves, not the focused one", async () => {
+    render(<Sync />);
+    const meds = openWindow("meds");
+    openWindow("metrics");
+    useWindowStore.getState().switchTo(meds!.win.id); // the switcher pushes no entry
+
+    await back();
+    expect(apps()).toEqual(["meds"]);
+    expect(useWindowStore.getState().focus).toBe(meds!.win.id);
+    expect(window.location.pathname).toBe("/medications");
+  });
+
   it("/history opens Metrics on Records", async () => {
     window.history.replaceState(null, "", "/history");
     pathname = "/history";
@@ -128,6 +157,24 @@ describe("useWindowHistory", () => {
       expect(sheetOpen()).toBe(false);
       expect(apps()).toEqual(["meds"]);
       expect(window.location.pathname).toBe("/medications");
+    });
+
+    it("Back closes the sheet, then Back again closes the window under it", async () => {
+      render(<Sync />);
+      openWindow("metrics");
+      openSettings();
+      expect(window.location.pathname).toBe("/settings");
+
+      await back();
+      expect(sheetOpen()).toBe(false);
+      expect(apps()).toEqual(["metrics"]);
+      expect(useWindowStore.getState().showHome).toBe(false);
+      expect(window.location.pathname).toBe("/analytics");
+
+      await back();
+      expect(sheetOpen()).toBe(false);
+      expect(apps()).toEqual([]);
+      expect(window.location.pathname).toBe("/");
     });
 
     it("closing the sheet steps back over its entry", async () => {
