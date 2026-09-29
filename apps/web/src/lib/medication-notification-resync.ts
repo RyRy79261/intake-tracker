@@ -11,7 +11,7 @@
  * reminder horizon forward.
  */
 import { liveQuery, type Subscription } from "dexie";
-import { db } from "@/lib/db";
+import { db, whenRealDatabase } from "@/lib/db";
 import { toLocalDateKey } from "@/lib/date-utils";
 import { useSettingsStore } from "@/stores/settings-store";
 
@@ -57,9 +57,11 @@ export function installMedicationNotificationResync(
     if (timer) clearTimeout(timer);
     timer = setTimeout(() => {
       timer = null;
-      void Promise.resolve(target()).catch((error) =>
-        console.error("[reminders] Resync failed:", error),
-      );
+      // A manual preview swaps in sample data; resync against the real
+      // database once it is back, never the samples.
+      void whenRealDatabase()
+        .then(() => target())
+        .catch((error) => console.error("[reminders] Resync failed:", error));
     }, debounceMs);
   };
 

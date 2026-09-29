@@ -6,13 +6,15 @@ import { LiquidsCard } from "@/components/liquids-card";
 import { FoodSaltCard } from "@/components/food-salt-card";
 import { UrinationCard } from "@/components/urination-card";
 import { DefecationCard } from "@/components/defecation-card";
-import { TextMetrics } from "@/components/text-metrics";
+import { MedsDemo, RecordsDemo, TodayDemo } from "@/components/help/preview-demos";
 import {
   seedBathroomPreview,
   seedBloodPressurePreview,
   seedFoodSaltPreview,
   seedLiquidsPreview,
-  seedTextMetricsPreview,
+  seedMedicationsPreview,
+  seedRecordsPreview,
+  seedTodayPreview,
   seedWeightPreview,
 } from "@/lib/help/preview-data";
 
@@ -30,8 +32,8 @@ export interface ManualPreview {
 
 const MANUAL_PREVIEWS: Record<string, ManualPreview> = {
   "how-it-works": {
-    render: () => <TextMetrics />,
-    seed: seedTextMetricsPreview,
+    render: () => <TodayDemo />,
+    seed: seedTodayPreview,
   },
   "logging-drinks": {
     render: () => <LiquidsCard />,
@@ -51,15 +53,30 @@ const MANUAL_PREVIEWS: Record<string, ManualPreview> = {
   },
   "urination-and-bowel": {
     render: () => (
-      <div className="space-y-4">
+      <div className="flex flex-col gap-2.5">
         <UrinationCard />
         <DefecationCard />
       </div>
     ),
     seed: seedBathroomPreview,
   },
+  "editing-entries": {
+    render: () => <RecordsDemo />,
+    seed: seedRecordsPreview,
+  },
+  "adding-medication": {
+    render: () => <MedsDemo tab="prescriptions" />,
+    seed: seedMedicationsPreview,
+  },
+  "medication-schedule": {
+    render: () => <MedsDemo tab="schedule" />,
+    seed: seedMedicationsPreview,
+  },
 };
 
+/** Manual slugs that have a live preview. */
+export const PREVIEW_SLUGS: readonly string[] = Object.keys(MANUAL_PREVIEWS);
+
 export function getManualPreview(slug: string): ManualPreview | undefined {
-  return MANUAL_PREVIEWS[slug];
+  return Object.hasOwn(MANUAL_PREVIEWS, slug) ? MANUAL_PREVIEWS[slug] : undefined;
 }

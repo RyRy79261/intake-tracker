@@ -1,5 +1,5 @@
 import "client-only";
-import Dexie, { type EntityTable } from "dexie";
+import Dexie, { RangeSet, type EntityTable, type ObservabilitySet } from "dexie";
 import {
   getTimezoneForTimestamp,
   localHHMMStringToUTCMinutes,
@@ -869,12 +869,104 @@ export function createPreviewDatabase(): AppDatabase {
   return preview;
 }
 
+/** Resolvers waiting for the real database to be active again. */
+let realDbWaiters: Array<() => void> = [];
+
+/** Bumped on every swap, so a read can tell one happened while it ran. */
+let dbEpoch = 0;
+
 /** Point every `db` consumer at `next` — used by component previews. */
 export function setActiveDatabase(next: AppDatabase): void {
   db = next;
+  dbEpoch += 1;
 }
 
-/** Restore the real database after a preview is torn down. */
+/**
+ * Restore the real database after a preview is torn down.
+ *
+ * Anything that read `db` while the preview was swapped in (a background
+ * window's live query re-running, a component mounting behind the manual)
+ * read the sample data. Firing a "the whole preview database changed" event
+ * makes every live query that observed it run again, now against the real
+ * database; then the reads held back by `whenRealDatabase` go ahead.
+ */
 export function resetActiveDatabase(): void {
+  const previous = db;
   db = realDb;
+  dbEpoch += 1;
+  if (previous !== realDb) touchEverything(previous);
+  const waiters = realDbWaiters;
+  realDbWaiters = [];
+  for (const resolve of waiters) resolve();
+}
+
+/** Is a component preview's sample database swapped in? */
+export function isPreviewDatabaseActive(): boolean {
+  return db !== realDb;
+}
+
+/**
+ * Resolves once the real database is active: at once normally, or when the
+ * preview on screen is torn down. App-wide readers that run in the
+ * background (the shared React Query client, reminder and timezone checks)
+ * wait on this so they never read, or act on, a preview's sample data.
+ */
+export function whenRealDatabase(): Promise<void> {
+  if (db === realDb) return Promise.resolve();
+  return new Promise((resolve) => realDbWaiters.push(resolve));
+}
+
+/**
+ * Runs an async read against the real database only. A read spans several
+ * awaits and reads `db` afresh after each, so a preview mounting mid-read
+ * would feed it sample rows; if a swap happens while it runs, it runs again
+ * once the real database is back.
+ */
+export async function readRealDatabase<T>(read: () => T | Promise<T>): Promise<T> {
+  for (;;) {
+    await whenRealDatabase();
+    const epoch = dbEpoch;
+    const result = await read();
+    if (epoch === dbEpoch) return result;
+  }
+}
+
+/** A background live query paused while a preview's sample data is swapped in. */
+export const PREVIEW_PAUSED: unique symbol = Symbol("preview-paused");
+
+/**
+ * The live-query form of `readRealDatabase`, for a querier run by Dexie's
+ * `liveQuery`. It cannot wait for the preview inside the querier (awaiting a
+ * non-Dexie promise loses the live query's change tracking), so while a
+ * preview is swapped in it returns `PREVIEW_PAUSED` instead, after reading
+ * one row of the preview database: releasing the preview marks that whole
+ * database changed (see `resetActiveDatabase`), which runs the query again
+ * against the real one.
+ */
+export async function liveReadRealDatabase<T>(
+  read: () => T | Promise<T>,
+): Promise<T | typeof PREVIEW_PAUSED> {
+  for (;;) {
+    if (db !== realDb) {
+      await db.table("_syncMeta").get("__preview__");
+      return PREVIEW_PAUSED;
+    }
+    const epoch = dbEpoch;
+    const result = await read();
+    if (epoch === dbEpoch) return result;
+  }
+}
+
+function touchEverything(database: Dexie): void {
+  const parts: ObservabilitySet = {};
+  const all = () => new RangeSet(-Infinity, [[[]]]);
+  for (const table of database.tables) {
+    const base = `idb://${database.name}/${table.name}/`;
+    parts[base] = all();
+    parts[`${base}:dels`] = all();
+    for (const idx of table.schema.indexes) {
+      if (idx.name) parts[`${base}${idx.name}`] = all();
+    }
+  }
+  Dexie.on.storagemutated.fire(parts);
 }

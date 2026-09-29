@@ -85,7 +85,7 @@ export const SYS_BAR_APPS = ["meds", "metrics", "history"] as const satisfies re
 // ---------------------------------------------------------------------------
 
 /** Apps that open as a window. History is not one: it opens Metrics › Records. */
-export type WindowAppId = "meds" | "metrics" | "profile";
+export type WindowAppId = "meds" | "metrics" | "profile" | "help";
 
 /** Per-window state, e.g. `{ tab: "records" }` for Metrics. */
 export type WindowState = Record<string, string | number | boolean | null>;
@@ -97,7 +97,7 @@ export function resolveWindowApp(
 ): { app: WindowAppId; st: WindowState } | null {
   // History = Metrics on Records, unfiltered unless the caller filters it.
   if (app === "history") return { app: "metrics", st: { filter: "all", ...st, tab: "records" } };
-  if (app === "meds" || app === "metrics" || app === "profile") return { app, st: { ...st } };
+  if (app === "meds" || app === "metrics" || app === "profile" || app === "help") return { app, st: { ...st } };
   return null;
 }
 
@@ -111,10 +111,14 @@ const WINDOW_ROUTE_APPS: Readonly<Record<string, ShellAppId>> = {
   "/analytics": "metrics",
   "/history": "history",
   "/profile": "profile",
+  "/help": "help",
 };
 
+/** `/help/<slug>`: the manual window open on one guide. */
+const HELP_SLUG_RE = /^\/help\/([^/]+)\/?$/;
+
 export function isWindowRoute(pathname: string | null): boolean {
-  return pathname !== null && Object.hasOwn(WINDOW_ROUTE_APPS, pathname);
+  return pathname !== null && (Object.hasOwn(WINDOW_ROUTE_APPS, pathname) || HELP_SLUG_RE.test(pathname));
 }
 
 /** `/analytics?tab=records` -> the Metrics window on Records. */
@@ -123,6 +127,9 @@ export function windowForRoute(
   search: URLSearchParams | null,
 ): { app: WindowAppId; st: WindowState } | null {
   if (!isWindowRoute(pathname)) return null;
+  const guide = HELP_SLUG_RE.exec(pathname as string);
+  if (guide) return { app: "help", st: { slug: safeDecode(guide[1] as string) } };
+  if (pathname === "/help") return { app: "help", st: { slug: null } };
   const id = WINDOW_ROUTE_APPS[pathname as string] as ShellAppId;
   const tab = search?.get("tab");
   return resolveWindowApp(id, tab && id === "metrics" ? { tab } : undefined);
@@ -134,5 +141,17 @@ export function windowHref(app: WindowAppId, st?: WindowState): string {
     const tab = typeof st?.tab === "string" ? st.tab : null;
     return tab && tab !== "summary" ? `/analytics?tab=${encodeURIComponent(tab)}` : "/analytics";
   }
+  if (app === "help") {
+    const slug = typeof st?.slug === "string" && st.slug ? st.slug : null;
+    return slug ? `/help/${encodeURIComponent(slug)}` : "/help";
+  }
   return app === "meds" ? "/medications" : "/profile";
+}
+
+function safeDecode(segment: string): string {
+  try {
+    return decodeURIComponent(segment);
+  } catch {
+    return segment;
+  }
 }

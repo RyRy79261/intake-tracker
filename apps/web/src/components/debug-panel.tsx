@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { useLiveQuery } from "dexie-react-hooks";
+import { useLiveQuery } from "@/hooks/use-live-query";
 import { db, type AuditAction } from "@/lib/db";
 import {
   recalculateAllStock,

@@ -9,6 +9,7 @@ import { getDeviceTimezone } from "@/lib/timezone";
 import { toLocalDateKey } from "@/lib/date-utils";
 import { getRefillStatuses, reconcileRefillNotifications } from "@/lib/refill-status";
 import { formatSupplyRemaining } from "@/lib/medication-ui-utils";
+import { isPreviewDatabaseActive } from "@/lib/db";
 
 const MED_NOTIFICATION_KEY = "intake-tracker-med-notifications";
 
@@ -74,6 +75,8 @@ const DOSE_REMINDER_WINDOW_MS = 5 * 60 * 1000;
 
 export async function checkDoseReminders(now: number = Date.now()): Promise<void> {
   if (getNotificationPermission() !== "granted") return;
+  // A manual preview's sample medications must never raise a reminder.
+  if (isPreviewDatabaseActive()) return;
 
   const state = getState();
   const doses = await loadReminderDoses();

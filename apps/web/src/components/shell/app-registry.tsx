@@ -1,11 +1,14 @@
 "use client";
 
-import { useEffect, type ComponentType } from "react";
+import { useEffect, useRef, type ComponentType } from "react";
 import { Plus } from "lucide-react";
 import { MedicationsPageBody } from "@/components/medications/medications-page-body";
 import { AddMedicationWizard } from "@/components/medications/add-medication-wizard";
 import { AnalyticsPageBody, isAnalyticsTab } from "@/components/analytics/analytics-page-body";
 import { ProfilePageBody } from "@/components/profile/profile-page-body";
+import { HelpIndex } from "@/components/help/help-index";
+import { ManualView } from "@/components/help/manual-view";
+import { getManual } from "@/lib/help/manuals";
 import { useMedicationUIStore } from "@/stores/medication-ui-store";
 import { useWindowStore, type Win } from "@/stores/window-store";
 import { isFilterType } from "@/lib/history-types";
@@ -81,6 +84,30 @@ function ProfileBody() {
 }
 
 /**
+ * The user manual: the index, or one guide (`st.slug`). Opening a guide and
+ * "All guides" change the window's state in place, like the prototype.
+ */
+function HelpBody({ win }: WindowBodyProps) {
+  const setSt = useWindowStore((s) => s.setSt);
+  const slug = typeof win.st.slug === "string" ? win.st.slug : null;
+  const manual = slug ? getManual(slug) : undefined;
+  const topRef = useRef<HTMLDivElement>(null);
+
+  // A new page starts at the top of the window.
+  useEffect(() => {
+    const body = topRef.current?.closest('[data-testid="window-body"]');
+    if (body) body.scrollTop = 0;
+  }, [slug]);
+
+  const show = (next: string | null) => setSt(win.id, { slug: next });
+  return (
+    <div ref={topRef}>
+      {manual ? <ManualView manual={manual} onBack={() => show(null)} /> : <HelpIndex onOpen={show} />}
+    </div>
+  );
+}
+
+/**
  * App id -> window content. Each body wraps the existing page content, so a
  * window behaves exactly like the page it replaces.
  */
@@ -88,4 +115,5 @@ export const WINDOW_APPS: Record<WindowAppId, WindowApp> = {
   meds: { Body: MedsBody, Overlay: MedsOverlay, flushTop: true },
   metrics: { Body: MetricsBody, flushTop: true },
   profile: { Body: ProfileBody },
+  help: { Body: HelpBody },
 };

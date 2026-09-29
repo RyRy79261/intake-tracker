@@ -11,7 +11,23 @@
  * 'undefined'` already — see `providers.tsx` `getQueryClient()`.
  */
 
-import { QueryClient } from "@tanstack/react-query";
+import { QueryClient, type QueryFunctionContext } from "@tanstack/react-query";
+import { readRealDatabase } from "@/lib/db";
+
+/**
+ * Wraps every query of the app-wide client: while a manual's live preview
+ * has its sample database swapped in, a fetch (a background window
+ * refetching, a component mounting behind the manual) waits for the real
+ * database instead of reading the sample data, and one caught mid-read by a
+ * swap runs again. The preview renders with its own client, which has no
+ * gate.
+ */
+function waitForRealDatabase<T>(
+  queryFn: (context: QueryFunctionContext) => T | Promise<T>,
+  context: QueryFunctionContext,
+): Promise<T> {
+  return readRealDatabase(() => queryFn(context));
+}
 
 export function makeQueryClient(): QueryClient {
   return new QueryClient({
@@ -26,6 +42,7 @@ export function makeQueryClient(): QueryClient {
         staleTime: 1000 * 60, // 1 minute
         refetchOnWindowFocus: false,
         networkMode: "always",
+        persister: waitForRealDatabase,
       },
       mutations: {
         networkMode: "always",

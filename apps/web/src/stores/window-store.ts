@@ -72,6 +72,8 @@ const DEFAULT_ST: Record<WindowAppId, WindowState> = {
   meds: {},
   metrics: { tab: "summary" },
   profile: {},
+  /** The guide on screen; null for the index. */
+  help: { slug: null },
 };
 
 /** The visible window on top, or null. */

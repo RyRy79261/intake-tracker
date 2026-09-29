@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { useLiveQuery } from "dexie-react-hooks";
+import { useLiveQuery } from "@/hooks/use-live-query";
 import {
   fluidBalance,
   adherenceRate,

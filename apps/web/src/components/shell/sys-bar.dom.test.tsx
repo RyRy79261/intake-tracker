@@ -144,7 +144,7 @@ describe("SysBar", () => {
 
   it("returns to an open window from another route", () => {
     useWindowStore.getState().open("meds");
-    pathname = "/help";
+    pathname = "/auth";
     render(<SysBar />);
     const meds = screen.getByRole("button", { name: "Medications" });
     // Not "on" while another page covers the windows.

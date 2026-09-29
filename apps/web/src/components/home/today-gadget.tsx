@@ -9,6 +9,7 @@ import { useOptionalTrackerEnabled } from "@/lib/optional-trackers";
 import { getProgressStatus } from "@intake/core/progress";
 import { domainColor, type Domain } from "@/lib/domain-colors";
 import { openWindow } from "@/hooks/use-window-history";
+import { useInPreview } from "@/lib/help/preview-context";
 import { cn } from "@/lib/utils";
 import type { FilterType } from "@/lib/history-types";
 import {
@@ -161,6 +162,9 @@ export function TodayGadget() {
   const sugarEnabled = useOptionalTrackerEnabled("sugar");
   const potassiumEnabled = useOptionalTrackerEnabled("potassium");
   const tick = useNowTick();
+  // In the manual's live preview a row stays put: Metrics would open over
+  // the manual with the user's real records.
+  const inPreview = useInPreview();
 
   const week = useMemo(
     () => getLogicalWeek(new Date(), dayStartHour, weekStartsOn),
@@ -238,7 +242,9 @@ export function TodayGadget() {
               aria-label={aria}
               data-testid={`today-row-${m.key}`}
               data-status={st.status}
-              onClick={() => openRecords(m.key)}
+              onClick={() => {
+                if (!inPreview) openRecords(m.key);
+              }}
             >
               <span className="wc-tg-l">{m.label}</span>
               <DayCells m={m} dayKeys={dayKeys} todayIndex={todayIndex} />
@@ -277,7 +283,9 @@ export function TodayGadget() {
               style={{ "--c": m.color } as CSSProperties}
               aria-label={aria}
               data-testid={`today-row-${m.key}`}
-              onClick={() => openRecords(m.key)}
+              onClick={() => {
+                if (!inPreview) openRecords(m.key);
+              }}
             >
               <span className="wc-tg-l">
                 {m.label}

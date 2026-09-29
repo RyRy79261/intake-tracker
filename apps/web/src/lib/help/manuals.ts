@@ -18,6 +18,7 @@ import {
   Bath,
   type LucideIcon,
 } from "lucide-react";
+import type { Domain } from "@/lib/domain-colors";
 
 /**
  * Content model for the in-app user manual. Each `Manual` is a self-contained
@@ -71,7 +72,8 @@ export interface ManualDomain {
   label: string;
   blurb: string;
   icon: LucideIcon;
-  colorClass: string;
+  /** Heading and icon colour; null for the muted foreground. */
+  color: Domain | null;
 }
 
 export const MANUAL_DOMAINS: ManualDomain[] = [
@@ -80,49 +82,49 @@ export const MANUAL_DOMAINS: ManualDomain[] = [
     label: "Getting started",
     blurb: "New here? Start with the big picture.",
     icon: Compass,
-    colorClass: "text-sky-600 dark:text-sky-400",
+    color: "water",
   },
   {
     id: "intake",
     label: "Food & drink",
     blurb: "Logging what you drink and eat.",
     icon: Droplets,
-    colorClass: "text-blue-600 dark:text-blue-400",
+    color: "water",
   },
   {
     id: "health",
     label: "Health metrics",
     blurb: "Vitals and body measurements.",
     icon: HeartPulse,
-    colorClass: "text-indigo-600 dark:text-indigo-400",
+    color: "bp",
   },
   {
     id: "medications",
     label: "Medications",
     blurb: "Prescriptions, doses and titrations.",
     icon: Pill,
-    colorClass: "text-teal-600 dark:text-teal-400",
+    color: "meds",
   },
   {
     id: "voice",
     label: "Voice",
     blurb: "Hands-free logging.",
     icon: Mic,
-    colorClass: "text-violet-600 dark:text-violet-400",
+    color: "alcohol",
   },
   {
     id: "ai",
     label: "AI & privacy",
     blurb: "Optional smart helpers and your data.",
     icon: Sparkles,
-    colorClass: "text-amber-600 dark:text-amber-400",
+    color: "sodium",
   },
   {
     id: "system",
     label: "App & settings",
     blurb: "Configuring the app.",
     icon: SlidersHorizontal,
-    colorClass: "text-slate-600 dark:text-slate-400",
+    color: null,
   },
 ];
 

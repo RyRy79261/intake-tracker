@@ -61,9 +61,14 @@ describe("window store", () => {
     expect(store().wins[0]?.st.tab).toBe("records");
   });
 
-  it("does not open apps without a window (the manual)", () => {
-    expect(store().open("help")).toBeNull();
-    expect(store().wins).toHaveLength(0);
+  it("opens the manual on its index, and a second open moves it to a guide", () => {
+    const index = store().open("help");
+    expect(index?.created).toBe(true);
+    expect(index?.win.st).toEqual({ slug: null });
+    const guide = store().open("help", { slug: "weight" });
+    expect(guide?.created).toBe(false);
+    expect(store().wins).toHaveLength(1);
+    expect(store().wins[0]?.st.slug).toBe("weight");
   });
 
   it(`stops at ${MAX_WINDOWS} windows with a toast`, () => {
