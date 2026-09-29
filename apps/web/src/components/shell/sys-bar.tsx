@@ -95,6 +95,7 @@ export function SysBar() {
       <button
         key={id}
         type="button"
+        data-app={id}
         className={cn(hbBase, on && hbOn)}
         style={app.color ? ({ "--c": app.color } as CSSProperties) : undefined}
         aria-label={pip ? `${app.title}, ${pip} open` : app.title}

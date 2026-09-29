@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Loader2, RotateCcw } from "lucide-react";
+import { RotateCcw } from "lucide-react";
+import { Spinner } from "@intake/ui/spinner";
 import { Button } from "@intake/ui/button";
 import { useToast } from "@intake/ui/use-toast";
 import {
@@ -120,7 +121,7 @@ export function ComponentPreview({
         <div className="p-2.5">
           {status === "loading" && (
             <div className="flex items-center justify-center gap-2 py-12 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+              <Spinner className="size-4" />
               Preparing preview…
             </div>
           )}

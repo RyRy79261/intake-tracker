@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Trash2, Loader2 } from "lucide-react";
+import { Trash2 } from "lucide-react";
+import { Spinner } from "@intake/ui/spinner";
 import { Button } from "@intake/ui/button";
 import {
   AlertDialog,
@@ -118,7 +119,7 @@ export function DeleteDataControls() {
               disabled={mutation.isPending}
             >
               {mutation.isPending ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                <Spinner className="size-4 mr-2" />
               ) : null}
               {mutation.isPending ? "Deleting…" : "Delete"}
             </AlertDialogAction>

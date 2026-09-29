@@ -4,7 +4,8 @@ import { useState } from "react";
 import { Button } from "@intake/ui/button";
 import { Input } from "@intake/ui/input";
 import { Label } from "@intake/ui/label";
-import { Check, Loader2, ChevronDown, ChevronUp } from "lucide-react";
+import { Check, ChevronDown, ChevronUp } from "lucide-react";
+import { Spinner } from "@intake/ui/spinner";
 import { z } from "zod";
 import { cn } from "@/lib/utils";
 import { ModuleCard } from "@/components/home/module-card";
@@ -453,7 +454,7 @@ export function BloodPressureCard() {
           >
             {addMutation.isPending ? (
               <>
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                <Spinner className="size-4 mr-2" />
                 Recording...
               </>
             ) : (

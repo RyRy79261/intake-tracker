@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2, Pill, Trash2 } from "lucide-react";
+import { Pill, Trash2 } from "lucide-react";
+import { Spinner } from "@intake/ui/spinner";
 import { Button } from "@intake/ui/button";
 import { Input } from "@intake/ui/input";
 import { Label } from "@intake/ui/label";
@@ -103,7 +104,7 @@ export function DeleteMedicationDataControl() {
               disabled={!canDelete}
             >
               {busy ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
+                <Spinner className="size-4" />
               ) : (
                 <Trash2 className="w-4 h-4" />
               )}

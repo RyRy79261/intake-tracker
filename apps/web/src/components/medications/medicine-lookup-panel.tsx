@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useId, useRef, useState } from "react";
-import { Check, Info, Loader2 } from "lucide-react";
+import { Check, Info } from "lucide-react";
+import { Spinner } from "@intake/ui/spinner";
 import { Button } from "@intake/ui/button";
 import { Label } from "@intake/ui/label";
 import { useAuthGate } from "@/components/auth-guard";
@@ -302,7 +303,7 @@ export function MedicineLookupPanel({
     return (
       <div data-testid="medicine-lookup" className={cn(BOX, "bg-ai/6", className)} role="status" aria-live="polite">
         <div className="flex items-start gap-2.5 text-[0.8125rem]">
-          <Loader2 className="mt-0.5 h-4 w-4 shrink-0 animate-spin text-ai" aria-hidden="true" />
+          <Spinner className="size-4 mt-0.5 shrink-0 text-ai" />
           <div className="min-w-0 flex-1">
             <b className="block font-semibold [overflow-wrap:anywhere]">Looking up “{L.asked}”</b>
             <p className="mt-0.5 leading-[1.4] text-muted-foreground">

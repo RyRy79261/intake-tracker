@@ -11,7 +11,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@intake/ui/select";
-import { Loader2, Sparkles } from "lucide-react";
+import { Sparkles } from "lucide-react";
+import { Spinner } from "@intake/ui/spinner";
 import { cn } from "@/lib/utils";
 import { CARD_THEMES } from "@/lib/card-themes";
 import { RecentEntriesList, InlineEditFormShell } from "@/components/recent-entries-list";
@@ -628,7 +629,7 @@ export function FoodSection() {
             )}
           >
             {isParsing ? (
-              <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
+              <Spinner className="size-4" />
             ) : (
               <Sparkles className="w-4 h-4" />
             )}
@@ -758,7 +759,7 @@ export function FoodSection() {
           className="w-full"
         >
           {addEatingMutation.isPending || isSubmitting ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
+            <Spinner className="size-4" />
           ) : (
             "Record with details"
           )}

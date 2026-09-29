@@ -32,7 +32,8 @@ import { isCombo, formatCompoundShort, formatCompoundFull, compoundsMismatch } f
 import type { Prescription, InventoryItem, InventoryTransaction } from "@/lib/db";
 import { toLocalDateKey } from "@/lib/date-utils";
 import { Bdg, WarnBox } from "@/components/medications/ward-bits";
-import { Loader2, Archive, ArchiveRestore, Plus, Pencil, Trash2, Check, X, CheckCircle2 } from "lucide-react";
+import { Archive, ArchiveRestore, Plus, Pencil, Trash2, Check, X, CheckCircle2 } from "lucide-react";
+import { Spinner } from "@intake/ui/spinner";
 
 /** A Color / Shape / Markings tile (`.tiles > div`). */
 const tileClass = "border border-line bg-background px-2 py-1.5";
@@ -327,7 +328,7 @@ function InventoryTab({
             }
             className="shrink-0"
           >
-            {refillMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+            {refillMutation.isPending ? <Spinner className="size-4" /> : <Plus className="w-4 h-4" />}
             Add
           </Button>
         </div>
@@ -380,7 +381,7 @@ function InventoryTab({
             disabled={countMutation.isPending || parsedCount === null || parsedCount < 0}
             className="shrink-0"
           >
-            {countMutation.isPending && <Loader2 className="w-4 h-4 mr-1 animate-spin" />}
+            {countMutation.isPending && <Spinner className="size-4 mr-1" />}
             Set count
           </Button>
         </div>
@@ -469,7 +470,7 @@ function TransactionRow({ tx }: { tx: Pick<InventoryTransaction, "id" | "type" |
             <X /> Cancel
           </Button>
           <Button size="sm" onClick={handleSave} disabled={updateMutation.isPending || !canSave}>
-            {updateMutation.isPending ? <Loader2 className="animate-spin" /> : <Check />}
+            {updateMutation.isPending ? <Spinner /> : <Check />}
             Save
           </Button>
         </div>
@@ -506,7 +507,7 @@ function TransactionRow({ tx }: { tx: Pick<InventoryTransaction, "id" | "type" |
             disabled={deleteMutation.isPending}
             aria-label="Delete transaction"
           >
-            {deleteMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+            {deleteMutation.isPending ? <Spinner className="size-4" /> : <Trash2 className="h-4 w-4" />}
           </button>
         </div>
       )}
@@ -587,7 +588,7 @@ function ManageTab({
             disabled={setActiveMutation.isPending}
           >
             {setActiveMutation.isPending ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
+              <Spinner className="size-4" />
             ) : (
               <>
                 <CheckCircle2 />
@@ -636,7 +637,7 @@ function ManageTab({
             disabled={archivePending}
           >
             {archivePending ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
+              <Spinner className="size-4" />
             ) : item.isArchived ? (
               <>
                 <ArchiveRestore />
@@ -663,7 +664,7 @@ function ManageTab({
             disabled={deleteMutation.isPending}
           >
             {deleteMutation.isPending ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
+              <Spinner className="size-4" />
             ) : (
               "Delete Permanently"
             )}

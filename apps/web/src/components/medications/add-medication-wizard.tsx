@@ -21,7 +21,8 @@ import { useAuthGate } from "@/components/auth-guard";
 import { useAddPrescription, usePrescriptions, useAddMedicationToPrescription, usePhasesForPrescription } from "@/hooks/use-medication-queries";
 import { useToast } from "@intake/ui/use-toast";
 import type { MedicationPhase, CompoundStrength, Prescription } from "@/lib/db";
-import { AlertTriangle, ArrowLeft, ArrowRight, Loader2, Check } from "lucide-react";
+import { AlertTriangle, ArrowLeft, ArrowRight, Check } from "lucide-react";
+import { Spinner } from "@intake/ui/spinner";
 import { useInteractionCheck } from "@/hooks/use-interaction-check";
 import { cn } from "@/lib/utils";
 import {
@@ -538,7 +539,7 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
             )}
             {isLastStep ? (
               <Button onClick={() => handleSave()} disabled={saving}>
-                {saving ? <Loader2 className="animate-spin" /> : <Check aria-hidden="true" />}
+                {saving ? <Spinner /> : <Check aria-hidden="true" />}
                 Save Medication
               </Button>
             ) : (

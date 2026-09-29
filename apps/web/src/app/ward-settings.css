@@ -21,3 +21,17 @@ html.reduce-motion *::after {
   transition: none !important;
   scroll-behavior: auto !important;
 }
+
+/* The same for the system setting (the prototype's
+   `@media (prefers-reduced-motion:reduce)`), so the app honours the OS
+   preference even with the in-app toggle off. */
+@media (prefers-reduced-motion: reduce) {
+  html,
+  html *,
+  html *::before,
+  html *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -5,12 +5,12 @@ import { formatDistanceToNow } from "date-fns";
 import {
   Check,
   ChevronDown,
-  Loader2,
   Search,
   Sparkles,
   Trash2,
   X,
 } from "lucide-react";
+import { Spinner } from "@intake/ui/spinner";
 import { Button } from "@intake/ui/button";
 import { Checkbox } from "@intake/ui/checkbox";
 import {
@@ -396,7 +396,7 @@ export function AiInsightsCard() {
 
       {pendingState && (
         <div className="wm-deep" role="status">
-          <Loader2 className="mt-0.5 h-3.5 w-3.5 shrink-0 animate-spin" aria-hidden="true" />
+          <Spinner className="mt-0.5 shrink-0" />
           <div>
             <b>Deep analysis in progress</b>
             <p>
@@ -418,7 +418,7 @@ export function AiInsightsCard() {
         >
           {fastPending ? (
             <>
-              <Loader2 className="animate-spin" />
+              <Spinner />
               Analysing…
             </>
           ) : (
@@ -432,12 +432,12 @@ export function AiInsightsCard() {
         >
           {deep.state.status === "submitting" ? (
             <>
-              <Loader2 className="animate-spin" />
+              <Spinner />
               Submitting…
             </>
           ) : pendingState ? (
             <>
-              <Loader2 className="animate-spin" />
+              <Spinner />
               In progress
             </>
           ) : (

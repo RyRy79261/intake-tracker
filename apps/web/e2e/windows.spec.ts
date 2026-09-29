@@ -74,6 +74,17 @@ test.describe("Windows on a phone", () => {
     await expect(page).toHaveURL(/\/$/);
   });
 
+  test("closing a window hands keyboard focus back to its sys-bar button", async ({ page }) => {
+    await openHome(page);
+    await sysBar(page).getByRole("button", { name: /^Medications/ }).click();
+    await expect(windowNamed(page, "Medications")).toBeVisible();
+
+    await page.getByRole("button", { name: "Close Medications" }).focus();
+    await page.keyboard.press("Enter");
+    await expect(windows(page)).toHaveCount(0);
+    await expect(sysBar(page).getByRole("button", { name: /^Medications/ })).toBeFocused();
+  });
+
   test("the switcher shows the count and closes windows", async ({ page }) => {
     await openHome(page);
     await sysBar(page).getByRole("button", { name: /^Medications/ }).click();
@@ -159,6 +170,10 @@ test.describe("Windows on a wide screen", () => {
     await page.keyboard.press("Escape");
     await expect(metrics).toHaveCount(0);
     await expect(meds).toBeVisible();
+    // Focus moves to the window now on top, so Esc keeps working.
+    await expect(meds.getByRole("heading", { name: "Medications" })).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(meds).toHaveCount(0);
   });
 
   test("minimise hides a window and the switcher brings it back", async ({ page }) => {

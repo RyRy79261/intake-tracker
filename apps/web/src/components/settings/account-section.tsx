@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@intake/ui/button";
-import { Loader2, LogIn, LogOut, Sparkles, Bell, CloudUpload, Trash2 } from "lucide-react";
+import { LogIn, LogOut, Sparkles, Bell, CloudUpload, Trash2 } from "lucide-react";
+import { Spinner } from "@intake/ui/spinner";
 import { useAuth } from "@/components/auth-guard";
 import { handleSignOut } from "@/lib/sign-out";
 import { useSettingsStore } from "@/stores/settings-store";
@@ -29,7 +30,7 @@ export function AccountSection({ showDeleteAccount = false }: { showDeleteAccoun
   if (!ready) {
     return (
       <div className="flex items-center justify-center border border-line p-6">
-        <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+        <Spinner className="size-5 text-muted-foreground" />
       </div>
     );
   }

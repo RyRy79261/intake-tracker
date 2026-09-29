@@ -184,6 +184,8 @@ export function WindowFrame({
           className={cn(
             "min-w-0 flex-1 truncate font-semibold outline-none",
             phone ? "px-3 text-[0.9375rem]" : "text-[0.8125rem]",
+            // Muted on chrome is 4.2:1 in the day theme; keep the title AA.
+            wide && !focused && "text-foreground/80",
           )}
         >
           {title}

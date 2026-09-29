@@ -12,7 +12,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@intake/ui/select";
-import { Loader2, ChevronDown } from "lucide-react";
+import { ChevronDown } from "lucide-react";
+import { Spinner } from "@intake/ui/spinner";
 import { cn } from "@/lib/utils";
 import { CARD_THEMES } from "@/lib/card-themes";
 import { ModuleCard, WhenLabel, useLogicalTodayRange } from "@/components/home/module-card";
@@ -195,7 +196,7 @@ export function DefecationCard() {
             onClick={() => handleQuickLog(opt.value)}
           >
             {submittingAmount === opt.value ? (
-              <Loader2 className="w-4 h-4 animate-spin" aria-label={opt.label} />
+              <Spinner className="size-4" label={opt.label} />
             ) : (
               opt.label
             )}
@@ -262,7 +263,7 @@ export function DefecationCard() {
             className="w-full"
           >
             {addMutation.isPending ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
+              <Spinner className="size-4" />
             ) : (
               "Record with details"
             )}

@@ -19,10 +19,10 @@ import {
   ChevronDown,
   ChevronRight,
   ExternalLink,
-  Loader2,
   CheckCircle2,
   BookOpen,
 } from "lucide-react";
+import { Spinner } from "@intake/ui/spinner";
 import { VoiceRecorder } from "@/components/voice/voice-recorder";
 import { useAuth } from "@/components/auth-guard";
 import { Tog, flabelClass, plainboxClass } from "@/components/settings/settings-kit";
@@ -183,7 +183,7 @@ export function ReportBugDialog({
       <DialogContent
         data-testid="report-bug-dialog"
         style={domainStripeStyle(result ? "weight" : "bp")}
-        className="flex max-h-[calc(100dvh-24px)] w-[calc(100%-24px)] max-w-[460px] flex-col gap-0 border-line bg-card p-0 shadow-[inset_0_3px_0_var(--c)]"
+        className="flex w-[calc(100%-24px)] max-w-[460px] flex-col gap-0 border-line bg-card p-0 shadow-[inset_0_3px_0_var(--c)]"
       >
         {result ? (
           <>
@@ -407,7 +407,7 @@ export function ReportBugDialog({
               </Button>
               <Button onClick={handleSubmit} disabled={!canSubmit} className="flex-1">
                 {submit.isPending && (
-                  <Loader2 aria-hidden="true" className="animate-spin" />
+                  <Spinner />
                 )}
                 {submit.isPending ? "Filing…" : "Submit report"}
               </Button>

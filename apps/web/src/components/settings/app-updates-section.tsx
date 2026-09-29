@@ -2,7 +2,8 @@
 
 import type { CSSProperties } from "react";
 import { Button } from "@intake/ui/button";
-import { Smartphone, RefreshCw, Loader2 } from "lucide-react";
+import { Smartphone, RefreshCw } from "lucide-react";
+import { Spinner } from "@intake/ui/spinner";
 import { useVersionCheck } from "@/hooks/use-version-check";
 import { useToast } from "@intake/ui/use-toast";
 import { isCapacitorMode } from "@/lib/api-fetch";
@@ -85,7 +86,7 @@ export function AppUpdatesSection() {
           >
             {isChecking ? (
               <>
-                <Loader2 className="w-4 h-4 animate-spin" />
+                <Spinner className="size-4" />
                 Checking...
               </>
             ) : (

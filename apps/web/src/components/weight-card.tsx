@@ -3,7 +3,8 @@
 import { useState, useEffect } from "react";
 import { Button } from "@intake/ui/button";
 import { Input } from "@intake/ui/input";
-import { Minus, Plus, Check, Loader2 } from "lucide-react";
+import { Minus, Plus, Check } from "lucide-react";
+import { Spinner } from "@intake/ui/spinner";
 import { z } from "zod";
 import { CARD_THEMES } from "@/lib/card-themes";
 import { ModuleCard, WhenLabel } from "@/components/home/module-card";
@@ -267,7 +268,7 @@ export function WeightCard() {
           >
             {addMutation.isPending ? (
               <>
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                <Spinner className="size-4 mr-2" />
                 Recording...
               </>
             ) : (

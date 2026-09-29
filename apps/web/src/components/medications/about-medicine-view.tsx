@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { AlertTriangle, ArrowLeft, Info, Loader2, RefreshCw, ShieldCheck } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Info, RefreshCw, ShieldCheck } from "lucide-react";
+import { Spinner } from "@intake/ui/spinner";
 import { Button } from "@intake/ui/button";
 import { useToast } from "@intake/ui/use-toast";
 import { useAuthGate } from "@/components/auth-guard";
@@ -54,7 +55,7 @@ function Busy({ title, sub, onCancel }: { title: string; sub: string; onCancel?:
   return (
     <div className={BUSY_BOX} role="status" aria-live="polite">
       <div className="flex items-start gap-2.5 text-[0.8125rem]">
-        <Loader2 className="mt-0.5 h-4 w-4 shrink-0 animate-spin text-ai" aria-hidden="true" />
+        <Spinner className="size-4 mt-0.5 shrink-0 text-ai" />
         <div className="min-w-0 flex-1">
           <b className="block font-semibold [overflow-wrap:anywhere]">{title}</b>
           <p className="mt-0.5 leading-[1.4] text-muted-foreground">{sub}</p>

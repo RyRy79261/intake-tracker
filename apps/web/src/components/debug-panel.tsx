@@ -43,6 +43,7 @@ import {
   Info,
   Cog,
 } from "lucide-react";
+import { Spinner } from "@intake/ui/spinner";
 import { ErrorLogViewer } from "@/components/debug/error-log-viewer";
 import { EnvironmentInfo } from "@/components/debug/environment-info";
 import { ServiceWorkerDiagnostics } from "@/components/debug/service-worker-diagnostics";
@@ -341,9 +342,7 @@ function StockManagement() {
           onClick={handleRecalculate}
           disabled={isRecalculating}
         >
-          <RefreshCw
-            className={`h-3 w-3 mr-1 ${isRecalculating ? "animate-spin" : ""}`}
-          />
+          {isRecalculating ? <Spinner className="size-3 mr-1" /> : <RefreshCw className="h-3 w-3 mr-1" />}
           Recalculate All Stock
         </Button>
         <Button

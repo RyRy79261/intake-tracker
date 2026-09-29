@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@intake/ui/button";
-import { Mic, Square, Loader2 } from "lucide-react";
+import { Mic, Square } from "lucide-react";
+import { Spinner } from "@intake/ui/spinner";
 import { cn } from "@/lib/utils";
 
 type RecorderState = "idle" | "requesting" | "recording" | "processing" | "error";
@@ -245,7 +246,7 @@ export function VoiceRecorder({ onRecorded, busy, disabled }: VoiceRecorderProps
           aria-label={isRecording ? "Stop recording" : "Start recording"}
         >
           {state === "processing" || state === "requesting" ? (
-            <Loader2 className="h-7 w-7 animate-spin" />
+            <Spinner className="size-7" />
           ) : isRecording ? (
             <Square className="h-6 w-6 fill-current" />
           ) : (

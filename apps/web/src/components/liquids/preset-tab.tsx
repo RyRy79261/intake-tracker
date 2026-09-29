@@ -5,7 +5,8 @@ import { Button } from "@intake/ui/button";
 import { Input } from "@intake/ui/input";
 import { Label } from "@intake/ui/label";
 import { SegmentBar } from "@/components/home/module-card";
-import { Sparkles, Loader2, Check } from "lucide-react";
+import { Sparkles, Check } from "lucide-react";
+import { Spinner } from "@intake/ui/spinner";
 import { apiFetch } from "@/lib/api-fetch";
 import { readAiErrorMessage } from "@/lib/ai-error-message";
 import { cn } from "@/lib/utils";
@@ -572,7 +573,7 @@ export function PresetTab({ tab }: PresetTabProps) {
             className="absolute right-2 top-1/2 -translate-y-1/2 h-auto w-auto p-1 rounded-md text-muted-foreground hover:bg-transparent hover:text-foreground disabled:cursor-not-allowed"
           >
             {isLookingUp ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
+              <Spinner className="size-4" />
             ) : (
               <Sparkles className="w-4 h-4" />
             )}

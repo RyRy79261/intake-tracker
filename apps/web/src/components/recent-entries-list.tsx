@@ -5,7 +5,8 @@ import { useId } from "react";
 import { Button } from "@intake/ui/button";
 import { Input } from "@intake/ui/input";
 import { Label } from "@intake/ui/label";
-import { Loader2, Trash2 } from "lucide-react";
+import { Trash2 } from "lucide-react";
+import { Spinner } from "@intake/ui/spinner";
 import { cn } from "@/lib/utils";
 import { formatTimeOnly, getCurrentDateTimeLocal } from "@/lib/date-utils";
 import { recentDayLabel } from "@/lib/week-utils";
@@ -176,7 +177,7 @@ export function RecentEntriesList<T extends { id: string; timestamp: number }>({
               disabled={deletingId === record.id}
             >
               {deletingId === record.id ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
+                <Spinner className="size-4" />
               ) : (
                 <Trash2 className="w-4 h-4" />
               )}

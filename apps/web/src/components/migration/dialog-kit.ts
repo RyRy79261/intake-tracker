@@ -9,7 +9,7 @@ import type { CSSProperties } from "react";
 
 /** Dialog shell over the shared centred `DialogContent`/`AlertDialogContent`. */
 export const dlgClass =
-  "flex max-h-[calc(100dvh-24px)] w-[calc(100%-24px)] max-w-[460px] flex-col gap-0 border-line bg-panel p-0 shadow-[inset_0_3px_0_var(--c)]";
+  "flex w-[calc(100%-24px)] max-w-[460px] flex-col gap-0 border-line bg-panel p-0 shadow-[inset_0_3px_0_var(--c)]";
 
 /** `.dlg-h`: leaves room on the right for the 44px close button. */
 export const headClass = "shrink-0 space-y-1 pb-2.5 pl-4 pr-12 pt-3.5 text-left sm:text-left";

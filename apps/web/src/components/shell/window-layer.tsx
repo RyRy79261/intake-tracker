@@ -74,13 +74,45 @@ export function WindowLayer({ hidden = false }: { hidden?: boolean }) {
       const id = useWindowStore.getState().focus;
       if (!id) return;
       const el = layerRef.current?.querySelector(`[data-wid="${id}"]`);
-      if (!el || !(e.target instanceof Node) || !el.contains(e.target)) return;
+      if (!el || !(e.target instanceof Node)) return;
+      // Keyboard focus inside the window, or nowhere in particular (the
+      // window was clicked on a non-focusable spot).
+      if (e.target !== document.body && !el.contains(e.target)) return;
       e.preventDefault();
       closeWindow(id);
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [wide]);
+
+  // When the window holding keyboard focus closes or is minimised, focus
+  // would drop to <body>. Hand it to the window now on top, or back to the
+  // sys-bar button that opens the app (Home in the bottom bar otherwise).
+  const prevWins = useRef(wins);
+  useEffect(() => {
+    const prev = prevWins.current;
+    prevWins.current = wins;
+    const gone = prev.filter((p) => !p.min && !wins.some((w) => w.id === p.id && !w.min));
+    if (gone.length === 0) return;
+    const raf = requestAnimationFrame(() => {
+      const active = document.activeElement;
+      const lost =
+        !active ||
+        active === document.body ||
+        !active.isConnected ||
+        (active instanceof HTMLElement && active.offsetParent === null && active.getClientRects().length === 0);
+      if (!lost) return;
+      const s = useWindowStore.getState();
+      const next = s.wins.find((w) => w.id === s.focus && !w.min);
+      const title = next && (wide || !s.showHome) ? document.getElementById(`wt-${next.id}`) : null;
+      const target =
+        title ??
+        document.querySelector<HTMLElement>(`[data-testid="sys-bar"] [data-app="${gone[0]!.app}"]`) ??
+        document.querySelector<HTMLElement>('nav[aria-label="Bottom bar"] button');
+      target?.focus({ preventScroll: true });
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [wins, wide]);
 
   const rects = wide ? layoutWindows(wins, area) : {};
   const phoneActive = phone && !showHome && wins.some((w) => w.id === focus && !w.min);

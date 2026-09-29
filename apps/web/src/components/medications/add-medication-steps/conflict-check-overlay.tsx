@@ -2,7 +2,8 @@
 
 import { Badge } from "@intake/ui/badge";
 import { Button } from "@intake/ui/button";
-import { AlertTriangle, Loader2 } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
+import { Spinner } from "@intake/ui/spinner";
 
 export type ConflictCheckState = "idle" | "checking" | "warning" | "unavailable";
 
@@ -30,7 +31,7 @@ export function ConflictCheckOverlay({
   if (state === "checking") {
     return (
       <div className="absolute inset-0 bg-panel z-10 flex flex-col items-center justify-center p-4">
-        <Loader2 className="w-8 h-8 animate-spin text-muted-foreground mb-3" />
+        <Spinner className="size-8 text-muted-foreground mb-3" />
         <p className="text-sm text-muted-foreground">Checking for interactions...</p>
       </div>
     );

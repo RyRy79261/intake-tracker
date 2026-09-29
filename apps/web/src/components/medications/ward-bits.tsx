@@ -132,7 +132,7 @@ export const fieldClass =
  * own), capped to the viewport so long content scrolls.
  */
 export const dlgClass =
-  "flex max-h-[calc(100dvh-24px)] w-[calc(100%-24px)] max-w-[460px] flex-col gap-0 border-line bg-panel p-0 shadow-[inset_0_3px_0_hsl(var(--meds))]";
+  "flex w-[calc(100%-24px)] max-w-[460px] flex-col gap-0 border-line bg-panel p-0 shadow-[inset_0_3px_0_hsl(var(--meds))]";
 
 /** The full-width dashed "+ Add …" button at the bottom of a list (`.addfull`). */
 export const addFullClass = "mt-3.5 h-12 w-full border-dashed";

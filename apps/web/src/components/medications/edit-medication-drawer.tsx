@@ -22,7 +22,8 @@ import {
 } from "@/hooks/use-medication-queries";
 import { getMaintenancePhase, getActiveTitrationPhase } from "@/lib/medication-ui-utils";
 import type { Prescription, FoodInstruction, InventoryItem, PillShape, CompoundStrength } from "@/lib/db";
-import { Loader2, Plus, Clock, Edit2, Check, X, Trash2 } from "lucide-react";
+import { Plus, Clock, Edit2, Check, X, Trash2 } from "lucide-react";
+import { Spinner } from "@intake/ui/spinner";
 import { WarnBox } from "@/components/medications/ward-bits";
 import { useMedicineSearch } from "@/hooks/use-medicine-search";
 import {
@@ -400,7 +401,7 @@ function ScheduleTab({ prescription }: { prescription: Prescription }) {
             onClick={handleSave}
             disabled={!canSave}
           >
-            {isSaving ? <Loader2 className="animate-spin" /> : "Save schedule"}
+            {isSaving ? <Spinner /> : "Save schedule"}
           </Button>
         </div>
       )}
@@ -767,7 +768,7 @@ function MedicineEditForm({
           onClick={() => save()}
           disabled={errors.length > 0 || isSaving}
         >
-          {isSaving ? <Loader2 className="animate-spin" /> : "Save medicine"}
+          {isSaving ? <Spinner /> : "Save medicine"}
         </Button>
       </div>
     </div>
@@ -850,7 +851,7 @@ function DetailsTab({ prescription, onOpenChange }: { prescription: Prescription
               <X /> Cancel
             </Button>
             <Button size="sm" aria-label="Save details" onClick={handleSave} disabled={updatePrescription.isPending}>
-              {updatePrescription.isPending ? <Loader2 className="animate-spin" /> : <Check />} Save
+              {updatePrescription.isPending ? <Spinner /> : <Check />} Save
             </Button>
           </div>
         )}
@@ -924,7 +925,7 @@ function DetailsTab({ prescription, onOpenChange }: { prescription: Prescription
               onClick={handleDelete}
               disabled={deletePrescription.isPending}
             >
-              {deletePrescription.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Delete Prescription"}
+              {deletePrescription.isPending ? <Spinner className="size-4" /> : "Delete Prescription"}
             </Button>
           </div>
         </div>
@@ -1035,7 +1036,7 @@ function InfoTab({ prescription }: { prescription: Prescription }) {
           <div className="flex justify-end gap-2 border-t border-line pt-3">
             <Button size="sm" variant="outline" onClick={() => setIsEditingAiData(false)}>Cancel</Button>
             <Button size="sm" onClick={saveEdits} disabled={updatePrescription.isPending}>
-              {updatePrescription.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : "Save"}
+              {updatePrescription.isPending ? <Spinner className="size-3" /> : "Save"}
             </Button>
           </div>
         </div>
@@ -1079,7 +1080,7 @@ function InfoTab({ prescription }: { prescription: Prescription }) {
             <Button size="sm" variant="outline" onClick={handleReject}>Reject</Button>
             <Button size="sm" variant="outline" onClick={startEditing}>Edit</Button>
             <Button size="sm" onClick={handleAccept} disabled={updatePrescription.isPending}>
-              {updatePrescription.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : "Accept"}
+              {updatePrescription.isPending ? <Spinner className="size-3" /> : "Accept"}
             </Button>
           </div>
         </div>
@@ -1092,7 +1093,7 @@ function InfoTab({ prescription }: { prescription: Prescription }) {
       <div className="flex items-center justify-between">
         <h3 className={H3}>AI Information</h3>
         <Button size="sm" variant="outline" className="border-ai text-ai" onClick={handleRefresh} disabled={isRefreshing || updatePrescription.isPending}>
-          {isRefreshing || updatePrescription.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Clock className="w-3 h-3" />}
+          {isRefreshing || updatePrescription.isPending ? <Spinner className="size-3" /> : <Clock className="w-3 h-3" />}
           Refresh AI Data
         </Button>
       </div>

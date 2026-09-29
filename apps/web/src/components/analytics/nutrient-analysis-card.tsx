@@ -4,12 +4,12 @@ import { useMemo, useState, type CSSProperties } from "react";
 import { formatDistanceToNow } from "date-fns";
 import {
   Apple,
-  Loader2,
   ChevronDown,
   AlertCircle,
   Check,
   X,
 } from "lucide-react";
+import { Spinner } from "@intake/ui/spinner";
 import { Button } from "@intake/ui/button";
 import { Input } from "@intake/ui/input";
 import {
@@ -345,7 +345,7 @@ export function NutrientAnalysisCard() {
       >
         {pending ? (
           <>
-            <Loader2 className="animate-spin" />
+            <Spinner />
             Analyzing…
           </>
         ) : foods.length === 0 ? (

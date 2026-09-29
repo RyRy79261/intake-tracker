@@ -12,7 +12,8 @@ import {
   DrawerHeader,
   DrawerTitle,
 } from "@intake/ui/drawer";
-import { AlertTriangle, Loader2, Plus, TrendingUp } from "lucide-react";
+import { AlertTriangle, Plus, TrendingUp } from "lucide-react";
+import { Spinner } from "@intake/ui/spinner";
 import {
   useCreateTitrationPlan,
   usePhasesForPrescription,
@@ -352,7 +353,7 @@ export function TitrationDrawer({
                   disabled={aiLoading || entries.filter((e) => e.prescriptionId).length === 0}
                 >
                   {aiLoading ? (
-                    <Loader2 className="w-3 h-3 animate-spin" />
+                    <Spinner className="size-3" />
                   ) : (
                     <TrendingUp className="w-3 h-3" />
                   )}

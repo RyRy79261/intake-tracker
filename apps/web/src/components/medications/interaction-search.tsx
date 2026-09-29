@@ -3,10 +3,10 @@
 import { useState } from "react";
 import {
   Search,
-  Loader2,
   X,
   ShieldCheck,
 } from "lucide-react";
+import { Spinner } from "@intake/ui/spinner";
 import { Input } from "@intake/ui/input";
 import { Badge } from "@intake/ui/badge";
 import { useInteractionCheck } from "@/hooks/use-interaction-check";
@@ -102,7 +102,7 @@ export function InteractionSearch() {
           >
             {isLoading && (
               <div className="flex items-center justify-center p-4 border rounded-md">
-                <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                <Spinner className="size-4 mr-2" />
                 <span className="text-sm text-muted-foreground">
                   Checking interactions...
                 </span>

@@ -1,7 +1,8 @@
 "use client";
 
 import { memo, type CSSProperties } from "react";
-import { Trash2, Loader2, Pencil } from "lucide-react";
+import { Trash2, Pencil } from "lucide-react";
+import { Spinner } from "@intake/ui/spinner";
 import { CARD_THEMES, type CardTheme } from "@/lib/card-themes";
 import { domainColor } from "@/lib/domain-colors";
 import { type UnifiedRecord } from "@/lib/history-types";
@@ -133,7 +134,7 @@ function RecordRowImpl({ unified, onDelete, onEdit, isDeleting, liquidPresets }:
         aria-label="Delete entry"
         title="Delete entry"
       >
-        {isDeleting ? <Loader2 className="animate-spin" /> : <Trash2 />}
+        {isDeleting ? <Spinner /> : <Trash2 />}
       </button>
     </div>
   );

@@ -2,7 +2,8 @@
 
 import { useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, LogIn } from "lucide-react";
+import { LogIn } from "lucide-react";
+import { Spinner } from "@intake/ui/spinner";
 import { Button } from "@intake/ui/button";
 import { useAuth } from "@/components/auth-guard";
 import { useSettingsStore } from "@/stores/settings-store";
@@ -109,7 +110,7 @@ export function ProfilePageBody() {
         <ProfileSec id="profile-account">Account</ProfileSec>
         {!ready ? (
           <div className="flex items-center justify-center border border-line p-6">
-            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            <Spinner className="size-5 text-muted-foreground" />
           </div>
         ) : signedOut ? (
           <SignedOutAccount />

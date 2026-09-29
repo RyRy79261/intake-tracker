@@ -3,6 +3,18 @@
 import { useCallback, useEffect, useRef, type FocusEvent } from "react";
 
 /**
+ * "smooth", unless the user asked for reduced motion (the OS setting or
+ * Settings > Appearance > Reduce motion, which sets `html.reduce-motion`).
+ */
+export function scrollBehavior(): ScrollBehavior {
+  if (typeof window === "undefined") return "auto";
+  const reduced =
+    document.documentElement.classList.contains("reduce-motion") ||
+    window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  return reduced ? "auto" : "smooth";
+}
+
+/**
  * Hook that provides keyboard-aware scroll behavior for input fields.
  * When an input is focused and the mobile keyboard appears, it scrolls
  * the input into view so it's not hidden behind the keyboard.
@@ -22,7 +34,7 @@ export function useKeyboardAwareScroll() {
     // iOS keyboard animation takes ~300ms
     timeoutRef.current = setTimeout(() => {
       target.scrollIntoView({
-        behavior: "smooth",
+        behavior: scrollBehavior(),
         block: "center",
       });
     }, 300);
@@ -69,7 +81,7 @@ export function useVisualViewportScroll() {
         }
         resizeTimeoutRef.current = setTimeout(() => {
           activeInputRef.current?.scrollIntoView({
-            behavior: "smooth",
+            behavior: scrollBehavior(),
             block: "center",
           });
         }, 100);
@@ -96,7 +108,7 @@ export function useVisualViewportScroll() {
     // Also scroll immediately on focus as a fallback
     focusTimeoutRef.current = setTimeout(() => {
       e.target.scrollIntoView({
-        behavior: "smooth",
+        behavior: scrollBehavior(),
         block: "center",
       });
     }, 300);
