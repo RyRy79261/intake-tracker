@@ -79,6 +79,17 @@ describe("HoldToTalk", () => {
     await waitFor(() => expect(screen.getByTestId("voice-panel")).toHaveTextContent("clip:audio/webm"));
   });
 
+  it("announces state changes but not the ticking timer", () => {
+    render(<HoldToTalk />);
+    fireEvent.pointerDown(micButton(), { button: 0, pointerId: 1, clientX: 100, clientY: 800 });
+    const panel = screen.getByTestId("hold-to-talk-listening");
+    expect(panel).not.toHaveAttribute("aria-live");
+    const timer = screen.getByTestId("hold-to-talk-timer");
+    expect(timer.closest("[aria-live]")).toBeNull();
+    expect(timer).toHaveAttribute("aria-hidden", "true");
+    expect(screen.getByText("Release to review · Slide away to cancel")).toHaveAttribute("aria-live", "polite");
+  });
+
   it("cancels when the finger slides away before release", async () => {
     render(<HoldToTalk />);
     const btn = micButton();

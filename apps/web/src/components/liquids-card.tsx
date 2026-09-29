@@ -33,6 +33,7 @@ import { type IntakeRecord } from "@/lib/db";
 import { abvFromStandardDrinks } from "@intake/core/alcohol";
 import { getProgressStatus } from "@intake/core/progress";
 import { progressStatusTextClass } from "@intake/ui/progress";
+import { useFieldId } from "@/components/log-form-scope";
 
 const TAB_THEMES = {
   water: CARD_THEMES.water,
@@ -51,6 +52,7 @@ const TAB_ICONS = {
 } as const;
 
 export function LiquidsCard() {
+  const fid = useFieldId();
   const [activeTab, setActiveTab] = useState<string>("water");
   const waterIntake = useIntake("water");
   const settings = useSettings();
@@ -394,8 +396,8 @@ export function LiquidsCard() {
               idPrefix="edit-liquid"
             >
               <div className="space-y-1">
-                <Label htmlFor="edit-liquid-amount" className="text-xs text-muted-foreground">Amount (ml)</Label>
-                <Input id="edit-liquid-amount" type="number" value={editAmount} onChange={(e) => setEditAmount(e.target.value)} className="h-8 text-sm" />
+                <Label htmlFor={fid("edit-liquid-amount")} className="text-xs text-muted-foreground">Amount (ml)</Label>
+                <Input id={fid("edit-liquid-amount")} type="number" value={editAmount} onChange={(e) => setEditAmount(e.target.value)} className="h-8 text-sm" />
               </div>
               {editIsMealWater ? (
                 <p className="text-xs text-muted-foreground" data-testid="liquid-edit-meal-hint">
@@ -404,11 +406,11 @@ export function LiquidsCard() {
               ) : (
                 <>
                   <div className="space-y-1">
-                    <Label htmlFor="edit-liquid-beverage" className="text-xs text-muted-foreground">
+                    <Label htmlFor={fid("edit-liquid-beverage")} className="text-xs text-muted-foreground">
                       Beverage name <span className="font-normal">(optional)</span>
                     </Label>
                     <Input
-                      id="edit-liquid-beverage"
+                      id={fid("edit-liquid-beverage")}
                       type="text"
                       value={editBeverageName}
                       onChange={(e) => setEditBeverageName(e.target.value)}
@@ -416,11 +418,11 @@ export function LiquidsCard() {
                     />
                   </div>
                   <div className="space-y-1">
-                    <Label htmlFor="edit-liquid-caffeine" className="text-xs text-muted-foreground">
+                    <Label htmlFor={fid("edit-liquid-caffeine")} className="text-xs text-muted-foreground">
                       Caffeine (mg) <span className="font-normal">(optional)</span>
                     </Label>
                     <Input
-                      id="edit-liquid-caffeine"
+                      id={fid("edit-liquid-caffeine")}
                       type="number"
                       min="0"
                       step="1"
@@ -431,11 +433,11 @@ export function LiquidsCard() {
                     />
                   </div>
                   <div className="space-y-1">
-                    <Label htmlFor="edit-liquid-alcohol" className="text-xs text-muted-foreground">
+                    <Label htmlFor={fid("edit-liquid-alcohol")} className="text-xs text-muted-foreground">
                       Alcohol (% ABV) <span className="font-normal">(optional)</span>
                     </Label>
                     <Input
-                      id="edit-liquid-alcohol"
+                      id={fid("edit-liquid-alcohol")}
                       type="number"
                       min="0"
                       step="0.1"
@@ -447,11 +449,11 @@ export function LiquidsCard() {
                   </div>
                   {sugarEnabled && (
                     <div className="space-y-1">
-                      <Label htmlFor="edit-liquid-sugar" className="text-xs text-muted-foreground">
+                      <Label htmlFor={fid("edit-liquid-sugar")} className="text-xs text-muted-foreground">
                         Sugar (g) <span className="font-normal">(optional)</span>
                       </Label>
                       <Input
-                        id="edit-liquid-sugar"
+                        id={fid("edit-liquid-sugar")}
                         type="number"
                         min="0"
                         step="1"
