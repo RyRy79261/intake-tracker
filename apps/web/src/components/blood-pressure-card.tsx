@@ -41,6 +41,7 @@ import {
   formatDateTime,
 } from "@/lib/date-utils";
 import { getBPCategory } from "@/lib/constants";
+import { useFieldId, useOnLogged } from "@/components/log-form-scope";
 
 // Format BP reading
 function formatBPReading(record: BloodPressureRecord): string {
@@ -51,6 +52,8 @@ const theme = CARD_THEMES.bp;
 const Icon = theme.icon;
 
 export function BloodPressureCard() {
+  const onLogged = useOnLogged();
+  const fid = useFieldId();
   const { toast } = useToast();
   const [systolicInput, setSystolicInput] = useState("");
   const [diastolicInput, setDiastolicInput] = useState("");
@@ -187,6 +190,7 @@ export function BloodPressureCard() {
         description: `${systolic}/${diastolic} mmHg logged successfully`,
         variant: "success",
       });
+      onLogged();
       setSystolicInput("");
       setDiastolicInput("");
       setHeartRateInput("");
@@ -255,9 +259,9 @@ export function BloodPressureCard() {
           {/* Primary inputs: Systolic / Diastolic (always visible) */}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
-              <Label htmlFor="systolic" className="text-xs">Systolic (top)</Label>
+              <Label htmlFor={fid("systolic")} className="text-xs">Systolic (top)</Label>
               <Input
-                id="systolic"
+                id={fid("systolic")}
                 type="number"
                 min={BP_RANGES.systolic.min}
                 max={BP_RANGES.systolic.max}
@@ -271,9 +275,9 @@ export function BloodPressureCard() {
               )}
             </div>
             <div className="space-y-1">
-              <Label htmlFor="diastolic" className="text-xs">Diastolic (bottom)</Label>
+              <Label htmlFor={fid("diastolic")} className="text-xs">Diastolic (bottom)</Label>
               <Input
-                id="diastolic"
+                id={fid("diastolic")}
                 type="number"
                 min={BP_RANGES.diastolic.min}
                 max={BP_RANGES.diastolic.max}
@@ -295,10 +299,10 @@ export function BloodPressureCard() {
 
           {/* Heart Rate (optional) - promoted to primary input area */}
           <div className="space-y-1 mt-2">
-            <Label htmlFor="heartrate" className="text-xs">Heart Rate (optional)</Label>
+            <Label htmlFor={fid("heartrate")} className="text-xs">Heart Rate (optional)</Label>
             <div className="flex gap-2">
               <Input
-                id="heartrate"
+                id={fid("heartrate")}
                 type="number"
                 min={BP_RANGES.heartRate.min}
                 max={BP_RANGES.heartRate.max}
@@ -429,9 +433,9 @@ export function BloodPressureCard() {
 
               {/* Note */}
               <div className="space-y-2">
-                <Label htmlFor="bp-note" className="text-xs">Note (optional)</Label>
+                <Label htmlFor={fid("bp-note")} className="text-xs">Note (optional)</Label>
                 <Input
-                  id="bp-note"
+                  id={fid("bp-note")}
                   aria-label="Blood pressure note"
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
@@ -445,7 +449,7 @@ export function BloodPressureCard() {
                 onChange={setCustomTime}
                 expanded={showTimeInput}
                 onToggle={() => setShowTimeInput(!showTimeInput)}
-                id="bp-time"
+                id={fid("bp-time")}
               />
             </div>
           )}
@@ -528,8 +532,8 @@ export function BloodPressureCard() {
                 </Select>
               </div>
               <div className="flex items-center gap-2">
-                <Checkbox id="edit-irregular-heartbeat" checked={editIrregularHeartbeat} onCheckedChange={(checked) => setEditIrregularHeartbeat(checked === true)} />
-                <Label htmlFor="edit-irregular-heartbeat" className="text-sm cursor-pointer">Irregular heartbeat</Label>
+                <Checkbox id={fid("edit-irregular-heartbeat")} checked={editIrregularHeartbeat} onCheckedChange={(checked) => setEditIrregularHeartbeat(checked === true)} />
+                <Label htmlFor={fid("edit-irregular-heartbeat")} className="text-sm cursor-pointer">Irregular heartbeat</Label>
               </div>
             </InlineEditFormShell>
           )}

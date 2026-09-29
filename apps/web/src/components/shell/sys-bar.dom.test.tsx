@@ -134,6 +134,23 @@ describe("SysBar", () => {
     fireEvent.click(meds);
     expect(push).toHaveBeenCalledWith("/medications");
   });
+
+  it("lights History, not Metrics, on the Records tab, and neither pushes when already there", () => {
+    render(<SysBar />);
+    const metrics = screen.getByRole("button", { name: "Metrics" });
+    const history = screen.getByRole("button", { name: "History" });
+
+    fireEvent.click(history);
+    expect(useWindowStore.getState().wins.map((w) => [w.app, w.st.tab])).toEqual([["metrics", "records"]]);
+    expect(window.location.search).toBe("?tab=records");
+    expect(history).toHaveAttribute("aria-pressed", "true");
+    expect(metrics).toHaveAttribute("aria-pressed", "false");
+
+    // Clicking History again keeps the one window and routes nowhere.
+    fireEvent.click(history);
+    expect(useWindowStore.getState().wins).toHaveLength(1);
+    expect(push).not.toHaveBeenCalled();
+  });
 });
 
 describe("initialsFor", () => {

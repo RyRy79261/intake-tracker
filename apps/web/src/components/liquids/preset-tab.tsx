@@ -35,6 +35,7 @@ import {
   waterContentPercentFromAbv,
 } from "@intake/core/alcohol";
 import { computeTwoStageProgress } from "@intake/core/progress";
+import { useFieldId, useOnLogged } from "@/components/log-form-scope";
 
 type PresetTabKind = "coffee" | "alcohol";
 
@@ -173,6 +174,8 @@ function sugarGrams(form: DrinkForm): number {
 }
 
 export function PresetTab({ tab }: PresetTabProps) {
+  const onLogged = useOnLogged();
+  const fid = useFieldId();
   const [form, dispatch] = useReducer(drinkFormReducer, EMPTY_FORM);
   const {
     selectedPresetId,
@@ -409,6 +412,7 @@ export function PresetTab({ tab }: PresetTabProps) {
         description: `${beverageName || searchText.trim() || "Entry"} recorded`,
         variant: "success",
       });
+      onLogged();
       // Reset fields
       resetFields();
     } catch (cause) {
@@ -477,6 +481,7 @@ export function PresetTab({ tab }: PresetTabProps) {
           description: `${name} recorded, but the preset could not be saved`,
           variant: "destructive",
         });
+        onLogged();
         resetFields();
         return;
       }
@@ -485,6 +490,7 @@ export function PresetTab({ tab }: PresetTabProps) {
         description: `${name} saved as preset and logged`,
         variant: "success",
       });
+      onLogged();
       // Reset
       resetFields();
     } finally {
@@ -606,11 +612,11 @@ export function PresetTab({ tab }: PresetTabProps) {
       {/* 3. Volume and Substance Fields */}
       <div className="grid grid-cols-2 gap-3 mb-2">
         <div>
-          <Label htmlFor={`${tab}-volume`} className="text-xs text-muted-foreground">
+          <Label htmlFor={fid(`${tab}-volume`)} className="text-xs text-muted-foreground">
             Volume (ml)
           </Label>
           <Input
-            id={`${tab}-volume`}
+            id={fid(`${tab}-volume`)}
             type="number"
             value={volumeMl || ""}
             onChange={(e) =>
@@ -622,13 +628,13 @@ export function PresetTab({ tab }: PresetTabProps) {
         </div>
         <div>
           <Label
-            htmlFor={`${tab}-per100ml`}
+            htmlFor={fid(`${tab}-per100ml`)}
             className="text-xs text-muted-foreground"
           >
             {primarySubstanceLabel}
           </Label>
           <Input
-            id={`${tab}-per100ml`}
+            id={fid(`${tab}-per100ml`)}
             type="number"
             value={(tab === "coffee" ? caffeinePer100ml : alcoholPer100ml) || ""}
             onChange={(e) =>
@@ -649,13 +655,13 @@ export function PresetTab({ tab }: PresetTabProps) {
       {sugarEnabled && (
         <div className="mb-3 space-y-1">
           <Label
-            htmlFor={`${tab}-sugar`}
+            htmlFor={fid(`${tab}-sugar`)}
             className="text-xs text-muted-foreground"
           >
             Sugar (g) — optional
           </Label>
           <Input
-            id={`${tab}-sugar`}
+            id={fid(`${tab}-sugar`)}
             type="number"
             min={0}
             inputMode="decimal"
