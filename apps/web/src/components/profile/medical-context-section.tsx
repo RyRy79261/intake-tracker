@@ -57,7 +57,7 @@ export function MedicalContextSection() {
         Medical context
       </h2>
 
-      <Card className="bg-white/80 dark:bg-slate-900/50 border-slate-200 dark:border-slate-800">
+      <Card className="bg-card border-line">
         <CardHeader className="pt-3 pb-1 px-3">
           <CardTitle className="text-sm font-medium flex items-center gap-1.5">
             <HeartPulse className="w-4 h-4 text-rose-500" />
@@ -78,7 +78,7 @@ export function MedicalContextSection() {
               {conditions.map((c) => (
                 <span
                   key={c}
-                  className="inline-flex items-center gap-1 rounded-full bg-slate-100 dark:bg-slate-800 px-2.5 py-1 text-xs"
+                  className="inline-flex items-center gap-1 rounded-full bg-chrome px-2.5 py-1 text-xs"
                 >
                   {c}
                   <button

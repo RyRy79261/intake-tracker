@@ -69,7 +69,7 @@ export function InventoryItemViewDrawer({ item, prescription, open, onOpenChange
         <div className="flex-1 overflow-y-auto">
           <Tabs defaultValue="details" className="w-full h-full flex flex-col">
             <div className="px-4 pt-4 shrink-0 border-b">
-              <TabsList className="w-full grid grid-cols-3 h-auto p-1 bg-muted/50 rounded-lg mb-4">
+              <TabsList className="w-full grid grid-cols-3 mb-4">
                 <TabsTrigger value="details" className="py-2 text-xs">Details</TabsTrigger>
                 <TabsTrigger value="inventory" className="py-2 text-xs">Stock</TabsTrigger>
                 <TabsTrigger value="manage" className="py-2 text-xs">Manage</TabsTrigger>

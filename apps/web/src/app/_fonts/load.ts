@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 
 /**
- * Loads the bundled Outfit TTFs for satori (`next/og` ImageResponse). Reads
+ * Loads the bundled IBM Plex Sans TTFs for satori (`next/og` ImageResponse). Reads
  * real font buffers off disk — `next/font/google` only emits runtime CSS, which
  * satori cannot use. Fault-tolerant: a missing/unreadable font is skipped so
  * `next build` can never fail over a font (ImageResponse falls back to satori's
@@ -16,8 +16,8 @@ export interface OgFont {
 }
 
 const FONT_FILES = [
-  { file: "Outfit-400.ttf", name: "Outfit", weight: 400 as const },
-  { file: "Outfit-600.ttf", name: "Outfit", weight: 600 as const },
+  { file: "IBMPlexSans-400.ttf", name: "IBM Plex Sans", weight: 400 as const },
+  { file: "IBMPlexSans-600.ttf", name: "IBM Plex Sans", weight: 600 as const },
 ];
 
 const FONT_DIR = path.join(process.cwd(), "src", "app", "_fonts");

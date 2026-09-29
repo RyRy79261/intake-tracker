@@ -15,7 +15,7 @@ function SignedOutBlurb() {
   const router = useRouter();
   return (
     <div className="space-y-3">
-      <div className="p-4 rounded-lg bg-slate-50 dark:bg-slate-900 border space-y-3">
+      <div className="p-4 rounded-lg bg-background border space-y-3">
         <p className="text-sm font-medium">You&apos;re not signed in</p>
         <p className="text-xs text-muted-foreground">
           Your profile works on this device offline. Signing in also unlocks:

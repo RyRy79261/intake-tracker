@@ -8,6 +8,7 @@ import { Label } from "@intake/ui/label";
 import { Check, Loader2, ChevronDown, ChevronUp } from "lucide-react";
 import { z } from "zod";
 import { cn } from "@/lib/utils";
+import { domainStripeStyle } from "@/lib/domain-colors";
 import { CARD_THEMES } from "@/lib/card-themes";
 import { logAudit } from "@/lib/audit";
 
@@ -210,7 +211,7 @@ export function BloodPressureCard() {
 
   return (
     <>
-    <Card className={cn("relative overflow-hidden transition-all duration-300 bg-linear-to-br", theme.gradient, theme.border)}>
+    <Card className={cn("relative overflow-hidden transition-all duration-300 stripe", theme.gradient, theme.border)} style={domainStripeStyle(theme.domain)}>
       <CardContent className="p-6">
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
@@ -263,7 +264,7 @@ export function BloodPressureCard() {
                 placeholder="120"
                 value={systolicInput}
                 onChange={(e) => setSystolicInput(e.target.value)}
-                className="h-12 text-lg text-center bg-white/80 dark:bg-slate-900/50"
+                className="h-12 text-lg text-center bg-background"
               />
               {fieldErrors.systolic && (
                 <p className="text-sm text-destructive mt-1">{fieldErrors.systolic}</p>
@@ -279,7 +280,7 @@ export function BloodPressureCard() {
                 placeholder="80"
                 value={diastolicInput}
                 onChange={(e) => setDiastolicInput(e.target.value)}
-                className="h-12 text-lg text-center bg-white/80 dark:bg-slate-900/50"
+                className="h-12 text-lg text-center bg-background"
               />
               {fieldErrors.diastolic && (
                 <p className="text-sm text-destructive mt-1">{fieldErrors.diastolic}</p>
@@ -304,7 +305,7 @@ export function BloodPressureCard() {
                 placeholder="72"
                 value={heartRateInput}
                 onChange={(e) => setHeartRateInput(e.target.value)}
-                className="h-11 text-center bg-white/80 dark:bg-slate-900/50"
+                className="h-11 text-center bg-background"
               />
               <div className="flex items-center px-3 text-sm font-medium text-muted-foreground bg-muted rounded-md">
                 BPM

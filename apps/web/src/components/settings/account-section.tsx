@@ -20,7 +20,7 @@ export function AccountSection({ showDeleteAccount = false }: { showDeleteAccoun
 
   if (!ready) {
     return (
-      <div className="flex items-center justify-center p-6 rounded-lg bg-slate-50 dark:bg-slate-900 border">
+      <div className="flex items-center justify-center p-6 rounded-lg bg-background border">
         <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
       </div>
     );
@@ -29,7 +29,7 @@ export function AccountSection({ showDeleteAccount = false }: { showDeleteAccoun
   if (!authenticated) {
     return (
       <div className="space-y-3">
-        <div className="p-4 rounded-lg bg-slate-50 dark:bg-slate-900 border">
+        <div className="p-4 rounded-lg bg-background border">
           <p className="text-sm font-medium mb-1">Not signed in</p>
           <p className="text-xs text-muted-foreground mb-3">
             Sign in to unlock:
@@ -64,7 +64,7 @@ export function AccountSection({ showDeleteAccount = false }: { showDeleteAccoun
 
   return (
     <div className="space-y-3">
-      <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-900 border">
+      <div className="p-3 rounded-lg bg-background border">
         <p className="text-sm font-medium">{email}</p>
         <p className="text-xs text-muted-foreground">
           Signed in via Neon Auth

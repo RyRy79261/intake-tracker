@@ -4,6 +4,7 @@ import { Card, CardContent } from "@intake/ui/card";
 import { Progress, progressStatusTextClass } from "@intake/ui/progress";
 import { Utensils } from "lucide-react";
 import { cn, formatAmount } from "@/lib/utils";
+import { domainStripeStyle } from "@/lib/domain-colors";
 import { CARD_THEMES } from "@/lib/card-themes";
 import { useIntake } from "@/hooks/use-intake-queries";
 import { useSettings } from "@/hooks/use-settings";
@@ -46,10 +47,11 @@ export function FoodSaltCard() {
   return (
     <Card
       className={cn(
-        "relative overflow-hidden transition-all duration-300 bg-linear-to-br",
+        "relative overflow-hidden transition-all duration-300 stripe",
         CARD_THEMES.eating.gradient,
         CARD_THEMES.eating.border
       )}
+      style={domainStripeStyle(CARD_THEMES.eating.domain)}
     >
       <CardContent className="p-6">
         {/* Card header */}

@@ -6,30 +6,32 @@ import type { ReactElement } from "react";
  * `opengraph-image.tsx` / `twitter-image.tsx`.
  */
 export const COLORS = {
-  bg: "#0b1220", // deep slate — richer than the app's #111827 for a share card
-  bgTo: "#111a2e",
-  fg: "#f1f5f9",
-  muted: "#94a3b8",
+  // Ward Console night palette (mirrors the .dark tokens in @intake/ui).
+  // bg === bgTo keeps the share card flat — no gradient.
+  bg: "#10121C",
+  bgTo: "#10121C",
+  fg: "#EDEFF6",
+  muted: "#979CB3",
   waterFrom: "#0ea5e9", // the droplet gradient from public/icons/icon-512.svg
   waterTo: "#0284c7",
-  // per-domain accent colors (mirror @intake/ui tokens)
-  water: "#29a9e8",
-  salt: "#e8973a",
-  eating: "#fb7115",
-  weight: "#10b788",
-  bp: "#f43f6b",
-  medication: "#16a181",
+  // per-domain accent colors (mirror @intake/ui night tokens)
+  water: "#4AAEFF",
+  sodium: "#F4B73E",
+  caffeine: "#CF9468",
+  weight: "#52D38F",
+  bp: "#FF5E5A",
+  meds: "#2FD1C2",
 } as const;
 
-export const SANS = "Outfit";
+export const SANS = "IBM Plex Sans";
 
 const DOMAIN_DOTS = [
   COLORS.water,
-  COLORS.salt,
-  COLORS.eating,
+  COLORS.sodium,
+  COLORS.caffeine,
   COLORS.weight,
   COLORS.bp,
-  COLORS.medication,
+  COLORS.meds,
 ];
 
 /** The app's water-droplet mark — the exact art from public/icons/icon-512.svg. */
@@ -72,7 +74,7 @@ export function DomainDots({
             display: "flex",
             width: size,
             height: size,
-            borderRadius: size,
+            borderRadius: 0,
             backgroundColor: c,
           }}
         />

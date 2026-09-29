@@ -103,7 +103,7 @@ function ScanPreview({
     <button
       type="button"
       onClick={() => onOpen(record)}
-      className="w-full text-left rounded-md border border-slate-200 dark:border-slate-800 bg-white/40 dark:bg-slate-900/40 hover:bg-slate-100/60 dark:hover:bg-slate-800/40 transition-colors px-2.5 py-2"
+      className="w-full text-left rounded-md border border-line bg-background hover:bg-foreground/5 transition-colors px-2.5 py-2"
     >
       <div className="flex items-center justify-between gap-2 mb-1">
         <div className="flex items-center gap-1.5 min-w-0 flex-1">
@@ -124,7 +124,7 @@ function ScanPreview({
           <ChevronRight className="w-3 h-3" />
         </span>
       </div>
-      <p className="text-xs text-slate-600 dark:text-slate-300 line-clamp-2">
+      <p className="text-xs text-muted-foreground line-clamp-2">
         {record.summary}
       </p>
     </button>
@@ -137,7 +137,7 @@ function ScanPreview({
 function ScanContent({ record }: { record: ScanRecord }) {
   return (
     <div className="space-y-3">
-      <p className="text-sm text-slate-700 dark:text-slate-200 whitespace-pre-line">
+      <p className="text-sm text-foreground whitespace-pre-line">
         {record.summary}
       </p>
 
@@ -146,15 +146,15 @@ function ScanContent({ record }: { record: ScanRecord }) {
           {record.findings.map((f, i) => (
             <li
               key={i}
-              className="rounded-md border border-slate-200 dark:border-slate-800 bg-white/40 dark:bg-slate-900/40 px-2.5 py-2 space-y-1"
+              className="rounded-md border border-line bg-background px-2.5 py-2 space-y-1"
             >
               <div className="flex items-center justify-between gap-2">
-                <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
+                <span className="text-sm font-medium text-foreground">
                   {f.nutrient}
                 </span>
                 <StatusBadge status={f.status} />
               </div>
-              <p className="text-xs text-slate-600 dark:text-slate-300">
+              <p className="text-xs text-muted-foreground">
                 {f.detail}
               </p>
               {f.exampleFoods.length > 0 && (
@@ -310,7 +310,7 @@ export function NutrientAnalysisCard() {
   };
 
   return (
-    <Card className="bg-white/80 dark:bg-slate-900/50 border-slate-200 dark:border-slate-800">
+    <Card className="bg-card border-line">
       <CardHeader className="pt-3 pb-1 px-3">
         <CardTitle className="text-sm font-medium flex items-center gap-1.5">
           <Apple className="w-3.5 h-3.5 text-emerald-500" />
@@ -444,10 +444,10 @@ export function NutrientAnalysisCard() {
 
           <div className="space-y-3 text-sm">
             <div className="space-y-1.5">
-              <p className="font-medium text-slate-700 dark:text-slate-200">
+              <p className="font-medium text-foreground">
                 Food data (last {WINDOW_DAYS} days)
               </p>
-              <ul className="space-y-1 text-slate-600 dark:text-slate-300">
+              <ul className="space-y-1 text-muted-foreground">
                 <li className="flex gap-1.5">
                   <Check className="w-3.5 h-3.5 mt-0.5 shrink-0 text-emerald-500" />
                   <span>
@@ -457,7 +457,7 @@ export function NutrientAnalysisCard() {
                   </span>
                 </li>
                 <li className="flex gap-1.5">
-                  <X className="w-3.5 h-3.5 mt-0.5 shrink-0 text-slate-400" />
+                  <X className="w-3.5 h-3.5 mt-0.5 shrink-0 text-muted-foreground" />
                   <span>
                     Timestamps, notes, and any other tracked categories (water,
                     BP, weight, etc.) are NOT sent
@@ -468,12 +468,12 @@ export function NutrientAnalysisCard() {
 
             {focus.trim() !== "" && (
               <div className="space-y-1.5">
-                <p className="font-medium text-slate-700 dark:text-slate-200">
+                <p className="font-medium text-foreground">
                   Focus
                 </p>
-                <p className="text-slate-600 dark:text-slate-300">
+                <p className="text-muted-foreground">
                   Findings will lead with:{" "}
-                  <span className="text-slate-700 dark:text-slate-200 font-medium">
+                  <span className="text-foreground font-medium">
                     {focus.trim()}
                   </span>
                 </p>
@@ -481,21 +481,21 @@ export function NutrientAnalysisCard() {
             )}
 
             <div className="space-y-1.5">
-              <p className="font-medium text-slate-700 dark:text-slate-200">
+              <p className="font-medium text-foreground">
                 Your medical profile
               </p>
-              <ul className="space-y-1 text-slate-600 dark:text-slate-300">
+              <ul className="space-y-1 text-muted-foreground">
                 <li className="flex gap-1.5">
                   {shareConditions ? (
                     <Check className="w-3.5 h-3.5 mt-0.5 shrink-0 text-emerald-500" />
                   ) : (
-                    <X className="w-3.5 h-3.5 mt-0.5 shrink-0 text-slate-400" />
+                    <X className="w-3.5 h-3.5 mt-0.5 shrink-0 text-muted-foreground" />
                   )}
                   <span>
                     {shareConditions ? (
                       <>
                         Conditions included:{" "}
-                        <span className="text-slate-700 dark:text-slate-200">
+                        <span className="text-foreground">
                           {profile.conditions.join(", ")}
                         </span>
                       </>
@@ -508,7 +508,7 @@ export function NutrientAnalysisCard() {
                   {shareMedications && sharedMedicationCount !== 0 ? (
                     <Check className="w-3.5 h-3.5 mt-0.5 shrink-0 text-emerald-500" />
                   ) : (
-                    <X className="w-3.5 h-3.5 mt-0.5 shrink-0 text-slate-400" />
+                    <X className="w-3.5 h-3.5 mt-0.5 shrink-0 text-muted-foreground" />
                   )}
                   <span>
                     {!shareMedications

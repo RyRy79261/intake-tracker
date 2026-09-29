@@ -244,7 +244,7 @@ export function BeverageTab() {
             theme.inputBg
           )}
         >
-          <span className={cn("text-3xl font-bold tabular-nums", theme.inputText)}>
+          <span className={cn("text-3xl font-bold num", theme.inputText)}>
             +{formatAmount(pendingAmount, unit)}
           </span>
           <span className="text-xs text-muted-foreground">

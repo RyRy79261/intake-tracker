@@ -49,7 +49,7 @@ const Progress = React.forwardRef<
       <ProgressPrimitive.Root
         ref={ref}
         className={cn(
-          "relative h-4 w-full overflow-hidden rounded-full bg-secondary",
+          "relative h-4 w-full overflow-hidden rounded-none bg-foreground/10",
           className
         )}
         {...props}
@@ -85,7 +85,7 @@ const Progress = React.forwardRef<
           <div
             aria-hidden="true"
             className={cn(
-              "absolute top-0 h-full w-0.5 bg-foreground/40 dark:bg-foreground/50",
+              "absolute top-0 h-full w-0.5 bg-foreground",
               targetMarkerClassName
             )}
             style={{ left: `calc(${targetMarkerPct}% - 1px)` }}

@@ -210,7 +210,7 @@ export function WeightCard() {
                 onValueChange={setPendingWeight}
                 formatDisplay={(v) => v?.toFixed(2) ?? "--"}
                 suffix="kg"
-                displayClassName="text-4xl font-bold tabular-nums"
+                displayClassName="text-4xl font-bold num"
                 suffixClassName="text-lg text-muted-foreground ml-1"
                 // Keep the typed scale reading (2 dp). The increment only
                 // drives the +/- buttons; out-of-range values are rejected

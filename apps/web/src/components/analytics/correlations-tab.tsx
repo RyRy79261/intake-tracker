@@ -114,7 +114,7 @@ function CorrelationCard({
   unitB: string;
 }) {
   return (
-    <Card className="bg-white/80 dark:bg-slate-900/50 border-slate-200 dark:border-slate-800">
+    <Card className="bg-card border-line">
       <CardHeader className="pt-3 pb-1 px-3">
         <CardTitle className="text-sm font-medium">{title}</CardTitle>
       </CardHeader>
@@ -153,7 +153,7 @@ function FluidBalanceCard({ range }: { range: TimeRange }) {
 
   if (!data || data.value.daily.length === 0) {
     return (
-      <Card className="bg-white/80 dark:bg-slate-900/50 border-slate-200 dark:border-slate-800">
+      <Card className="bg-card border-line">
         <CardHeader className="pt-3 pb-1 px-3">
           <CardTitle className="text-sm font-medium">Fluid Balance</CardTitle>
         </CardHeader>
@@ -173,7 +173,7 @@ function FluidBalanceCard({ range }: { range: TimeRange }) {
   }));
 
   return (
-    <Card className="bg-white/80 dark:bg-slate-900/50 border-slate-200 dark:border-slate-800">
+    <Card className="bg-card border-line">
       <CardHeader className="pt-3 pb-1 px-3">
         <CardTitle className="text-sm font-medium">Fluid Balance</CardTitle>
       </CardHeader>
@@ -260,7 +260,7 @@ function CustomComparison({ range }: { range: TimeRange }) {
     DOMAIN_OPTIONS.find((o) => o.value === d)?.label ?? d;
 
   return (
-    <Card className="bg-white/80 dark:bg-slate-900/50 border-slate-200 dark:border-slate-800">
+    <Card className="bg-card border-line">
       <CardHeader className="pt-3 pb-1 px-3">
         <div className="flex items-center gap-2">
           <ArrowRightLeft className="w-4 h-4 text-muted-foreground" />

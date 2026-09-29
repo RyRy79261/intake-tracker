@@ -298,7 +298,7 @@ function PrescriptionSection({ report }: { report: PrescriptionReport }) {
   const [expanded, setExpanded] = useState(report.prescription.isActive);
 
   return (
-    <Card className="bg-white/80 dark:bg-slate-900/50 border-slate-200 dark:border-slate-800">
+    <Card className="bg-card border-line">
       <CardHeader className="pt-3 pb-1 px-3">
         <Button
           variant="ghost"

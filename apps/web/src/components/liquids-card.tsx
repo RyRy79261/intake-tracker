@@ -29,6 +29,7 @@ import {
 } from "@/hooks/use-composable-entry";
 import { useOptionalTrackerEnabled } from "@/lib/optional-trackers";
 import { cn, formatAmount, getLiquidTypeLabel } from "@/lib/utils";
+import { domainStripeStyle } from "@/lib/domain-colors";
 import { formatTimeOnly } from "@/lib/date-utils";
 import { type IntakeRecord } from "@/lib/db";
 import { abvFromStandardDrinks } from "@intake/core/alcohol";
@@ -291,8 +292,9 @@ export function LiquidsCard() {
     <Card
       className={cn(
         "relative overflow-hidden transition-all duration-300",
-        `bg-linear-to-br ${theme.gradient} ${theme.border}`
+        `stripe ${theme.gradient} ${theme.border}`
       )}
+      style={domainStripeStyle(theme.domain)}
     >
       <CardContent className="p-6">
         {/* Header */}

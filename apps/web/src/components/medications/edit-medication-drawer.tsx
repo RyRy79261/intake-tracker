@@ -71,7 +71,7 @@ export function PrescriptionViewDrawer({ prescription, open, onOpenChange }: Pre
         <div className="flex-1 overflow-y-auto">
           <Tabs defaultValue="schedule" className="w-full h-full flex flex-col">
             <div className="px-4 pt-4 shrink-0 border-b">
-              <TabsList className="w-full grid grid-cols-4 h-auto p-1 bg-muted/50 rounded-lg mb-4">
+              <TabsList className="w-full grid grid-cols-4 mb-4">
                 <TabsTrigger value="schedule" className="py-2 text-xs">Schedule</TabsTrigger>
                 <TabsTrigger value="medicine" className="py-2 text-xs">Medicine</TabsTrigger>
                 <TabsTrigger value="details" className="py-2 text-xs">Details</TabsTrigger>

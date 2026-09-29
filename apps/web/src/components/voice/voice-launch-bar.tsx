@@ -51,7 +51,7 @@ export function VoiceLaunchBar({
           aria-hidden={hidden}
           className={cn(
             "flex w-full items-center justify-center gap-2",
-            "border-t bg-linear-to-t from-slate-50 to-slate-50/95 dark:from-slate-950 dark:to-slate-950/95",
+            "border-t bg-chrome",
             "backdrop-blur-xs px-4 py-2.5",
             "text-sm font-medium text-muted-foreground transition-colors",
             "hover:bg-muted/40 active:bg-muted/60",
@@ -60,8 +60,8 @@ export function VoiceLaunchBar({
           )}
           aria-label="Open voice log"
         >
-          <span className="p-1.5 rounded-lg bg-sky-100 dark:bg-sky-900/50">
-            <Mic className="h-4 w-4 text-sky-600 dark:text-sky-400" />
+          <span className="p-1.5">
+            <Mic className="h-4 w-4 text-ai" />
           </span>
           <span>Voice log</span>
         </button>

@@ -77,7 +77,7 @@ const DrawerOverlay: React.ForwardRefExoticComponent<
 >(({ className, ...props }, ref) => (
   <DrawerPrimitive.Overlay
     ref={ref}
-    className={cn("fixed inset-0 z-50 bg-black/80", className)}
+    className={cn("fixed inset-0 z-50 bg-black/55", className)}
     {...props}
   />
 ))
@@ -100,8 +100,8 @@ const DrawerContent = React.forwardRef<
 
   // Direction-specific styles
   const directionStyles = {
-    bottom: "inset-x-0 bottom-0 mt-24 flex h-auto flex-col rounded-t-[10px] border-t",
-    top: "inset-x-0 top-0 mb-24 flex h-auto flex-col rounded-b-[10px] border-b",
+    bottom: "inset-x-0 bottom-0 mt-24 flex h-auto flex-col border-t-2 border-t-foreground",
+    top: "inset-x-0 top-0 mb-24 flex h-auto flex-col border-b-2 border-b-foreground",
     right: "inset-y-0 right-0 h-full w-3/4 sm:max-w-sm flex flex-col border-l",
     left: "inset-y-0 left-0 h-full w-3/4 sm:max-w-sm flex flex-col border-r",
   };
@@ -130,14 +130,14 @@ const DrawerContent = React.forwardRef<
         ref={ref}
         onFocus={handleFocus}
         className={cn(
-          "fixed z-50 bg-background outline-hidden",
+          "fixed z-50 bg-card outline-hidden",
           directionStyles[direction],
           className
         )}
         {...props}
       >
         {shouldShowHandle && (
-          <div className="mx-auto mt-4 h-2 w-[100px] rounded-full bg-muted" />
+          <div className="mx-auto mt-3 h-1 w-12 bg-line" />
         )}
         {children}
       </DrawerPrimitive.Content>

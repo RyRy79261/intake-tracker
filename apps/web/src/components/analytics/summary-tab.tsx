@@ -78,7 +78,7 @@ function KpiCard({
   trend?: TrendDirection["direction"];
 }) {
   return (
-    <div className="rounded-lg border p-3 bg-white/80 dark:bg-slate-900/50">
+    <div className="rounded-lg border p-3 bg-background">
       <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
         {icon}
         <span>{label}</span>
@@ -100,7 +100,7 @@ function ChartSection({
   children: React.ReactNode;
 }) {
   return (
-    <Card className="bg-white/80 dark:bg-slate-900/50 border-slate-200 dark:border-slate-800">
+    <Card className="bg-card border-line">
       <CardHeader className="pt-3 pb-1 px-3">
         <CardTitle className="text-sm font-medium">{title}</CardTitle>
       </CardHeader>
@@ -403,7 +403,7 @@ export function SummaryTab({ range }: { range: TimeRange }) {
 
       {/* Observations */}
       {observations.length > 0 && (
-        <Card className="bg-white/80 dark:bg-slate-900/50 border-slate-200 dark:border-slate-800">
+        <Card className="bg-card border-line">
           <CardHeader className="pt-3 pb-1 px-3">
             <CardTitle className="text-sm font-medium">Observations</CardTitle>
           </CardHeader>

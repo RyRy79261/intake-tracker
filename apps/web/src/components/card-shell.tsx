@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 import { Card, CardContent } from "@intake/ui/card";
 import { cn } from "@/lib/utils";
+import { domainStripeStyle } from "@/lib/domain-colors";
 import { type CardTheme } from "@/lib/card-themes";
 
 interface CardShellProps {
@@ -24,10 +25,11 @@ export function CardShell({ theme, label, headerRight, children }: CardShellProp
   return (
     <Card
       className={cn(
-        "relative overflow-hidden transition-all duration-300 bg-linear-to-br",
+        "relative overflow-hidden transition-all duration-300 stripe",
         theme.gradient,
         theme.border,
       )}
+      style={domainStripeStyle(theme.domain)}
     >
       <CardContent className="p-6">
         <div className="flex items-center justify-between mb-4">

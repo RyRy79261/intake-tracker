@@ -165,7 +165,7 @@ export function WaterTab() {
         >
           <span
             className={cn(
-              "text-3xl font-bold tabular-nums",
+              "text-3xl font-bold num",
               wouldExceedLimit && !isOverLimit
                 ? "text-orange-600 dark:text-orange-400"
                 : theme.inputText

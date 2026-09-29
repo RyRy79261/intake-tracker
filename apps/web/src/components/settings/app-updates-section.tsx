@@ -21,7 +21,7 @@ export function AppUpdatesSection() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-2 text-slate-600 dark:text-slate-400">
+      <div className="flex items-center gap-2 text-muted-foreground">
         <Smartphone className="w-4 h-4" />
         <h3 className="font-semibold">{capacitor ? "App Version" : "App Updates"}</h3>
       </div>

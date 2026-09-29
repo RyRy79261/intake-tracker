@@ -45,7 +45,7 @@ function AnalyticsContent() {
     <div className="space-y-4">
         <AnalyticsIntroDialog />
 
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <TimeRangeSelector
             scope={scope}
             onScopeChange={setScope}

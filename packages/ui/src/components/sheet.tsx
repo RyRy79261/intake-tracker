@@ -57,7 +57,7 @@ const SheetOverlay = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <SheetPrimitive.Overlay asChild ref={ref} {...props}>
     <motion.div
-      className={cn("fixed inset-0 z-50 bg-black/80", className)}
+      className={cn("fixed inset-0 z-50 bg-black/55", className)}
       variants={overlayVariants}
       initial="initial"
       animate="animate"
@@ -69,14 +69,14 @@ const SheetOverlay = React.forwardRef<
 SheetOverlay.displayName = SheetPrimitive.Overlay.displayName;
 
 const sheetVariants = cva(
-  "fixed z-50 gap-4 bg-background p-6 shadow-lg",
+  "fixed z-50 gap-4 bg-card p-6",
   {
     variants: {
       side: {
-        top: "inset-x-0 top-0 border-b",
-        bottom: "inset-x-0 bottom-0 border-t",
-        left: "inset-y-0 left-0 h-full w-3/4 border-r sm:max-w-sm",
-        right: "inset-y-0 right-0 h-full w-3/4 border-l sm:max-w-sm",
+        top: "inset-x-0 top-0 border-b-2 border-b-foreground",
+        bottom: "inset-x-0 bottom-0 border-t-2 border-t-foreground",
+        left: "inset-y-0 left-0 h-full w-3/4 border-r border-r-line sm:max-w-sm",
+        right: "inset-y-0 right-0 h-full w-3/4 border-l border-l-line sm:max-w-sm",
         full: "inset-0 h-full w-full",
       },
     },
@@ -113,7 +113,7 @@ const SheetContent = React.forwardRef<
               <SheetPrimitive.Overlay asChild forceMount>
                 <motion.div
                   key="sheet-overlay"
-                  className="fixed inset-0 z-50 bg-black/80"
+                  className="fixed inset-0 z-50 bg-black/55"
                   variants={overlayVariants}
                   initial="initial"
                   animate="animate"
@@ -140,7 +140,7 @@ const SheetContent = React.forwardRef<
                   }}
                 >
                   {children}
-                  <SheetPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-hidden focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-secondary">
+                  <SheetPrimitive.Close className="absolute right-1 top-1 flex h-11 w-11 items-center justify-center rounded-none text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:-outline-offset-4 focus-visible:outline-ring disabled:pointer-events-none">
                     <X className="h-4 w-4" />
                     <span className="sr-only">Close</span>
                   </SheetPrimitive.Close>
@@ -163,7 +163,7 @@ const SheetContent = React.forwardRef<
         {...props}
       >
         {children}
-        <SheetPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-hidden focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-secondary">
+        <SheetPrimitive.Close className="absolute right-1 top-1 flex h-11 w-11 items-center justify-center rounded-none text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:-outline-offset-4 focus-visible:outline-ring disabled:pointer-events-none">
           <X className="h-4 w-4" />
           <span className="sr-only">Close</span>
         </SheetPrimitive.Close>

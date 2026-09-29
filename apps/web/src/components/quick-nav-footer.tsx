@@ -50,7 +50,7 @@ export function QuickNavFooter({
 
   return (
     <motion.footer
-      className="fixed bottom-0 left-0 right-0 z-40 border-t bg-linear-to-t from-slate-50 to-slate-50/95 dark:from-slate-950 dark:to-slate-950/95 backdrop-blur-xs"
+      className="fixed bottom-0 left-0 right-0 z-40 border-t bg-chrome backdrop-blur-xs"
       style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
       animate={{ y: hidden ? "100%" : 0 }}
       transition={{ duration: transitionDuration, ease: "easeInOut" }}

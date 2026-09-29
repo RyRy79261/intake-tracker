@@ -84,7 +84,7 @@ describe("CorrelationsTab", () => {
     const compareButton = await screen.findByRole("button", {
       name: "Compare",
     });
-    const customCard = compareButton.closest("div.rounded-xl") as HTMLElement;
+    const customCard = compareButton.closest('[data-slot="card"]') as HTMLElement;
     expect(customCard).not.toBeNull();
 
     // Before clicking Compare the custom card renders no correlation output.

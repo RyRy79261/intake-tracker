@@ -131,7 +131,7 @@ function ReportPreview({
     <button
       type="button"
       onClick={() => onOpen(report)}
-      className="w-full text-left rounded-md border border-slate-200 dark:border-slate-800 bg-white/40 dark:bg-slate-900/40 hover:bg-slate-100/60 dark:hover:bg-slate-800/40 transition-colors px-2.5 py-2"
+      className="w-full text-left rounded-md border border-line bg-background hover:bg-foreground/5 transition-colors px-2.5 py-2"
     >
       <div className="flex items-center justify-between gap-2 mb-1">
         <div className="flex items-center gap-1.5 min-w-0">
@@ -153,7 +153,7 @@ function ReportPreview({
           <ChevronRight className="w-3 h-3" />
         </span>
       </div>
-      <p className="text-xs text-slate-600 dark:text-slate-300 line-clamp-2">
+      <p className="text-xs text-muted-foreground line-clamp-2">
         {report.narrative}
       </p>
     </button>
@@ -166,11 +166,11 @@ function ReportPreview({
 function ReportContent({ report }: { report: InsightReport }) {
   return (
     <div className="space-y-3">
-      <p className="text-sm text-slate-700 dark:text-slate-200 whitespace-pre-line">
+      <p className="text-sm text-foreground whitespace-pre-line">
         {report.narrative}
       </p>
       {report.observations.length > 0 && (
-        <ul className="space-y-1.5 text-sm text-slate-600 dark:text-slate-300">
+        <ul className="space-y-1.5 text-sm text-muted-foreground">
           {report.observations.map((observation, i) => (
             <li key={i} className="flex gap-1.5">
               <span aria-hidden className="text-violet-500 leading-5">
@@ -182,7 +182,7 @@ function ReportContent({ report }: { report: InsightReport }) {
         </ul>
       )}
       {report.sources && report.sources.length > 0 && (
-        <div className="pt-2 border-t border-slate-200 dark:border-slate-800">
+        <div className="pt-2 border-t border-line">
           <p className="text-xs font-medium text-muted-foreground mb-1.5">
             Sources
           </p>
@@ -390,7 +390,7 @@ export function AiInsightsCard() {
   }, [deep.state.status]);
 
   return (
-    <Card className="bg-white/80 dark:bg-slate-900/50 border-slate-200 dark:border-slate-800">
+    <Card className="bg-card border-line">
       <CardHeader className="pt-3 pb-1 px-3">
         <CardTitle className="text-sm font-medium flex items-center gap-1.5">
           <Sparkles className="w-3.5 h-3.5 text-violet-500" />
@@ -534,10 +534,10 @@ export function AiInsightsCard() {
 
           <div className="space-y-3 text-sm">
             <div className="space-y-1.5">
-              <p className="font-medium text-slate-700 dark:text-slate-200">
+              <p className="font-medium text-foreground">
                 Tracked data (last {INSIGHTS_WINDOW_DAYS} days)
               </p>
-              <ul className="space-y-1 text-slate-600 dark:text-slate-300">
+              <ul className="space-y-1 text-muted-foreground">
                 {trackedData.map((item) => (
                   <li key={item} className="flex gap-1.5">
                     <Check className="w-3.5 h-3.5 mt-0.5 shrink-0 text-emerald-500" />
@@ -551,21 +551,21 @@ export function AiInsightsCard() {
             </div>
 
             <div className="space-y-1.5">
-              <p className="font-medium text-slate-700 dark:text-slate-200">
+              <p className="font-medium text-foreground">
                 Your medical profile
               </p>
-              <ul className="space-y-1 text-slate-600 dark:text-slate-300">
+              <ul className="space-y-1 text-muted-foreground">
                 <li className="flex gap-1.5">
                   {shareConditions ? (
                     <Check className="w-3.5 h-3.5 mt-0.5 shrink-0 text-emerald-500" />
                   ) : (
-                    <X className="w-3.5 h-3.5 mt-0.5 shrink-0 text-slate-400" />
+                    <X className="w-3.5 h-3.5 mt-0.5 shrink-0 text-muted-foreground" />
                   )}
                   <span>
                     {shareConditions ? (
                       <>
                         Conditions included:{" "}
-                        <span className="text-slate-700 dark:text-slate-200">
+                        <span className="text-foreground">
                           {profile.conditions.join(", ")}
                         </span>
                       </>
@@ -578,7 +578,7 @@ export function AiInsightsCard() {
                   {shareMedications && sharedMedicationCount !== 0 ? (
                     <Check className="w-3.5 h-3.5 mt-0.5 shrink-0 text-emerald-500" />
                   ) : (
-                    <X className="w-3.5 h-3.5 mt-0.5 shrink-0 text-slate-400" />
+                    <X className="w-3.5 h-3.5 mt-0.5 shrink-0 text-muted-foreground" />
                   )}
                   <span>
                     {!shareMedications
@@ -593,10 +593,10 @@ export function AiInsightsCard() {
 
             {hasPrevious && (
               <div className="space-y-1.5">
-                <p className="font-medium text-slate-700 dark:text-slate-200">
+                <p className="font-medium text-foreground">
                   Compare with history
                 </p>
-                <label className="flex gap-2 text-slate-600 dark:text-slate-300">
+                <label className="flex gap-2 text-muted-foreground">
                   <Checkbox
                     className="mt-0.5"
                     checked={includePrevious}

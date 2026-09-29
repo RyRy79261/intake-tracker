@@ -121,7 +121,7 @@ function SettingsContent() {
           <ReportBugSection />
         </SettingsAccordionGroup>
 
-        <SettingsAccordionGroup value="debug" icon={Bug} label="Debug" iconColorClass="text-slate-600 dark:text-slate-400">
+        <SettingsAccordionGroup value="debug" icon={Bug} label="Debug" iconColorClass="text-muted-foreground">
           <DebugPanel />
         </SettingsAccordionGroup>
       </Accordion>

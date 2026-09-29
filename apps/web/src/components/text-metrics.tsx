@@ -236,7 +236,7 @@ export function TextMetrics() {
                 <span
                   data-testid="today-water-value"
                   className={cn(
-                    "text-sm font-semibold tabular-nums",
+                    "text-sm font-semibold num",
                     progressStatusTextClass(
                       waterProgress.status,
                       CARD_THEMES.water.latestValueColor
@@ -252,7 +252,7 @@ export function TextMetrics() {
               {waterProgress.isOverTarget && (
                 <span
                   className={cn(
-                    "text-xs tabular-nums",
+                    "text-xs num",
                     progressStatusTextClass(waterProgress.status, "text-muted-foreground")
                   )}
                 >
@@ -294,7 +294,7 @@ export function TextMetrics() {
                 <span
                   data-testid="today-sodium-value"
                   className={cn(
-                    "text-sm font-semibold tabular-nums",
+                    "text-sm font-semibold num",
                     progressStatusTextClass(
                       saltProgress.status,
                       CARD_THEMES.salt.latestValueColor
@@ -310,7 +310,7 @@ export function TextMetrics() {
               {saltProgress.isOverTarget && (
                 <span
                   className={cn(
-                    "text-xs tabular-nums",
+                    "text-xs num",
                     progressStatusTextClass(saltProgress.status, "text-muted-foreground")
                   )}
                 >
@@ -352,7 +352,7 @@ export function TextMetrics() {
               <div className="flex items-baseline gap-1">
                 <span
                   className={cn(
-                    "text-sm font-semibold tabular-nums",
+                    "text-sm font-semibold num",
                     progressStatusTextClass(
                       sugarProgress.status,
                       CARD_THEMES.sugar.latestValueColor
@@ -368,7 +368,7 @@ export function TextMetrics() {
               {sugarProgress.isOverTarget && (
                 <span
                   className={cn(
-                    "text-xs tabular-nums",
+                    "text-xs num",
                     progressStatusTextClass(sugarProgress.status, "text-muted-foreground")
                   )}
                 >
@@ -402,7 +402,7 @@ export function TextMetrics() {
             />
             <span
               className={cn(
-                "text-sm font-semibold tabular-nums",
+                "text-sm font-semibold num",
                 CARD_THEMES.potassium.latestValueColor
               )}
             >
@@ -424,7 +424,7 @@ export function TextMetrics() {
             <span className="flex-1" />
             <span
               className={cn(
-                "text-sm font-semibold tabular-nums",
+                "text-sm font-semibold num",
                 caffeineTotal === 0
                   ? "text-muted-foreground"
                   : CARD_THEMES.caffeine.latestValueColor
@@ -444,7 +444,7 @@ export function TextMetrics() {
             <span className="flex-1" />
             <span
               className={cn(
-                "text-sm font-semibold tabular-nums",
+                "text-sm font-semibold num",
                 alcoholTotal === 0
                   ? "text-muted-foreground"
                   : CARD_THEMES.alcohol.latestValueColor
@@ -494,7 +494,7 @@ export function TextMetrics() {
                   <div
                     key={`${row.key}-${i}`}
                     className={cn(
-                      "text-xs tabular-nums text-center",
+                      "text-xs num text-center",
                       isFuture && "text-muted-foreground/50",
                       isToday && "font-semibold",
                       !isFuture && hasData && progressStatusTextClass(status, row.theme.latestValueColor),
