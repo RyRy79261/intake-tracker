@@ -106,6 +106,19 @@ describe("useWindowHistory", () => {
     expect(window.location.pathname).toBe("/");
   });
 
+  it("a /help/<slug> deep link opens the manual window on that guide", async () => {
+    window.history.replaceState(null, "", "/help/weight");
+    pathname = "/help/weight";
+    render(<Sync />);
+    await waitFor(() => expect(apps()).toEqual(["help"]));
+    expect(useWindowStore.getState().wins[0]?.st.slug).toBe("weight");
+    expect(window.location.pathname).toBe("/help/weight");
+
+    await back();
+    expect(apps()).toEqual([]);
+    expect(window.location.pathname).toBe("/");
+  });
+
   it("Back from Settings returns to the window that was open", async () => {
     const { rerender } = render(<Sync />);
     openWindow("meds");

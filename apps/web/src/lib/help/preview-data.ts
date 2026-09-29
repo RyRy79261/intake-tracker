@@ -1,6 +1,7 @@
 import { baseSyncFields, generateId, syncFields } from "@/lib/utils";
 import { toLocalDateKey } from "@/lib/date-utils";
 import { getDeviceTimezone, localHHMMStringToUTCMinutes } from "@/lib/timezone";
+import { useSettingsStore } from "@/stores/settings-store";
 import type {
   AppDatabase,
   BloodPressureRecord,
@@ -244,11 +245,20 @@ export async function seedTextMetricsPreview(
 // ---------------------------------------------------------------------------
 
 /** A timestamp `daysAgo` days back at `hour:minute`, never in the future. */
-function at(daysAgo: number, hour: number, minute = 0): number {
-  const d = new Date();
-  d.setDate(d.getDate() - daysAgo);
-  d.setHours(hour, minute, 0, 0);
-  return Math.min(d.getTime(), Date.now() - 5 * 60_000);
+/**
+ * A moment `share` (0–1) of the way through the logical day `daysAgo` days
+ * back, the day starting at the user's day-start hour. Today only runs up to
+ * now, so its entries are always in the past and on today, whatever the time.
+ */
+function at(daysAgo: number, share: number): number {
+  const now = Date.now();
+  const dayStartHour = useSettingsStore.getState().dayStartHour;
+  const start = new Date(now);
+  start.setHours(dayStartHour, 0, 0, 0);
+  if (start.getTime() > now) start.setDate(start.getDate() - 1);
+  if (daysAgo === 0) return Math.round(start.getTime() + share * (now - start.getTime()));
+  start.setDate(start.getDate() - daysAgo);
+  return Math.round(start.getTime() + share * DAY_MS);
 }
 
 /**
@@ -278,7 +288,7 @@ export async function seedTodayPreview(database: AppDatabase): Promise<void> {
         id: generateId(),
         type: "water",
         amount: Math.round(water * share),
-        timestamp: at(daysAgo, 8 + p * 5, 15),
+        timestamp: at(daysAgo, 0.2 + p * 0.25),
         source: "manual",
         ...syncFields(),
       });
@@ -289,7 +299,7 @@ export async function seedTodayPreview(database: AppDatabase): Promise<void> {
         id: generateId(),
         type: "salt",
         amount: Math.round(sodium * 0.45),
-        timestamp: at(daysAgo, 12, 30),
+        timestamp: at(daysAgo, 0.35),
         source: "manual",
         note: "Lunch",
         ...syncFields(),
@@ -298,7 +308,7 @@ export async function seedTodayPreview(database: AppDatabase): Promise<void> {
         id: generateId(),
         type: "salt",
         amount: Math.round(sodium * 0.55),
-        timestamp: at(daysAgo, 19, 0),
+        timestamp: at(daysAgo, 0.8),
         source: "manual",
         note: "Dinner",
         ...syncFields(),
@@ -308,7 +318,7 @@ export async function seedTodayPreview(database: AppDatabase): Promise<void> {
       id: generateId(),
       type: "sugar",
       amount: WEEK.sugar[i] ?? 0,
-      timestamp: at(daysAgo, 15, 30),
+      timestamp: at(daysAgo, 0.55),
       source: "manual",
       ...syncFields(),
     });
@@ -322,7 +332,7 @@ export async function seedTodayPreview(database: AppDatabase): Promise<void> {
         description: "Coffee",
         source: "standalone",
         aiEnriched: false,
-        timestamp: at(daysAgo, 7, 45),
+        timestamp: at(daysAgo, 0.1),
         ...syncFields(),
       });
     }
@@ -337,7 +347,7 @@ export async function seedTodayPreview(database: AppDatabase): Promise<void> {
         description: "Red wine",
         source: "standalone",
         aiEnriched: false,
-        timestamp: at(daysAgo, 20, 0),
+        timestamp: at(daysAgo, 0.9),
         ...syncFields(),
       });
     }
