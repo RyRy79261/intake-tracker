@@ -183,6 +183,13 @@
       "when": 1790510373022,
       "tag": "0025_user_settings_week_starts_on",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1790718073654,
+      "tag": "0026_prescription_medicine_info",
+      "breakpoints": true
     }
   ]
 }

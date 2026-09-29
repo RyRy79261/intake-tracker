@@ -17,6 +17,7 @@ export * from "./analytics-insights";
 
 export * as parse from "./parse";
 export * as medicineSearch from "./medicine-search";
+export * as medicineAbout from "./medicine-about";
 export * as substanceLookup from "./substance-lookup";
 export * as interactionCheck from "./interaction-check";
 export * as nutrientAnalysis from "./nutrient-analysis";

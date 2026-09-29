@@ -1,34 +1,63 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useId } from "react";
 import { useRollingSelectedDate } from "@/hooks/use-today-key";
 import { toLocalDateKey } from "@/lib/date-utils";
+import { cn } from "@/lib/utils";
 import { WeekDaySelector } from "@/components/medications/week-day-selector";
 import { MedTabBar } from "@/components/medications/med-footer";
+import { WardMedTabs, wardMedTabId } from "@/components/medications/med-tabs";
 import { ScheduleView } from "@/components/medications/schedule-view";
+import { OtherDosesToday } from "@/components/medications/other-doses-today";
 import { MedicationSettingsView } from "@/components/medications/medication-settings-view";
 import { DoseDetailDialog } from "@/components/medications/dose-detail-dialog";
 import { CompoundList } from "@/components/medications/compound-list";
 import { PrescriptionsView } from "@/components/medications/prescriptions-view";
+import { AboutMedicineView } from "@/components/medications/about-medicine-view";
+import { usePrescriptions } from "@/hooks/use-medication-queries";
 import { TitrationsView } from "@/components/medications/titrations-view";
 import { TitrationStartPrompt } from "@/components/medications/titrations/titration-start-prompt";
 import type { DoseSlot } from "@/hooks/use-medication-queries";
 import { useMedicationNotifications } from "@/hooks/use-medication-notifications";
 import { useMedicationUIStore } from "@/stores/medication-ui-store";
 
+interface MedicationsPageBodyProps {
+  /**
+   * Rendered in the Ward Console Medications window: the four-tab bar with
+   * pips, no Settings tab, and "Other doses today" under the schedule (the
+   * window's "+" button logs them). Off, the legacy page is unchanged.
+   */
+  ward?: boolean;
+}
+
 /**
  * The Medications screen: tab bar, schedule, Rx, Meds and Titrations. The
  * `/medications` route renders it, and so does the Medications window.
  */
-export function MedicationsPageBody() {
-  const activeTab = useMedicationUIStore((s) => s.activeTab);
+export function MedicationsPageBody({ ward = false }: MedicationsPageBodyProps) {
+  const storedTab = useMedicationUIStore((s) => s.activeTab);
   const setActiveTab = useMedicationUIStore((s) => s.setActiveTab);
   const setWizardOpen = useMedicationUIStore((s) => s.setWizardOpen);
+  // The window has no Settings tab: medication preferences live in the
+  // global Settings sheet (Settings › Medications). A "settings" tab left
+  // over from the legacy page falls back to Schedule in the window.
+  const activeTab = ward && storedTab === "settings" ? "schedule" : storedTab;
+  const wardTab = ward && activeTab !== "settings" ? activeTab : null;
+  const panelId = useId();
   // Ticks over at midnight, so a screen left open overnight moves its
   // "today" (and a today selection) to the new day.
   const { selectedDate, setSelectedDate, todayKey } = useRollingSelectedDate();
 
   const [doseDetailOpen, setDoseDetailOpen] = useState(false);
+  // "About this medicine" replaces the tabs while open (the prototype's
+  // in-window sub-view). The Rx tab stays mounted underneath, hidden, so its
+  // expanded card is still open on the way back.
+  const [aboutId, setAboutId] = useState<string | null>(null);
+  const prescriptions = usePrescriptions();
+  const aboutRx =
+    aboutId && activeTab === "prescriptions"
+      ? (prescriptions.find((p) => p.id === aboutId) ?? null)
+      : null;
   const [selectedSlot, setSelectedSlot] = useState<DoseSlot | null>(null);
 
   useMedicationNotifications();
@@ -48,33 +77,51 @@ export function MedicationsPageBody() {
 
   return (
     <>
-      <MedTabBar activeTab={activeTab} onTabChange={setActiveTab} />
-
-      {activeTab === "schedule" && (
-        <>
-          <WeekDaySelector selectedDate={selectedDate} onSelectDate={setSelectedDate} />
-          {/* A planned titration step waits for the user to confirm it. */}
-          <TitrationStartPrompt className="px-1 mb-4" />
-          <ScheduleView
-            selectedDate={selectedDate}
-            onDoseClick={handleDoseClick}
-            onAddMed={handleAddMed}
-          />
-        </>
+      {aboutRx && <AboutMedicineView prescription={aboutRx} onBack={() => setAboutId(null)} />}
+      {/* `contents` keeps the sticky tab bar tied to the window's scroller. */}
+      <div className={aboutRx ? "hidden" : "contents"}>
+      {wardTab ? (
+        <WardMedTabs activeTab={wardTab} onTabChange={setActiveTab} panelId={panelId} />
+      ) : (
+        <MedTabBar activeTab={activeTab} onTabChange={setActiveTab} />
       )}
 
-      {activeTab === "medications" && (
-        <CompoundList onAddMed={handleAddMed} />
-      )}
+      <div
+        {...(wardTab && {
+          role: "tabpanel",
+          id: panelId,
+          "aria-labelledby": wardMedTabId(panelId, wardTab),
+        })}
+      >
+        {activeTab === "schedule" && (
+          // The "+" button floats over the bottom right corner: leave room under
+          // the last row so it never covers a Take button.
+          <div className={cn(ward ? "pb-[68px]" : "pb-24")}>
+            <WeekDaySelector selectedDate={selectedDate} onSelectDate={setSelectedDate} />
+            {/* A planned titration step waits for the user to confirm it. */}
+            <TitrationStartPrompt className={ward ? "mb-3" : "px-1 mb-4"} />
+            <ScheduleView
+              selectedDate={selectedDate}
+              onDoseClick={handleDoseClick}
+              onAddMed={handleAddMed}
+            />
+            {ward && <OtherDosesToday dateKey={selectedKey} isToday={isToday} />}
+          </div>
+        )}
 
-      {activeTab === "prescriptions" && (
-        <PrescriptionsView onAddMed={handleAddMed} />
-      )}
+        {activeTab === "medications" && (
+          <CompoundList onAddMed={handleAddMed} />
+        )}
 
-      {activeTab === "titrations" && <TitrationsView />}
+        {activeTab === "prescriptions" && (
+          <PrescriptionsView onAddMed={handleAddMed} onOpenAbout={setAboutId} />
+        )}
 
-      {activeTab === "settings" && <MedicationSettingsView />}
+        {activeTab === "titrations" && <TitrationsView />}
 
+        {!ward && activeTab === "settings" && <MedicationSettingsView />}
+      </div>
+      </div>
 
       <DoseDetailDialog
         open={doseDetailOpen}

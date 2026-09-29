@@ -4,7 +4,7 @@ import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 // `useAuthGate` is backed by Better Auth's `useSession`, which would attempt a
-// network request in jsdom. Stub it (mirroring interactions-section.dom.test)
+// network request in jsdom. Stub it (mirroring about-medicine-view.dom.test)
 // so CompoundList renders deterministically without the AI search panel.
 vi.mock("@/components/auth-guard", () => ({
   useAuthGate: () => false,

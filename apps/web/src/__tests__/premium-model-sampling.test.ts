@@ -168,7 +168,11 @@ describe("Claude requests only pass parameters the pinned models accept", () => 
     const all = parsed.flatMap(({ source }) => requestLiterals(source));
     // A rename that silently empties this scan would make the suite pass
     // while guarding nothing.
-    expect(all.filter((r) => r.tier === "premium").length).toBeGreaterThanOrEqual(4);
+    const files = parsed
+      .filter(({ source }) => requestLiterals(source).some((r) => r.tier === "premium"))
+      .map(({ file }) => path.relative(SRC, file));
+    expect(files).toContain(path.join("app", "api", "ai", "medicine-about", "route.ts"));
+    expect(all.filter((r) => r.tier === "premium").length).toBeGreaterThanOrEqual(5);
     expect(all.filter((r) => r.tier === "quality").length).toBeGreaterThanOrEqual(4);
   });
 
