@@ -4,6 +4,7 @@
 @import "@intake/ui/styles.css";
 @import "./ward-home.css";
 @import "./ward-metrics.css";
+@import "./ward-settings.css";
 
 /* Mobile viewport fix */
 html {

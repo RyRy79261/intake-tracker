@@ -90,7 +90,7 @@ export function ConflictReviewDrawer({
       <DrawerContent>
         <DrawerHeader>
           <DrawerTitle className="flex items-center gap-2">
-            <AlertTriangle className="h-5 w-5 text-amber-500" />
+            <AlertTriangle className="h-5 w-5 text-sodium" />
             {conflicts.length} Conflicts Found
           </DrawerTitle>
           <DrawerDescription>
@@ -126,7 +126,7 @@ export function ConflictReviewDrawer({
             return (
               <div
                 key={getKey(c)}
-                className="rounded-lg border p-3 space-y-2"
+                className="space-y-2 border border-line bg-background p-2.5"
               >
                 <div className="flex items-center justify-between">
                   <div>

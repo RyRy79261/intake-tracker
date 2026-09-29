@@ -1,10 +1,13 @@
 "use client";
 
+import type { CSSProperties } from "react";
 import { Button } from "@intake/ui/button";
 import { Smartphone, RefreshCw, Loader2 } from "lucide-react";
 import { useVersionCheck } from "@/hooks/use-version-check";
 import { useToast } from "@intake/ui/use-toast";
 import { isCapacitorMode } from "@/lib/api-fetch";
+import { SubHead, btnClass, helpClass } from "@/components/settings/settings-kit";
+import { domainColor } from "@/lib/domain-colors";
 
 export function AppUpdatesSection() {
   const { toast } = useToast();
@@ -20,20 +23,20 @@ export function AppUpdatesSection() {
   const capacitor = isCapacitorMode();
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-2 text-muted-foreground">
-        <Smartphone className="w-4 h-4" />
-        <h3 className="font-semibold">{capacitor ? "App Version" : "App Updates"}</h3>
-      </div>
-      <div className="space-y-3 pl-0">
+    <div className="flex flex-col gap-2.5">
+      <SubHead icon={Smartphone}>{capacitor ? "App Version" : "App Updates"}</SubHead>
+      <div className="flex flex-col gap-2.5">
         {isUpdateAvailable ? (
-          <div className="p-3 rounded-lg bg-sky-50 dark:bg-sky-950/30 border border-sky-200 dark:border-sky-800">
-            <div className="flex items-center justify-between">
+          <div
+            className="border border-water bg-background p-2.5"
+            style={{ "--c": domainColor("water") } as CSSProperties}
+          >
+            <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="text-sm font-medium text-sky-700 dark:text-sky-400">
+                <p className="text-sm font-semibold text-water">
                   Update available
                 </p>
-                <p className="text-xs text-sky-600 dark:text-sky-500 mt-0.5">
+                <p className={`${helpClass} mt-0.5`}>
                   {capacitor
                     ? `v${serverVersion} available — update from Play Store`
                     : `v${serverVersion} available (you have v${clientVersion})`}
@@ -41,11 +44,10 @@ export function AppUpdatesSection() {
               </div>
               {!capacitor && (
                 <Button
-                  size="sm"
-                  className="bg-sky-600 hover:bg-sky-700"
+                  className="shrink-0 bg-water text-on-domain hover:bg-water/90"
                   onClick={applyUpdate}
                 >
-                  <RefreshCw className="w-4 h-4 mr-1" />
+                  <RefreshCw className="h-4 w-4" />
                   Update
                 </Button>
               )}
@@ -54,7 +56,7 @@ export function AppUpdatesSection() {
         ) : (
           <Button
             variant="outline"
-            className="w-full justify-start gap-2"
+            className={`${btnClass} w-full justify-start`}
             onClick={async () => {
               try {
                 const hasUpdate = await checkForUpdates();
@@ -94,7 +96,7 @@ export function AppUpdatesSection() {
             )}
           </Button>
         )}
-        <p className="text-xs text-muted-foreground">
+        <p className={helpClass}>
           Running v{clientVersion} · Checks automatically every 5 min
         </p>
       </div>

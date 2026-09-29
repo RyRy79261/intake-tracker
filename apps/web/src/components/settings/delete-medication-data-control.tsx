@@ -14,6 +14,7 @@ import {
   DialogTitle,
 } from "@intake/ui/dialog";
 import { useDeleteAllMedicationData } from "@/hooks/use-data-deletion";
+import { SubHead, btnClass, helpClass } from "@/components/settings/settings-kit";
 
 const CONFIRM_PHRASE = "DELETE";
 
@@ -41,24 +42,20 @@ export function DeleteMedicationDataControl() {
   }
 
   return (
-    <div className="space-y-2">
-      <div className="flex items-center gap-2">
-        <Pill className="w-4 h-4 text-muted-foreground" />
-        <p className="text-sm font-medium">Medication data</p>
-      </div>
-      <p className="text-xs text-muted-foreground">
+    <div className="flex flex-col gap-2.5">
+      <SubHead icon={Pill}>Medication data</SubHead>
+      <p className={helpClass}>
         Delete every medication, schedule, titration plan, inventory item and
         dose log. Health logs are kept. In cloud-sync mode this also removes
         the cloud copy and your other devices.
       </p>
       <Button
         variant="outline"
-        size="sm"
-        className="gap-1.5 text-destructive"
+        className={`${btnClass} self-start border-destructive text-destructive hover:text-destructive`}
         disabled={busy}
         onClick={() => setOpen(true)}
       >
-        <Trash2 className="w-3.5 h-3.5" />
+        <Trash2 className="h-4 w-4" />
         Delete all medication data
       </Button>
 

@@ -93,12 +93,14 @@ interface SheetContentProps
   open?: boolean;
   /** Callback fired when exit animation completes (useful for delayed navigation) */
   onExitComplete?: () => void;
+  /** Extra classes for the scrim (controlled sheets only). */
+  overlayClassName?: string;
 }
 
 const SheetContent = React.forwardRef<
   React.ElementRef<typeof SheetPrimitive.Content>,
   SheetContentProps
->(({ side = "right", className, children, open, onExitComplete, ...props }, ref) => {
+>(({ side = "right", className, children, open, onExitComplete, overlayClassName, ...props }, ref) => {
   const isControlled = open !== undefined;
   const variants = slideAnimationVariants[side || "right"];
   const isFull = side === "full";
@@ -113,7 +115,7 @@ const SheetContent = React.forwardRef<
               <SheetPrimitive.Overlay asChild forceMount>
                 <motion.div
                   key="sheet-overlay"
-                  className="fixed inset-0 z-50 bg-black/55"
+                  className={cn("fixed inset-0 z-50 bg-black/55", overlayClassName)}
                   variants={overlayVariants}
                   initial="initial"
                   animate="animate"

@@ -17,6 +17,8 @@ import {
   useAiUsage,
   type AiProvider,
 } from "@/hooks/use-ai-keys";
+import { SubHead, helpClass, plainboxClass } from "@/components/settings/settings-kit";
+import { domainColor } from "@/lib/domain-colors";
 
 interface ProviderMeta {
   id: AiProvider;
@@ -36,7 +38,7 @@ const PROVIDERS: ProviderMeta[] = [
     name: "Anthropic",
     description: "Powers food & drink parsing, substance lookup, medicine search.",
     icon: Sparkles,
-    iconColor: "text-amber-500",
+    iconColor: "text-ai",
     prefix: "sk-ant-",
     placeholder: "sk-ant-…",
     consoleUrl: "https://console.anthropic.com/settings/keys",
@@ -47,7 +49,7 @@ const PROVIDERS: ProviderMeta[] = [
     name: "Groq",
     description: "Powers voice transcription (Whisper).",
     icon: Mic,
-    iconColor: "text-purple-500",
+    iconColor: "text-alcohol",
     prefix: "gsk_",
     placeholder: "gsk_…",
     consoleUrl: "https://console.groq.com/keys",
@@ -143,7 +145,7 @@ function ProviderCard({ meta }: { meta: ProviderMeta }) {
   }
 
   return (
-    <div className="rounded-lg border p-4 space-y-3">
+    <div className="space-y-3 border border-line bg-background p-2.5">
       <div className="flex items-start gap-3">
         <Icon className={`w-4 h-4 mt-0.5 ${meta.iconColor}`} />
         <div className="flex-1 min-w-0">
@@ -216,7 +218,7 @@ function ProviderCard({ meta }: { meta: ProviderMeta }) {
               variant="ghost"
               onClick={handleRemove}
               disabled={deleteKey.isPending}
-              className="gap-1 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30"
+              className="gap-1 text-destructive hover:text-destructive"
             >
               <Trash2 className="w-3.5 h-3.5" />
               Remove
@@ -310,7 +312,7 @@ function ShareControls() {
           <select
             value={provider}
             onChange={(e) => setProvider(e.target.value as AiProvider)}
-            className="h-10 rounded-md border border-input bg-background px-2 text-sm"
+            className="h-10 border border-muted-foreground bg-background px-2 text-sm"
           >
             {ownHasAnthropic && <option value="anthropic">Anthropic</option>}
             {ownHasGroq && <option value="groq">Groq</option>}
@@ -348,7 +350,7 @@ function ShareControls() {
                   variant="ghost"
                   onClick={() => handleRevoke(g.granteeId, g.provider)}
                   disabled={revoke.isPending}
-                  className="h-7 px-2 text-red-600 hover:text-red-700"
+                  className="h-9 px-2 text-destructive hover:text-destructive"
                 >
                   Revoke
                 </Button>
@@ -433,12 +435,11 @@ export function AiKeysSection() {
 
   if (!authenticated) {
     return (
-      <div className="space-y-4">
-        <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
-          <Sparkles className="w-4 h-4" />
-          <h3 className="font-semibold">AI features</h3>
-        </div>
-        <div className="p-3 rounded-lg border bg-muted/30">
+      <div className="flex flex-col gap-2.5">
+        <SubHead icon={Sparkles} color={domainColor("ai")}>
+          AI features
+        </SubHead>
+        <div className={plainboxClass}>
           <p className="text-sm font-medium">Sign in to manage AI keys</p>
           <p className="text-xs text-muted-foreground mt-1">
             Once signed in you can add your own Anthropic and Groq API keys, or
@@ -450,37 +451,30 @@ export function AiKeysSection() {
   }
 
   return (
-    <div className="space-y-5">
-      <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
-        <Sparkles className="w-4 h-4" />
-        <h3 className="font-semibold">AI features</h3>
-      </div>
+    <div className="flex flex-col gap-3">
+      <SubHead icon={Sparkles} color={domainColor("ai")}>
+        AI features
+      </SubHead>
 
-      <p className="text-xs text-muted-foreground">
+      <p className={helpClass}>
         AI features run through your own provider keys, billed directly by
         Anthropic and Groq. Add a key below, or use one someone has shared with
         you. Keys are encrypted at rest on the server.
       </p>
 
-      <div className="space-y-3">
+      <div className="flex flex-col gap-1.5">
         {PROVIDERS.map((p) => (
           <ProviderCard key={p.id} meta={p} />
         ))}
       </div>
 
-      <div className="space-y-2 pt-2 border-t">
-        <div className="flex items-center gap-2">
-          <Share2 className="w-3.5 h-3.5 text-muted-foreground" />
-          <p className="text-sm font-medium">Share your key</p>
-        </div>
+      <div className="space-y-2 border-t border-line pt-2.5">
+        <SubHead icon={Share2}>Share your key</SubHead>
         <ShareControls />
       </div>
 
-      <div className="space-y-2 pt-2 border-t">
-        <div className="flex items-center gap-2">
-          <Activity className="w-3.5 h-3.5 text-muted-foreground" />
-          <p className="text-sm font-medium">Usage (last 30 days)</p>
-        </div>
+      <div className="space-y-2 border-t border-line pt-2.5">
+        <SubHead icon={Activity}>Usage (last 30 days)</SubHead>
         <UsageSummary />
       </div>
     </div>

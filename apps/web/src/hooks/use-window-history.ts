@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useWindowStore, type OpenResult } from "@/stores/window-store";
 import { windowForRoute, windowHref, type ShellAppId, type WindowState } from "@/lib/nav-routes";
+import { isSettingsGroup, useSettingsSheetStore, type SettingsGroupId } from "@/stores/settings-sheet-store";
 
 /**
  * Browser history for Ward Console windows.
@@ -23,7 +24,12 @@ interface WardHistoryState {
   wardSeq?: number;
   /** The window this entry opened. */
   wardWin?: string;
+  /** This entry opened the Settings sheet (`/settings`). */
+  wardSettings?: boolean;
 }
+
+/** The route that deep-links to the Settings sheet. */
+export const SETTINGS_PATH = "/settings";
 
 let lastSeq = 0;
 /** How many upcoming popstates are our own `history.back()` calls. */
@@ -76,6 +82,33 @@ export function closeWindow(id: string): void {
 }
 
 /**
+ * Open the global Settings sheet (the sys-bar gear), optionally with a group
+ * expanded. It gets its own Back entry at `/settings`, so the phone or
+ * browser Back button closes it.
+ */
+export function openSettings(group?: SettingsGroupId): void {
+  const store = useSettingsSheetStore.getState();
+  const wasOpen = store.open;
+  store.show(group);
+  if (wasOpen || typeof window === "undefined") return;
+  const data: WardHistoryState = { wardSeq: nextSeq(), wardSettings: true };
+  window.history.pushState(data, "", SETTINGS_PATH);
+}
+
+/**
+ * Close the Settings sheet. If the current history entry is the one that
+ * opened it, step back over it, so the address bar returns to what is
+ * underneath.
+ */
+export function closeSettings(): void {
+  useSettingsSheetStore.getState().hide();
+  if (wardState()?.wardSettings) {
+    skipPops += 1;
+    window.history.back();
+  }
+}
+
+/**
  * The Home button. On a phone it closes the window on screen (the
  * prototype's `home`); on a wide screen it minimises every window.
  */
@@ -99,6 +132,13 @@ function onPopState(event: PopStateEvent): void {
     return;
   }
   if (currentSeq >= prev) return; // Forward, or an entry we never tagged.
+
+  // The Settings sheet sits over everything: Back closes it first.
+  const sheet = useSettingsSheetStore.getState();
+  if (sheet.open) {
+    sheet.hide();
+    return;
+  }
 
   const s = useWindowStore.getState();
   const onScreen = s.focus && !s.showHome ? s.wins.find((w) => w.id === s.focus && !w.min) : undefined;
@@ -131,6 +171,30 @@ export function useWindowHistory(): void {
     const isFirst = firstSync;
     firstSync = false;
     const state = wardState();
+
+    // `/settings` opens the Settings sheet over Home and the windows; any
+    // other route closes it (e.g. "Open the manual" going to /help).
+    const sheet = useSettingsSheetStore.getState();
+    if (pathname === SETTINGS_PATH) {
+      const group = search?.get("section");
+      sheet.show(isSettingsGroup(group) ? group : null);
+      if (seqOf(state) > 0) return;
+      if (isFirst) {
+        // A deep link: put Home underneath so Back closes the sheet rather
+        // than leaving the app.
+        window.history.replaceState({ wardSeq: nextSeq() } satisfies WardHistoryState, "", "/");
+        window.history.pushState(
+          { wardSeq: nextSeq(), wardSettings: true } satisfies WardHistoryState,
+          "",
+          SETTINGS_PATH,
+        );
+        return;
+      }
+      window.history.replaceState({ wardSeq: nextSeq(), wardSettings: true } satisfies WardHistoryState, "");
+      return;
+    }
+    if (sheet.open) sheet.hide();
+
     // An entry we already handled (including one restored by a reload,
     // whose windows came back from sessionStorage). Don't touch
     // `currentSeq` here: on Back, Next can render the restored route (and

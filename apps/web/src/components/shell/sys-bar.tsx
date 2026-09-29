@@ -13,8 +13,9 @@ import {
   windowHref,
   type ShellAppId,
 } from "@/lib/nav-routes";
-import { openWindow } from "@/hooks/use-window-history";
+import { SETTINGS_PATH, openSettings, openWindow } from "@/hooks/use-window-history";
 import { useWindowStore } from "@/stores/window-store";
+import { useSettingsSheetStore } from "@/stores/settings-sheet-store";
 import { ShellIcon, ShellLogo } from "@/components/shell/shell-icon";
 import { cn } from "@/lib/utils";
 
@@ -48,7 +49,8 @@ const hbOn = "shadow-[inset_0_-3px_0_var(--c,currentColor)]";
  * Ward Console system bar: logo and title on the left, then the app buttons
  * (Medications with a due-dose pip, Metrics, History), the account avatar and
  * the Settings gear. The app buttons and the avatar open windows; History
- * opens Metrics on Records. Settings and sign-in are still routes.
+ * opens Metrics on Records; the gear opens the global Settings sheet.
+ * Sign-in is still a route.
  */
 export function SysBar() {
   const pathname = usePathname();
@@ -58,7 +60,8 @@ export function SysBar() {
   const wins = useWindowStore((s) => s.wins);
   const focus = useWindowStore((s) => s.focus);
   const showHome = useWindowStore((s) => s.showHome);
-  const onShell = pathname === "/" || isWindowRoute(pathname);
+  const settingsOn = useSettingsSheetStore((s) => s.open);
+  const onShell = pathname === "/" || pathname === SETTINGS_PATH || isWindowRoute(pathname);
 
   const go = (path: string) => {
     if (pathname !== path) router.push(path);
@@ -73,7 +76,7 @@ export function SysBar() {
 
   /** Is this app's window the one on screen? History = Metrics on Records. */
   const isOn = (id: ShellAppId): boolean => {
-    if (!onShell || showHome) return false;
+    if (!onShell || showHome || settingsOn) return false;
     const target = resolveWindowApp(id);
     const w = target && wins.find((x) => x.app === target.app);
     if (!w || w.min || w.id !== focus) return false;
@@ -148,8 +151,6 @@ export function SysBar() {
     );
   }
 
-  const settingsOn = pathname === "/settings";
-
   return (
     <header
       data-testid="sys-bar"
@@ -166,8 +167,9 @@ export function SysBar() {
           type="button"
           className={cn(hbBase, settingsOn && hbOn)}
           aria-label="Settings"
-          aria-current={settingsOn ? "page" : undefined}
-          onClick={() => go("/settings")}
+          aria-haspopup="dialog"
+          aria-expanded={settingsOn}
+          onClick={() => openSettings()}
         >
           <ShellIcon name="gear" size={20} />
         </button>

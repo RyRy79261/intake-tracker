@@ -15,6 +15,8 @@ import { HomeFloatingBars } from "@/components/home-floating-bars";
 import { MedicationsFloatingBars } from "@/components/medications-floating-bars";
 import { SysBar } from "@/components/shell/sys-bar";
 import { BottomBar } from "@/components/shell/bottom-bar";
+import { SettingsSheet } from "@/components/settings/settings-sheet";
+import { SETTINGS_PATH } from "@/hooks/use-window-history";
 
 const noopSubscribe = () => () => {};
 
@@ -58,16 +60,16 @@ export function AppChrome({ children }: { children: ReactNode }) {
 }
 
 /**
- * The Ward Console frame. Home and the window routes (`/medications`,
- * `/analytics`, `/history`, `/profile`) all render Home here, with the app
- * windows over it, so Home stays mounted while windows open and close and
- * the route only decides which window a deep link opens. Other routes
- * (`/settings`, `/help`, ...) render their page; the windows stay mounted
- * behind it, hidden.
+ * The Ward Console frame. Home, the window routes (`/medications`,
+ * `/analytics`, `/history`, `/profile`) and `/settings` all render Home
+ * here, with the app windows (and the Settings sheet) over it, so Home stays
+ * mounted while windows open and close and the route only decides which
+ * window a deep link opens. Other routes (`/help`, ...) render their page;
+ * the windows stay mounted behind it, hidden.
  */
 function WardShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const onShell = pathname === "/" || isWindowRoute(pathname);
+  const onShell = pathname === "/" || pathname === SETTINGS_PATH || isWindowRoute(pathname);
   const chrome = onShell || isChromeRoute(pathname);
   const wide = useIsWide();
   // On a phone the window on screen covers Home; on a wide screen tiled or
@@ -100,6 +102,7 @@ function WardShell({ children }: { children: ReactNode }) {
       </div>
       <WindowLayer hidden={!onShell} />
       {chrome && <BottomBar />}
+      <SettingsSheet />
     </main>
   );
 }

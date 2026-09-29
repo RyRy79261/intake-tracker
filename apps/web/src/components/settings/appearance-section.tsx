@@ -1,58 +1,52 @@
 "use client";
 
-import { Label } from "@intake/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@intake/ui/select";
-import { Sun, Moon, Monitor } from "lucide-react";
 import { useTheme } from "next-themes";
+import { useSettingsStore } from "@/stores/settings-store";
+import { Seg, Tog, flabelClass } from "@/components/settings/settings-kit";
 
+const THEMES = [
+  ["light", "Light"],
+  ["dark", "Dark"],
+  ["system", "System"],
+] as const;
+
+type ThemeChoice = (typeof THEMES)[number][0];
+
+function isThemeChoice(value: string | undefined): value is ThemeChoice {
+  return value === "light" || value === "dark" || value === "system";
+}
+
+/**
+ * Settings › Appearance: theme (next-themes), Bigger text and Reduce
+ * motion. The last two are device-only and applied by DisplayPrefs.
+ */
 export function AppearanceSection() {
   const { theme, setTheme } = useTheme();
+  const bigText = useSettingsStore((s) => s.bigText);
+  const setBigText = useSettingsStore((s) => s.setBigText);
+  const reduceMotion = useSettingsStore((s) => s.reduceMotion);
+  const setReduceMotion = useSettingsStore((s) => s.setReduceMotion);
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-2 text-muted-foreground">
-        <Sun className="w-4 h-4" />
-        <h3 className="font-semibold">Appearance</h3>
+    <>
+      <div>
+        <span className={flabelClass}>Theme</span>
+        <Seg label="Theme" value={isThemeChoice(theme) ? theme : "system"} options={THEMES} onChange={setTheme} />
       </div>
-      <div className="space-y-3 pl-6">
-        <div className="space-y-2">
-          <Label htmlFor="theme">Theme</Label>
-          <Select {...(theme !== undefined && { value: theme })} onValueChange={setTheme}>
-            <SelectTrigger id="theme" className="w-full">
-              <SelectValue placeholder="Select theme" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="light">
-                <div className="flex items-center gap-2">
-                  <Sun className="w-4 h-4" />
-                  Light
-                </div>
-              </SelectItem>
-              <SelectItem value="dark">
-                <div className="flex items-center gap-2">
-                  <Moon className="w-4 h-4" />
-                  Dark
-                </div>
-              </SelectItem>
-              <SelectItem value="system">
-                <div className="flex items-center gap-2">
-                  <Monitor className="w-4 h-4" />
-                  System
-                </div>
-              </SelectItem>
-            </SelectContent>
-          </Select>
-          <p className="text-xs text-muted-foreground">
-            Choose light, dark, or follow your system preference
-          </p>
-        </div>
-      </div>
-    </div>
+      <Tog
+        id="set-big-text"
+        label="Bigger text"
+        description="Larger type and controls across the app."
+        checked={bigText}
+        onCheckedChange={setBigText}
+      />
+      <Tog
+        id="set-reduce-motion"
+        label="Reduce motion"
+        description="Turns off animations and sliding transitions."
+        checked={reduceMotion}
+        onCheckedChange={setReduceMotion}
+      />
+    </>
   );
 }

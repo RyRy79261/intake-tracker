@@ -11,12 +11,15 @@ vi.mock("next/navigation", () => ({
 
 import {
   __resetWindowHistoryForTests,
+  closeSettings,
   closeWindow,
   goHome,
+  openSettings,
   openWindow,
   useWindowHistory,
 } from "@/hooks/use-window-history";
 import { useWindowStore } from "@/stores/window-store";
+import { useSettingsSheetStore } from "@/stores/settings-sheet-store";
 
 function Sync() {
   useWindowHistory();
@@ -36,6 +39,7 @@ describe("useWindowHistory", () => {
   beforeEach(() => {
     __resetWindowHistoryForTests();
     useWindowStore.setState({ wins: [], focus: null, showHome: true, wide: false, z: 0, nextId: 1 });
+    useSettingsSheetStore.setState({ open: false, page: "main", groups: { tracking: true } });
     window.history.replaceState(null, "", "/");
     pathname = "/";
     search = new URLSearchParams();
@@ -108,5 +112,66 @@ describe("useWindowHistory", () => {
     render(<Sync />);
     await waitFor(() => expect(apps()).toEqual(["metrics"]));
     expect(useWindowStore.getState().wins[0]?.st.tab).toBe("records");
+  });
+
+  describe("Settings sheet", () => {
+    const sheetOpen = () => useSettingsSheetStore.getState().open;
+
+    it("Back closes the sheet before the window under it", async () => {
+      render(<Sync />);
+      openWindow("meds");
+      openSettings();
+      expect(sheetOpen()).toBe(true);
+      expect(window.location.pathname).toBe("/settings");
+
+      await back();
+      expect(sheetOpen()).toBe(false);
+      expect(apps()).toEqual(["meds"]);
+      expect(window.location.pathname).toBe("/medications");
+    });
+
+    it("closing the sheet steps back over its entry", async () => {
+      render(<Sync />);
+      openSettings("data");
+      expect(useSettingsSheetStore.getState().groups.data).toBe(true);
+      const popped = new Promise((r) => window.addEventListener("popstate", r, { once: true }));
+      closeSettings();
+      await popped;
+      expect(sheetOpen()).toBe(false);
+      expect(window.location.pathname).toBe("/");
+    });
+
+    it("a second open does not push another entry", () => {
+      render(<Sync />);
+      openSettings();
+      const len = window.history.length;
+      openSettings("meds");
+      expect(window.history.length).toBe(len);
+      expect(useSettingsSheetStore.getState().groups.meds).toBe(true);
+    });
+
+    it("the /settings deep link opens the sheet over a Home entry", async () => {
+      window.history.replaceState(null, "", "/settings?section=about");
+      pathname = "/settings";
+      search = new URLSearchParams("section=about");
+      render(<Sync />);
+      await waitFor(() => expect(sheetOpen()).toBe(true));
+      expect(useSettingsSheetStore.getState().groups.about).toBe(true);
+      expect(window.location.pathname).toBe("/settings");
+
+      await back();
+      expect(sheetOpen()).toBe(false);
+      expect(window.location.pathname).toBe("/");
+    });
+
+    it("leaving /settings for another route closes the sheet", async () => {
+      window.history.replaceState(null, "", "/settings");
+      pathname = "/settings";
+      const { rerender } = render(<Sync />);
+      await waitFor(() => expect(sheetOpen()).toBe(true));
+      pathname = "/help";
+      rerender(<Sync />);
+      await waitFor(() => expect(sheetOpen()).toBe(false));
+    });
   });
 });

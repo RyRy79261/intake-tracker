@@ -6,6 +6,7 @@ import { Button } from "@intake/ui/button";
 import { useToast } from "@intake/ui/use-toast";
 import { useAuth } from "@/components/auth-guard";
 import { apiFetch } from "@/lib/api-fetch";
+import { SubHead, helpClass, plainboxClass } from "@/components/settings/settings-kit";
 
 interface McpConnection {
   clientId: string;
@@ -75,11 +76,8 @@ export function McpConnectionsSection() {
   const connections = data?.connections ?? [];
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
-        <Plug className="w-4 h-4" />
-        <h3 className="font-semibold">Claude connections</h3>
-      </div>
+    <div className="flex flex-col gap-2.5">
+      <SubHead icon={Plug}>Claude connections</SubHead>
       {!authenticated ? (
         <p className="text-sm text-muted-foreground">
           Sign in to manage Claude connections.
@@ -91,7 +89,7 @@ export function McpConnectionsSection() {
           No Claude connector is connected.
         </p>
       ) : (
-        <div className="p-3 rounded-lg border space-y-3">
+        <div className={plainboxClass}>
           {connections.map((c) => (
             <div key={c.clientId} className="flex items-center justify-between gap-3">
               <div className="min-w-0">
@@ -127,7 +125,7 @@ export function McpConnectionsSection() {
           )}
         </div>
       )}
-      <p className="text-xs text-muted-foreground">
+      <p className={helpClass}>
         Connected clients get read-only access to your synced data.
       </p>
     </div>

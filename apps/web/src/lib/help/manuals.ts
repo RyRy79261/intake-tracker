@@ -186,7 +186,7 @@ export const MANUALS: Manual[] = [
         heading: "Logging plain water",
         steps: [
           "Open the Water tab on the card.",
-          "Tap the add button to log one serving. The serving size comes from Settings → Tracking → Water.",
+          "Tap the add button to log one serving. The serving size comes from Settings → Tracking → Water step.",
           "Tap again for more — the ring-3 fills as you approach your daily limit.",
         ],
       },
@@ -201,7 +201,7 @@ export const MANUALS: Manual[] = [
       },
       {
         heading: "Saving favourites as presets",
-        body: "Drinks you log often can become presets so they are one tap away on the Preset tab. Add and edit them under Settings → Tracking → Liquid presets.",
+        body: "Drinks you log often can become presets so they are one tap away on the Preset tab. Add and edit them under Settings → Tracking → Drink presets.",
         callout: {
           tone: "tip",
           text: "The Preset tab can also use AI to recognise a drink you describe and fill in its details automatically — see the AI features manual.",
@@ -306,8 +306,8 @@ export const MANUALS: Manual[] = [
         ],
       },
       {
-        heading: "Units and target",
-        body: "Choose kilograms or pounds, and set an optional target weight, under Settings → Tracking → Weight.",
+        heading: "The +/- step",
+        body: "Set how much each +/- tap changes the weight under Settings → Tracking → Weight step.",
       },
       {
         heading: "Seeing the trend",
@@ -342,7 +342,7 @@ export const MANUALS: Manual[] = [
       },
       {
         heading: "Setting your defaults",
-        body: "The amount options and the frequency thresholds that flag an unusual day come from Settings → Tracking → Urination & bowel defaults.",
+        body: "The amount options and the frequency thresholds that flag an unusual day come from Settings → Tracking → Urination and Defecation default amount.",
         callout: {
           tone: "note",
           text: "Every entry can be corrected later from the card's recent list — see the Editing & correcting entries manual.",
@@ -535,7 +535,7 @@ export const MANUALS: Manual[] = [
     domain: "ai",
     icon: ShieldCheck,
     summary: "Where your data lives, what leaves your device, and the controls you hold.",
-    whereToFind: "Settings → Privacy & Security",
+    whereToFind: "Settings → Privacy",
     sections: [
       {
         heading: "Local first",
@@ -551,14 +551,14 @@ export const MANUALS: Manual[] = [
       },
       {
         heading: "Medical context consent",
-        body: "AI insight features that would draw on your conditions or medications stay off until you opt in. Per-item toggles under Settings → Privacy & Security — and on your Profile — control this, and a disclaimer is shown the first time you enable one.",
+        body: "AI insight features that would draw on your conditions or medications stay off until you opt in. Per-item toggles under Settings → Privacy — and on your Profile — control this, and a disclaimer is shown the first time you enable one.",
       },
       {
         heading: "Permissions",
-        body: "Motion access (for shake-to-report), the microphone (for voice) and notifications are each requested only when you turn on the feature that needs them. Review what you have granted under Settings → Privacy & Security.",
+        body: "Motion access (for shake-to-report), the microphone (for voice) and notifications are each requested only when you turn on the feature that needs them. Review what you have granted under Settings → Privacy.",
         callout: {
           tone: "tip",
-          text: "You can export a full backup of your data at any time from Settings → Data & Storage.",
+          text: "You can export a full backup of your data at any time from Settings → Data & storage.",
         },
       },
     ],
@@ -569,28 +569,30 @@ export const MANUALS: Manual[] = [
     domain: "system",
     icon: SlidersHorizontal,
     summary: "A tour of every settings group and what you can change.",
-    whereToFind: "Settings tab",
+    whereToFind: "The gear at the top right",
     sections: [
       {
         heading: "How settings are organised",
-        body: "The Settings page is a stack of collapsible groups. Tap a group to expand it. Changes take effect as you make them — there is no save button.",
+        body: "The gear at the top right opens Settings over whatever you are doing: full screen on a phone, a panel on the right on a wider screen. It is a stack of collapsible groups; tap a group to expand it. Changes take effect as you make them — there is no save button.",
       },
       {
         heading: "The groups",
         bullets: [
+          "Tracking — day and week start, each limit as a target plus a buffer, optional trackers, the +/- steps, bathroom defaults, and the Drink presets page.",
+          "Appearance — theme, Bigger text and Reduce motion.",
+          "Medications — medicine-search region, time format, dose reminders and the home timezone.",
           "AI features — API keys for the optional AI helpers.",
-          "Data & Storage — storage usage, export, import, backup and data migration.",
-          "Tracking — day-start hour, water and sodium limits, weight units, liquid presets and bathroom defaults.",
-          "Customization — theme and dark mode, the quick-nav bar, animation timing and swipe navigation.",
-          "Medication — time format and inventory and notification preferences.",
-          "Privacy & Security — app permissions and medical-AI consent.",
+          "Data & storage — sync status, storage usage, deleting data, export, import and conflicts.",
+          "Privacy — app permissions, medical-AI consent and Claude connections.",
           "System — checking for and applying app updates.",
+          "Help & Manual — this manual.",
           "Feedback — reporting a bug, and the shake-to-report sensitivity.",
+          "About — version and build, and Reset to Defaults.",
         ],
       },
       {
         heading: "Resetting",
-        body: "Reset to Defaults, at the bottom of the page, asks for confirmation and then restores your preferences to their original values. It does not delete any of your logged data, and it keeps your liquid presets, storage mode and dose reminders.",
+        body: "Reset to Defaults, under About, asks for confirmation and then restores your preferences to their original values. It does not delete any of your logged data, and it keeps your drink presets, storage mode and dose reminders.",
         callout: {
           tone: "tip",
           text: "This manual is reachable from Settings → Help & Manual, and from the \"How does this work?\" link in the shake / bug-report dialog.",

@@ -1,13 +1,14 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Bug, Smartphone, SlidersHorizontal } from "lucide-react";
+import { Bug, ChevronDown } from "lucide-react";
 import { Button } from "@intake/ui/button";
-import { Switch } from "@intake/ui/switch";
 import { Label } from "@intake/ui/label";
 import { NumericInput } from "@intake/ui/numeric-input";
 import { ReportBugDialog } from "@/components/report-bug-dialog";
-import { ExpandableSettingsSection } from "@/components/settings/expandable-settings-section";
+import { SubHead, Tog, helpClass } from "@/components/settings/settings-kit";
+import { domainColor } from "@/lib/domain-colors";
+import { cn } from "@/lib/utils";
 import { useSettings } from "@/hooks/use-settings";
 import { useToast } from "@intake/ui/use-toast";
 import { requestMotionPermission } from "@/hooks/use-shake-gesture";
@@ -19,6 +20,7 @@ import {
 
 export function ReportBugSection() {
   const [open, setOpen] = useState(false);
+  const [sensOpen, setSensOpen] = useState(false);
   const settings = useSettings();
   const { toast } = useToast();
 
@@ -53,137 +55,134 @@ export function ReportBugSection() {
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-2 text-rose-600 dark:text-rose-400">
-        <Bug className="w-4 h-4" />
-        <h3 className="font-semibold">Report a bug</h3>
-      </div>
-      <div className="space-y-3 pl-6">
-        <p className="text-sm text-muted-foreground">
-          Found a problem, or have an idea? File it on GitHub directly from the
-          app. Environment info and recent error logs are attached
-          automatically, with personal data removed first.
-        </p>
-        <Button size="sm" className="gap-2" onClick={() => setOpen(true)}>
-          <Bug className="h-4 w-4" />
-          Report a bug
-        </Button>
+    <>
+      <SubHead icon={Bug} color={domainColor("bp")}>
+        Report a bug
+      </SubHead>
+      <p className={helpClass}>
+        Found a problem, or have an idea? File it on GitHub directly from the
+        app. Environment info and recent error logs are attached
+        automatically, with personal data removed first.
+      </p>
+      <Button className="self-start" onClick={() => setOpen(true)}>
+        <Bug className="h-4 w-4" />
+        Report a bug
+      </Button>
 
-        <div className="flex items-center justify-between gap-3 pt-1">
-          <div className="space-y-0.5">
-            <p className="flex items-center gap-1.5 text-sm font-medium">
-              <Smartphone className="h-3.5 w-3.5" />
-              Shake to report
-            </p>
-            <p className="text-xs text-muted-foreground">
-              Give your device a shake to open this dialog from anywhere.
-            </p>
-          </div>
-          <Switch
-            checked={settings.shakeToReportEnabled}
-            onCheckedChange={handleShakeToggle}
-          />
-        </div>
+      <Tog
+        id="set-shake"
+        label="Shake to report"
+        description="Give your device a shake to open this dialog from anywhere."
+        checked={settings.shakeToReportEnabled}
+        onCheckedChange={(v) => void handleShakeToggle(v)}
+      />
 
-        {settings.shakeToReportEnabled && (
-          <ExpandableSettingsSection
-            icon={SlidersHorizontal}
-            label="Shake sensitivity"
-            iconColorClass="text-rose-600 dark:text-rose-400"
+      {settings.shakeToReportEnabled && (
+        <div>
+          <button
+            type="button"
+            aria-expanded={sensOpen}
+            aria-controls="shake-sensitivity"
+            onClick={() => setSensOpen((o) => !o)}
+            className="flex min-h-11 w-full items-center gap-2 text-left text-sm font-medium"
           >
-            <div className="space-y-3">
-              <div className="space-y-2">
-                <Label htmlFor="shake-threshold">Jolt threshold</Label>
-                <NumericInput
-                  id="shake-threshold"
-                  value={thresholdInput}
-                  onChange={setThresholdInput}
-                  onBlur={() =>
-                    validateAndSave(
-                      thresholdInput,
-                      4,
-                      20,
-                      settings.shakeThreshold,
-                      settings.setShakeThreshold,
-                      setThresholdInput,
-                    )
-                  }
-                  min={4}
-                  max={20}
-                  step={1}
-                  onIncrement={() =>
-                    incrementSetting(
-                      settings.shakeThreshold,
-                      1,
-                      20,
-                      settings.setShakeThreshold,
-                      setThresholdInput,
-                    )
-                  }
-                  onDecrement={() =>
-                    decrementSetting(
-                      settings.shakeThreshold,
-                      1,
-                      4,
-                      settings.setShakeThreshold,
-                      setThresholdInput,
-                    )
-                  }
-                />
-                <p className="text-xs text-muted-foreground">
-                  Movement strength needed to register a shake (4-20). Lower =
-                  more sensitive.
-                </p>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="shake-jolts">Jolts required</Label>
-                <NumericInput
-                  id="shake-jolts"
-                  value={joltsInput}
-                  onChange={setJoltsInput}
-                  onBlur={() =>
-                    validateAndSave(
-                      joltsInput,
-                      2,
-                      8,
-                      settings.shakeRequiredJolts,
-                      settings.setShakeRequiredJolts,
-                      setJoltsInput,
-                    )
-                  }
-                  min={2}
-                  max={8}
-                  step={1}
-                  onIncrement={() =>
-                    incrementSetting(
-                      settings.shakeRequiredJolts,
-                      1,
-                      8,
-                      settings.setShakeRequiredJolts,
-                      setJoltsInput,
-                    )
-                  }
-                  onDecrement={() =>
-                    decrementSetting(
-                      settings.shakeRequiredJolts,
-                      1,
-                      2,
-                      settings.setShakeRequiredJolts,
-                      setJoltsInput,
-                    )
-                  }
-                />
-                <p className="text-xs text-muted-foreground">
-                  How many jolts within ~0.8s open the dialog (2-8). Higher =
-                  fewer accidental triggers.
-                </p>
-              </div>
+            Shake sensitivity
+            <ChevronDown aria-hidden="true" className={cn("ml-auto h-4 w-4", sensOpen && "rotate-180")} />
+          </button>
+          {sensOpen && (
+          <div id="shake-sensitivity" className="flex flex-col gap-3 border-l-2 border-line pl-2.5">
+            <div className="space-y-2">
+              <Label htmlFor="shake-threshold">Jolt threshold</Label>
+              <NumericInput
+                id="shake-threshold"
+                value={thresholdInput}
+                onChange={setThresholdInput}
+                onBlur={() =>
+                  validateAndSave(
+                    thresholdInput,
+                    4,
+                    20,
+                    settings.shakeThreshold,
+                    settings.setShakeThreshold,
+                    setThresholdInput,
+                  )
+                }
+                min={4}
+                max={20}
+                step={1}
+                onIncrement={() =>
+                  incrementSetting(
+                    settings.shakeThreshold,
+                    1,
+                    20,
+                    settings.setShakeThreshold,
+                    setThresholdInput,
+                  )
+                }
+                onDecrement={() =>
+                  decrementSetting(
+                    settings.shakeThreshold,
+                    1,
+                    4,
+                    settings.setShakeThreshold,
+                    setThresholdInput,
+                  )
+                }
+              />
+              <p className={helpClass}>
+                Movement strength needed to register a shake (4-20). Lower =
+                more sensitive.
+              </p>
             </div>
-          </ExpandableSettingsSection>
-        )}
-      </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="shake-jolts">Jolts required</Label>
+              <NumericInput
+                id="shake-jolts"
+                value={joltsInput}
+                onChange={setJoltsInput}
+                onBlur={() =>
+                  validateAndSave(
+                    joltsInput,
+                    2,
+                    8,
+                    settings.shakeRequiredJolts,
+                    settings.setShakeRequiredJolts,
+                    setJoltsInput,
+                  )
+                }
+                min={2}
+                max={8}
+                step={1}
+                onIncrement={() =>
+                  incrementSetting(
+                    settings.shakeRequiredJolts,
+                    1,
+                    8,
+                    settings.setShakeRequiredJolts,
+                    setJoltsInput,
+                  )
+                }
+                onDecrement={() =>
+                  decrementSetting(
+                    settings.shakeRequiredJolts,
+                    1,
+                    2,
+                    settings.setShakeRequiredJolts,
+                    setJoltsInput,
+                  )
+                }
+              />
+              <p className={helpClass}>
+                How many jolts within ~0.8s open the dialog (2-8). Higher =
+                fewer accidental triggers.
+              </p>
+            </div>
+          </div>
+          )}
+        </div>
+      )}
       <ReportBugDialog open={open} onOpenChange={setOpen} />
-    </div>
+    </>
   );
 }

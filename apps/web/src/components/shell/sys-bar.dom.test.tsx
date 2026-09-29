@@ -25,10 +25,12 @@ vi.mock("@/hooks/use-medication-queries", () => ({
 
 import { SysBar, initialsFor } from "@/components/shell/sys-bar";
 import { useWindowStore } from "@/stores/window-store";
+import { useSettingsSheetStore } from "@/stores/settings-sheet-store";
 
 describe("SysBar", () => {
   beforeEach(() => {
     push.mockReset();
+    useSettingsSheetStore.setState({ open: false, page: "main" });
     pathname = "/";
     useWindowStore.setState({ wins: [], focus: null, showHome: true, wide: false, z: 0, nextId: 1 });
     window.history.replaceState(null, "", "/");
@@ -119,17 +121,33 @@ describe("SysBar", () => {
     expect(history).toHaveAttribute("aria-pressed", "true");
     expect(metrics).toHaveAttribute("aria-pressed", "false");
 
-    // Settings is still a route.
-    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
-    expect(push.mock.calls.map((c) => c[0])).toEqual(["/settings"]);
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it("opens the Settings sheet from the gear, over the windows", () => {
+    render(<SysBar />);
+    fireEvent.click(screen.getByRole("button", { name: "Medications" }));
+    const gear = screen.getByRole("button", { name: "Settings" });
+    expect(gear).toHaveAttribute("aria-expanded", "false");
+
+    fireEvent.click(gear);
+    // A sheet, not a route change: no navigation, the windows stay open,
+    // and the address bar shows the /settings deep link.
+    expect(push).not.toHaveBeenCalled();
+    expect(useSettingsSheetStore.getState().open).toBe(true);
+    expect(window.location.pathname).toBe("/settings");
+    expect(gear).toHaveAttribute("aria-expanded", "true");
+    expect(useWindowStore.getState().wins.map((w) => w.app)).toEqual(["meds"]);
+    // Nothing is "on" while Settings covers the windows.
+    expect(screen.getByRole("button", { name: "Medications" })).toHaveAttribute("aria-pressed", "false");
   });
 
   it("returns to an open window from another route", () => {
     useWindowStore.getState().open("meds");
-    pathname = "/settings";
+    pathname = "/help";
     render(<SysBar />);
     const meds = screen.getByRole("button", { name: "Medications" });
-    // Not "on" while Settings covers the windows.
+    // Not "on" while another page covers the windows.
     expect(meds).toHaveAttribute("aria-pressed", "false");
     fireEvent.click(meds);
     expect(push).toHaveBeenCalledWith("/medications");

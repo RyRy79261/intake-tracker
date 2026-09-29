@@ -116,6 +116,12 @@ export interface Settings {
   // (a stored value wins, so the Settings > Debug switch can turn it off).
   // Never synced.
   wardShell: boolean;
+
+  // Display preferences (Settings > Appearance). Device-only, never synced.
+  // Bigger text scales the root font size; Reduce motion turns animations
+  // and transitions off (see components/display-prefs.tsx).
+  bigText: boolean;
+  reduceMotion: boolean;
 }
 
 interface SettingsActions {
@@ -166,6 +172,9 @@ interface SettingsActions {
   setShakeRequiredJolts: (value: number) => void;
   // Ward Console shell (staged rollout, device-only)
   setWardShell: (value: boolean) => void;
+  // Display preferences (device-only)
+  setBigText: (value: boolean) => void;
+  setReduceMotion: (value: boolean) => void;
   /**
    * Restore preferences to their defaults. Leaves alone the fields that are
    * data or have their own flows (see RESET_PRESERVED_KEYS).
@@ -214,6 +223,8 @@ const defaultSettings: Settings = {
   homeTimezone: null,
   homeTimezoneConfirmedAt: null,
   wardShell: true,
+  bigText: false,
+  reduceMotion: false,
 };
 
 /**
@@ -457,6 +468,8 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
         set({ shakeRequiredJolts: sanitizeNumericInput(value, 2, 8) }),
 
       setWardShell: (value) => set({ wardShell: value }),
+      setBigText: (value) => set({ bigText: value }),
+      setReduceMotion: (value) => set({ reduceMotion: value }),
 
       addLiquidPreset: (preset) => {
         const id = crypto.randomUUID();
