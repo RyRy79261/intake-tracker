@@ -30,6 +30,9 @@ function formatTime12(time24: string): string {
   return `${h12}:${String(m).padStart(2, "0")} ${ampm}`;
 }
 
+/** The prototype's `.btn.sm`: 32px outlined, compact type. */
+const slotButton = "h-8 px-2.5 text-[0.8125rem]";
+
 function isTimeOverdue(time24: string): boolean {
   const parts = time24.split(":").map(Number);
   const h = parts[0] ?? 0;
@@ -64,35 +67,36 @@ export function TimeSlotGroup({
   return (
     <div
       id={`time-slot-${time}`}
+      data-next={isNextUpcoming || undefined}
       className={cn(
-        "rounded-xl",
-        isNextUpcoming && "border-l-[3px] border-l-teal-500 bg-teal-50/30 dark:bg-teal-950/10 pl-3",
-        !isNextUpcoming && allDone && "opacity-80",
+        "border border-line bg-panel",
+        isNextUpcoming && "shadow-[inset_3px_0_0_hsl(var(--meds))]",
+        !isNextUpcoming && allDone && "opacity-85",
       )}
     >
-      <div className="flex items-center justify-between mb-2">
+      <div className="flex min-h-11 items-center gap-2 border-b border-line bg-chrome px-2.5">
         <h3
           className={cn(
-            "text-lg font-bold",
-            overdue ? "text-red-500" : "text-foreground"
+            "font-mono text-base font-semibold",
+            overdue ? "text-bp" : "text-foreground"
           )}
         >
           {formatTime12(time)}
         </h3>
         {!isFuture && hasPending && (
-          <div className="flex items-center gap-1">
+          <div className="ml-auto flex items-center gap-1.5">
             <Button
-              variant="ghost"
+              variant="outline"
               size="sm"
-              className="text-xs text-muted-foreground h-7"
+              className={slotButton}
               onClick={() => onSkipAll(time, openSlots)}
             >
               Skip All
             </Button>
             <Button
-              variant="ghost"
+              variant="outline"
               size="sm"
-              className="text-xs text-muted-foreground h-7"
+              className={slotButton}
               onClick={() => onMarkAll(time, openSlots)}
             >
               Mark All
@@ -101,9 +105,9 @@ export function TimeSlotGroup({
         )}
         {!isFuture && !hasPending && hasTaken && (
           <Button
-            variant="ghost"
+            variant="outline"
             size="sm"
-            className="text-xs text-muted-foreground h-7"
+            className={cn(slotButton, "ml-auto")}
             onClick={() => onEditAll(time, slots)}
           >
             Edit All
@@ -111,7 +115,7 @@ export function TimeSlotGroup({
         )}
       </div>
 
-      <div className="space-y-2">
+      <div>
         {slots.map((slot) => (
           <DoseRow
             key={`${slot.scheduleId}-${slot.localTime}`}

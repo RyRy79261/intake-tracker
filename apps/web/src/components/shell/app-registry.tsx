@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, type ComponentType } from "react";
-import { Plus } from "lucide-react";
 import { MedicationsPageBody } from "@/components/medications/medications-page-body";
+import { LogDoseFab } from "@/components/medications/log-dose-fab";
 import { AddMedicationWizard } from "@/components/medications/add-medication-wizard";
 import { AnalyticsPageBody, isAnalyticsTab } from "@/components/analytics/analytics-page-body";
 import { ProfilePageBody } from "@/components/profile/profile-page-body";
@@ -27,10 +27,14 @@ export interface WindowApp {
 }
 
 function MedsBody() {
-  return <MedicationsPageBody />;
+  return <MedicationsPageBody ward />;
 }
 
-/** The Medications window's "+" button (Schedule tab) and Add-medication wizard. */
+/**
+ * The Medications window's "+" button (Schedule tab; logs an extra dose) and
+ * the Add-medication wizard, which the Rx and Meds tabs' Add buttons and the
+ * empty schedule open.
+ */
 function MedsOverlay() {
   const activeTab = useMedicationUIStore((s) => s.activeTab);
   const wizardOpen = useMedicationUIStore((s) => s.wizardOpen);
@@ -41,16 +45,8 @@ function MedsOverlay() {
 
   return (
     <>
-      {activeTab === "schedule" && (
-        <button
-          type="button"
-          onClick={() => setWizardOpen(true)}
-          className="absolute bottom-3.5 right-3.5 z-[4] flex h-14 w-14 items-center justify-center bg-meds text-on-domain shadow-[0_3px_0_rgba(20,22,31,.22)] dark:shadow-[0_3px_0_rgba(0,0,0,.5)] md:bottom-[22px] md:right-[22px]"
-          aria-label="Add medication"
-        >
-          <Plus className="h-6 w-6" />
-        </button>
-      )}
+      {/* "settings" falls back to Schedule in the window (see MedicationsPageBody). */}
+      {(activeTab === "schedule" || activeTab === "settings") && <LogDoseFab />}
       <AddMedicationWizard open={wizardOpen} onOpenChange={setWizardOpen} />
     </>
   );

@@ -86,7 +86,7 @@ test.describe('Medications', () => {
     await expect(page.getByRole('dialog')).toBeHidden({ timeout: 5000 });
 
     // Go to the Meds tab to view the active meds list
-    await page.click('button:has-text("Meds")');
+    await page.getByTestId('window').getByRole('tab', { name: 'Meds' }).click();
 
     // Verify it appears in the active meds list
     await expect(page.locator('text=Aviolix').first()).toBeVisible();
@@ -175,7 +175,7 @@ test.describe('Medications', () => {
     // Navigate to the Medications tab (labeled "Meds" in the med tab bar)
     // compound-card.tsx displays "{currentStock} pills" — should now be "29 pills" (was 30)
     // Scope to the Medications window: /medications opens it over Home.
-    const medsTab = page.getByTestId('window').locator('button', { hasText: 'Meds' }).first();
+    const medsTab = page.getByTestId('window').getByRole('tab', { name: 'Meds' });
     await medsTab.click();
 
     // Verify the medication appears in the compound list
@@ -240,7 +240,7 @@ test.describe('Medications', () => {
     await expect(page.getByRole('dialog')).toBeHidden({ timeout: 5000 });
 
     // === The as-needed med shows "Log dose now" on the Rx tab ===
-    await page.getByTestId('window').locator('button', { hasText: 'Rx' }).click();
+    await page.getByTestId('window').getByRole('tab', { name: 'Rx' }).click();
     await expect(page.locator('text=Furosemide').first()).toBeVisible({ timeout: 5000 });
 
     const logNow = page.getByRole('button', {
@@ -274,20 +274,88 @@ test.describe('Medications', () => {
     // EmptySchedule shows "No medications scheduled for today" and an "Add a prescription" button
     await expect(page.locator('text=Add a prescription')).toBeVisible({ timeout: 10000 });
 
-    // /medications opens the Medications window over Home; its MedTabBar is
+    // /medications opens the Medications window over Home; its tab bar is
     // the one to drive.
     const medsWindow = page.getByTestId('window');
 
-    // Navigate to the Meds tab (labeled "Meds" in MedTabBar)
-    await medsWindow.locator('button', { hasText: 'Meds' }).first().click();
-    // Meds tab should be visible (CompoundList renders)
+    // Four tabs; Settings moved out of the window (global Settings, PR 12).
+    await expect(medsWindow.getByRole('tab')).toHaveText(['Schedule', 'Rx', 'Meds', 'Titrations']);
 
-    // Navigate to the Rx tab (labeled "Rx" in MedTabBar, shows PrescriptionsView)
-    await medsWindow.locator('button', { hasText: 'Rx' }).click();
+    // Navigate to the Meds tab (CompoundList renders)
+    await medsWindow.getByRole('tab', { name: 'Meds' }).click();
+    await expect(medsWindow.getByRole('tab', { name: 'Meds' })).toHaveAttribute('aria-selected', 'true');
+
+    // Navigate to the Rx tab (PrescriptionsView)
+    await medsWindow.getByRole('tab', { name: 'Rx' }).click();
 
     // Navigate back to Schedule tab
-    await medsWindow.locator('button', { hasText: 'Schedule' }).click();
+    await medsWindow.getByRole('tab', { name: /^Schedule/ }).click();
     // Verify we're back at the schedule view with empty state
     await expect(medsWindow.locator('text=Add a prescription')).toBeVisible();
+  });
+
+  test('should log an extra dose from the "+" button and undo it', async ({ page }) => {
+    // Client-side errors only: a network status (e.g. the auth session probe
+    // with no auth backend configured locally) is not this flow's concern.
+    const consoleErrors: string[] = [];
+    page.on('console', (msg) => {
+      if (msg.type() === 'error' && !msg.text().startsWith('Failed to load resource')) {
+        consoleErrors.push(msg.text());
+      }
+    });
+
+    await page.goto('/medications');
+    const medsWindow = page.getByTestId('window');
+
+    // === An as-needed prescription with 30 tablets, via the wizard ===
+    // The Rx tab's Add button opens the wizard (the "+" now logs doses).
+    // Filled by hand: the AI search is sign-in gated.
+    await medsWindow.getByRole('tab', { name: 'Rx' }).click();
+    await medsWindow.getByRole('button', { name: /Add your first prescription|Add prescription/ }).click();
+    await expect(page.locator('text=Search Medicine')).toBeVisible();
+    await page.getByPlaceholder('e.g. Aviolix', { exact: true }).fill('Lasix');
+    await page.getByPlaceholder('e.g. Clopidogrel', { exact: true }).fill('Furosemide');
+    await page.getByPlaceholder('e.g. 75mg', { exact: true }).fill('40mg');
+    await page.click('button:has-text("Next")'); // Appearance
+    await page.click('button:has-text("Next")'); // Indication
+    await page.click('button:has-text("Next")'); // Dosage
+    await expect(page.locator('text=Dosage')).toBeVisible();
+    await page.getByRole('switch').click(); // As needed: no schedule step
+    await page.click('button:has-text("Next")');
+    await expect(page.locator('text=Current stock')).toBeVisible();
+    await page.fill('input[placeholder="e.g. 36"]', '30');
+    await page.click('button:has-text("Save Medication")');
+    await expect(page.getByRole('dialog')).toBeHidden({ timeout: 5000 });
+
+    // === "+" on the Schedule tab: Log a dose, extra dose ===
+    await medsWindow.getByRole('tab', { name: /^Schedule/ }).click();
+    await page.getByRole('button', { name: 'Log a dose' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Log a dose' });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByLabel('Prescription')).toHaveValue(/.+/);
+
+    // Pill maths: two tablets of the 40mg brand, and what is left after.
+    await dialog.getByLabel('Dose').fill('80');
+    const maths = dialog.getByTestId('log-dose-maths');
+    await expect(maths).toContainText('= 2 tablets of 40mg (= 80mg)');
+    await expect(maths).toContainText(/Deducts 2 pills from .+ · 28 pills left after/);
+    await dialog.getByLabel('Note (optional)').fill('swollen ankles');
+    await dialog.getByRole('button', { name: 'Log dose' }).click();
+    await expect(dialog).toBeHidden();
+
+    // Undo toast, then the dose under "Other doses today".
+    await expect(page.locator('text=Furosemide extra dose logged').first()).toBeVisible();
+    await expect(medsWindow.getByText('Other doses today')).toBeVisible();
+    await expect(medsWindow.getByText(/Extra dose · 2 tablets of .+ · swollen ankles/)).toBeVisible();
+
+    // Undo arms first, then removes the dose (and restores the stock).
+    await medsWindow.getByRole('button', { name: /^Undo Furosemide at/ }).click();
+    await medsWindow.getByRole('button', { name: /^Confirm remove Furosemide at/ }).click();
+    await expect(medsWindow.getByText('Other doses today')).toBeHidden();
+
+    expect(
+      consoleErrors,
+      `unexpected console errors:\n${consoleErrors.join('\n')}`,
+    ).toEqual([]);
   });
 });

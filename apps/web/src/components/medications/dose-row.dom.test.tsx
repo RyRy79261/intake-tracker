@@ -77,3 +77,49 @@ describe("DoseRow keyboard access", () => {
     expect(onDoseClick).not.toHaveBeenCalled();
   });
 });
+
+describe("DoseRow Ward Console markup", () => {
+  function renderSlot(slot: DoseSlot, isToday = false) {
+    render(
+      <DoseRow
+        slot={slot}
+        isToday={isToday}
+        isFuture={false}
+        onTake={vi.fn()}
+        onRetroactiveTake={vi.fn()}
+        onSkip={vi.fn()}
+        onDoseClick={vi.fn()}
+        onEditTime={vi.fn()}
+      />,
+    );
+    return screen.getByText("Lisinopril").closest<HTMLElement>("[data-status]")!;
+  }
+
+  it("is a flat, square row: no rounded card or pastel status tint", () => {
+    const row = renderSlot(takenSlot());
+    expect(row.dataset.status).toBe("taken");
+    expect(row.className).not.toMatch(/rounded|emerald|bg-gray|amber/);
+    expect(screen.getByText(/Taken at/)).toHaveClass("text-meds");
+  });
+
+  it("flags a missed dose with the sodium stripe and a Missed line, and keeps Take/Skip", () => {
+    const slot = { ...takenSlot(), status: "missed" as const };
+    delete slot.existingLog;
+    const row = renderSlot(slot);
+    expect(row.className).toContain("shadow-[inset_3px_0_0_hsl(var(--sodium))]");
+    expect(screen.getByText("Missed")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Take" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Skip" })).toBeInTheDocument();
+  });
+
+  it("strikes through a skipped dose and shows the reason", () => {
+    const slot = {
+      ...takenSlot(),
+      status: "skipped" as const,
+      existingLog: { ...takenSlot().existingLog!, status: "skipped" as const, skipReason: "Side effects" },
+    };
+    renderSlot(slot);
+    expect(screen.getByText("Lisinopril")).toHaveClass("line-through");
+    expect(screen.getByText("Side effects")).toBeInTheDocument();
+  });
+});
