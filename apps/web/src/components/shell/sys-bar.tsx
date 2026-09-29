@@ -68,7 +68,9 @@ export function SysBar() {
   };
 
   const open = (id: ShellAppId) => {
-    const res = openWindow(id);
+    // Metrics opens on Summary (History is Metrics on Records), so the
+    // button lights and is the way back from Records.
+    const res = openWindow(id, id === "metrics" ? { tab: "summary" } : undefined);
     // An already-open window from another route (e.g. /settings): go back
     // to the windows. A new one pushed its own route already.
     if (res && !res.created && !onShell) router.push(windowHref(res.win.app, res.win.st));

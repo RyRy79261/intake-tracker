@@ -113,7 +113,7 @@ export function WindowLayer({ hidden = false }: { hidden?: boolean }) {
             focused={focused}
             rect={rects[win.id]}
             onClose={() => closeWindow(win.id)}
-            onHome={goHome}
+            onHome={() => goHome()}
             onMinimise={() => minimise(win.id)}
             onToggleMax={() => toggleMax(win.id)}
             onFocus={() => focusWin(win.id)}

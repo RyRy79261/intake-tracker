@@ -47,8 +47,11 @@ export function useHoldRecorder(): HoldRecorder {
   const chunksRef = useRef<Blob[]>([]);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const rafRef = useRef<number | null>(null);
-  // Set when stop/cancel lands while getUserMedia is still pending.
-  const abortedRef = useRef(false);
+  // Bumped by every start, cancel and unmount. A getUserMedia that resolves
+  // after its request was superseded stops its own stream and bows out, so a
+  // cancelled request can never leave a live microphone behind.
+  const requestRef = useRef(0);
+  const mountedRef = useRef(true);
   const stateRef = useRef<HoldRecorderState>("idle");
 
   const setBoth = useCallback((s: HoldRecorderState) => {
@@ -84,14 +87,21 @@ export function useHoldRecorder(): HoldRecorder {
     setLevel(0);
   }, []);
 
-  useEffect(() => release, [release]);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      release();
+    };
+  }, [release]);
 
   const start = useCallback(async () => {
     if (stateRef.current === "requesting" || stateRef.current === "recording") {
       return { ok: false };
     }
+    const request = ++requestRef.current;
+    const isCurrent = () => mountedRef.current && request === requestRef.current;
     setError(null);
-    abortedRef.current = false;
     const mime = pickMimeType();
     if (!mime || !navigator.mediaDevices?.getUserMedia) {
       const message = "This browser cannot record audio.";
@@ -104,12 +114,12 @@ export function useHoldRecorder(): HoldRecorder {
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
       });
-      streamRef.current = stream;
-      if (abortedRef.current) {
-        release();
-        setBoth("idle");
+      if (!isCurrent()) {
+        // Cancelled, superseded or unmounted while the prompt was open.
+        stream.getTracks().forEach((t) => t.stop());
         return { ok: false };
       }
+      streamRef.current = stream;
 
       // Level meter. Optional: a missing AudioContext just leaves it flat.
       const AudioCtx =
@@ -150,6 +160,7 @@ export function useHoldRecorder(): HoldRecorder {
       setBoth("recording");
       return { ok: true };
     } catch (e) {
+      if (!isCurrent()) return { ok: false };
       release();
       const message =
         e instanceof Error && e.name === "NotAllowedError"
@@ -164,7 +175,7 @@ export function useHoldRecorder(): HoldRecorder {
   }, [release, setBoth]);
 
   const cancel = useCallback(() => {
-    abortedRef.current = true;
+    requestRef.current++;
     release();
     setBoth("idle");
   }, [release, setBoth]);
