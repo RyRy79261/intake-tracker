@@ -63,7 +63,6 @@ function resultBlock(overrides: Record<string, unknown> = {}) {
       defaultVolumeMl: 250,
       beverageName: "Pour-over coffee",
       reasoning: "USDA FoodData Central",
-      waterContentPercent: 99,
       ...overrides,
     },
   };

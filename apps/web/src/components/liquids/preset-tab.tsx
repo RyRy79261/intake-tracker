@@ -30,10 +30,7 @@ import {
 } from "@intake/ui/alert-dialog";
 import type { LiquidPreset } from "@/lib/constants";
 import type { SubstanceLookupResponse } from "@/lib/substance-lookup-schema";
-import {
-  standardDrinksFromAbv,
-  waterContentPercentFromAbv,
-} from "@intake/core/alcohol";
+import { standardDrinksFromAbv } from "@intake/core/alcohol";
 import { computeTwoStageProgress } from "@intake/core/progress";
 
 type PresetTabKind = "coffee" | "alcohol";
@@ -64,12 +61,6 @@ interface DrinkForm {
    * figure until the next preset, lookup or reset. `null` = not typed.
    */
   sugarGInput: string | null;
-  /**
-   * Share of the volume that is water, from a preset or lookup. `null` =
-   * unknown (a hand-typed drink): derived from the ABV, see
-   * {@link resolveWaterContentPercent}.
-   */
-  waterContentPercent: number | null;
   beverageName: string;
   /** Whether the current values came from an AI lookup (enables save-as-preset). */
   aiLookupUsed: boolean;
@@ -83,7 +74,6 @@ const EMPTY_FORM: DrinkForm = {
   saltPer100ml: 0,
   sugarPer100ml: 0,
   sugarGInput: null,
-  waterContentPercent: null,
   beverageName: "",
   aiLookupUsed: false,
 };
@@ -109,7 +99,6 @@ function drinkFormReducer(state: DrinkForm, action: DrinkFormAction): DrinkForm 
         alcoholPer100ml: preset.alcoholPer100ml ?? 0,
         saltPer100ml: preset.saltPer100ml ?? 0,
         sugarPer100ml: preset.sugarPer100ml ?? 0,
-        waterContentPercent: preset.waterContentPercent,
         beverageName: preset.name,
       };
     }
@@ -125,7 +114,6 @@ function drinkFormReducer(state: DrinkForm, action: DrinkFormAction): DrinkForm 
         alcoholPer100ml: tab === "alcohol" ? substance : 0,
         saltPer100ml: result.sodiumPer100ml ?? 0,
         sugarPer100ml: result.sugarPer100ml ?? 0,
-        waterContentPercent: result.waterContentPercent ?? null,
         beverageName: result.beverageName,
         aiLookupUsed: true,
       };
@@ -141,26 +129,6 @@ function drinkFormReducer(state: DrinkForm, action: DrinkFormAction): DrinkForm 
     case "setName":
       return { ...state, beverageName: action.value };
   }
-}
-
-/**
- * The water share `logDrink` books for this drink, in (0, 100]. A preset or
- * lookup value wins; otherwise (or if it is out of range) the non-alcohol
- * share of the drink — a hand-typed 40% spirit is 60% water.
- */
-function resolveWaterContentPercent(
-  waterContentPercent: number | null,
-  abvPercent: number,
-): number {
-  if (
-    waterContentPercent !== null &&
-    Number.isFinite(waterContentPercent) &&
-    waterContentPercent > 0 &&
-    waterContentPercent <= 100
-  ) {
-    return waterContentPercent;
-  }
-  return waterContentPercentFromAbv(abvPercent);
 }
 
 /** Sugar in grams for the current drink, before rounding. */
@@ -181,7 +149,6 @@ export function PresetTab({ tab }: PresetTabProps) {
     alcoholPer100ml,
     saltPer100ml,
     sugarPer100ml,
-    waterContentPercent,
     beverageName,
     aiLookupUsed,
   } = form;
@@ -382,10 +349,6 @@ export function PresetTab({ tab }: PresetTabProps) {
     return {
       volumeMl,
       description,
-      waterContentPercent: resolveWaterContentPercent(
-        waterContentPercent,
-        alcoholPer100ml,
-      ),
       waterSource: presetTag,
       groupSource: presetTag,
       ...(caffeinePer100ml > 0 && {
@@ -459,10 +422,6 @@ export function PresetTab({ tab }: PresetTabProps) {
           name,
           tab,
           defaultVolumeMl: volumeMl,
-          waterContentPercent: resolveWaterContentPercent(
-            waterContentPercent,
-            alcoholPer100ml,
-          ),
           ...(caffeinePer100ml > 0 && { caffeinePer100ml }),
           ...(alcoholPer100ml > 0 && { alcoholPer100ml }),
           ...(saltPer100ml > 0 && { saltPer100ml }),

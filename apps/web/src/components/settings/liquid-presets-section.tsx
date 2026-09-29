@@ -38,7 +38,7 @@ function formatPresetSubstances(
     parts.push(`${preset.sugarPer100ml}g sugar/100ml`);
   }
   if (parts.length === 0) {
-    return `${preset.waterContentPercent}% water`;
+    return `${preset.defaultVolumeMl} ml`;
   }
   return parts.join(" + ");
 }
@@ -98,9 +98,6 @@ function PresetEditForm({
   const [sugarPer100ml, setSugarPer100ml] = useState(
     preset.sugarPer100ml ?? 0
   );
-  const [waterContentPercent, setWaterContentPercent] = useState(
-    preset.waterContentPercent ?? 100
-  );
 
   const handleSave = () => {
     if (!name.trim()) return;
@@ -108,7 +105,6 @@ function PresetEditForm({
       name: name.trim(),
       tab,
       defaultVolumeMl,
-      waterContentPercent,
       caffeinePer100ml: positiveOrUndefined(caffeinePer100ml),
       alcoholPer100ml: positiveOrUndefined(alcoholPer100ml),
       saltPer100ml: positiveOrUndefined(saltPer100ml),
@@ -156,30 +152,15 @@ function PresetEditForm({
           </SelectContent>
         </Select>
       </div>
-      <div className="grid grid-cols-2 gap-2">
-        <div className="space-y-1">
-          <Label className="text-xs">Volume (ml)</Label>
-          <Input
-            type="number"
-            value={defaultVolumeMl || ""}
-            onChange={(e) => setDefaultVolumeMl(Number(e.target.value) || 0)}
-            className="h-9"
-            min={0}
-          />
-        </div>
-        <div className="space-y-1">
-          <Label className="text-xs">Water %</Label>
-          <Input
-            type="number"
-            value={waterContentPercent || ""}
-            onChange={(e) =>
-              setWaterContentPercent(Number(e.target.value) || 0)
-            }
-            className="h-9"
-            min={0}
-            max={100}
-          />
-        </div>
+      <div className="space-y-1">
+        <Label className="text-xs">Volume (ml)</Label>
+        <Input
+          type="number"
+          value={defaultVolumeMl || ""}
+          onChange={(e) => setDefaultVolumeMl(Number(e.target.value) || 0)}
+          className="h-9"
+          min={0}
+        />
       </div>
       <div className="grid grid-cols-2 gap-2">
         <div className="space-y-1">

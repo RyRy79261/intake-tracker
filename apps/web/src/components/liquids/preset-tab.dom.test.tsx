@@ -84,15 +84,15 @@ describe("PresetTab", () => {
     await user.click(screen.getByRole("button", { name: COFFEE }));
     await user.click(screen.getByRole("button", { name: "Log Entry" }));
 
-    // Default Coffee preset: 250ml volume, 38mg/100ml caffeine, 99% water
-    // (250 × 0.99 = 247.5 → 248 ml of water).
+    // Default Coffee preset: 250ml volume, 38mg/100ml caffeine; the whole
+    // 250 ml counts as fluid.
     await waitFor(async () => {
       const water = await db.intakeRecords
         .where("type")
         .equals("water")
         .toArray();
       expect(water).toHaveLength(1);
-      expect(water[0]!.amount).toBe(248);
+      expect(water[0]!.amount).toBe(250);
     });
 
     const substances = await db.substanceRecords.toArray();
@@ -128,7 +128,7 @@ describe("PresetTab", () => {
     await waitFor(async () => {
       const water = await db.intakeRecords.where("type").equals("water").toArray();
       expect(water).toHaveLength(1);
-      expect(water[0]!.amount).toBe(248);
+      expect(water[0]!.amount).toBe(250);
     });
     const sugar = await db.intakeRecords.where("type").equals("sugar").toArray();
     expect(sugar).toHaveLength(1);
@@ -153,25 +153,25 @@ describe("PresetTab", () => {
     });
   });
 
-  // ai-routes-models#9: the preset's water content is applied to the water
-  // row; the alcohol dose still comes from the full drink volume.
-  it("logs a spirit preset's water content, not its full volume, as water", async () => {
+  // A drink counts as fluid at its full volume, as on a clinical intake/output
+  // chart; the alcohol dose comes from the same volume.
+  it("logs a spirit preset's full volume as fluid", async () => {
     const user = userEvent.setup();
     await renderWithFixtures(<PresetTab tab="alcohol" />);
 
-    // Default Spirit preset: 45 ml, 40% ABV, 60% water.
+    // Default Spirit preset: 45 ml, 40% ABV.
     await user.click(screen.getByRole("button", { name: "Spirit45ml" }));
     await user.click(screen.getByRole("button", { name: "Log Entry" }));
 
     await waitFor(async () => {
       const water = await db.intakeRecords.where("type").equals("water").toArray();
-      expect(water.map((r) => r.amount)).toEqual([27]);
+      expect(water.map((r) => r.amount)).toEqual([45]);
     });
     const [alcohol] = await db.substanceRecords.toArray();
     expect(alcohol!.volumeMl).toBe(45);
   });
 
-  it("derives a manual alcohol entry's water content from its ABV", async () => {
+  it("logs a manual alcohol entry's full volume as fluid", async () => {
     const user = userEvent.setup();
     await renderWithFixtures(<PresetTab tab="alcohol" />);
 
@@ -183,7 +183,7 @@ describe("PresetTab", () => {
 
     await waitFor(async () => {
       const water = await db.intakeRecords.where("type").equals("water").toArray();
-      expect(water.map((r) => r.amount)).toEqual([30]);
+      expect(water.map((r) => r.amount)).toEqual([50]);
     });
   });
 
@@ -262,7 +262,6 @@ describe("PresetTab", () => {
       name: "Salted Latte",
       tab: "coffee",
       defaultVolumeMl: 200,
-      waterContentPercent: 98,
       caffeinePer100ml: 30,
       saltPer100ml: 100,
       isDefault: false,
@@ -273,7 +272,6 @@ describe("PresetTab", () => {
       name: "Mocha",
       tab: "coffee",
       defaultVolumeMl: 100,
-      waterContentPercent: 95,
       caffeinePer100ml: 40,
       sugarPer100ml: 10,
       isDefault: false,
@@ -285,7 +283,6 @@ describe("PresetTab", () => {
       defaultVolumeMl: 330,
       beverageName: "Coca-Cola",
       reasoning: "label",
-      waterContentPercent: 90,
       sugarPer100ml: 10.6,
       sodiumPer100ml: 4,
     };

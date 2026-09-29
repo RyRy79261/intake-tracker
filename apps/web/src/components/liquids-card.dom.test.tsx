@@ -135,8 +135,9 @@ describe("LiquidsCard", () => {
     expect(live).toHaveLength(0);
   });
 
-  // ai-routes-models#9: a spirit's water row is smaller than the drink. The
-  // edit form used to send the water amount as the drink volume, so a
+  // ai-routes-models#9: a drink logged before full-volume booking (or one
+  // that could not be repaired) can have a water row smaller than the drink.
+  // The edit form used to send the water amount as the drink volume, so a
   // time-only edit cut the alcohol record to the water amount.
   it("keeps a spirit's drink volume and standard drinks through a time-only edit", async () => {
     const user = userEvent.setup();
@@ -144,10 +145,11 @@ describe("LiquidsCard", () => {
       volumeMl: 45,
       description: "Vodka",
       abvPercent: 40,
-      waterContentPercent: 60,
       waterSource: "preset:default-spirit",
     });
     if (!drink.success) throw new Error("logDrink failed");
+    // A legacy water row that booked only the non-alcohol share.
+    await db.intakeRecords.update(drink.data.waterIntakeId, { amount: 27 });
     const before = (await db.substanceRecords.get(drink.data.substanceIds[0]!))!;
 
     await renderWithFixtures(<LiquidsCard />);

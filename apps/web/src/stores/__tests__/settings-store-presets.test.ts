@@ -19,7 +19,6 @@ describe("liquidPresets CRUD", () => {
       name: "Cold Brew",
       tab: "coffee",
       caffeinePer100ml: 65,
-      waterContentPercent: 99,
       defaultVolumeMl: 350,
       isDefault: false,
       source: "manual",
@@ -53,7 +52,6 @@ describe("liquidPresets CRUD", () => {
     addLiquidPreset({
       name: "Cola",
       tab: "beverage",
-      waterContentPercent: 90,
       defaultVolumeMl: 330,
       sugarPer100ml: 10.6,
       potassiumPer100ml: 2,
@@ -90,7 +88,6 @@ describe("liquidPresets CRUD", () => {
       name: "Espresso",
       tab: "coffee",
       caffeinePer100ml: 200,
-      waterContentPercent: 98,
       defaultVolumeMl: 30,
       isDefault: false,
       source: "manual",

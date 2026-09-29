@@ -295,7 +295,7 @@ export async function undoDeleteSubstanceRecord(
  * Update a SubstanceRecord, keeping its group's fluid row consistent.
  *
  * `volumeMl` is the drink's volume, and the group's water IntakeRecord is
- * derived from it (volume x water content, see logDrink). Editing the volume
+ * derived from it (the full volume, see logDrink). Editing the volume
  * on the substance alone let the two halves of one drink disagree — the
  * substance said 500 ml while hydration still counted 330 — with nothing to
  * reconcile them. Same for `timestamp`: moving
@@ -318,11 +318,10 @@ export async function updateSubstanceRecord(
         const groupId = updates.groupId ?? existing?.groupId;
         if (!groupId) return;
 
-        // The water row is the drink's water share, not always its whole
-        // volume (a spirit logged at 60% water has a 27 ml row for 45 ml).
-        // So scale it by the change in volume: re-sending the same volume
-        // leaves it alone. With no stored volume to compare against, the
-        // drink is taken to be all water, as before water content existed.
+        // Scale the water row by the change in volume rather than copying
+        // the volume over: re-sending the same volume leaves it alone, and a
+        // row the user adjusted by hand keeps its proportion. With no stored
+        // volume to compare against, the water row takes the new volume.
         const oldVolume = existing?.volumeMl;
         const newVolume = updates.volumeMl;
         const volumeChanged = newVolume !== undefined && newVolume !== oldVolume;
