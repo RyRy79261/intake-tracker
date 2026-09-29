@@ -97,22 +97,25 @@ export function AiInsightsConsentToggle({ field, label, noun }: Props) {
 
   return (
     <>
-      <div className="flex items-center justify-between gap-3">
-        <div className="space-y-0.5">
-          <div className="flex items-center gap-1.5">
-            <Label htmlFor={inputId} className="text-sm">
+      <div className="flex min-h-11 items-center gap-2.5 py-1">
+        <div className="flex min-w-0 flex-1 flex-col">
+          <div className="flex items-center">
+            <Label
+              htmlFor={inputId}
+              className="text-[0.9375rem] font-normal leading-snug"
+            >
               {label}
             </Label>
             <button
               type="button"
               aria-label="About AI insights"
               onClick={() => setDialog("info")}
-              className="text-muted-foreground hover:text-foreground"
+              className="-my-2 flex h-8 w-8 shrink-0 items-center justify-center text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring"
             >
-              <Info className="w-3.5 h-3.5" />
+              <Info className="h-3.5 w-3.5" />
             </button>
           </div>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-[0.8125rem] text-muted-foreground">
             {enabled
               ? `Your ${noun} are included when generating AI insights.`
               : // Not "stay on this device": the profile backs up and syncs.
@@ -120,6 +123,12 @@ export function AiInsightsConsentToggle({ field, label, noun }: Props) {
           </p>
         </div>
         <Switch id={inputId} checked={enabled} onCheckedChange={handleToggle} />
+        <span
+          aria-hidden="true"
+          className="w-[2.2em] font-mono text-xs text-muted-foreground"
+        >
+          {enabled ? "On" : "Off"}
+        </span>
       </div>
 
       <Dialog

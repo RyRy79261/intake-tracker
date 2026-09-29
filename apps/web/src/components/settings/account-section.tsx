@@ -6,21 +6,29 @@ import { Button } from "@intake/ui/button";
 import { Loader2, LogIn, LogOut, Sparkles, Bell, CloudUpload, Trash2 } from "lucide-react";
 import { useAuth } from "@/components/auth-guard";
 import { handleSignOut } from "@/lib/sign-out";
+import { useSettingsStore } from "@/stores/settings-store";
 import { DeleteAccountDialog } from "@/components/settings/delete-account-dialog";
+import { kvClass } from "@/components/profile/profile-sec";
+
+/** Outlined Ward Console secondary button (the prototype's `.btn`). */
+const actBtn = "h-10 gap-1.5 border-muted-foreground px-3";
 
 /**
+ * Account state: signed-in status, cloud sync, Sign Out and (optionally)
+ * Delete Account. Used by Settings and the Profile window.
+ *
  * @param showDeleteAccount - When true, renders the destructive "Delete Account"
- *   action. Off by default so it only appears where we explicitly want it
- *   (Settings), not on the profile page.
+ *   action next to Sign Out. Off by default so a caller opts in explicitly.
  */
 export function AccountSection({ showDeleteAccount = false }: { showDeleteAccount?: boolean } = {}) {
   const { ready, authenticated, user } = useAuth();
   const router = useRouter();
+  const storageMode = useSettingsStore((s) => s.storageMode);
   const [deleteOpen, setDeleteOpen] = useState(false);
 
   if (!ready) {
     return (
-      <div className="flex items-center justify-center p-6 rounded-lg bg-background border">
+      <div className="flex items-center justify-center border border-line p-6">
         <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
       </div>
     );
@@ -29,30 +37,27 @@ export function AccountSection({ showDeleteAccount = false }: { showDeleteAccoun
   if (!authenticated) {
     return (
       <div className="space-y-3">
-        <div className="p-4 rounded-lg bg-background border">
-          <p className="text-sm font-medium mb-1">Not signed in</p>
-          <p className="text-xs text-muted-foreground mb-3">
+        <div>
+          <p className="text-[0.9375rem] font-medium">Not signed in</p>
+          <p className="text-[0.8125rem] text-muted-foreground">
             Sign in to unlock:
           </p>
-          <ul className="space-y-1.5 text-xs text-muted-foreground">
+          <ul className="mt-1.5 space-y-1 text-[0.8125rem] text-muted-foreground">
             <li className="flex items-center gap-2">
-              <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+              <Sparkles className="h-3.5 w-3.5 shrink-0 text-ai" />
               AI food & drink parsing
             </li>
             <li className="flex items-center gap-2">
-              <Bell className="w-3.5 h-3.5 text-blue-500" />
+              <Bell className="h-3.5 w-3.5 shrink-0 text-meds" />
               Dose reminder notifications
             </li>
             <li className="flex items-center gap-2">
-              <CloudUpload className="w-3.5 h-3.5 text-emerald-500" />
+              <CloudUpload className="h-3.5 w-3.5 shrink-0 text-water" />
               Cloud sync across devices
             </li>
           </ul>
         </div>
-        <Button
-          className="w-full gap-2"
-          onClick={() => router.push("/auth")}
-        >
+        <Button onClick={() => router.push("/auth")}>
           <LogIn className="w-4 h-4" />
           Sign In
         </Button>
@@ -63,39 +68,42 @@ export function AccountSection({ showDeleteAccount = false }: { showDeleteAccoun
   const email = user?.email ?? "Signed in";
 
   return (
-    <div className="space-y-3">
-      <div className="p-3 rounded-lg bg-background border">
-        <p className="text-sm font-medium">{email}</p>
-        <p className="text-xs text-muted-foreground">
-          Signed in via Neon Auth
-        </p>
+    <div>
+      <dl className={kvClass}>
+        <dt>Status</dt>
+        <dd className="break-words">Signed in as {email}</dd>
+        <dt>Cloud sync</dt>
+        <dd className="font-mono">
+          {storageMode === "cloud-sync" ? "On" : "Off (this device)"}
+        </dd>
+      </dl>
+      <p className="mt-1 text-[0.8125rem] text-muted-foreground">
+        Signed in via Neon Auth
+      </p>
+
+      <div className="mt-2.5 flex flex-wrap gap-2">
+        <Button variant="outline" className={actBtn} onClick={handleSignOut}>
+          <LogOut className="w-4 h-4" />
+          Sign Out
+        </Button>
+        {showDeleteAccount && (
+          <Button
+            variant="outline"
+            className={actBtn}
+            onClick={() => setDeleteOpen(true)}
+          >
+            <Trash2 className="w-4 h-4" />
+            Delete Account
+          </Button>
+        )}
       </div>
-      <Button
-        variant="outline"
-        className="w-full justify-start gap-2 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30"
-        onClick={handleSignOut}
-      >
-        <LogOut className="w-4 h-4" />
-        Sign Out
-      </Button>
 
       {showDeleteAccount && (
         <>
-          <div className="pt-2 mt-1 border-t">
-            <Button
-              variant="ghost"
-              className="w-full justify-start gap-2 text-muted-foreground hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30"
-              onClick={() => setDeleteOpen(true)}
-            >
-              <Trash2 className="w-4 h-4" />
-              Delete Account
-            </Button>
-            <p className="px-3 pt-1 text-xs text-muted-foreground">
-              Erases all your data from our servers and removes your login. The copy
-              on this device is kept.
-            </p>
-          </div>
-
+          <p className="mt-2 text-[0.8125rem] text-muted-foreground">
+            Delete Account erases all your data from our servers and removes
+            your login. The copy on this device is kept.
+          </p>
           <DeleteAccountDialog open={deleteOpen} onOpenChange={setDeleteOpen} />
         </>
       )}

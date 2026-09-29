@@ -1,8 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { HeartPulse, Plus, X } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@intake/ui/card";
+import { Plus, X } from "lucide-react";
 import { Button } from "@intake/ui/button";
 import { Input } from "@intake/ui/input";
 import { useToast } from "@intake/ui/use-toast";
@@ -12,16 +11,26 @@ import {
   MAX_CONDITIONS,
   MAX_CONDITION_LENGTH,
 } from "@/hooks/use-profile-queries";
+import { usePrescriptions } from "@/hooks/use-medication-queries";
 import { AiInsightsConsentToggle } from "@/components/profile/ai-insights-consent-toggle";
+import { ProfileSec, kvClass } from "@/components/profile/profile-sec";
 
 /**
- * Profile section for user-reported medical conditions. The conditions back up
+ * Profile Health and AI sections: user-reported medical conditions, the active
+ * prescriptions (read-only), and the AI-sharing opt-ins. The conditions back up
  * and cloud-sync with the rest of the data (so the copy must not say they stay
  * on the device). They reach the AI only when the user opts in via the
  * consent toggle.
  */
-export function MedicalContextSection() {
+export function MedicalContextSection({
+  signedIn = true,
+}: {
+  /** Signed out: AI features are unavailable, so the AI block says so. */
+  signedIn?: boolean;
+} = {}) {
   const profile = useUserProfile();
+  const prescriptions = usePrescriptions();
+  const activeMeds = prescriptions.filter((rx) => rx.isActive);
   const { mutate: save } = useSaveProfile();
   const { toast } = useToast();
   const [draft, setDraft] = useState("");
@@ -52,97 +61,111 @@ export function MedicalContextSection() {
   };
 
   return (
-    <section className="space-y-2">
-      <h2 className="text-sm font-semibold text-muted-foreground">
-        Medical context
-      </h2>
-
-      <Card className="bg-card border-line">
-        <CardHeader className="pt-3 pb-1 px-3">
-          <CardTitle className="text-sm font-medium flex items-center gap-1.5">
-            <HeartPulse className="w-4 h-4 text-rose-500" />
-            Conditions
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="px-3 pb-3 space-y-3">
-          <p className="text-xs text-muted-foreground">
-            Conditions you add back up and sync with the rest of your data.
-            They are not sent to the AI unless you turn on sharing below;
-            then they give AI insights clinical context — for example, why
-            your sodium and fluid limits matter, and which trends are worth
-            watching.
-          </p>
-
-          {conditions.length > 0 ? (
-            <div className="flex flex-wrap gap-1.5">
-              {conditions.map((c) => (
-                <span
-                  key={c}
-                  className="inline-flex items-center gap-1 rounded-full bg-chrome px-2.5 py-1 text-xs"
-                >
-                  {c}
-                  <button
-                    type="button"
-                    aria-label={`Remove ${c}`}
-                    onClick={() => removeCondition(c)}
-                    className="text-muted-foreground hover:text-foreground"
+    <>
+      <section aria-labelledby="profile-health">
+        <ProfileSec id="profile-health">Health</ProfileSec>
+        <dl className={kvClass}>
+          <dt>Conditions</dt>
+          <dd>
+            {conditions.length > 0 ? (
+              <ul className="flex flex-wrap gap-1.5">
+                {conditions.map((c) => (
+                  <li
+                    key={c}
+                    className="inline-flex min-h-9 max-w-full items-center border border-line pl-2.5 text-sm"
                   >
-                    <X className="w-3 h-3" />
-                  </button>
+                    <span className="min-w-0 break-words">{c}</span>
+                    <button
+                      type="button"
+                      aria-label={`Remove ${c}`}
+                      onClick={() => removeCondition(c)}
+                      className="flex h-9 w-8 shrink-0 items-center justify-center text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <span className="text-muted-foreground">
+                No conditions added yet.
+              </span>
+            )}
+          </dd>
+          <dt>Medications</dt>
+          <dd>
+            {activeMeds.length > 0 ? (
+              activeMeds.map((rx) => (
+                <span key={rx.id} className="block">
+                  {rx.genericName}
                 </span>
-              ))}
-            </div>
-          ) : (
-            <p className="text-xs text-muted-foreground italic">
-              No conditions added yet.
-            </p>
-          )}
+              ))
+            ) : (
+              <span className="text-muted-foreground">None active</span>
+            )}
+          </dd>
+        </dl>
 
-          <div className="flex gap-2">
-            <Input
-              value={draft}
-              maxLength={MAX_CONDITION_LENGTH}
-              placeholder="e.g. HFrEF, idiopathic dilated cardiomyopathy"
-              onChange={(e) => setDraft(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  addCondition();
-                }
-              }}
-            />
-            <Button
-              type="button"
-              size="icon"
-              variant="outline"
-              className="shrink-0"
-              aria-label="Add condition"
-              onClick={addCondition}
-              disabled={!draft.trim()}
-            >
-              <Plus className="w-4 h-4" />
-            </Button>
-          </div>
+        <div className="mt-2.5 flex gap-2">
+          <Input
+            value={draft}
+            maxLength={MAX_CONDITION_LENGTH}
+            aria-label="Add a condition"
+            placeholder="e.g. HFrEF, idiopathic dilated cardiomyopathy"
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                addCondition();
+              }
+            }}
+          />
+          <Button
+            type="button"
+            size="icon"
+            variant="outline"
+            className="shrink-0"
+            aria-label="Add condition"
+            onClick={addCondition}
+            disabled={!draft.trim()}
+          >
+            <Plus className="w-4 h-4" />
+          </Button>
+        </div>
+        <p className="mt-2 text-[0.8125rem] text-muted-foreground">
+          Conditions you add back up and sync with the rest of your data.
+          They are not sent to the AI unless you turn on sharing below;
+          then they give AI insights clinical context — for example, why
+          your sodium and fluid limits matter, and which trends are worth
+          watching.
+        </p>
+      </section>
 
-          <div className="pt-3 border-t space-y-4">
-            <AiInsightsConsentToggle
-              field="shareConditionsWithAI"
-              label="Share conditions with AI insights"
-              noun="conditions"
-            />
-            <AiInsightsConsentToggle
-              field="shareMedicationsWithAI"
-              label="Share medications with AI insights"
-              noun="medications"
-            />
-            <p className="text-xs text-muted-foreground">
-              Sharing medications sends your active prescriptions — name, dose,
-              frequency, and how long the current titration or maintenance
-              phase has run. Manage medications on the Medications page.
-            </p>
-          </div>
-        </CardContent>
-      </Card>
-    </section>
+      <section aria-labelledby="profile-ai">
+        <ProfileSec id="profile-ai" className="[&>span]:text-ai">
+          AI
+        </ProfileSec>
+        {!signedIn && (
+          <p className="py-1.5 text-[0.8125rem] text-muted-foreground">
+            Sign in to use AI features. These choices apply once you do.
+          </p>
+        )}
+        <AiInsightsConsentToggle
+          field="shareConditionsWithAI"
+          label="Share conditions with AI insights"
+          noun="conditions"
+        />
+        <AiInsightsConsentToggle
+          field="shareMedicationsWithAI"
+          label="Share medications with AI insights"
+          noun="medications"
+        />
+        <p className="mt-1 text-[0.8125rem] text-muted-foreground">
+          Sharing medications sends your active prescriptions — name, dose,
+          frequency, and how long the current titration or maintenance
+          phase has run. Manage medications on the Medications page.
+        </p>
+      </section>
+    </>
   );
 }
