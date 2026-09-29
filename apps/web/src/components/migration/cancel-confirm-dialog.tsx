@@ -10,6 +10,17 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@intake/ui/alert-dialog";
+import { domainColor } from "@/lib/domain-colors";
+import { cn } from "@/lib/utils";
+import {
+  dangerClass,
+  descClass,
+  dlgClass,
+  footClass,
+  headClass,
+  stripe,
+  titleClass,
+} from "@/components/migration/dialog-kit";
 
 interface CancelConfirmDialogProps {
   open: boolean;
@@ -24,20 +35,21 @@ export function CancelConfirmDialog({
 }: CancelConfirmDialogProps) {
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>Cancel migration?</AlertDialogTitle>
-          <AlertDialogDescription>
+      <AlertDialogContent
+        data-testid="migration-cancel-confirm"
+        style={stripe(domainColor("bp"))}
+        className={dlgClass}
+      >
+        <AlertDialogHeader className={cn(headClass, "pr-4")}>
+          <AlertDialogTitle className={titleClass}>Cancel migration?</AlertDialogTitle>
+          <AlertDialogDescription className={descClass}>
             This will delete all uploaded data from the server and return to
             Local mode.
           </AlertDialogDescription>
         </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel>Go Back</AlertDialogCancel>
-          <AlertDialogAction
-            onClick={onConfirm}
-            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-          >
+        <AlertDialogFooter className={footClass}>
+          <AlertDialogCancel className="border-muted-foreground">Go Back</AlertDialogCancel>
+          <AlertDialogAction onClick={onConfirm} className={dangerClass}>
             Cancel Migration
           </AlertDialogAction>
         </AlertDialogFooter>

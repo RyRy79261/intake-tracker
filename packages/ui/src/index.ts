@@ -27,6 +27,7 @@ export * from "./components/scroll-area";
 export * from "./components/select";
 export * from "./components/sheet";
 export * from "./components/skeleton";
+export * from "./components/spinner";
 export * from "./components/switch";
 export * from "./components/tabs";
 export * from "./components/textarea";

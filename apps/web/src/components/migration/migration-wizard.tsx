@@ -1,7 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Dialog, DialogContent, DialogTitle } from "@intake/ui/dialog";
+import { AlertTriangle } from "lucide-react";
+import { Button } from "@intake/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@intake/ui/dialog";
+import { domainColor } from "@/lib/domain-colors";
+import { cn } from "@/lib/utils";
 import { useMigrationStore } from "@/stores/migration-store";
 // eslint-disable-next-line no-restricted-imports
 import {
@@ -14,6 +23,17 @@ import { BackupGateStep } from "@/components/migration/backup-gate-step";
 import { UploadProgressStep } from "@/components/migration/upload-progress-step";
 import { CompletionSummaryStep } from "@/components/migration/completion-summary-step";
 import { CancelConfirmDialog } from "@/components/migration/cancel-confirm-dialog";
+import {
+  bodyClass,
+  dlgClass,
+  footClass,
+  headClass,
+  migClass,
+  migHeadingClass,
+  migTextClass,
+  stripe,
+  titleClass,
+} from "@/components/migration/dialog-kit";
 
 interface MigrationWizardProps {
   open: boolean;
@@ -62,6 +82,19 @@ export function MigrationWizard({
   }, [onOpenChange]);
 
   const isBlocking = phase === "uploading";
+  const color =
+    phase === "complete"
+      ? domainColor("weight")
+      : phase === "error"
+        ? domainColor("bp")
+        : phase === "cancelled"
+          ? "hsl(var(--foreground))"
+          : domainColor("water");
+
+  const close = () => {
+    reset();
+    onOpenChange(false);
+  };
 
   return (
     <>
@@ -73,7 +106,11 @@ export function MigrationWizard({
         }}
       >
         <DialogContent
-          className="max-w-lg w-full min-h-[60vh] flex flex-col [&>button]:hidden"
+          data-testid="migration-wizard"
+          style={stripe(color)}
+          // The close button is hidden while uploading: the upload can only
+          // be stopped through Cancel, which asks first.
+          className={cn(dlgClass, isBlocking && "[&>button]:hidden")}
           onPointerDownOutside={(e) => {
             if (isBlocking) e.preventDefault();
           }}
@@ -82,7 +119,10 @@ export function MigrationWizard({
           }}
           aria-describedby={undefined}
         >
-          <DialogTitle className="sr-only">Cloud sync migration</DialogTitle>
+          <DialogHeader className={headClass}>
+            <DialogTitle className={titleClass}>Cloud sync migration</DialogTitle>
+          </DialogHeader>
+
           {phase === "backup" && (
             <BackupGateStep onProceed={handleProceedFromBackup} />
           )}
@@ -99,41 +139,38 @@ export function MigrationWizard({
           )}
 
           {phase === "error" && (
-            <div className="flex flex-col items-center gap-4 p-6 text-center">
-              <h2 className="text-xl font-semibold text-destructive">
-                Migration Error
-              </h2>
-              <p className="text-sm text-muted-foreground">{error}</p>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => {
-                    reset();
-                    onOpenChange(false);
-                  }}
-                  className="text-sm underline text-muted-foreground"
-                >
-                  Close
-                </button>
+            <>
+              <div className={bodyClass}>
+                <div className={migClass} role="alert">
+                  <AlertTriangle aria-hidden="true" className="h-8 w-8 text-bp" />
+                  <h3 className={cn(migHeadingClass, "text-bp")}>Migration Error</h3>
+                  <p className={migTextClass}>{error}</p>
+                </div>
               </div>
-            </div>
+              <div className={footClass}>
+                <Button variant="outline" className="border-muted-foreground" onClick={close}>
+                  Close
+                </Button>
+              </div>
+            </>
           )}
 
           {phase === "cancelled" && (
-            <div className="flex flex-col items-center gap-4 p-6 text-center">
-              <h2 className="text-xl font-semibold">Migration Cancelled</h2>
-              <p className="text-sm text-muted-foreground">
-                All uploaded data has been removed from the server.
-              </p>
-              <button
-                onClick={() => {
-                  reset();
-                  onOpenChange(false);
-                }}
-                className="text-sm underline text-muted-foreground"
-              >
-                Close
-              </button>
-            </div>
+            <>
+              <div className={bodyClass}>
+                <div className={migClass}>
+                  <h3 className={migHeadingClass}>Migration Cancelled</h3>
+                  <p className={migTextClass}>
+                    All uploaded data has been removed from the server.
+                  </p>
+                </div>
+              </div>
+              <div className={footClass}>
+                <Button variant="outline" className="border-muted-foreground" onClick={close}>
+                  Close
+                </Button>
+              </div>
+            </>
           )}
         </DialogContent>
       </Dialog>

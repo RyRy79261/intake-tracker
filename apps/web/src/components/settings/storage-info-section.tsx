@@ -10,11 +10,11 @@ import {
   Upload,
   LogIn,
   CheckCircle2,
-  Loader2,
   Download,
 } from "lucide-react";
 import { Badge } from "@intake/ui/badge";
 import { Button } from "@intake/ui/button";
+import { Spinner } from "@intake/ui/spinner";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -45,6 +45,15 @@ import {
   warnboxClass,
 } from "@/components/settings/settings-kit";
 import { domainColor } from "@/lib/domain-colors";
+import { cn } from "@/lib/utils";
+import {
+  descClass,
+  dlgClass,
+  footClass,
+  headClass,
+  stripe,
+  titleClass,
+} from "@/components/migration/dialog-kit";
 
 function tableLabel(name: string): string {
   return name
@@ -137,7 +146,7 @@ export function StorageInfoSection() {
             </>
           ) : isOnline ? (
             <>
-              <Loader2 className="h-4 w-4 animate-spin text-sodium" aria-hidden="true" />
+              <Spinner className="size-4 text-sodium" />
               <span className="text-muted-foreground">Downloading your full data to this device…</span>
             </>
           ) : (
@@ -250,18 +259,24 @@ export function StorageInfoSection() {
           if (!switching) setSwitchOpen(next);
         }}
       >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Switch to local-only?</AlertDialogTitle>
-            <AlertDialogDescription>
+        <AlertDialogContent
+          data-testid="switch-to-local-dialog"
+          style={stripe(domainColor("meds"))}
+          className={dlgClass}
+        >
+          <AlertDialogHeader className={cn(headClass, "pr-4")}>
+            <AlertDialogTitle className={titleClass}>Switch to local-only?</AlertDialogTitle>
+            <AlertDialogDescription className={descClass}>
               Your full dataset will be downloaded to this device, then the copy
               stored in the cloud will be permanently deleted. Your account and
               login stay active, and the data on this device is kept. You can
               re-enable cloud sync later.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={switching}>Cancel</AlertDialogCancel>
+          <AlertDialogFooter className={footClass}>
+            <AlertDialogCancel className="border-muted-foreground" disabled={switching}>
+              Cancel
+            </AlertDialogCancel>
             <AlertDialogAction
               onClick={(e) => {
                 e.preventDefault();
@@ -269,9 +284,7 @@ export function StorageInfoSection() {
               }}
               disabled={!canSwitchToLocal}
             >
-              {switching ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : null}
+              {switching ? <Spinner /> : null}
               {switching ? "Switching…" : "Download & switch"}
             </AlertDialogAction>
           </AlertDialogFooter>
