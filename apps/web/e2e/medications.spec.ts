@@ -172,10 +172,10 @@ test.describe('Medications', () => {
     await expect(takenAt).toBeVisible({ timeout: 10000 });
 
     // === Per D-02: Verify inventory decremented ===
-    // Navigate to the Medications tab (labeled "Meds" in the med tab bar, not the global nav)
+    // Navigate to the Medications tab (labeled "Meds" in the med tab bar)
     // compound-card.tsx displays "{currentStock} pills" — should now be "29 pills" (was 30)
-    // Use nth(1) since first "Meds" button is the global nav, second is the med tab bar
-    const medsTab = page.locator('button', { hasText: 'Meds' }).nth(1);
+    // Scope to the Medications window: /medications opens it over Home.
+    const medsTab = page.getByTestId('window').locator('button', { hasText: 'Meds' }).first();
     await medsTab.click();
 
     // Verify the medication appears in the compound list
@@ -240,7 +240,7 @@ test.describe('Medications', () => {
     await expect(page.getByRole('dialog')).toBeHidden({ timeout: 5000 });
 
     // === The as-needed med shows "Log dose now" on the Rx tab ===
-    await page.locator('button', { hasText: 'Rx' }).click();
+    await page.getByTestId('window').locator('button', { hasText: 'Rx' }).click();
     await expect(page.locator('text=Furosemide').first()).toBeVisible({ timeout: 5000 });
 
     const logNow = page.getByRole('button', {
@@ -274,16 +274,20 @@ test.describe('Medications', () => {
     // EmptySchedule shows "No medications scheduled for today" and an "Add a prescription" button
     await expect(page.locator('text=Add a prescription')).toBeVisible({ timeout: 10000 });
 
+    // /medications opens the Medications window over Home; its MedTabBar is
+    // the one to drive.
+    const medsWindow = page.getByTestId('window');
+
     // Navigate to the Meds tab (labeled "Meds" in MedTabBar)
-    await page.locator('button', { hasText: 'Meds' }).nth(1).click();
+    await medsWindow.locator('button', { hasText: 'Meds' }).first().click();
     // Meds tab should be visible (CompoundList renders)
 
     // Navigate to the Rx tab (labeled "Rx" in MedTabBar, shows PrescriptionsView)
-    await page.locator('button', { hasText: 'Rx' }).click();
+    await medsWindow.locator('button', { hasText: 'Rx' }).click();
 
     // Navigate back to Schedule tab
-    await page.locator('button', { hasText: 'Schedule' }).click();
+    await medsWindow.locator('button', { hasText: 'Schedule' }).click();
     // Verify we're back at the schedule view with empty state
-    await expect(page.locator('text=Add a prescription')).toBeVisible();
+    await expect(medsWindow.locator('text=Add a prescription')).toBeVisible();
   });
 });

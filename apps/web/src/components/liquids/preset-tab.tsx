@@ -4,8 +4,8 @@ import { useState, useMemo, useRef, useCallback, useReducer } from "react";
 import { Button } from "@intake/ui/button";
 import { Input } from "@intake/ui/input";
 import { Label } from "@intake/ui/label";
-import { Progress } from "@intake/ui/progress";
-import { Sparkles, Loader2 } from "lucide-react";
+import { SegmentBar } from "@/components/home/module-card";
+import { Sparkles, Loader2, Check } from "lucide-react";
 import { apiFetch } from "@/lib/api-fetch";
 import { readAiErrorMessage } from "@/lib/ai-error-message";
 import { cn } from "@/lib/utils";
@@ -34,7 +34,6 @@ import {
   standardDrinksFromAbv,
   waterContentPercentFromAbv,
 } from "@intake/core/alcohol";
-import { computeTwoStageProgress } from "@intake/core/progress";
 
 type PresetTabKind = "coffee" | "alcohol";
 
@@ -209,11 +208,6 @@ export function PresetTab({ tab }: PresetTabProps) {
   const waterLimit = settings.waterLimit;
   const waterExtendedBuffer = settings.waterExtendedBuffer;
   const { dailyTotal: waterDailyTotal } = waterIntake;
-  const waterProgress = computeTwoStageProgress(
-    waterDailyTotal,
-    waterLimit,
-    waterExtendedBuffer
-  );
 
   // Filter presets by tab prop
   const presets = useMemo(
@@ -497,54 +491,40 @@ export function PresetTab({ tab }: PresetTabProps) {
     tab === "coffee" ? "per 100ml (mg caffeine)" : "% ABV";
 
   return (
-    <>
-      {/* Water Progress Bar */}
-      <div className="mb-4">
-        <Progress
-          value={waterProgress.isOverExtended ? 100 : waterProgress.primaryPct}
-          extendedValue={waterProgress.isOverExtended ? 0 : waterProgress.extendedPct}
-          targetMarkerPct={waterProgress.isOverExtended ? 0 : waterProgress.targetPct}
-          className="h-3"
-          indicatorClassName={
-            waterProgress.isOverExtended ? theme.progressOverLimit : theme.progressGradient
-          }
-          extendedIndicatorClassName={CARD_THEMES.water.progressExtended}
-          aria-label="Water intake today, as a percentage of the daily limit"
-        />
-      </div>
+    <div className="flex flex-col gap-2.5">
+      <SegmentBar
+        value={waterDailyTotal}
+        limit={waterLimit}
+        buffer={waterExtendedBuffer}
+        domain="water"
+        aria-label="Water intake today, as a percentage of the daily limit"
+      />
 
       {/* 1. Preset Grid */}
       {presets.length === 0 ? (
-        <p className="text-sm text-muted-foreground mb-3">
+        <p className="text-sm text-muted-foreground">
           No {tab} presets yet.{" "}
           {showAi
             ? "Use AI lookup or enter values manually to create one."
             : "Enter values manually to create one."}
         </p>
       ) : (
-        <div className="grid grid-cols-2 gap-2 mb-3">
+        <div className="wc-pgrid">
           {visiblePresets.map((preset) => (
-            <Button
+            <button
               key={preset.id}
-              variant="outline"
-              size="sm"
+              type="button"
+              aria-pressed={selectedPresetId === preset.id}
               onClick={() => handlePresetClick(preset.id)}
               onPointerDown={() => handlePointerDown(preset.id)}
               onPointerUp={handlePointerUpOrCancel}
               onPointerCancel={handlePointerUpOrCancel}
               onPointerLeave={handlePointerUpOrCancel}
-              className={cn(
-                "min-h-[40px] w-full touch-manipulation",
-                selectedPresetId === preset.id && theme.activeToggle
-              )}
+              className="touch-manipulation"
             >
-              <span className="flex items-center justify-between w-full">
-                <span className="text-sm font-semibold">{preset.name}</span>
-                <span className="text-xs text-muted-foreground">
-                  {preset.defaultVolumeMl}ml
-                </span>
-              </span>
-            </Button>
+              <b>{preset.name}</b>
+              <span>{preset.defaultVolumeMl}ml</span>
+            </button>
           ))}
           {presets.length > 8 && !showAllPresets && (
             <Button
@@ -561,14 +541,14 @@ export function PresetTab({ tab }: PresetTabProps) {
 
       {/* 2. AI Text Input — only when signed in */}
       {showAi && (
-        <div className="relative mb-3">
+        <div className="relative">
           <Input
             value={searchText}
             onChange={(e) => setSearchText(e.target.value)}
             placeholder={tab === "coffee" ? "Search beverage..." : "Search drink..."}
             aria-label="Search beverages for AI lookup"
             disabled={isLookingUp}
-            className="h-10 pr-10"
+            className="pr-10"
             onKeyDown={(e) => {
               if (e.key === "Enter") {
                 e.preventDefault();
@@ -600,11 +580,10 @@ export function PresetTab({ tab }: PresetTabProps) {
         onChange={(e) => dispatch({ type: "setName", value: e.target.value })}
         placeholder={tab === "coffee" ? "e.g. Espresso, Latte" : "e.g. Beer, Whisky"}
         aria-label={`${tab} name`}
-        className="h-10 mb-3"
       />
 
       {/* 3. Volume and Substance Fields */}
-      <div className="grid grid-cols-2 gap-3 mb-2">
+      <div className="grid grid-cols-2 gap-2">
         <div>
           <Label htmlFor={`${tab}-volume`} className="text-xs text-muted-foreground">
             Volume (ml)
@@ -616,7 +595,7 @@ export function PresetTab({ tab }: PresetTabProps) {
             onChange={(e) =>
               dispatch({ type: "setVolume", volumeMl: Number(e.target.value) || 0 })
             }
-            className="h-10"
+            className="num"
             min={0}
           />
         </div>
@@ -638,7 +617,7 @@ export function PresetTab({ tab }: PresetTabProps) {
                 value: Number(e.target.value) || 0,
               })
             }
-            className="h-10"
+            className="num"
             min={0}
             step={tab === "alcohol" ? "0.5" : "1"}
           />
@@ -647,7 +626,7 @@ export function PresetTab({ tab }: PresetTabProps) {
 
       {/* Optional sugar content — only while the sugar tracker is on */}
       {sugarEnabled && (
-        <div className="mb-3 space-y-1">
+        <div className="space-y-1">
           <Label
             htmlFor={`${tab}-sugar`}
             className="text-xs text-muted-foreground"
@@ -662,13 +641,13 @@ export function PresetTab({ tab }: PresetTabProps) {
             placeholder="g"
             value={sugarFieldValue}
             onChange={(e) => dispatch({ type: "setSugar", value: e.target.value })}
-            className="h-10"
+            className="num"
           />
         </div>
       )}
 
       {/* 4. Calculated Amount Display */}
-      <div className="mb-4">
+      <div>
         {calculatedDisplay ? (
           <p className={cn("text-sm font-semibold", theme.iconColor)}>
             {calculatedDisplay}
@@ -686,8 +665,9 @@ export function PresetTab({ tab }: PresetTabProps) {
           variant="default"
           onClick={handleLog}
           disabled={isSubmitting || volumeMl <= 0 || !hasSubstance}
-          className={cn("h-12 w-full", theme.buttonBg)}
+          className="w-full"
         >
+          <Check className="w-5 h-5" />
           {isSubmitting ? "Logging..." : "Log Entry"}
         </Button>
         {volumeMl > 0 && !hasSubstance && (
@@ -710,7 +690,7 @@ export function PresetTab({ tab }: PresetTabProps) {
                 !hasSubstance ||
                 !aiLookupUsed
               }
-              className={cn("w-full text-xs text-muted-foreground border", theme.outlineBorder)}
+              className="w-full"
             >
               {isSubmitting ? "Saving..." : "Save as preset & log"}
             </Button>
@@ -745,6 +725,6 @@ export function PresetTab({ tab }: PresetTabProps) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </>
+    </div>
   );
 }

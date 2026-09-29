@@ -18,46 +18,11 @@ import { Progress, progressStatusTextClass } from "@intake/ui/progress";
 import { computeTwoStageProgress, getProgressStatus } from "@intake/core/progress";
 import { Droplets, Sparkles, Coffee, Wine, Candy, Banana } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { toLocalDateKey, weekDayOrder, weekDayPosition } from "@/lib/date-utils";
+import { weekDayOrder } from "@/lib/date-utils";
+import { bucketByLogicalDay, getLogicalWeek } from "@/lib/week-utils";
 
 const DAY_LETTERS = ["S", "M", "T", "W", "T", "F", "S"] as const;
 const DAY_ABBREVIATIONS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
-
-/** The calendar date a timestamp's logical day (starting at dayStartHour) belongs to. */
-function logicalDate(timestamp: number, dayStartHour: number): Date {
-  const d = new Date(timestamp);
-  if (d.getHours() < dayStartHour) d.setDate(d.getDate() - 1);
-  return d;
-}
-
-/**
- * The logical week containing `now`, starting on `weekStartsOn` (0-6, JS
- * getDay): its seven day keys, the [start, end) timestamps to query, and
- * today's column. Days are calendar dates shifted by dayStartHour, and the end
- * is the next logical day start rather than start + 7 × 24h, so 23h/25h DST
- * days don't drop or borrow an hour.
- */
-export function getLogicalWeek(now: Date, dayStartHour: number, weekStartsOn: number) {
-  const today = logicalDate(now.getTime(), dayStartHour);
-  const todayIndex = weekDayPosition(today.getDay(), weekStartsOn);
-
-  const first = new Date(today);
-  first.setDate(today.getDate() - todayIndex);
-  first.setHours(dayStartHour, 0, 0, 0);
-
-  const dayKeys: string[] = [];
-  for (let i = 0; i < 7; i++) {
-    const d = new Date(first);
-    d.setDate(first.getDate() + i);
-    dayKeys.push(toLocalDateKey(d));
-  }
-
-  const next = new Date(first);
-  next.setDate(first.getDate() + 7);
-  next.setHours(dayStartHour, 0, 0, 0);
-
-  return { start: first.getTime(), end: next.getTime(), dayKeys, todayIndex };
-}
 
 function formatValue(value: number): string {
   // Summed totals can carry float noise (0.1 + 0.2); show at most one decimal.
@@ -73,18 +38,6 @@ function dayHeaders(weekStartsOn: number): string[] {
 function weekLabel(weekStartsOn: number): string {
   const order = weekDayOrder(weekStartsOn);
   return `${DAY_ABBREVIATIONS[order[0]!]}-${DAY_ABBREVIATIONS[order[6]!]}`;
-}
-
-/** Sum records into the week's columns by the logical day each belongs to. */
-export function bucketByLogicalDay<T extends { timestamp: number }>(
-  records: T[], dayKeys: string[], dayStartHour: number, accessor: (r: T) => number
-): number[] {
-  const buckets = [0, 0, 0, 0, 0, 0, 0];
-  for (const r of records) {
-    const i = dayKeys.indexOf(toLocalDateKey(logicalDate(r.timestamp, dayStartHour)));
-    if (i >= 0) buckets[i] = (buckets[i] ?? 0) + accessor(r);
-  }
-  return buckets;
 }
 
 export function TextMetrics() {

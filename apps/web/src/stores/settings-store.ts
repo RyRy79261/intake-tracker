@@ -112,8 +112,9 @@ export interface Settings {
   shakeRequiredJolts: number; // jolts within the detection window required to fire
 
   // Ward Console shell (sys-bar + bottom bar) instead of the legacy header,
-  // swipe nav and floating bars. Staged rollout: device-only, off by default,
-  // toggled from Settings > Debug. Never synced.
+  // swipe nav and floating bars. Staged rollout: device-only, on by default
+  // (a stored value wins, so the Settings > Debug switch can turn it off).
+  // Never synced.
   wardShell: boolean;
 }
 
@@ -212,7 +213,7 @@ const defaultSettings: Settings = {
   reminderFollowUpInterval: 10,
   homeTimezone: null,
   homeTimezoneConfirmedAt: null,
-  wardShell: false,
+  wardShell: true,
 };
 
 /**

@@ -12,20 +12,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@intake/ui/select";
-import { Loader2, ChevronDown, ChevronUp } from "lucide-react";
+import { Loader2, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CARD_THEMES } from "@/lib/card-themes";
-import { CardShell } from "@/components/card-shell";
+import { ModuleCard, WhenLabel, useLogicalTodayRange } from "@/components/home/module-card";
 import { RecentEntriesList, InlineEditFormShell } from "@/components/recent-entries-list";
 import { useDeleteWithToast } from "@/hooks/use-delete-with-toast";
 import { useEditRecord } from "@/hooks/use-edit-record";
 import { useToast } from "@intake/ui/use-toast";
 import { type DefecationRecord } from "@/lib/db";
-import { useDefecationRecords, useAddDefecation, useDeleteDefecation, useUpdateDefecation } from "@/hooks/use-defecation-queries";
+import { useDefecationRecords, useDefecationRecordsByDateRange, useAddDefecation, useDeleteDefecation, useUpdateDefecation } from "@/hooks/use-defecation-queries";
 import {
   getCurrentDateTimeLocal,
   dateTimeLocalToTimestamp,
-  formatDateTime,
 } from "@/lib/date-utils";
 import { DEFECATION_AMOUNT_OPTIONS } from "@/lib/constants";
 import { useSettings } from "@/hooks/use-settings";
@@ -52,7 +51,8 @@ export function DefecationCard() {
   const [detailError, setDetailError] = useState<string | null>(null);
   const quickLogGuard = useQuickLogGuard();
   const recentRecords = useDefecationRecords(5);
-  const isLoading = !recentRecords;
+  const [todayStart, todayEnd] = useLogicalTodayRange();
+  const todayCount = useDefecationRecordsByDateRange(todayStart, todayEnd).length;
   const addMutation = useAddDefecation();
   const deleteMutation = useDeleteDefecation();
   const updateMutation = useUpdateDefecation();
@@ -166,103 +166,104 @@ export function DefecationCard() {
   };
 
   return (
-    <CardShell
-      theme={theme}
-      headerRight={
-        isLoading ? (
-          <div className={cn("h-6 w-20 rounded animate-pulse", theme.loadingBg)} />
-        ) : latestRecord ? (
-          <p className="text-xs text-muted-foreground">
-            {formatDateTime(latestRecord.timestamp)}
-          </p>
+    <ModuleCard
+      domain={theme.domain}
+      icon={theme.icon}
+      title={theme.label}
+      data-testid="defecation-card"
+      right={
+        latestRecord ? (
+          <>
+            <b>{todayCount} today</b>
+            <br />
+            last <WhenLabel timestamp={latestRecord.timestamp} />
+          </>
         ) : null
       }
     >
-      <div className="flex flex-col gap-2">
-        <div className="grid grid-cols-3 gap-2">
-          {AMOUNT_OPTIONS.map((opt) => (
-            <Button
-              key={opt.value}
-              variant="outline"
-              size="sm"
-              disabled={submittingAmount !== null}
-              className={cn("h-10", submittingAmount === opt.value && "opacity-70")}
-              onClick={() => handleQuickLog(opt.value)}
-            >
-              {submittingAmount === opt.value ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                opt.label
-              )}
-            </Button>
-          ))}
-        </div>
-
-        <Button
-          variant="ghost"
-          size="sm"
-          className="w-full justify-between text-muted-foreground"
-          onClick={toggleDetails}
-        >
-          <span>Add details</span>
-          {showDetails ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-        </Button>
-
-        {showDetails && (
-          <div className="p-3 rounded-lg bg-muted/50 border space-y-3">
-            <div className="space-y-2">
-              <Label>Amount (optional)</Label>
-              <Select value={amount || NO_ESTIMATE_VALUE} onValueChange={setAmount}>
-                <SelectTrigger aria-label="Amount estimate" className="bg-background">
-                  <SelectValue placeholder="Select estimate" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={NO_ESTIMATE_VALUE}>No estimate</SelectItem>
-                  {AMOUNT_OPTIONS.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="defecation-note">Note (optional)</Label>
-              <Textarea
-                id="defecation-note"
-                placeholder="e.g. consistency, urgency"
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                className="min-h-[60px]"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="defecation-time">When</Label>
-              <Input
-                id="defecation-time"
-                type="datetime-local"
-                value={detailTime}
-                onChange={(e) => setDetailTime(e.target.value)}
-                max={getCurrentDateTimeLocal()}
-              />
-              {detailError && (
-                <p className="text-sm text-destructive">{detailError}</p>
-              )}
-            </div>
-            <Button
-              onClick={handleSubmitDetails}
-              disabled={addMutation.isPending}
-              className={cn("w-full", theme.buttonBg)}
-            >
-              {addMutation.isPending ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                "Record with details"
-              )}
-            </Button>
-          </div>
-        )}
+      <div className="wc-quick3">
+        {AMOUNT_OPTIONS.map((opt) => (
+          <button
+            key={opt.value}
+            type="button"
+            disabled={submittingAmount !== null}
+            onClick={() => handleQuickLog(opt.value)}
+          >
+            {submittingAmount === opt.value ? (
+              <Loader2 className="w-4 h-4 animate-spin" aria-label={opt.label} />
+            ) : (
+              opt.label
+            )}
+          </button>
+        ))}
       </div>
+
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className="self-start"
+        aria-expanded={showDetails}
+        onClick={toggleDetails}
+      >
+        {showDetails ? "Hide details" : "Add details"}
+        <ChevronDown className={cn("w-4 h-4", showDetails && "rotate-180")} />
+      </Button>
+
+      {showDetails && (
+        <div className="space-y-3">
+          <div className="space-y-1">
+            <Label className="text-[0.8125rem] text-muted-foreground">Amount (optional)</Label>
+            <Select value={amount || NO_ESTIMATE_VALUE} onValueChange={setAmount}>
+              <SelectTrigger aria-label="Amount estimate">
+                <SelectValue placeholder="Select estimate" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={NO_ESTIMATE_VALUE}>No estimate</SelectItem>
+                {AMOUNT_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="defecation-note" className="text-[0.8125rem] text-muted-foreground">Note (optional)</Label>
+            <Textarea
+              id="defecation-note"
+              placeholder="e.g. consistency, urgency"
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              className="min-h-[60px]"
+            />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="defecation-time" className="text-[0.8125rem] text-muted-foreground">When</Label>
+            <Input
+              id="defecation-time"
+              type="datetime-local"
+              value={detailTime}
+              onChange={(e) => setDetailTime(e.target.value)}
+              max={getCurrentDateTimeLocal()}
+            />
+            {detailError && (
+              <p className="text-sm text-destructive">{detailError}</p>
+            )}
+          </div>
+          <Button
+            onClick={handleSubmitDetails}
+            disabled={addMutation.isPending}
+            className="w-full"
+          >
+            {addMutation.isPending ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              "Record with details"
+            )}
+          </Button>
+        </div>
+      )}
 
       {/* Recent History */}
       <RecentEntriesList
@@ -271,19 +272,11 @@ export function DefecationCard() {
         onDelete={handleDelete}
         onEdit={openEdit}
         editingId={editingRecord?.id ?? null}
-        borderColor={theme.border}
-        renderEntry={(record) => (
-          <div className="flex items-center gap-2 min-w-0">
-            <span className="text-muted-foreground shrink-0">{formatDateTime(record.timestamp)}</span>
-            {record.amountEstimate && (
-              <span className="text-xs font-medium capitalize">{record.amountEstimate}</span>
-            )}
-            {record.note && (
-              <span className="text-xs text-muted-foreground/70 truncate">
-                {record.note}
-              </span>
-            )}
-          </div>
+        renderLabel={(record) => (
+          <span className="text-muted-foreground">{record.note}</span>
+        )}
+        renderValue={(record) => (
+          <span className="capitalize">{record.amountEstimate || "—"}</span>
         )}
         renderEditForm={() => (
           <InlineEditFormShell timestamp={editTimestamp} onTimestampChange={setEditTimestamp} note={editNote} onNoteChange={setEditNote} onSave={() => handleEditSubmit()} onCancel={closeEdit} buttonClassName={theme.buttonBg}>
@@ -301,6 +294,6 @@ export function DefecationCard() {
           </InlineEditFormShell>
         )}
       />
-    </CardShell>
+    </ModuleCard>
   );
 }

@@ -7,7 +7,9 @@ import { Input } from "@intake/ui/input";
 import { Label } from "@intake/ui/label";
 import { Loader2, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { getCurrentDateTimeLocal } from "@/lib/date-utils";
+import { formatTimeOnly, getCurrentDateTimeLocal } from "@/lib/date-utils";
+import { recentDayLabel } from "@/lib/week-utils";
+import { useSettingsStore } from "@/stores/settings-store";
 
 /**
  * Shared shell for inline edit forms used by card components.
@@ -78,13 +80,14 @@ export function InlineEditFormShell({
   );
 }
 
-interface RecentEntriesListProps<T extends { id: string }> {
+interface RecentEntriesListProps<T extends { id: string; timestamp: number }> {
   records: T[] | undefined;
-  /** Render the content columns for a single entry (timestamp, value, etc.) */
-  renderEntry: (record: T) => ReactNode;
+  /** The middle column: what the entry was (name, position, note...). */
+  renderLabel?: (record: T) => ReactNode;
+  /** The right column: the entry's value, right-aligned in mono. */
+  renderValue?: (record: T) => ReactNode;
   onDelete: (id: string) => void;
   deletingId: string | null;
-  borderColor: string;
   maxEntries?: number;
   /** If provided, clicking an entry row opens the edit form for that record */
   onEdit?: (record: T) => void;
@@ -92,90 +95,92 @@ interface RecentEntriesListProps<T extends { id: string }> {
   editingId?: string | null;
   /** Render an inline edit form (record available via parent closure) */
   renderEditForm?: () => ReactNode;
+  /** Shown when there is nothing to list. */
+  emptyText?: string;
 }
 
 /**
- * Shared "Recent" entries section used by all card components.
- * Renders a border-top separator, "Recent" label, entries with delete buttons.
- * Entries are clickable when an `onEdit` handler is provided.
+ * The "Recent" list at the foot of every Home module card (the prototype's
+ * `.rec`). Each row is a grid: time | label | value | delete. Entries from an
+ * earlier logical day carry a day prefix above the time ("Yest", "Fri").
+ * Rows are clickable when an `onEdit` handler is provided.
  */
-export function RecentEntriesList<T extends { id: string }>({
+export function RecentEntriesList<T extends { id: string; timestamp: number }>({
   records,
-  renderEntry,
+  renderLabel,
+  renderValue,
   onDelete,
   deletingId,
-  borderColor,
   maxEntries = 3,
   onEdit,
   editingId,
   renderEditForm,
+  emptyText = "Nothing logged yet.",
 }: RecentEntriesListProps<T>) {
-  if (!records || records.length === 0) return null;
+  const dayStartHour = useSettingsStore((s) => s.dayStartHour);
+  if (!records) return null;
 
   const displayRecords = records.slice(0, maxEntries);
 
   return (
-    <div className={cn("mt-4 pt-4 border-t", borderColor)}>
-      <p className="text-xs font-medium text-muted-foreground mb-2">Recent</p>
-      <div className="space-y-1">
-        {displayRecords.map((record) => {
-          const isEditing = editingId === record.id && renderEditForm;
-          if (isEditing) {
-            return (
-              <div
-                key={record.id}
-                className="bg-muted/30 rounded-lg p-2 -mx-1.5"
-              >
-                {renderEditForm()}
-              </div>
-            );
-          }
+    <div className="wc-rec" data-testid="recent-entries">
+      <h4>Recent</h4>
+      {displayRecords.length === 0 && <p className="empty">{emptyText}</p>}
+      {displayRecords.map((record) => {
+        const isEditing = editingId === record.id && renderEditForm;
+        if (isEditing) {
           return (
-            <div
-              key={record.id}
-              className={cn(
-                "flex items-center justify-between text-sm py-1",
-                onEdit && "cursor-pointer rounded-md -mx-1.5 px-1.5 transition-colors hover:bg-black/5 dark:hover:bg-white/5 active:bg-black/10 dark:active:bg-white/10"
-              )}
-              onClick={onEdit ? () => onEdit(record) : undefined}
-              role={onEdit ? "button" : undefined}
-              tabIndex={onEdit ? 0 : undefined}
-              onKeyDown={
-                onEdit
-                  ? (e) => {
-                      if (e.target !== e.currentTarget) return;
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        onEdit(record);
-                      }
-                    }
-                  : undefined
-              }
-            >
-              <div className="flex items-center justify-between min-w-0 flex-1 gap-2">
-                {renderEntry(record)}
-              </div>
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label="Delete entry"
-                className="h-6 w-6 text-muted-foreground hover:text-red-600 shrink-0"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDelete(record.id);
-                }}
-                disabled={deletingId === record.id}
-              >
-                {deletingId === record.id ? (
-                  <Loader2 className="w-3 h-3 animate-spin" />
-                ) : (
-                  <Trash2 className="w-3 h-3" />
-                )}
-              </Button>
+            <div key={record.id} className="wc-ri-edit">
+              {renderEditForm()}
             </div>
           );
-        })}
-      </div>
+        }
+        const day = recentDayLabel(record.timestamp, dayStartHour);
+        return (
+          <div
+            key={record.id}
+            className="wc-ri"
+            data-testid="recent-entry"
+            onClick={onEdit ? () => onEdit(record) : undefined}
+            role={onEdit ? "button" : undefined}
+            tabIndex={onEdit ? 0 : undefined}
+            onKeyDown={
+              onEdit
+                ? (e) => {
+                    if (e.target !== e.currentTarget) return;
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      onEdit(record);
+                    }
+                  }
+                : undefined
+            }
+          >
+            <span className="tm">
+              {day && <span>{day}</span>}
+              <span>{formatTimeOnly(record.timestamp)}</span>
+            </span>
+            <span className="lb">{renderLabel?.(record)}</span>
+            <span className="v">{renderValue?.(record)}</span>
+            <button
+              type="button"
+              className="del"
+              aria-label="Delete entry"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete(record.id);
+              }}
+              disabled={deletingId === record.id}
+            >
+              {deletingId === record.id ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Trash2 className="w-4 h-4" />
+              )}
+            </button>
+          </div>
+        );
+      })}
     </div>
   );
 }

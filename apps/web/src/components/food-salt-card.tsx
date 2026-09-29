@@ -1,16 +1,15 @@
 "use client";
 
-import { Card, CardContent } from "@intake/ui/card";
-import { Progress, progressStatusTextClass } from "@intake/ui/progress";
+import { progressStatusTextClass } from "@intake/ui/progress";
 import { Utensils } from "lucide-react";
-import { cn, formatAmount } from "@/lib/utils";
-import { domainStripeStyle } from "@/lib/domain-colors";
-import { CARD_THEMES } from "@/lib/card-themes";
+import { formatAmount } from "@/lib/utils";
+import { type Domain } from "@/lib/domain-colors";
+import { ModuleCard, SegmentBar } from "@/components/home/module-card";
 import { useIntake } from "@/hooks/use-intake-queries";
 import { useSettings } from "@/hooks/use-settings";
 import { useOptionalTrackerEnabled } from "@/lib/optional-trackers";
 import { FoodSection } from "@/components/food-salt/food-section";
-import { computeTwoStageProgress } from "@intake/core/progress";
+import { computeTwoStageProgress, type TwoStageProgress } from "@intake/core/progress";
 
 export function FoodSaltCard() {
   const saltIntake = useIntake("salt");
@@ -39,170 +38,113 @@ export function FoodSaltCard() {
   const potassiumDaily = potassiumIntake.dailyTotal;
   const potassiumRolling = potassiumIntake.rollingTotal;
   const potassiumLimit = settings.potassiumLimit;
-  const potassiumProgressPercent =
-    potassiumLimit > 0
-      ? Math.min((potassiumDaily / potassiumLimit) * 100, 100)
-      : 0;
 
   return (
-    <Card
-      className={cn(
-        "relative overflow-hidden transition-all duration-300 stripe",
-        CARD_THEMES.eating.gradient,
-        CARD_THEMES.eating.border
+    <ModuleCard domain="sodium" icon={Utensils} title="Food" data-testid="food-card">
+      <NutrientRow
+        testId="food-card-sodium"
+        label="Sodium"
+        unit="mg"
+        total={dailyTotal}
+        limit={limit}
+        buffer={settings.saltExtendedBuffer}
+        rolling={rollingTotal}
+        progress={saltProgress}
+        domain="sodium"
+        ariaLabel="Sodium intake today, as a percentage of the daily limit"
+      />
+
+      {/* Sugar — optional tracker */}
+      {sugarEnabled && (
+        <NutrientRow
+          testId="food-card-sugar"
+          label="Sugar"
+          unit="g"
+          total={sugarDaily}
+          limit={sugarLimit}
+          buffer={settings.sugarExtendedBuffer}
+          rolling={sugarRolling}
+          progress={sugarProgress}
+          domain="sugar"
+          ariaLabel="Sugar intake today, as a percentage of the daily limit"
+        />
       )}
-      style={domainStripeStyle(CARD_THEMES.eating.domain)}
-    >
-      <CardContent className="p-6">
-        {/* Card header */}
-        <div className="flex items-center gap-2 mb-4">
-          <div className={cn("p-2 rounded-lg", CARD_THEMES.eating.iconBg)}>
-            <Utensils
-              className={cn("w-5 h-5", CARD_THEMES.eating.iconColor)}
-            />
-          </div>
-          <span className="font-semibold text-lg uppercase tracking-wide">
-            Food
+
+      {/* Potassium — soft target (a minimum), optional tracker */}
+      {potassiumEnabled && (
+        <NutrientRow
+          testId="food-card-potassium"
+          label="Potassium"
+          unit="mg"
+          total={potassiumDaily}
+          limit={potassiumLimit}
+          rolling={potassiumRolling}
+          soft
+          ariaLabel="Potassium intake today, as a percentage of the daily target"
+        />
+      )}
+
+      <FoodSection />
+    </ModuleCard>
+  );
+}
+
+/** A nutrient's total against its target, with the level bar (prototype `.nut`). */
+function NutrientRow({
+  testId,
+  label,
+  unit,
+  total,
+  limit,
+  buffer = 0,
+  rolling,
+  progress,
+  domain,
+  soft = false,
+  ariaLabel,
+}: {
+  testId?: string;
+  label: string;
+  unit: string;
+  total: number;
+  limit: number;
+  buffer?: number;
+  rolling: number;
+  progress?: TwoStageProgress;
+  domain?: Domain;
+  soft?: boolean;
+  ariaLabel: string;
+}) {
+  return (
+    <div className="wc-nut" data-testid={testId}>
+      <span className="nl">{label}</span>
+      <span className="nv">
+        <b className={progress ? progressStatusTextClass(progress.status, "") : undefined}>
+          {formatAmount(total, unit)}
+        </b>{" "}
+        / {formatAmount(limit, unit)}
+      </span>
+      {soft ? (
+        <SegmentBar value={Math.min(total, limit)} limit={limit} aria-label={ariaLabel} />
+      ) : (
+        <SegmentBar value={total} limit={limit} buffer={buffer} domain={domain} aria-label={ariaLabel} />
+      )}
+      <span className="ns">
+        {progress?.isOverTarget && (
+          <span className={progressStatusTextClass(progress.status, "")}>
+            {progress.extendedTotal > 0 ? (
+              <>
+                {formatAmount(progress.extendedCurrent, unit)} /{" "}
+                {formatAmount(progress.extendedTotal, unit)} extra
+              </>
+            ) : (
+              <>{formatAmount(progress.extendedCurrent, unit)} over</>
+            )}
+            {" · "}
           </span>
-        </div>
-
-        {/* Sodium total + progress bar */}
-        <div className="mb-4">
-          <div className="flex items-center justify-between mb-1.5">
-            <span className="text-sm font-medium text-muted-foreground">
-              Sodium
-            </span>
-            <div className="text-right">
-              <p
-                className={cn(
-                  "text-sm font-medium",
-                  progressStatusTextClass(saltProgress.status, "text-foreground")
-                )}
-              >
-                {formatAmount(dailyTotal, "mg")} /{" "}
-                {formatAmount(limit, "mg")}
-              </p>
-              {saltProgress.isOverTarget && (
-                <p
-                  className={cn(
-                    "text-xs",
-                    progressStatusTextClass(saltProgress.status, "text-foreground")
-                  )}
-                >
-                  {saltProgress.extendedTotal > 0 ? (
-                    <>
-                      {formatAmount(saltProgress.extendedCurrent, "mg")} /{" "}
-                      {formatAmount(saltProgress.extendedTotal, "mg")} extra
-                    </>
-                  ) : (
-                    <>{formatAmount(saltProgress.extendedCurrent, "mg")} over</>
-                  )}
-                </p>
-              )}
-              <p className="text-xs text-muted-foreground/70">
-                24h: {formatAmount(rollingTotal, "mg")}
-              </p>
-            </div>
-          </div>
-          <Progress
-            value={saltProgress.isOverExtended ? 100 : saltProgress.primaryPct}
-            extendedValue={saltProgress.isOverExtended ? 0 : saltProgress.extendedPct}
-            targetMarkerPct={saltProgress.isOverExtended ? 0 : saltProgress.targetPct}
-            className="h-3"
-            indicatorClassName={
-              saltProgress.isOverExtended
-                ? CARD_THEMES.salt.progressOverLimit
-                : CARD_THEMES.salt.progressGradient
-            }
-            extendedIndicatorClassName={CARD_THEMES.salt.progressExtended}
-            aria-label="Sodium intake today, as a percentage of the daily limit"
-          />
-        </div>
-
-        {/* Sugar total + progress bar — optional tracker */}
-        {sugarEnabled && (
-        <div className="mb-4" data-testid="food-card-sugar">
-          <div className="flex items-center justify-between mb-1.5">
-            <span className="text-sm font-medium text-muted-foreground">
-              Sugar
-            </span>
-            <div className="text-right">
-              <p
-                className={cn(
-                  "text-sm font-medium",
-                  progressStatusTextClass(sugarProgress.status, "text-foreground")
-                )}
-              >
-                {formatAmount(sugarDaily, "g")} /{" "}
-                {formatAmount(sugarLimit, "g")}
-              </p>
-              {sugarProgress.isOverTarget && (
-                <p
-                  className={cn(
-                    "text-xs",
-                    progressStatusTextClass(sugarProgress.status, "text-foreground")
-                  )}
-                >
-                  {sugarProgress.extendedTotal > 0 ? (
-                    <>
-                      {formatAmount(sugarProgress.extendedCurrent, "g")} /{" "}
-                      {formatAmount(sugarProgress.extendedTotal, "g")} extra
-                    </>
-                  ) : (
-                    <>{formatAmount(sugarProgress.extendedCurrent, "g")} over</>
-                  )}
-                </p>
-              )}
-              <p className="text-xs text-muted-foreground/70">
-                24h: {formatAmount(sugarRolling, "g")}
-              </p>
-            </div>
-          </div>
-          <Progress
-            value={sugarProgress.isOverExtended ? 100 : sugarProgress.primaryPct}
-            extendedValue={sugarProgress.isOverExtended ? 0 : sugarProgress.extendedPct}
-            targetMarkerPct={sugarProgress.isOverExtended ? 0 : sugarProgress.targetPct}
-            className="h-3"
-            indicatorClassName={
-              sugarProgress.isOverExtended
-                ? CARD_THEMES.sugar.progressOverLimit
-                : CARD_THEMES.sugar.progressGradient
-            }
-            extendedIndicatorClassName={CARD_THEMES.sugar.progressExtended}
-            aria-label="Sugar intake today, as a percentage of the daily limit"
-          />
-        </div>
         )}
-
-        {/* Potassium total + progress bar — soft target, optional tracker */}
-        {potassiumEnabled && (
-        <div className="mb-4" data-testid="food-card-potassium">
-          <div className="flex items-center justify-between mb-1.5">
-            <span className="text-sm font-medium text-muted-foreground">
-              Potassium
-            </span>
-            <div className="text-right">
-              <p className="text-sm font-medium text-foreground">
-                {formatAmount(potassiumDaily, "mg")} /{" "}
-                {formatAmount(potassiumLimit, "mg")}
-              </p>
-              <p className="text-xs text-muted-foreground/70">
-                24h: {formatAmount(potassiumRolling, "mg")}
-              </p>
-            </div>
-          </div>
-          <Progress
-            value={potassiumProgressPercent}
-            className="h-3"
-            indicatorClassName={CARD_THEMES.potassium.progressGradient}
-            aria-label="Potassium intake today, as a percentage of the daily target"
-          />
-        </div>
-        )}
-
-        {/* Food section */}
-        <FoodSection />
-      </CardContent>
-    </Card>
+        24h {formatAmount(rolling, unit)}
+      </span>
+    </div>
   );
 }

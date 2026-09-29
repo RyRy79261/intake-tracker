@@ -2,11 +2,8 @@
 import { describe, it, expect, afterEach } from "vitest";
 import { screen, waitFor } from "@testing-library/react";
 
-import {
-  TextMetrics,
-  bucketByLogicalDay,
-  getLogicalWeek,
-} from "@/components/text-metrics";
+import { TextMetrics } from "@/components/text-metrics";
+import { bucketByLogicalDay, getLogicalWeek } from "@/lib/week-utils";
 import { renderWithFixtures } from "@/__tests__/react-test-utils";
 import {
   makeIntakeRecord,

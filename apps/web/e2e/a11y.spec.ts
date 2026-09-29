@@ -28,8 +28,8 @@ interface Route {
 
 const ROUTES: ReadonlyArray<Route> = [
   { name: "dashboard", path: "/", waitFor: "Intake Tracker" },
-  // src/app/history/page.tsx is a client-side redirect to /analytics
-  // (router.replace). Wait for the resolved URL before running axe.
+  // /history resolves to /analytics (the Metrics window on Records, which
+  // adds ?tab=records). Wait for the resolved path before running axe.
   { name: "history", path: "/history", resolvedPath: "/analytics", waitFor: "Analytics" },
   { name: "medications", path: "/medications", waitFor: "Medications" },
   { name: "settings", path: "/settings", waitFor: "Settings" },
@@ -39,7 +39,8 @@ for (const route of ROUTES) {
   test(`a11y: ${route.name} has no critical violations`, async ({ page }) => {
     await page.goto(route.path);
     if (route.resolvedPath && route.resolvedPath !== route.path) {
-      await page.waitForURL(route.resolvedPath);
+      const resolved = route.resolvedPath;
+      await page.waitForURL((url) => url.pathname === resolved);
     }
     await expect(page.getByText(route.waitFor, { exact: false }).first()).toBeVisible();
 

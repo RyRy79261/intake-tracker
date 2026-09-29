@@ -2,10 +2,9 @@
 
 import { useState, useCallback, useRef } from "react";
 import { Button } from "@intake/ui/button";
-import { Progress } from "@intake/ui/progress";
+import { SegmentBar } from "@/components/home/module-card";
 import { Minus, Plus, Check } from "lucide-react";
 import { cn, formatAmount } from "@/lib/utils";
-import { CARD_THEMES } from "@/lib/card-themes";
 import { ManualInputDialog } from "@/components/manual-input-dialog";
 import { useSettings } from "@/hooks/use-settings";
 import { useToast } from "@intake/ui/use-toast";
@@ -14,7 +13,6 @@ import { computeTwoStageProgress } from "@intake/core/progress";
 import { reportSaveError } from "@/lib/db-recovery";
 import { formatDateTime } from "@/lib/date-utils";
 
-const theme = CARD_THEMES.water;
 const unit = "ml";
 
 export function WaterTab() {
@@ -104,103 +102,70 @@ export function WaterTab() {
   );
 
   return (
-    <>
-      {/* Progress Bar */}
-      <div className="mb-4">
-        <Progress
-          value={progress.isOverExtended ? 100 : progress.primaryPct}
-          extendedValue={progress.isOverExtended ? 0 : progress.extendedPct}
-          targetMarkerPct={progress.isOverExtended ? 0 : progress.targetPct}
-          className="h-3"
-          indicatorClassName={
-            progress.isOverExtended ? theme.progressOverLimit : theme.progressGradient
-          }
-          extendedIndicatorClassName={theme.progressExtended}
-          aria-label="Water intake today, as a percentage of the daily limit"
-        />
-      </div>
+    <div className="flex flex-col gap-2.5">
+      <SegmentBar
+        value={dailyTotal}
+        limit={waterLimit}
+        buffer={waterExtendedBuffer}
+        aria-label="Water intake today, as a percentage of the daily limit"
+      />
 
       {/* Quick-set size buttons */}
-      <div className="flex gap-2 mb-3">
+      <div className="wc-qchips">
         {[70, 100, 150, 200].map((size) => (
-          <Button
+          <button
             key={size}
-            variant="outline"
-            size="sm"
+            type="button"
+            aria-pressed={pendingAmount === size}
             onClick={() => setPendingAmount(size)}
-            className={cn(
-              "flex-1",
-              pendingAmount === size && theme.activeToggle
-            )}
           >
             {size}
-          </Button>
+          </button>
         ))}
       </div>
 
-      {/* Input Controls */}
-      <div className="flex items-center justify-between gap-3">
-        {/* Decrement Button */}
-        <Button
-          variant="outline"
-          size="icon-lg"
+      {/* − amount + (tap the amount to type it, or set a time / note) */}
+      <div className="wc-lstep">
+        <button
+          type="button"
+          className="rb"
           onClick={handleDecrement}
           disabled={pendingAmount <= waterIncrement || isSubmitting}
-          className={cn("shrink-0 rounded-full transition-all", theme.hoverBg)}
           aria-label="Decrease water amount"
         >
-          <Minus className="w-6 h-6" />
-        </Button>
-
-        {/* Center Value - Clickable for manual input */}
+          <Minus className="w-5 h-5" />
+        </button>
         <button
+          type="button"
           onClick={() => setShowManualInput(true)}
           disabled={isSubmitting}
-          className={cn(
-            "flex-1 py-4 px-6 rounded-xl transition-all",
-            "flex flex-col items-center justify-center gap-1",
-            "active:scale-95",
-            theme.inputBg
-          )}
+          className={cn("amt", wouldExceedLimit && !isOverLimit && "warn")}
         >
-          <span
-            className={cn(
-              "text-3xl font-bold num",
-              wouldExceedLimit && !isOverLimit
-                ? "text-orange-600 dark:text-orange-400"
-                : theme.inputText
-            )}
-          >
-            +{formatAmount(pendingAmount, unit)}
-          </span>
-          <span className="text-xs text-muted-foreground">
+          <b>+{formatAmount(pendingAmount, unit)}</b>
+          <small>
             {pendingTimestamp !== undefined &&
               `${formatDateTime(pendingTimestamp)} · `}
             {pendingNote !== undefined && "with note · "}
             tap to edit
-          </span>
+          </small>
         </button>
-
-        {/* Increment Button */}
-        <Button
-          variant="outline"
-          size="icon-lg"
+        <button
+          type="button"
+          className="rb"
           onClick={handleIncrement}
           disabled={isSubmitting}
-          className={cn("shrink-0 rounded-full transition-all", theme.hoverBg)}
           aria-label="Increase water amount"
         >
-          <Plus className="w-6 h-6" />
-        </Button>
+          <Plus className="w-5 h-5" />
+        </button>
       </div>
 
-      {/* Confirm Button */}
       <Button
         onClick={handleConfirm}
         disabled={isSubmitting || pendingAmount <= 0}
-        className={cn("w-full mt-4 h-12 text-base font-semibold", theme.buttonBg)}
+        className="w-full"
       >
-        <Check className="w-5 h-5 mr-2" />
+        <Check className="w-5 h-5" />
         {isSubmitting ? "Recording..." : "Confirm Entry"}
       </Button>
 
@@ -215,7 +180,6 @@ export function WaterTab() {
         description="Set the amount (and optionally the time or a note), then confirm the entry."
         submitLabel="Set Amount"
       />
-
-    </>
+    </div>
   );
 }

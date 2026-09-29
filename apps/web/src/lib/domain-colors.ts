@@ -42,9 +42,14 @@ export const DOMAIN_TOKEN: Record<Domain, `--${Domain}`> = {
   ai: "--ai",
 };
 
-/** A usable CSS colour for a domain, e.g. `var(--color-water)`. */
+/**
+ * A usable CSS colour for a domain, e.g. `hsl(var(--water))`. Built from the
+ * theme channels rather than `var(--color-water)`: the `@theme inline` colour
+ * variables are only emitted when a utility uses them, so an inline `--c`
+ * pointing at one can resolve to nothing.
+ */
 export function domainColor(domain: Domain): string {
-  return `var(--color-${domain})`;
+  return `hsl(var(${DOMAIN_TOKEN[domain]}))`;
 }
 
 /**

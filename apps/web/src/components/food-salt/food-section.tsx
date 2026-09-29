@@ -53,7 +53,6 @@ import { type EatingRecord } from "@/lib/db";
 import {
   getCurrentDateTimeLocal,
   dateTimeLocalToTimestamp,
-  formatDateTime,
 } from "@/lib/date-utils";
 import { useOptionalTrackerEnabled } from "@/lib/optional-trackers";
 import { waterContentPercentFromAbv } from "@intake/core/alcohol";
@@ -600,14 +599,14 @@ export function FoodSection() {
   return (
     <>
       {/* "What I ate" text input — doubles as AI parse input when signed in */}
-      <div className="relative mt-3">
+      <div className="relative">
         <Input
           value={foodText}
           onChange={(e) => setFoodText(e.target.value)}
           onKeyDown={showAi ? handleKeyDown : undefined}
           placeholder="What I ate..."
           aria-label={showAi ? "Describe food for AI nutritional parsing" : "Describe what you ate"}
-          className={cn("h-10", showAi && "pr-10")}
+          className={cn(showAi && "pr-10")}
           disabled={isParsing}
         />
         {showAi && (
@@ -618,7 +617,7 @@ export function FoodSection() {
             aria-label="Parse food with AI"
             className={cn(
               "absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-md transition-colors",
-              "text-muted-foreground hover:text-orange-600 dark:hover:text-orange-400",
+              "text-muted-foreground hover:text-sodium",
               "disabled:opacity-50 disabled:cursor-not-allowed"
             )}
           >
@@ -632,12 +631,12 @@ export function FoodSection() {
       </div>
 
       {/* Always-visible detail fields */}
-      <div className="space-y-3 mt-3">
+      <div className="space-y-3">
         {/* Weight in grams */}
         <div className="space-y-1">
-          <Label htmlFor="eating-grams" className="text-sm">
+          <Label htmlFor="eating-grams" className="text-[0.8125rem] text-muted-foreground">
             Weight (g){" "}
-            <span className="text-muted-foreground font-normal">(optional)</span>
+            <span className="font-normal">(optional)</span>
           </Label>
           <Input
             id="eating-grams"
@@ -652,7 +651,7 @@ export function FoodSection() {
 
         {/* Sodium section */}
         <div className="space-y-1">
-          <Label htmlFor="eating-sodium" className="text-sm">
+          <Label htmlFor="eating-sodium" className="text-[0.8125rem] text-muted-foreground">
             Sodium
           </Label>
           <div className="flex gap-2">
@@ -689,9 +688,9 @@ export function FoodSection() {
         {/* Sugar section — optional tracker */}
         {sugarEnabled && (
           <div className="space-y-1" data-testid="eating-sugar-field">
-            <Label htmlFor="eating-sugar" className="text-sm">
+            <Label htmlFor="eating-sugar" className="text-[0.8125rem] text-muted-foreground">
               Sugar (g){" "}
-              <span className="text-muted-foreground font-normal">(optional)</span>
+              <span className="font-normal">(optional)</span>
             </Label>
             <Input
               id="eating-sugar"
@@ -707,9 +706,9 @@ export function FoodSection() {
         {/* Potassium section — optional tracker */}
         {potassiumEnabled && (
           <div className="space-y-1" data-testid="eating-potassium-field">
-            <Label htmlFor="eating-potassium" className="text-sm">
+            <Label htmlFor="eating-potassium" className="text-[0.8125rem] text-muted-foreground">
               Potassium (mg){" "}
-              <span className="text-muted-foreground font-normal">(optional)</span>
+              <span className="font-normal">(optional)</span>
             </Label>
             <Input
               id="eating-potassium"
@@ -724,9 +723,9 @@ export function FoodSection() {
 
         {/* Water content */}
         <div className="space-y-1">
-          <Label htmlFor="eating-water" className="text-sm">
+          <Label htmlFor="eating-water" className="text-[0.8125rem] text-muted-foreground">
             Water content (ml){" "}
-            <span className="text-muted-foreground font-normal">(optional)</span>
+            <span className="font-normal">(optional)</span>
           </Label>
           <Input
             id="eating-water"
@@ -750,7 +749,7 @@ export function FoodSection() {
         <Button
           onClick={handleDetailSubmit}
           disabled={addEatingMutation.isPending || isSubmitting || !canSave}
-          className={cn("w-full mt-2", theme.buttonBg)}
+          className="w-full"
         >
           {addEatingMutation.isPending || isSubmitting ? (
             <Loader2 className="w-4 h-4 animate-spin" />
@@ -784,50 +783,23 @@ export function FoodSection() {
         onDelete={handleDelete}
         onEdit={openEdit}
         editingId={editingRecord?.id ?? null}
-        borderColor={theme.border}
-        renderEntry={(record) => {
-          const sodium = record.groupId ? groupSodiumMap.get(record.groupId) : undefined;
+        renderLabel={(record) => {
           const sugar = sugarEnabled && record.groupId ? groupSugarMap.get(record.groupId) : undefined;
           const potassium = potassiumEnabled && record.groupId ? groupPotassiumMap.get(record.groupId) : undefined;
-          const hasMetrics = Boolean(sodium || sugar || potassium || record.grams);
           return (
-            <div className="flex flex-col gap-1 min-w-0 w-full">
-              {/* Row 1: when + note */}
-              <div className="flex items-center gap-2 min-w-0">
-                <span className="text-muted-foreground shrink-0">
-                  {formatDateTime(record.timestamp)}
-                </span>
-                {record.note && (
-                  <span className="text-xs text-muted-foreground/70 truncate min-w-0">
-                    {record.note}
-                  </span>
-                )}
-              </div>
-              {/* Row 2: nutrition metrics */}
-              {hasMetrics && (
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 min-w-0">
-                  {sodium ? (
-                    <span className="text-xs font-medium text-orange-600 dark:text-orange-400">
-                      {sodium}mg Na
-                    </span>
-                  ) : null}
-                  {sugar ? (
-                    <span className="text-xs font-medium text-pink-600 dark:text-pink-400">
-                      {sugar}g sugar
-                    </span>
-                  ) : null}
-                  {potassium ? (
-                    <span className="text-xs font-medium text-purple-600 dark:text-purple-400">
-                      {potassium}mg K
-                    </span>
-                  ) : null}
-                  {record.grams && (
-                    <span className="text-xs font-medium">{record.grams}g</span>
-                  )}
-                </div>
-              )}
-            </div>
+            <>
+              {record.note || "Food"}
+              {sugar ? (
+                <span className="src" style={{ color: "hsl(var(--sugar))" }}>{sugar}g sugar</span>
+              ) : null}
+              {potassium ? <span className="src">{potassium}mg K</span> : null}
+              {record.grams ? <span className="src num">{record.grams}g</span> : null}
+            </>
           );
+        }}
+        renderValue={(record) => {
+          const sodium = record.groupId ? groupSodiumMap.get(record.groupId) : undefined;
+          return sodium ? <span className="text-sodium">{sodium}mg Na</span> : null;
         }}
         renderEditForm={() => (
           <InlineEditFormShell timestamp={editTimestamp} onTimestampChange={setEditTimestamp} note={editNote} onNoteChange={setEditNote} onSave={() => handleEditSubmit()} onCancel={closeEdit} buttonClassName={theme.buttonBg}>

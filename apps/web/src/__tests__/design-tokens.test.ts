@@ -59,7 +59,7 @@ describe("Ward Console design tokens", () => {
   it("every domain is exposed to Tailwind as a --color-* utility", () => {
     for (const domain of DOMAINS) {
       expect(css).toContain(`--color-${domain}: hsl(var(--${domain}));`);
-      expect(domainColor(domain)).toBe(`var(--color-${domain})`);
+      expect(domainColor(domain)).toBe(`hsl(var(--${domain}))`);
     }
   });
 

@@ -2,7 +2,6 @@
 
 import { useMemo, useRef, useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@intake/ui/tabs";
-import { Card, CardContent } from "@intake/ui/card";
 import { Input } from "@intake/ui/input";
 import { Label } from "@intake/ui/label";
 import { CARD_THEMES } from "@/lib/card-themes";
@@ -28,9 +27,8 @@ import {
   fetchEntryGroup,
 } from "@/hooks/use-composable-entry";
 import { useOptionalTrackerEnabled } from "@/lib/optional-trackers";
-import { cn, formatAmount, getLiquidTypeLabel } from "@/lib/utils";
-import { domainStripeStyle } from "@/lib/domain-colors";
-import { formatTimeOnly } from "@/lib/date-utils";
+import { formatAmount, getLiquidTypeLabel } from "@/lib/utils";
+import { ModuleCard } from "@/components/home/module-card";
 import { type IntakeRecord } from "@/lib/db";
 import { abvFromStandardDrinks } from "@intake/core/alcohol";
 import { getProgressStatus } from "@intake/core/progress";
@@ -289,60 +287,41 @@ export function LiquidsCard() {
   );
 
   return (
-    <Card
-      className={cn(
-        "relative overflow-hidden transition-all duration-300",
-        `stripe ${theme.gradient} ${theme.border}`
-      )}
-      style={domainStripeStyle(theme.domain)}
+    <ModuleCard
+      domain={theme.domain}
+      icon={Icon}
+      title="Liquids"
+      data-testid="liquids-card"
+      right={
+        <>
+          <b
+            data-testid="liquids-today-total"
+            className={progressStatusTextClass(waterStatus, "")}
+          >
+            {formatAmount(waterIntake.dailyTotal, "ml")}
+          </b>{" "}
+          / {formatAmount(settings.waterLimit, "ml")}
+          <br />
+          today · 24h {formatAmount(waterIntake.rollingTotal, "ml")}
+        </>
+      }
     >
-      <CardContent className="p-6">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <div className={cn("p-2 rounded-lg", theme.iconBg)}>
-              <Icon className={cn("w-5 h-5", theme.iconColor)} />
-            </div>
-            <span className="font-semibold text-lg uppercase tracking-wide">
-              Liquids
-            </span>
-          </div>
-
-          {/* Right side header content - water stats on all tabs */}
-          <div className="text-right">
-            <p
-              className={cn(
-                "text-sm font-medium",
-                progressStatusTextClass(waterStatus, "text-foreground")
-              )}
-            >
-              {formatAmount(waterIntake.dailyTotal, "ml")} /{" "}
-              {formatAmount(settings.waterLimit, "ml")}
-            </p>
-            <p className="text-xs text-muted-foreground">today</p>
-            <p className="text-xs text-muted-foreground/70">
-              24h: {formatAmount(waterIntake.rollingTotal, "ml")}
-            </p>
-          </div>
-        </div>
-
-        {/* Tab Strip */}
         <Tabs
           defaultValue="water"
           value={activeTab}
           onValueChange={setActiveTab}
         >
           <TabsList className="w-full grid grid-cols-4">
-            <TabsTrigger value="water" className="text-xs">
+            <TabsTrigger value="water" className="px-1">
               Water
             </TabsTrigger>
-            <TabsTrigger value="beverage" className="text-xs">
+            <TabsTrigger value="beverage" className="px-1">
               Beverage
             </TabsTrigger>
-            <TabsTrigger value="coffee" className="text-xs">
+            <TabsTrigger value="coffee" className="px-1">
               Coffee
             </TabsTrigger>
-            <TabsTrigger value="alcohol" className="text-xs">
+            <TabsTrigger value="alcohol" className="px-1">
               Alcohol
             </TabsTrigger>
           </TabsList>
@@ -351,7 +330,7 @@ export function LiquidsCard() {
           <TabsContent
             value="water"
             forceMount
-            className="data-[state=inactive]:hidden mt-4"
+            className="data-[state=inactive]:hidden mt-3"
           >
             <WaterTab />
           </TabsContent>
@@ -360,7 +339,7 @@ export function LiquidsCard() {
           <TabsContent
             value="beverage"
             forceMount
-            className="data-[state=inactive]:hidden mt-4"
+            className="data-[state=inactive]:hidden mt-3"
           >
             <BeverageTab />
           </TabsContent>
@@ -369,7 +348,7 @@ export function LiquidsCard() {
           <TabsContent
             value="coffee"
             forceMount
-            className="data-[state=inactive]:hidden mt-4"
+            className="data-[state=inactive]:hidden mt-3"
           >
             <PresetTab tab="coffee" />
           </TabsContent>
@@ -378,7 +357,7 @@ export function LiquidsCard() {
           <TabsContent
             value="alcohol"
             forceMount
-            className="data-[state=inactive]:hidden mt-4"
+            className="data-[state=inactive]:hidden mt-3"
           >
             <PresetTab tab="alcohol" />
           </TabsContent>
@@ -391,29 +370,14 @@ export function LiquidsCard() {
           onDelete={handleDelete}
           onEdit={openEdit}
           editingId={editingRecord?.id ?? null}
-          borderColor={CARD_THEMES.water.border}
-          renderEntry={(record) => {
+          renderLabel={(record) => {
             const sourceLabel = getLiquidTypeLabel(record.source, { presets: settings.liquidPresets, note: record.note });
+            const sugar = sugarEnabled && record.groupId ? groupSugarMap.get(record.groupId) : undefined;
             return (
               <>
-                <span className="text-muted-foreground">
-                  {formatTimeOnly(record.timestamp)}
-                </span>
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="font-medium shrink-0">
-                    {formatAmount(record.amount, "ml")}
-                  </span>
-                  {sugarEnabled && record.groupId && groupSugarMap.get(record.groupId) ? (
-                    <span className="text-xs font-medium text-pink-600 dark:text-pink-400 shrink-0">
-                      {groupSugarMap.get(record.groupId)}g sugar
-                    </span>
-                  ) : null}
-                  {sourceLabel && (
-                    <span className="text-xs text-muted-foreground/80 bg-muted/60 px-1.5 py-0.5 rounded truncate">
-                      {sourceLabel}
-                    </span>
-                  )}
-                </div>
+                <span className="num">{formatAmount(record.amount, "ml")}</span>
+                {sugar ? <span className="src text-sugar">{sugar}g sugar</span> : null}
+                {sourceLabel && <span className="src">{sourceLabel}</span>}
               </>
             );
           }}
@@ -503,7 +467,6 @@ export function LiquidsCard() {
             </InlineEditFormShell>
           )}
         />
-      </CardContent>
-    </Card>
+    </ModuleCard>
   );
 }
