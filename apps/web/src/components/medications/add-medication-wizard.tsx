@@ -12,7 +12,7 @@ import { useAuthGate } from "@/components/auth-guard";
 import { useAddPrescription, usePrescriptions, useAddMedicationToPrescription, usePhasesForPrescription } from "@/hooks/use-medication-queries";
 import { useToast } from "@intake/ui/use-toast";
 import type { PillShape, MedicationPhase, CompoundStrength, Prescription } from "@/lib/db";
-import { AlertTriangle, ArrowLeft, ArrowRight, Loader2, Check, X } from "lucide-react";
+import { AlertTriangle, ArrowLeft, ArrowRight, Loader2, Check } from "lucide-react";
 import { useInteractionCheck } from "@/hooks/use-interaction-check";
 import { cn } from "@/lib/utils";
 import {
@@ -44,6 +44,15 @@ const STEP_LABELS: Record<WizardStep, string> = {
   dosage: "Dosage",
   schedule: "Schedule",
   inventory: "Inventory",
+};
+/** The question each step asks (`.wq`). */
+const STEP_QUESTIONS: Record<WizardStep, string> = {
+  search: "Which medicine?",
+  appearance: "What does the pill look like?",
+  indication: "What is it for?",
+  dosage: "How much is each dose?",
+  schedule: "When do you take it?",
+  inventory: "How many do you have?",
 };
 
 interface AddMedicationWizardProps {
@@ -412,10 +421,15 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
       ? searchMutation.error.message
       : undefined;
 
+
+  const saving = addPrescriptionMutation.isPending || addMedicationToPrescriptionMutation.isPending;
+
   return (
     <Drawer open={open} onOpenChange={(o) => { if (!o) handleClose(); }} repositionInputs={false}>
-      <DrawerContent className="w-full max-w-[100vw] overflow-hidden max-h-[90dvh]" aria-describedby={undefined}>
-        <DrawerTitle className="sr-only">Add medication</DrawerTitle>
+      <DrawerContent
+        className="flex h-[92dvh] w-full max-w-[100vw] flex-col overflow-hidden bg-panel shadow-[inset_0_3px_0_hsl(var(--meds))]"
+        aria-describedby={undefined}
+      >
         <ConflictCheckOverlay
           state={conflictCheckState}
           data={conflictData}
@@ -429,25 +443,26 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
           }}
         />
         {duplicate && duplicateChoice === null && (
-          <div className="absolute inset-0 bg-background/95 z-10 flex flex-col p-4 overflow-y-auto">
-            <div className="flex items-center gap-2 mb-4">
-              <AlertTriangle className="w-5 h-5 text-amber-500" />
-              <h3 className="text-sm font-semibold">Possible duplicate</h3>
+          <div className="absolute inset-0 z-10 flex flex-col overflow-y-auto bg-panel p-4">
+            <div className="border border-sodium bg-sodium/10 px-3 py-2.5">
+              <h3 className="mb-1 flex items-center gap-2 text-[0.9375rem] font-semibold text-sodium">
+                <AlertTriangle className="h-4 w-4" aria-hidden="true" />
+                Possible duplicate
+              </h3>
+              <p className="mb-2 text-sm">
+                You already have an active prescription for{" "}
+                <span className="font-semibold">{duplicate.genericName}</span>.
+                A second one would put both on your schedule, so &ldquo;take all&rdquo;
+                would log a double dose.
+              </p>
+              <p className="text-[0.8125rem] text-muted-foreground">
+                Adding to the existing prescription stocks this box as another
+                brand and keeps its current schedule — change the dose there if it
+                changed.
+              </p>
             </div>
-            <p className="text-sm text-muted-foreground mb-2">
-              You already have an active prescription for{" "}
-              <span className="font-medium text-foreground">{duplicate.genericName}</span>.
-              A second one would put both on your schedule, so &ldquo;take all&rdquo;
-              would log a double dose.
-            </p>
-            <p className="text-xs text-muted-foreground">
-              Adding to the existing prescription stocks this box as another
-              brand and keeps its current schedule — change the dose there if it
-              changed.
-            </p>
-            <div className="flex flex-col gap-2 mt-auto pt-4">
+            <div className="mt-auto flex flex-col gap-2 pt-4">
               <Button
-                className="bg-teal-600 hover:bg-teal-700"
                 onClick={() => {
                   setDuplicateChoice("addToExisting");
                   handleSave("addToExisting");
@@ -464,45 +479,43 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
               >
                 Save as a separate prescription
               </Button>
-              <Button variant="ghost" onClick={() => setDuplicate(null)}>
+              <Button variant="outline" onClick={() => setDuplicate(null)}>
                 Go back
               </Button>
             </div>
           </div>
         )}
 
-        <div className="p-4 px-5">
-          <div className="flex items-center justify-between mb-4">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={canGoBack ? goBack : handleClose}
-              aria-label={canGoBack ? "Previous step" : "Close wizard"}
-            >
-              {canGoBack ? <ArrowLeft className="w-5 h-5" /> : <X className="w-5 h-5" />}
-            </Button>
-            <div className="text-center">
-              <p className="text-sm font-medium">{STEP_LABELS[step]}</p>
-              <p className="text-xs text-muted-foreground">
-                Step {currentStepIndex + 1} of {activeSteps.length}
+        <div className="flex min-h-0 flex-1 flex-col">
+          {/* Header: title, step counter, Cancel (`.wiz-h`) */}
+          <div className="flex flex-none items-center gap-2 px-3.5 pb-1.5 pt-2">
+            <div className="min-w-0 flex-1">
+              <DrawerTitle className="text-base font-semibold">
+                {isExistingPrescription ? "Add medication" : "Add prescription"}
+              </DrawerTitle>
+              <p className="text-[0.8125rem] text-muted-foreground">
+                Step {currentStepIndex + 1} of {activeSteps.length} ·{" "}
+                <span data-testid="wizard-step-label">{STEP_LABELS[step]}</span>
               </p>
             </div>
-            <div className="w-10" />
+            <Button variant="outline" onClick={handleClose} aria-label="Cancel and close">
+              Cancel
+            </Button>
           </div>
 
-          <div className="flex gap-1 mb-6">
+          {/* Progress segments (`.steps`) */}
+          <div className="grid flex-none gap-[3px] px-3.5 pb-1" style={{ gridTemplateColumns: `repeat(${activeSteps.length}, minmax(0, 1fr))` }} aria-hidden="true">
             {activeSteps.map((s, i) => (
-              <div
+              <i
                 key={s}
-                className={cn(
-                  "h-1 flex-1 rounded-full transition-colors",
-                  i <= currentStepIndex ? "bg-teal-500" : "bg-muted"
-                )}
+                className={cn("block h-1", i <= currentStepIndex ? "bg-meds" : "bg-foreground/14")}
               />
             ))}
           </div>
 
-          <div className="min-h-[300px] max-h-[60dvh] overflow-y-auto px-2 pb-2">
+          {/* Body (`.wiz-b`) */}
+          <div className="flex min-h-[300px] flex-1 flex-col gap-3.5 overflow-y-auto px-3.5 pb-4 pt-3">
+            <h3 className="text-[1.0625rem] font-semibold">{STEP_QUESTIONS[step]}</h3>
             {step === "search" && (
               <SearchStep
                 formState={formState}
@@ -539,36 +552,34 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
             {Object.entries(errors)
               .filter(([field]) => !INLINE_ERROR_FIELDS.has(field))
               .map(([field, message]) => (
-                <p key={field} role="alert" className="text-sm text-destructive mt-2">
+                <p key={field} role="alert" className="text-[0.8125rem] text-bp">
                   {message}
                 </p>
               ))}
           </div>
 
-          <div className="flex gap-3 mt-6">
+          {/* Sticky footer: Back (1fr) + Next / Save (2fr) (`.wiz-f`) */}
+          <div
+            className={cn(
+              "sticky bottom-0 z-[2] grid flex-none gap-2 border-t border-line bg-panel px-3.5 pb-[calc(12px+env(safe-area-inset-bottom,0px))] pt-2.5",
+              canGoBack ? "grid-cols-[1fr_2fr]" : "grid-cols-1",
+            )}
+          >
             {canGoBack && (
-              <Button variant="outline" onClick={goBack} className="flex-1 gap-2">
-                <ArrowLeft className="w-4 h-4" />
+              <Button variant="outline" onClick={goBack}>
+                <ArrowLeft aria-hidden="true" />
                 Back
               </Button>
             )}
             {isLastStep ? (
-              <Button
-                onClick={() => handleSave()}
-                disabled={addPrescriptionMutation.isPending || addMedicationToPrescriptionMutation.isPending}
-                className="flex-1 gap-2 bg-teal-600 hover:bg-teal-700"
-              >
-                {(addPrescriptionMutation.isPending || addMedicationToPrescriptionMutation.isPending) ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Check className="w-4 h-4" />
-                )}
+              <Button onClick={() => handleSave()} disabled={saving}>
+                {saving ? <Loader2 className="animate-spin" /> : <Check aria-hidden="true" />}
                 Save Medication
               </Button>
             ) : (
-              <Button onClick={goNext} className="flex-1 gap-2 bg-teal-600 hover:bg-teal-700">
+              <Button onClick={goNext}>
                 Next
-                <ArrowRight className="w-4 h-4" />
+                <ArrowRight aria-hidden="true" />
               </Button>
             )}
           </div>

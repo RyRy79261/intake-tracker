@@ -33,23 +33,31 @@ export function DosageStep({
   const unevenSplit = validDose && !isCleanFraction(pillsNeeded);
 
   return (
-    <div className="space-y-4">
+    <div className="flex flex-col gap-3.5">
       {pillContents && (
         <p className="text-sm text-muted-foreground">
-          Each pill contains <span className="font-medium text-foreground">{pillContents}</span>
+          Each pill contains <span className="font-mono font-semibold text-foreground">{pillContents}</span>
         </p>
       )}
       {!isCombination && dose && (
-        <p className="text-xs text-muted-foreground">
-          Read as <span className="font-medium text-foreground">1 pill = {strengthNum} {unit}</span>
+        <p className="text-[0.8125rem] text-muted-foreground">
+          Read as <span className="font-mono font-semibold text-foreground">1 pill = {strengthNum} {unit}</span>
         </p>
       )}
 
+      <div className="flex min-h-11 items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-medium">As needed (PRN)</p>
+          <p className="text-[0.8125rem] text-muted-foreground">No fixed times. You log each dose when you take it.</p>
+        </div>
+        <Switch checked={asNeeded} onCheckedChange={(v) => onFieldChange("asNeeded", v)} aria-label="As needed (PRN)" />
+      </div>
+
       <div>
-        <Label className="text-sm font-medium mb-2 block">
+        <Label className="mb-1 block text-[0.8125rem] font-normal text-muted-foreground">
           {isCombination ? "Pills per dose" : "Prescribed dose amount"}
         </Label>
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-3 gap-1.5" role="radiogroup" aria-label={isCombination ? "Pills per dose" : "Prescribed dose amount"}>
           {DOSE_MULTIPLIERS.map((mult) => {
             const label = isCombination
               ? mult === 1
@@ -59,12 +67,13 @@ export function DosageStep({
             return (
               <button
                 key={mult}
+                type="button"
+                role="radio"
+                aria-checked={dosageAmount === mult && !customDosage}
                 onClick={() => { onFieldChange("dosageAmount", mult); onFieldChange("customDosage", ""); }}
                 className={cn(
-                  "py-3 rounded-lg border text-sm font-medium transition-colors",
-                  dosageAmount === mult && !customDosage
-                    ? "bg-teal-50 border-teal-300 text-teal-700 dark:bg-teal-950/40 dark:border-teal-700 dark:text-teal-300"
-                    : "border-border hover:bg-muted"
+                  "min-h-11 border px-1 font-mono text-sm font-medium",
+                  dosageAmount === mult && !customDosage ? "border-foreground bg-foreground text-background" : "border-line hover:bg-foreground/6",
                 )}
               >
                 {label}
@@ -75,8 +84,8 @@ export function DosageStep({
       </div>
 
       <div>
-        <Label className="text-sm mb-1.5 block">
-          {isCombination ? "Custom pills per dose" : `Custom dose (${unit})`}
+        <Label className="mb-1 block text-[0.8125rem] font-normal text-muted-foreground">
+          {isCombination ? "Or type pills per dose" : `Or type a custom dose (${unit})`}
         </Label>
         <Input
           type="number"
@@ -104,34 +113,28 @@ export function DosageStep({
           }}
           placeholder={isCombination ? "e.g. 2" : `e.g. ${strengthNum * 2}${unit}`}
           aria-invalid={!validDose || undefined}
+          className="font-mono"
         />
-        {error && <p className="text-sm text-destructive mt-1">{error}</p>}
+        {error && <p role="alert" className="mt-1 text-[0.8125rem] text-bp">{error}</p>}
       </div>
 
-      <div className="rounded-lg bg-muted/50 p-3 text-sm">
-        <p className="text-muted-foreground">
-          <span className="font-medium text-foreground">
+      <div aria-live="polite" className="border border-dashed border-muted-foreground p-2.5 text-sm leading-[1.45]">
+        <p>
+          <span className="font-semibold text-meds">
             {pillsNeeded === 1 ? "1 pill" : `${pillsNeeded} pills`}
           </span>
           {" per dose = "}
-          <span className="font-medium text-foreground">{prescribedAmount}{unit}</span>
+          <span className="font-semibold text-meds">{prescribedAmount}{unit}</span>
           {isCombination && " total"}
           {validDose && pillsNeeded < 1 && " (partial pill)"}
         </p>
         {unevenSplit && (
-          <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+          <p className="mt-1 text-[0.8125rem] text-sodium">
             Not a whole or half tablet: check how this dose is split before saving.
           </p>
         )}
       </div>
 
-      <div className="flex items-center justify-between rounded-lg border p-3">
-        <div>
-          <p className="text-sm font-medium">As needed (PRN)</p>
-          <p className="text-xs text-muted-foreground">No fixed schedule — take when needed</p>
-        </div>
-        <Switch checked={asNeeded} onCheckedChange={(v) => onFieldChange("asNeeded", v)} />
-      </div>
     </div>
   );
 }

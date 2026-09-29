@@ -57,20 +57,20 @@ test.describe('Medications', () => {
     await expect(page.locator('text=Indication & Notes')).toBeVisible();
 
     // Verify Food Instruction is set to "After eating"
-    // Since "After eating" is the label and it's selected, it should have the active class
-    const afterEatingBtn = page.locator('button', { hasText: 'After eating' });
-    await expect(afterEatingBtn).toHaveClass(/bg-teal-50|text-teal-700/);
+    // The food options are a radio group; the AI's "after" is the checked one.
+    const afterEatingBtn = page.getByRole('radio', { name: 'After eating' });
+    await expect(afterEatingBtn).toHaveAttribute('aria-checked', 'true');
 
     // Verify Food note (placeholder is dynamic: "e.g. Take {foodInstruction} eating with water")
     await expect(page.getByRole('textbox', { name: /Take.*eating with water/ })).toHaveValue('Take with food');
 
     // Step 4: Dosage
     await page.click('button:has-text("Next")');
-    await expect(page.locator('text=Dosage')).toBeVisible();
+    await expect(page.getByTestId('wizard-step-label')).toHaveText('Dosage');
 
     // Step 5: Schedule
     await page.click('button:has-text("Next")');
-    await expect(page.getByRole('dialog').locator('p.text-sm.font-medium', { hasText: 'Schedule' })).toBeVisible();
+    await expect(page.getByRole('dialog').getByTestId('wizard-step-label')).toBeVisible();
 
     // Step 6: Inventory
     await page.click('button:has-text("Next")');
@@ -132,11 +132,11 @@ test.describe('Medications', () => {
 
     // Step 4: Dosage
     await page.click('button:has-text("Next")');
-    await expect(page.locator('text=Dosage')).toBeVisible();
+    await expect(page.getByTestId('wizard-step-label')).toHaveText('Dosage');
 
     // Step 5: Schedule
     await page.click('button:has-text("Next")');
-    await expect(page.getByRole('dialog').locator('p.text-sm.font-medium', { hasText: 'Schedule' })).toBeVisible();
+    await expect(page.getByRole('dialog').getByTestId('wizard-step-label')).toBeVisible();
 
     // Step 6: Inventory
     await page.click('button:has-text("Next")');
@@ -229,7 +229,7 @@ test.describe('Medications', () => {
     await expect(page.locator('text=Indication & Notes')).toBeVisible();
     // Dosage — flip the "As needed (PRN)" switch so no schedule is required
     await page.click('button:has-text("Next")');
-    await expect(page.locator('text=Dosage')).toBeVisible();
+    await expect(page.getByTestId('wizard-step-label')).toHaveText('Dosage');
     await page.getByRole('switch').click();
 
     // As-needed skips the Schedule step → Next lands on Inventory
@@ -294,6 +294,61 @@ test.describe('Medications', () => {
     await expect(medsWindow.locator('text=Add a prescription')).toBeVisible();
   });
 
+  test('should add a prescription by hand (no AI) and expand its Rx card', async ({ page }) => {
+    await page.goto('/medications');
+    const medsWindow = page.getByTestId('window');
+    await medsWindow.getByRole('tab', { name: 'Rx' }).click();
+    await medsWindow.getByRole('button', { name: /Add your first prescription|Add prescription/ }).click();
+
+    // Step 1: names and strength typed in (the AI lookup is not used).
+    const wizard = page.getByRole('dialog');
+    await expect(wizard.getByTestId('wizard-step-label')).toHaveText('Search Medicine');
+    await wizard.getByPlaceholder('e.g. Aviolix', { exact: true }).fill('Concor');
+    await wizard.getByPlaceholder('e.g. Clopidogrel').fill('Bisoprolol');
+    await wizard.getByPlaceholder('e.g. 75mg').fill('5mg');
+    await wizard.getByRole('button', { name: /^Next/ }).click();
+
+    await expect(wizard.getByTestId('wizard-step-label')).toHaveText('Pill Appearance');
+    await wizard.getByRole('button', { name: /^Next/ }).click();
+
+    await expect(wizard.getByTestId('wizard-step-label')).toHaveText('Indication & Notes');
+    await wizard.getByPlaceholder(/Heart failure/).fill('Heart failure');
+    await wizard.getByRole('button', { name: /^Next/ }).click();
+
+    // Dosage: one 5mg pill per dose.
+    await expect(wizard.getByTestId('wizard-step-label')).toHaveText('Dosage');
+    await wizard.getByRole('radio', { name: '5mg', exact: true }).click();
+    await wizard.getByRole('button', { name: /^Next/ }).click();
+
+    // Schedule keeps its default time.
+    await expect(wizard.getByTestId('wizard-step-label')).toHaveText('Schedule');
+    await wizard.getByRole('button', { name: /^Next/ }).click();
+
+    await expect(wizard.getByTestId('wizard-step-label')).toHaveText('Inventory');
+    await wizard.getByPlaceholder('e.g. 36').fill('30');
+    await wizard.getByRole('button', { name: /Save Medication/ }).click();
+    await expect(page.getByRole('dialog')).toBeHidden({ timeout: 5000 });
+
+    // The compact card: name, indication, dose chip and the active box.
+    const card = medsWindow.getByTestId('rx-card').filter({ hasText: 'Bisoprolol' });
+    await expect(card).toBeVisible();
+    await expect(card).toContainText('Heart failure');
+    await expect(card).toContainText('5mg');
+    await expect(card.getByRole('button', { name: /Concor, active brand/ })).toBeVisible();
+
+    // Expand: the card spans the grid and shows its boxes, schedule and Edit.
+    await card.getByRole('button', { name: /Bisoprolol/, expanded: false }).click();
+    await expect(card).toHaveAttribute('data-expanded', 'true');
+    await expect(card).toHaveClass(/col-span-2/);
+    await expect(card.getByText('Medicines')).toBeVisible();
+    await expect(card.getByText(/5mg daily/)).toBeVisible();
+    await expect(card.getByRole('button', { name: 'Prescription Details' })).toBeVisible();
+
+    // Collapse again.
+    await card.getByRole('button', { name: /Bisoprolol/, expanded: true }).click();
+    await expect(card.getByText('Medicines')).toBeHidden();
+  });
+
   test('should log an extra dose from the "+" button and undo it', async ({ page }) => {
     // Client-side errors only: a network status (e.g. the auth session probe
     // with no auth backend configured locally) is not this flow's concern.
@@ -319,7 +374,7 @@ test.describe('Medications', () => {
     await page.click('button:has-text("Next")'); // Appearance
     await page.click('button:has-text("Next")'); // Indication
     await page.click('button:has-text("Next")'); // Dosage
-    await expect(page.locator('text=Dosage')).toBeVisible();
+    await expect(page.getByTestId('wizard-step-label')).toHaveText('Dosage');
     await page.getByRole('switch').click(); // As needed: no schedule step
     await page.click('button:has-text("Next")');
     await expect(page.locator('text=Current stock')).toBeVisible();

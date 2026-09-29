@@ -163,15 +163,10 @@ describe("PrescriptionViewDrawer", () => {
     await user.clear(nameInput);
     await user.type(nameInput, "Lisinopril XR");
 
-    // The edit header exposes a cancel (X) and a save (check) icon button.
-    // The save button carries the teal accent class — find it among the
-    // header's icon buttons and click it to commit.
+    // The edit header exposes Cancel and Save buttons; Save commits.
     const detailsHeading = screen.getByText("Prescription Details");
     const headerRow = detailsHeading.parentElement!;
-    const saveBtn = within(headerRow)
-      .getAllByRole("button")
-      .find((b) => b.className.includes("teal"))!;
-    await user.click(saveBtn);
+    await user.click(within(headerRow).getByRole("button", { name: /save details/i }));
 
     await vi.waitFor(async () => {
       const rx = await db.prescriptions.get(prescription.id);

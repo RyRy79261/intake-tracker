@@ -52,12 +52,12 @@ export function SearchStep({
   const comboTotal = compoundSum(compounds);
 
   return (
-    <div className="space-y-4">
+    <div className="flex flex-col gap-3.5">
       {existingPrescriptions.length > 0 && (
         <div>
-          <Label className="text-sm font-medium mb-1.5 block">Assign to prescription</Label>
+          <Label className="text-[0.8125rem] font-normal text-muted-foreground mb-1 block">Assign to prescription</Label>
           <select
-            className="flex h-9 w-full rounded-md border border-input bg-background text-foreground px-3 py-1 text-sm shadow-xs"
+            className="flex h-10 w-full rounded-none border border-input bg-background px-2.5 text-[0.9375rem] text-foreground"
             value={selectedPrescriptionId}
             onChange={(e) => onSelectPrescription(e.target.value)}
           >
@@ -73,7 +73,7 @@ export function SearchStep({
 
       {showAi && (
         <div>
-          <Label className="text-sm font-medium mb-1.5 block">Search medication</Label>
+          <Label className="text-[0.8125rem] font-normal text-muted-foreground mb-1 block">Search medication</Label>
           <div className="flex gap-2">
             <Input
               placeholder="e.g. Aviolix, Clopidogrel..."
@@ -90,20 +90,21 @@ export function SearchStep({
               onClick={onSearch}
               disabled={isSearching || !searchQuery.trim()}
               size="icon"
-              className="shrink-0 bg-teal-600 hover:bg-teal-700"
+              aria-label="Search"
+              className="h-10 w-11 shrink-0"
             >
               {isSearching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
             </Button>
           </div>
-          {searchError && <p className="text-xs text-red-500 mt-1">{searchError}</p>}
+          {searchError && <p role="alert" className="mt-1 text-[0.8125rem] text-bp">{searchError}</p>}
         </div>
       )}
 
       {showAi && result && (
-        <div className="rounded-lg bg-teal-50 dark:bg-teal-950/30 p-3 text-sm space-y-1">
-          <p className="font-medium text-teal-700 dark:text-teal-300">Found: {result.genericName}</p>
+        <div className="space-y-1 border border-line bg-background p-3 text-sm shadow-[inset_3px_0_0_hsl(var(--ai))]">
+          <p className="font-semibold">Found: {result.genericName}</p>
           {result.isGenericFallback && (
-            <div className="bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 px-2 py-1 rounded text-xs mt-1 mb-2 border border-amber-200 dark:border-amber-800">
+            <div className="mb-2 mt-1 border border-sodium bg-sodium/10 px-2 py-1 text-xs">
               Could not find physical details for that specific brand. Showing appearance for the generic equivalent.
             </div>
           )}
@@ -131,23 +132,23 @@ export function SearchStep({
         </div>
       )}
 
-      <div className="space-y-3 pt-2">
+      <div className="flex flex-col gap-3.5">
         <div>
-          <Label className="text-sm mb-1.5 block">Brand name</Label>
+          <Label className="text-[0.8125rem] font-normal text-muted-foreground mb-1 block">Brand name</Label>
           <Input value={brandName} onChange={(e) => onFieldChange("brandName", e.target.value)} placeholder="e.g. Aviolix" />
           {errors.brandName && (
-            <p className="text-sm text-destructive mt-1">{errors.brandName}</p>
+            <p className="mt-1 text-[0.8125rem] text-bp">{errors.brandName}</p>
           )}
         </div>
         <div>
-          <Label className="text-sm mb-1.5 block">Active ingredient</Label>
+          <Label className="text-[0.8125rem] font-normal text-muted-foreground mb-1 block">Active ingredient</Label>
           <Input value={genericName} onChange={(e) => onFieldChange("genericName", e.target.value)} placeholder="e.g. Clopidogrel" />
         </div>
 
-        <div className="flex items-center justify-between rounded-lg border p-3">
+        <div className="flex min-h-11 items-center justify-between gap-3">
           <div>
             <p className="text-sm font-medium">Combination drug</p>
-            <p className="text-xs text-muted-foreground">Tablet with two active ingredients</p>
+            <p className="text-[0.8125rem] text-muted-foreground">Tablet with two active ingredients</p>
           </div>
           <Switch
             checked={isCombination}
@@ -157,9 +158,9 @@ export function SearchStep({
 
         {isCombination ? (
           <div>
-            <Label className="text-sm mb-1.5 block">Active ingredients (per pill)</Label>
+            <Label className="text-[0.8125rem] font-normal text-muted-foreground mb-1 block">Each pill contains …</Label>
             {comboOptions.length > 0 && (
-              <div className="flex flex-wrap gap-1 mb-2">
+              <div className="mb-2 flex flex-wrap gap-1.5">
                 {comboOptions.map((opt) => {
                   const selected =
                     formatCompoundShort(compounds) === formatCompoundShort(opt.compounds);
@@ -169,10 +170,10 @@ export function SearchStep({
                       type="button"
                       onClick={() => applyComboOption(opt)}
                       className={cn(
-                        "text-xs px-2 py-0.5 rounded-full border transition-colors",
+                        "min-h-9 border px-2.5 font-mono text-[0.8125rem]",
                         selected
-                          ? "bg-teal-100 border-teal-300 dark:bg-teal-900 dark:border-teal-700"
-                          : "border-border hover:bg-muted"
+                          ? "border-foreground bg-foreground text-background"
+                          : "border-line hover:bg-foreground/6"
                       )}
                     >
                       {opt.label}
@@ -190,7 +191,7 @@ export function SearchStep({
                     placeholder={i === 0 ? "e.g. Sacubitril" : "e.g. Valsartan"}
                     className="flex-1"
                   />
-                  <div className="flex items-center gap-1 shrink-0">
+                  <div className="relative shrink-0">
                     <Input
                       type="number"
                       step="any"
@@ -199,38 +200,40 @@ export function SearchStep({
                       onChange={(e) =>
                         setCompound(i, { strength: parseFloat(e.target.value) || 0 })
                       }
-                      placeholder="mg"
-                      className="w-20"
+                      placeholder="0"
+                      aria-label={`${c.name || `Compound ${i + 1}`} strength per pill`}
+                      className="w-28 pr-10 font-mono"
                     />
-                    <span className="text-xs text-muted-foreground">mg</span>
+                    <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 font-mono text-[0.8125rem] text-muted-foreground">mg</span>
                   </div>
                 </div>
               ))}
             </div>
             {comboTotal > 0 && (
-              <p className="text-xs text-muted-foreground mt-1.5">
-                Total per pill: <span className="font-medium text-foreground">{comboTotal}mg</span>
+              <p className="mt-1.5 text-[0.8125rem] text-muted-foreground">
+                Total per pill: <span className="font-mono font-semibold text-foreground">{comboTotal}mg</span>
               </p>
             )}
             {errors.compounds && (
-              <p className="text-sm text-destructive mt-1">{errors.compounds}</p>
+              <p className="mt-1 text-[0.8125rem] text-bp">{errors.compounds}</p>
             )}
           </div>
         ) : (
           <div>
-            <Label className="text-sm mb-1.5 block">Dosage strength</Label>
-            <Input value={dosageStrength} onChange={(e) => onFieldChange("dosageStrength", e.target.value)} placeholder="e.g. 75mg" />
+            <Label className="text-[0.8125rem] font-normal text-muted-foreground mb-1 block">Each pill contains …</Label>
+            <Input value={dosageStrength} onChange={(e) => onFieldChange("dosageStrength", e.target.value)} placeholder="e.g. 75mg" aria-label="Strength per pill" className="font-mono" />
             {result && result.dosageStrengths.length > 1 && (
-              <div className="flex flex-wrap gap-1 mt-1.5">
+              <div className="mt-1.5 flex flex-wrap gap-1.5">
                 {result.dosageStrengths.map((s: string) => (
                   <button
                     key={s}
+                    type="button"
                     onClick={() => onFieldChange("dosageStrength", s)}
                     className={cn(
-                      "text-xs px-2 py-0.5 rounded-full border transition-colors",
+                      "min-h-9 border px-2.5 font-mono text-[0.8125rem]",
                       dosageStrength === s
-                        ? "bg-teal-100 border-teal-300 dark:bg-teal-900 dark:border-teal-700"
-                        : "border-border hover:bg-muted"
+                        ? "border-foreground bg-foreground text-background"
+                        : "border-line hover:bg-foreground/6"
                     )}
                   >
                     {s}

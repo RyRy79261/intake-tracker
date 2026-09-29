@@ -2,7 +2,7 @@
 
 import { Button } from "@intake/ui/button";
 import { Input } from "@intake/ui/input";
-import { Plus, X } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type {
   AddMedicationFormState,
@@ -50,43 +50,53 @@ export function ScheduleStep({
   };
 
   return (
-    <div className="space-y-3">
-      <p className="text-sm text-muted-foreground">When should this medication be taken?</p>
-
+    <div className="flex flex-col gap-1.5">
       {schedules.map((sched, i) => (
-        <div key={i} className="flex items-center gap-2">
-          <Input
-            type="time"
-            value={sched.time}
-            onChange={(e) => updateSchedule(i, { time: e.target.value })}
-            className="w-28 shrink-0"
-          />
-          <div className="flex gap-0.5 flex-1">
+        <div key={i} className="flex flex-col gap-2 border border-line bg-background p-2">
+          <div className="flex items-end gap-1.5">
+            <label className="min-w-0 flex-1">
+              <span className="mb-1 block text-[0.8125rem] text-muted-foreground">Time</span>
+              <Input
+                type="time"
+                value={sched.time}
+                onChange={(e) => updateSchedule(i, { time: e.target.value })}
+                className="font-mono"
+              />
+            </label>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-10 w-11 shrink-0"
+              onClick={() => removeSchedule(i)}
+              disabled={schedules.length <= 1}
+              aria-label={`Remove ${sched.time}`}
+            >
+              <Trash2 />
+            </Button>
+          </div>
+          <div className="grid grid-cols-7 gap-[3px]" role="group" aria-label="Days">
             {weekDayOrder(weekStartsOn).map((dayIndex) => (
               <button
                 key={dayIndex}
+                type="button"
+                aria-pressed={sched.daysOfWeek.includes(dayIndex)}
                 onClick={() => toggleDay(i, dayIndex)}
                 className={cn(
-                  "flex-1 py-1 rounded text-[10px] font-medium transition-colors",
+                  "min-h-11 border text-xs font-medium",
                   sched.daysOfWeek.includes(dayIndex)
-                    ? "bg-teal-600 text-white"
-                    : "bg-muted text-muted-foreground hover:bg-muted/80"
+                    ? "border-foreground bg-foreground text-background"
+                    : "border-line text-muted-foreground hover:bg-foreground/6",
                 )}
               >
                 {DAY_LABELS_SHORT[dayIndex]}
               </button>
             ))}
           </div>
-          {schedules.length > 1 && (
-            <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => removeSchedule(i)}>
-              <X className="w-3 h-3" />
-            </Button>
-          )}
         </div>
       ))}
 
-      <Button variant="outline" size="sm" onClick={addScheduleEntry} className="w-full gap-1.5">
-        <Plus className="w-3.5 h-3.5" />
+      <Button variant="outline" onClick={addScheduleEntry} className="mt-1 w-full">
+        <Plus />
         Add time
       </Button>
     </div>

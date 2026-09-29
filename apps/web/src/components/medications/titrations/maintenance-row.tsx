@@ -1,6 +1,5 @@
 "use client";
 
-import { Clock } from "lucide-react";
 import {
   useInventoryForPrescription,
   usePhasesForPrescription,
@@ -33,34 +32,28 @@ export function MaintenanceRow({ prescription }: { prescription: Prescription })
   const activeBrand = inventoryItems.find((i) => i.isActive && !i.isArchived);
   const fmtDose = (mg: number, unit: string) => formatComboDose(mg, unit, activeBrand);
 
+  const daysText = (days: number[]) =>
+    days.length === 7
+      ? "Every day"
+      : sortDaysForDisplay(days, weekStartsOn).map((d) => DAY_LABELS_LONG[d]).join(", ");
+
   return (
-    <div className="p-2.5 rounded-lg bg-muted/30 border border-border/40">
-      <div className="flex items-center justify-between">
-        <span className="text-xs font-medium">{prescription.genericName}</span>
-        <span className="text-[10px] text-muted-foreground">
+    <div className="flex flex-col gap-[3px] border-t border-line py-2 first-of-type:border-t-0">
+      <div className="flex items-baseline justify-between gap-2">
+        <b className="font-semibold">{prescription.genericName}</b>
+        <span className="whitespace-nowrap font-mono text-[0.8125rem] text-muted-foreground">
           {everyDay ? "" : "avg "}
           {fmtDose(dailyDose, maintenancePhase.unit)}/day
         </span>
       </div>
-      {prescription.indication && (
-        <span className="text-[10px] text-muted-foreground">{prescription.indication}</span>
-      )}
-      <div className="mt-1.5 space-y-0.5">
-        {schedules.map((s) => (
-          <div key={s.id} className="flex items-center gap-2 text-[11px] text-muted-foreground">
-            <Clock className="w-3 h-3" />
-            <span>{s.time}</span>
-            <span className="font-medium text-foreground">
-              {fmtDose(s.dosage, maintenancePhase.unit)}
-            </span>
-            {s.daysOfWeek.length < 7 && (
-              <span className="text-[10px]">
-                ({sortDaysForDisplay(s.daysOfWeek, weekStartsOn).map((d) => DAY_LABELS_LONG[d]).join(", ")})
-              </span>
-            )}
-          </div>
-        ))}
-      </div>
+      {schedules.map((s) => (
+        <p key={s.id} className="text-[0.8125rem] text-muted-foreground">
+          <span className="font-mono">{s.time}</span>{" "}
+          <span className="font-medium text-foreground">{fmtDose(s.dosage, maintenancePhase.unit)}</span>
+          {" · "}
+          {daysText(s.daysOfWeek)}
+        </p>
+      ))}
     </div>
   );
 }

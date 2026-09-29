@@ -26,23 +26,23 @@ export function IndicationStep({
   const foodOptions: { value: FoodInstruction; label: string }[] = [
     { value: "before", label: "Before eating" },
     { value: "after", label: "After eating" },
-    { value: "none", label: "Not important" },
+    { value: "none", label: "No instruction" },
   ];
 
   return (
-    <div className="space-y-4">
+    <div className="flex flex-col gap-3.5">
       {!isExistingPrescription && (
         <>
           <div>
-            <div className="flex items-center justify-between mb-1.5">
-              <Label className="text-sm font-medium">What is this medication for?</Label>
+            <div className="mb-1 flex items-center justify-between">
+              <Label className="text-[0.8125rem] font-normal text-muted-foreground">Indication</Label>
               {showAi && onRefreshAI && (
                 <Button
-                  variant="ghost"
+                  variant="outline"
                   size="sm"
                   onClick={onRefreshAI}
                   disabled={isRefreshing}
-                  className="h-7 text-xs gap-1 text-teal-600"
+                  className="border-ai text-ai"
                 >
                   {isRefreshing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Search className="w-3 h-3" />}
                   AI Suggest
@@ -58,23 +58,23 @@ export function IndicationStep({
           </div>
 
           {(contraindications.length > 0 || warnings.length > 0) && (
-            <div className="bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900 rounded-lg p-3 space-y-3">
+            <div className="space-y-3 border border-bp bg-bp/8 p-3">
               {contraindications.length > 0 && (
                 <div>
-                  <p className="text-xs font-semibold text-red-800 dark:text-red-400 uppercase tracking-wider mb-1">
+                  <p className="mb-1 text-[0.6875rem] font-semibold tracking-[0.06em] text-bp">
                     Contraindications
                   </p>
-                  <ul className="list-disc list-inside text-xs text-red-700 dark:text-red-300 ml-4 space-y-0.5">
+                  <ul className="ml-4 list-inside list-disc space-y-0.5 text-[0.8125rem]">
                     {contraindications.map((c, i) => <li key={i}>{c.charAt(0).toUpperCase() + c.slice(1).toLowerCase()}</li>)}
                   </ul>
                 </div>
               )}
               {warnings.length > 0 && (
                 <div>
-                  <p className="text-xs font-semibold text-amber-800 dark:text-amber-500 uppercase tracking-wider mb-1">
+                  <p className="mb-1 text-[0.6875rem] font-semibold tracking-[0.06em] text-sodium">
                     Warnings
                   </p>
-                  <ul className="list-disc list-inside text-xs text-amber-700 dark:text-amber-400 ml-4 space-y-0.5">
+                  <ul className="ml-4 list-inside list-disc space-y-0.5 text-[0.8125rem]">
                     {warnings.map((w, i) => <li key={i}>{w}</li>)}
                   </ul>
                 </div>
@@ -85,17 +85,18 @@ export function IndicationStep({
       )}
 
       <div>
-        <Label className="text-sm font-medium mb-2 block">Food instruction</Label>
-        <div className="flex gap-2">
+        <Label className="mb-1 block text-[0.8125rem] font-normal text-muted-foreground">Food</Label>
+        <div className="flex border border-input" role="radiogroup" aria-label="Food instruction">
           {foodOptions.map((opt) => (
             <button
               key={opt.value}
+              type="button"
+              role="radio"
+              aria-checked={foodInstruction === opt.value}
               onClick={() => onFieldChange("foodInstruction", opt.value)}
               className={cn(
-                "flex-1 py-2 px-3 rounded-lg border text-sm font-medium transition-colors",
-                foodInstruction === opt.value
-                  ? "bg-teal-50 border-teal-300 text-teal-700 dark:bg-teal-950/40 dark:border-teal-700 dark:text-teal-300"
-                  : "border-border text-muted-foreground hover:bg-muted"
+                "min-h-10 flex-1 border-l border-input px-2 text-[0.8125rem] font-medium first:border-l-0",
+                foodInstruction === opt.value ? "bg-foreground text-background" : "hover:bg-foreground/6",
               )}
             >
               {opt.label}
@@ -106,7 +107,7 @@ export function IndicationStep({
 
       {foodInstruction !== "none" && (
         <div>
-          <Label className="text-sm mb-1.5 block">Food note (optional)</Label>
+          <Label className="mb-1 block text-[0.8125rem] font-normal text-muted-foreground">Food note (optional)</Label>
           <Input
             value={foodNote}
             onChange={(e) => onFieldChange("foodNote", e.target.value)}
@@ -116,7 +117,7 @@ export function IndicationStep({
       )}
 
       <div>
-        <Label className="text-sm font-medium mb-1.5 block">Additional notes</Label>
+        <Label className="mb-1 block text-[0.8125rem] font-normal text-muted-foreground">Notes (optional)</Label>
         <Textarea
           value={notes}
           onChange={(e) => onFieldChange("notes", e.target.value)}
