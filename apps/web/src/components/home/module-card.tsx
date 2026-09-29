@@ -61,9 +61,13 @@ export function useLogicalTodayRange(): [number, number] {
   }, [dayStartHour, tick]);
 }
 
-/** "07:20", or "Yest 07:20" / "Fri 07:20" for an earlier logical day. */
+/**
+ * "07:20", or "Yest 07:20" / "Fri 07:20" for an earlier logical day. Re-renders
+ * on the minute tick so the prefix appears once the day boundary passes.
+ */
 export function WhenLabel({ timestamp }: { timestamp: number }) {
   const dayStartHour = useSettingsStore((s) => s.dayStartHour);
+  useNowTick();
   const day = recentDayLabel(timestamp, dayStartHour);
   return <>{day ? `${day} ` : ""}{formatTimeOnly(timestamp)}</>;
 }
