@@ -35,12 +35,15 @@ import {
   estimateRecordSchema,
   normalizeAmountEstimate,
 } from "@intake/core/record-schemas";
+import { useFieldId, useOnLogged } from "@/components/log-form-scope";
 
 const AMOUNT_OPTIONS = DEFECATION_AMOUNT_OPTIONS;
 
 const theme = CARD_THEMES.defecation;
 
 export function DefecationCard() {
+  const onLogged = useOnLogged();
+  const fid = useFieldId();
   const { toast } = useToast();
   const settings = useSettings();
   const [showDetails, setShowDetails] = useState(false);
@@ -103,6 +106,7 @@ export function DefecationCard() {
           void removeQuickLoggedRecord("defecation", record.id);
         },
       });
+      onLogged();
     } catch {
       toast({
         title: "Error",
@@ -152,6 +156,7 @@ export function DefecationCard() {
         description: "Defecation recorded",
         variant: "success",
       });
+      onLogged();
       setShowDetails(false);
       setAmount(settings.defecationDefaultAmount || "");
       setNote("");
@@ -229,9 +234,9 @@ export function DefecationCard() {
             </Select>
           </div>
           <div className="space-y-1">
-            <Label htmlFor="defecation-note" className="text-[0.8125rem] text-muted-foreground">Note (optional)</Label>
+            <Label htmlFor={fid("defecation-note")} className="text-[0.8125rem] text-muted-foreground">Note (optional)</Label>
             <Textarea
-              id="defecation-note"
+              id={fid("defecation-note")}
               placeholder="e.g. consistency, urgency"
               value={note}
               onChange={(e) => setNote(e.target.value)}
@@ -239,9 +244,9 @@ export function DefecationCard() {
             />
           </div>
           <div className="space-y-1">
-            <Label htmlFor="defecation-time" className="text-[0.8125rem] text-muted-foreground">When</Label>
+            <Label htmlFor={fid("defecation-time")} className="text-[0.8125rem] text-muted-foreground">When</Label>
             <Input
-              id="defecation-time"
+              id={fid("defecation-time")}
               type="datetime-local"
               value={detailTime}
               onChange={(e) => setDetailTime(e.target.value)}

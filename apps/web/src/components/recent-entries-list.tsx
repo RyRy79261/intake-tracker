@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 import { formatTimeOnly, getCurrentDateTimeLocal } from "@/lib/date-utils";
 import { recentDayLabel } from "@/lib/week-utils";
 import { useSettingsStore } from "@/stores/settings-store";
+import { useNowTick } from "@intake/ui/use-now-tick";
 
 /**
  * Shared shell for inline edit forms used by card components.
@@ -118,6 +119,8 @@ export function RecentEntriesList<T extends { id: string; timestamp: number }>({
   emptyText = "Nothing logged yet.",
 }: RecentEntriesListProps<T>) {
   const dayStartHour = useSettingsStore((s) => s.dayStartHour);
+  // Re-render on the minute tick so day prefixes roll over at the day boundary.
+  useNowTick();
   if (!records) return null;
 
   const displayRecords = records.slice(0, maxEntries);
