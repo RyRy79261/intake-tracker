@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useWindowStore, type OpenResult } from "@/stores/window-store";
-import { windowForRoute, windowHref, type ShellAppId, type WindowState } from "@/lib/nav-routes";
+import { isWindowRoute, windowForRoute, windowHref, type ShellAppId, type WindowState } from "@/lib/nav-routes";
 
 /**
  * Browser history for Ward Console windows.
@@ -23,6 +23,8 @@ interface WardHistoryState {
   wardSeq?: number;
   /** The window this entry opened. */
   wardWin?: string;
+  /** A route outside the shell (Settings, Help, /auth): the windows are hidden. */
+  wardOff?: boolean;
 }
 
 let lastSeq = 0;
@@ -30,6 +32,9 @@ let lastSeq = 0;
 let skipPops = 0;
 /** `wardSeq` of the entry we are on. */
 let currentSeq = 0;
+/** `wardWin` / `wardOff` of the entry we are on, so Back knows what it leaves. */
+let currentWin: string | undefined;
+let currentOff = false;
 /** The first route sync after a page load pushes a Home entry under a deep link. */
 let firstSync = true;
 
@@ -37,6 +42,19 @@ function nextSeq(): number {
   lastSeq = Math.max(lastSeq + 1, Date.now());
   currentSeq = lastSeq;
   return lastSeq;
+}
+
+/** Tag the entry we are on (a fresh `wardSeq`) and remember what it holds. */
+function tag(extra: Omit<WardHistoryState, "wardSeq">): WardHistoryState {
+  currentWin = extra.wardWin;
+  currentOff = extra.wardOff === true;
+  return { wardSeq: nextSeq(), ...extra };
+}
+
+function track(state: WardHistoryState | null): void {
+  currentSeq = seqOf(state);
+  currentWin = state?.wardWin;
+  currentOff = state?.wardOff === true;
 }
 
 function wardState(): WardHistoryState | null {
@@ -56,7 +74,7 @@ function seqOf(state: WardHistoryState | null): number {
 export function openWindow(app: ShellAppId, st?: WindowState): OpenResult {
   const res = useWindowStore.getState().open(app, st);
   if (res?.created) {
-    const data: WardHistoryState = { wardSeq: nextSeq(), wardWin: res.win.id };
+    const data = tag({ wardWin: res.win.id });
     window.history.pushState(data, "", windowHref(res.win.app, res.win.st));
   }
   return res;
@@ -77,12 +95,18 @@ export function closeWindow(id: string): void {
 
 /**
  * The Home button. On a phone it closes the window on screen (the
- * prototype's `home`); on a wide screen it minimises every window.
+ * prototype's `home`); on a wide screen it minimises every window. Off the
+ * shell (`onShell` false, e.g. /settings) no window is on screen, so it only
+ * shows Home and leaves the windows open.
  */
-export function goHome(): void {
+export function goHome(onShell = true): void {
   const s = useWindowStore.getState();
   if (s.wide) {
     s.showDesktop();
+    return;
+  }
+  if (!onShell) {
+    useWindowStore.setState({ showHome: true });
     return;
   }
   if (s.focus && !s.showHome) closeWindow(s.focus);
@@ -92,7 +116,9 @@ export function goHome(): void {
 function onPopState(event: PopStateEvent): void {
   const state = (event.state && typeof event.state === "object" ? event.state : null) as WardHistoryState | null;
   const prev = currentSeq;
-  currentSeq = seqOf(state);
+  const leftWin = currentWin;
+  const leftOff = currentOff;
+  track(state);
   lastSeq = Math.max(lastSeq, currentSeq);
   if (skipPops > 0) {
     skipPops -= 1;
@@ -101,14 +127,29 @@ function onPopState(event: PopStateEvent): void {
   if (currentSeq >= prev) return; // Forward, or an entry we never tagged.
 
   const s = useWindowStore.getState();
-  const onScreen = s.focus && !s.showHome ? s.wins.find((w) => w.id === s.focus && !w.min) : undefined;
-  if (onScreen) {
-    s.close(onScreen.id);
+  const alive = (id: string | undefined) => id !== undefined && s.wins.some((w) => w.id === id);
+  if (leftOff) {
+    // Back from Settings/Help/auth returns to the window underneath, if any.
+  } else if (leftWin) {
+    // Close the window whose entry we left (not whichever is focused), so
+    // the address bar and the windows stay in step.
+    if (alive(leftWin)) s.close(leftWin);
+  } else {
+    const onScreen = s.focus && !s.showHome ? s.wins.find((w) => w.id === s.focus && !w.min) : undefined;
+    if (onScreen) {
+      s.close(onScreen.id);
+      return;
+    }
+  }
+  const landed = state?.wardWin;
+  if (!landed) return;
+  // An entry for a window closed some other way (the switcher) is dead:
+  // keep going back until we reach a live one or one that isn't ours.
+  if (!alive(landed)) {
+    window.history.back();
     return;
   }
-  // Nothing to close: this entry belonged to a window closed some other way
-  // (the switcher). Keep going back until we reach an entry that isn't ours.
-  if (state?.wardWin) window.history.back();
+  if (leftOff) useWindowStore.getState().switchTo(landed);
 }
 
 /**
@@ -121,7 +162,7 @@ export function useWindowHistory(): void {
   const search = useSearchParams();
 
   useEffect(() => {
-    currentSeq = seqOf(wardState());
+    track(wardState());
     lastSeq = Math.max(lastSeq, currentSeq);
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
@@ -139,21 +180,22 @@ export function useWindowHistory(): void {
     const target = windowForRoute(pathname, search);
     const res = target ? useWindowStore.getState().open(target.app, target.st) : null;
     if (!res) {
-      window.history.replaceState({ wardSeq: nextSeq() } satisfies WardHistoryState, "");
+      const off = pathname !== "/" && !isWindowRoute(pathname);
+      window.history.replaceState(tag(off ? { wardOff: true } : {}), "");
       return;
     }
     if (isFirst) {
       // A deep link: put Home underneath so Back closes the window rather
       // than leaving the app.
-      window.history.replaceState({ wardSeq: nextSeq() } satisfies WardHistoryState, "", "/");
+      window.history.replaceState(tag({}), "", "/");
       window.history.pushState(
-        { wardSeq: nextSeq(), wardWin: res.win.id } satisfies WardHistoryState,
+        tag({ wardWin: res.win.id }),
         "",
         windowHref(res.win.app, res.win.st),
       );
       return;
     }
-    window.history.replaceState({ wardSeq: nextSeq(), wardWin: res.win.id } satisfies WardHistoryState, "");
+    window.history.replaceState(tag({ wardWin: res.win.id }), "");
   }, [pathname, search]);
 }
 
@@ -162,5 +204,7 @@ export function __resetWindowHistoryForTests(): void {
   lastSeq = 0;
   skipPops = 0;
   currentSeq = 0;
+  currentWin = undefined;
+  currentOff = false;
   firstSync = true;
 }
