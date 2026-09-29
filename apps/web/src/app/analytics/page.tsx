@@ -16,11 +16,10 @@ function AnalyticsContent() {
 
   const [activeTab, setActiveTab] = useState<AnalyticsTab>(initialTab);
 
-  // Sync tab with URL param changes
+  // Sync tab with URL param changes. A bare /analytics (the Metrics button
+  // after History's ?tab=records) goes back to Summary.
   useEffect(() => {
-    if (isAnalyticsTab(tabParam)) {
-      setActiveTab(tabParam);
-    }
+    setActiveTab(isAnalyticsTab(tabParam) ? tabParam : "summary");
   }, [tabParam]);
 
   return <AnalyticsPageBody activeTab={activeTab} onTabChange={setActiveTab} />;
