@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { apiFetch } from "@/lib/api-fetch";
 import {
   getCachedEntry,
@@ -7,6 +7,7 @@ import {
 } from "@/lib/interaction-cache";
 import { readAiErrorMessage } from "@/lib/ai-error-message";
 import { useUpdatePrescription } from "@/hooks/use-medication-queries";
+import { buildInteractionCheck, legacyInteractionFields } from "@/lib/medicine-about";
 
 // --- Types ---
 
@@ -159,10 +160,22 @@ export function useInteractionCheck() {
 
 // --- useRefreshInteractions ---
 
+const MSG_OFFLINE = "You are offline. Connect to the internet and try again.";
+const MSG_TIMEOUT = "The check took too long and stopped. Try again.";
+
+/**
+ * Check one prescription against the user's other active prescriptions and
+ * store the answer on it: the structured `interactionCheck` (severity rows,
+ * checked date, the medicine list it covered) plus the legacy flat
+ * `contraindications` / `warnings` strings older builds still read.
+ */
 export function useRefreshInteractions() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const updatePrescription = useUpdatePrescription();
+  const abortRef = useRef<AbortController | null>(null);
+
+  useEffect(() => () => abortRef.current?.abort(), []);
 
   const refresh = useCallback(
     async (
@@ -170,8 +183,20 @@ export function useRefreshInteractions() {
       genericName: string,
       activePrescriptions: ActivePrescription[]
     ) => {
-      setIsRefreshing(true);
+      abortRef.current?.abort();
       setError(null);
+      if (typeof navigator !== "undefined" && navigator.onLine === false) {
+        setError(MSG_OFFLINE);
+        return null;
+      }
+      const controller = new AbortController();
+      abortRef.current = controller;
+      let timedOut = false;
+      const timeoutId = setTimeout(() => {
+        timedOut = true;
+        controller.abort();
+      }, INTERACTION_CHECK_TIMEOUT_MS);
+      setIsRefreshing(true);
 
       try {
         const response = await apiFetch("/api/ai/interaction-check", {
@@ -182,6 +207,7 @@ export function useRefreshInteractions() {
             newMedication: genericName,
             activePrescriptions,
           }),
+          signal: controller.signal,
         });
 
         if (!response) {
@@ -191,46 +217,45 @@ export function useRefreshInteractions() {
         }
         if (!response.ok) {
           setError(
-            await readAiErrorMessage(
-              response,
-              `Interaction check failed (${response.status})`,
-            ),
+            response.status === 504
+              ? MSG_TIMEOUT
+              : await readAiErrorMessage(
+                  response,
+                  `Interaction check failed (${response.status})`,
+                ),
           );
           setIsRefreshing(false);
           return null;
         }
 
         const result: InteractionResult = await response.json();
+        const interactionCheck = buildInteractionCheck(
+          result,
+          activePrescriptions.map((p) => p.genericName),
+          Date.now(),
+        );
 
-        // Map interactions to prescription fields
-        const contraindications = result.interactions
-          .filter((i) => i.severity === "AVOID")
-          .map((i) => `${i.medication}: ${i.description}`);
-
-        const warnings = result.interactions
-          .filter((i) => i.severity === "CAUTION")
-          .map((i) => `${i.medication}: ${i.description}`);
-
-        // Prepend drug class to warnings if available
-        if (result.drugClass) {
-          warnings.unshift(`Drug class: ${result.drugClass}`);
-        }
-
-        // Persist to prescription
         await updatePrescription.mutateAsync({
           id: prescriptionId,
-          updates: {
-            contraindications,
-            warnings,
-          },
+          updates: { interactionCheck, ...legacyInteractionFields(result) },
         });
 
         setIsRefreshing(false);
         return result;
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Interaction check failed");
+        if (controller.signal.aborted) {
+          // Unmounted or superseded: say nothing. A timeout says so.
+          if (timedOut) setError(MSG_TIMEOUT);
+        } else if (typeof navigator !== "undefined" && navigator.onLine === false) {
+          setError(MSG_OFFLINE);
+        } else {
+          setError(err instanceof Error ? err.message : "Interaction check failed");
+        }
         setIsRefreshing(false);
         return null;
+      } finally {
+        clearTimeout(timeoutId);
+        if (abortRef.current === controller) abortRef.current = null;
       }
     },
     [updatePrescription]

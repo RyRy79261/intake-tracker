@@ -82,6 +82,8 @@ export async function apiFetch(
   try {
     response = await fetch(url, finalInit);
   } catch (err) {
+    // A caller-aborted request (the user pressed Cancel) is not a failure.
+    if (err instanceof Error && err.name === "AbortError") throw err;
     captureFailure(
       `${method} ${path} → network error: ${err instanceof Error ? err.message : String(err)}`,
     );

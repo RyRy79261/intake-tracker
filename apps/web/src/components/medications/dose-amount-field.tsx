@@ -134,7 +134,7 @@ export function DosePreviewLine({
   }
   if (!unitsMatch(unit, brand.unit)) {
     return (
-      <p className={cn("text-[11px] text-amber-600 dark:text-amber-400", className)}>
+      <p className={cn("text-xs text-sodium", className)}>
         {brand.brandName} is stocked in {brand.unit}, not {unit}
       </p>
     );
@@ -151,7 +151,7 @@ export function DosePreviewLine({
     <p
       className={cn(
         "text-[11px]",
-        preview.clean ? "text-muted-foreground" : "text-amber-600 dark:text-amber-400",
+        preview.clean ? "text-muted-foreground" : "text-sodium",
         className,
       )}
     >

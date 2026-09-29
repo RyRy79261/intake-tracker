@@ -10,7 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@intake/ui/select";
-import { Clock, Plus, X } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 import {
   useInventoryForPrescription,
   usePhasesForPrescription,
@@ -55,13 +55,13 @@ export function RxEntryCard({
   const activeBrand = findActiveBrand(useInventoryForPrescription(selectedRx?.id));
 
   return (
-    <div className="border rounded-lg p-3 space-y-3">
+    <div className="flex flex-col gap-2 border border-line p-2">
       <div className="flex items-center gap-2">
         <Select
           value={entry.prescriptionId || ""}
           onValueChange={(val) => onSelectPrescription(val)}
         >
-          <SelectTrigger className="flex-1 h-9 text-sm">
+          <SelectTrigger className="flex-1">
             <SelectValue placeholder="Select prescription..." />
           </SelectTrigger>
           <SelectContent>
@@ -80,10 +80,11 @@ export function RxEntryCard({
         <Button
           variant="ghost"
           size="icon"
-          className="h-9 w-9 shrink-0"
+          className="h-10 w-11 shrink-0"
+          aria-label="Remove prescription from plan"
           onClick={onRemove}
         >
-          <X className="w-4 h-4 text-muted-foreground" />
+          <Trash2 className="text-muted-foreground" />
         </Button>
       </div>
 
@@ -96,44 +97,45 @@ export function RxEntryCard({
 
       <div className="space-y-2">
         <div className="flex items-center justify-between">
-          <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
-            Titration doses
+          <span className="text-[0.6875rem] font-semibold tracking-[0.06em] text-muted-foreground">
+            TITRATION DOSES
           </span>
           <Button
-            variant="ghost"
+            variant="outline"
             size="sm"
-            className="h-6 text-[11px] px-2 text-teal-600 dark:text-teal-400"
             onClick={onAddSchedule}
           >
-            <Plus className="w-3 h-3 mr-0.5" />
+            <Plus />
             Add time
           </Button>
         </div>
 
         {entry.schedules.map((sched, schedIdx) => (
-          <div key={schedIdx} className="bg-muted/30 rounded-lg p-2 space-y-1">
+          <div key={schedIdx} className="space-y-1 border border-line bg-panel p-2">
             <div className="flex items-center gap-2">
               <Input
                 type="time"
                 value={sched.time}
                 onChange={(e) => onUpdateSchedule(schedIdx, { time: e.target.value })}
-                className="w-28 h-8 text-sm"
+                aria-label="Time"
+                className="w-28 font-mono"
               />
               <DoseAmountInput
                 dosage={sched.dosage}
                 onDosageChange={(dosage) => onUpdateSchedule(schedIdx, { dosage })}
                 unit={TITRATION_UNIT}
                 brand={activeBrand}
-                className="w-20 h-8 text-sm"
+                className="w-24 font-mono"
               />
               {entry.schedules.length > 1 && (
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-6 w-6 shrink-0 ml-auto"
+                  className="ml-auto h-10 w-11 shrink-0"
+                  aria-label={`Remove ${sched.time}`}
                   onClick={() => onRemoveSchedule(schedIdx)}
                 >
-                  <X className="w-3 h-3 text-muted-foreground" />
+                  <Trash2 className="text-muted-foreground" />
                 </Button>
               )}
             </div>
@@ -171,26 +173,22 @@ function PrefillFromMaintenance({
   };
 
   return (
-    <div className="flex items-center justify-between p-2 rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800/50">
+    <div className="flex items-center justify-between gap-2 border border-dashed border-line p-2">
       <div className="space-y-0.5">
-        <span className="text-[10px] font-medium text-blue-700 dark:text-blue-300 uppercase tracking-wider">
+        <span className="text-[0.6875rem] font-semibold tracking-[0.06em] text-muted-foreground">
           Current maintenance
         </span>
         {schedules.map((s) => (
-          <div
-            key={s.id}
-            className="flex items-center gap-2 text-[11px] text-blue-600 dark:text-blue-400"
-          >
-            <Clock className="w-3 h-3" />
-            <span>{s.time}</span>
-            <span>{s.dosage}{maintenancePhase.unit}</span>
+          <div key={s.id} className="flex items-center gap-2 text-[0.8125rem] text-muted-foreground">
+            <span className="font-mono">{s.time}</span>
+            <span className="font-mono text-foreground">{s.dosage}{maintenancePhase.unit}</span>
           </div>
         ))}
       </div>
       <Button
         variant="outline"
         size="sm"
-        className="h-7 text-[11px] gap-1 shrink-0 border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300"
+        className="shrink-0"
         onClick={handlePrefill}
       >
         Copy to titration

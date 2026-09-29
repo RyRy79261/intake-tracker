@@ -9,7 +9,13 @@ import { MaintenanceRow } from "@/components/medications/titrations/maintenance-
 import { TitrationPlanCard } from "@/components/medications/titrations/titration-plan-card";
 import { TitrationDrawer } from "@/components/medications/titrations/titration-drawer";
 import { TitrationStartPrompt } from "@/components/medications/titrations/titration-start-prompt";
+import { SecHead } from "@/components/medications/ward-bits";
 
+/**
+ * The Titrations tab: plans grouped Active / Planned / Past, then every
+ * active prescription's current maintenance schedule. A planned step only
+ * starts once the user confirms it ("Start now" / Activate).
+ */
 export function TitrationsView() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editingPlan, setEditingPlan] = useState<TitrationPlan | null>(null);
@@ -30,72 +36,67 @@ export function TitrationsView() {
   };
 
   return (
-    <div className="space-y-4 pb-24 px-4">
-      <div className="flex items-center justify-between">
-        <p className="text-xs text-muted-foreground">
+    <div className="pb-6">
+      <div className="mb-1 flex items-center gap-3">
+        <p className="min-w-0 flex-1 text-[0.8125rem] leading-snug text-muted-foreground">
           Manage dosage adjustments across prescriptions.
         </p>
-        <Button
-          variant="outline"
-          size="sm"
-          className="gap-1"
-          onClick={() => { setEditingPlan(null); setDrawerOpen(true); }}
-        >
-          <Plus className="w-3.5 h-3.5" />
+        <Button onClick={() => { setEditingPlan(null); setDrawerOpen(true); }}>
+          <Plus aria-hidden="true" />
           New
         </Button>
       </div>
 
-      <TitrationStartPrompt />
+      <TitrationStartPrompt className="mt-3" />
 
       {plans.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-16 text-center">
-          <TrendingUp className="w-12 h-12 text-muted-foreground/30 mb-3" />
-          <p className="text-sm text-muted-foreground mb-1">
-            No titration plans yet
-          </p>
-          <p className="text-xs text-muted-foreground/70">
+        <div className="flex flex-col items-center gap-1.5 px-3 py-7 text-center">
+          <TrendingUp className="h-12 w-12 opacity-50" strokeWidth={1.5} aria-hidden="true" />
+          <p className="text-lg font-semibold">No titration plans yet</p>
+          <p className="text-[0.8125rem] text-muted-foreground">
             Create a plan to adjust dosages across prescriptions.
           </p>
         </div>
       ) : (
         <>
           {activePlans.length > 0 && (
-            <Section label="Active">
+            <section>
+              <SecHead className="first:mt-3.5">Active</SecHead>
               {activePlans.map((plan) => (
                 <TitrationPlanCard key={plan.id} plan={plan} onEdit={() => openForEdit(plan)} />
               ))}
-            </Section>
+            </section>
           )}
 
           {draftPlans.length > 0 && (
-            <Section label="Planned">
+            <section>
+              <SecHead className="first:mt-3.5">Planned</SecHead>
               {draftPlans.map((plan) => (
                 <TitrationPlanCard key={plan.id} plan={plan} onEdit={() => openForEdit(plan)} />
               ))}
-            </Section>
+            </section>
           )}
 
           {pastPlans.length > 0 && (
-            <Section label="Past">
+            <section>
+              <SecHead className="first:mt-3.5">Past</SecHead>
               {pastPlans.map((plan) => (
                 <TitrationPlanCard key={plan.id} plan={plan} onEdit={() => openForEdit(plan)} />
               ))}
-            </Section>
+            </section>
           )}
         </>
       )}
 
       {activePrescriptions.length > 0 && (
-        <Section label="Current Maintenance">
-          <div className="space-y-2">
-            {activePrescriptions
-              .sort((a, b) => a.genericName.localeCompare(b.genericName))
-              .map((rx) => (
-                <MaintenanceRow key={rx.id} prescription={rx} />
-              ))}
-          </div>
-        </Section>
+        <section>
+          <SecHead className="first:mt-3.5">Current maintenance</SecHead>
+          {activePrescriptions
+            .sort((a, b) => a.genericName.localeCompare(b.genericName))
+            .map((rx) => (
+              <MaintenanceRow key={rx.id} prescription={rx} />
+            ))}
+        </section>
       )}
 
       <TitrationDrawer
@@ -107,21 +108,3 @@ export function TitrationsView() {
     </div>
   );
 }
-
-function Section({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="space-y-2">
-      <h3 className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
-        {label}
-      </h3>
-      {children}
-    </div>
-  );
-}
-
