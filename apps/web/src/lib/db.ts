@@ -856,17 +856,44 @@ const PREVIEW_STORES = {
   userSettings: "id, updatedAt",
 } as const;
 
+export const PREVIEW_DB_PREFIX = "IntakeTrackerPreviewDB-";
 let previewDbCounter = 0;
+/**
+ * Scopes preview database names to this page load. A preview torn down by a
+ * reload or navigation never runs its cleanup, so its database survives; with
+ * a bare counter the next load would reopen it and seed on top of the old
+ * sample rows.
+ */
+const previewDbSession = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+let stalePreviewsSwept = false;
+
+/** Delete preview databases left behind by earlier page loads. */
+async function sweepStalePreviewDatabases(): Promise<void> {
+  if (typeof indexedDB === "undefined" || typeof indexedDB.databases !== "function") return;
+  try {
+    const own = `${PREVIEW_DB_PREFIX}${previewDbSession}-`;
+    const stale = (await indexedDB.databases())
+      .map((d) => d.name)
+      .filter((n): n is string => !!n?.startsWith(PREVIEW_DB_PREFIX) && !n.startsWith(own));
+    await Promise.allSettled(stale.map((n) => Dexie.delete(n)));
+  } catch {
+    // Best effort: a leftover preview database only costs a little storage.
+  }
+}
 
 /**
  * Create a fresh, isolated database for an in-app component preview. It has
- * the current schema and a unique name, and holds no data until seeded. Pair
- * with `setActiveDatabase` / `resetActiveDatabase`.
+ * the current schema and a name unique to this page load, and holds no data
+ * until seeded. Pair with `setActiveDatabase` / `resetActiveDatabase`.
  */
 export function createPreviewDatabase(): AppDatabase {
+  if (!stalePreviewsSwept) {
+    stalePreviewsSwept = true;
+    void sweepStalePreviewDatabases();
+  }
   previewDbCounter += 1;
   const preview = new Dexie(
-    `IntakeTrackerPreviewDB-${previewDbCounter}`,
+    `${PREVIEW_DB_PREFIX}${previewDbSession}-${previewDbCounter}`,
   ) as AppDatabase;
   preview.version(DB_SCHEMA_VERSION).stores(PREVIEW_STORES);
   return preview;
