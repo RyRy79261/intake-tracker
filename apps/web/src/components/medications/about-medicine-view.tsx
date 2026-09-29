@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import { AlertTriangle, ArrowLeft, Info, Loader2, RefreshCw, ShieldCheck } from "lucide-react";
 import { Button } from "@intake/ui/button";
+import { useToast } from "@intake/ui/use-toast";
 import { useAuthGate } from "@/components/auth-guard";
 import { AiIcon, AI_NOTE } from "@/components/medications/medicine-lookup-panel";
 import { PillIcon } from "@/components/medications/pill-icon";
@@ -85,6 +86,7 @@ interface AboutMedicineViewProps {
  */
 export function AboutMedicineView({ prescription, onBack }: AboutMedicineViewProps) {
   const signedIn = useAuthGate();
+  const { toast } = useToast();
   const about = useMedicineAbout();
   const ix = useRefreshInteractions();
   const prescriptions = usePrescriptions();
@@ -104,7 +106,16 @@ export function AboutMedicineView({ prescription, onBack }: AboutMedicineViewPro
   const brands = inventory.filter((i) => !i.isArchived);
   const multi = (info?.compounds.length ?? 0) > 1;
 
-  const lookUp = () => void about.lookUp(prescription);
+  const lookUp = async () => {
+    const had = !!info;
+    const saved = await about.lookUp(prescription);
+    if (saved) {
+      toast({
+        title: had ? "Medicine information updated" : "Medicine information saved",
+        description: "Stored on this prescription.",
+      });
+    }
+  };
   const runCheck = () =>
     void ix.refresh(
       prescription.id,
@@ -155,7 +166,7 @@ export function AboutMedicineView({ prescription, onBack }: AboutMedicineViewPro
                   variant="outline"
                   size="sm"
                   className="min-h-11 rounded-none border-y-0 border-r-0"
-                  onClick={lookUp}
+                  onClick={() => void lookUp()}
                   disabled={about.busy}
                 >
                   <RefreshCw aria-hidden="true" />
@@ -279,7 +290,7 @@ export function AboutMedicineView({ prescription, onBack }: AboutMedicineViewPro
                   only the name: {prescription.genericName}. The result is saved on this prescription.
                 </p>
               </div>
-              <Button className="col-span-full min-h-11 border-ai bg-ai text-on-domain hover:bg-ai/90" onClick={lookUp}>
+              <Button className="col-span-full min-h-11 border-ai bg-ai text-on-domain hover:bg-ai/90" onClick={() => void lookUp()}>
                 <AiIcon />
                 Look up with AI
               </Button>
