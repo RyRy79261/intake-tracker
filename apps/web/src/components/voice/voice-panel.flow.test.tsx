@@ -467,7 +467,7 @@ describe("VoicePanel commit — timing", () => {
         now: {
           localDateTime: "2026-09-30T14:00",
           timeZone: tz,
-          utcOffsetMinutes: -NOW.getTimezoneOffset(),
+          utcOffsetMinutes: -NOW.getTimezoneOffset() + 0, // + 0 turns -0 into 0 (UTC)
         },
       });
 
