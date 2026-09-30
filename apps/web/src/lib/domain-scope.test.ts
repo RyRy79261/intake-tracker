@@ -43,6 +43,21 @@ describe("domain scope rule", () => {
     expect(globalsCss).toContain(`[data-domain="${name}"] { --d: var(${token}); }`);
   });
 
+  it("tints field borders and fills at rest, and the ink scope clears them", () => {
+    const scope = rule("\n  [data-domain]");
+    expect(scope).toContain("--field-line: color-mix(in srgb, hsl(var(--d)) 60%, hsl(var(--input)));");
+    expect(scope).toContain("--field-bg: color-mix(in srgb, hsl(var(--d)) 7%, hsl(var(--background)));");
+    expect(globalsCss).toContain("--color-input: var(--field-line, hsl(var(--input)));");
+    const ink = rule('[data-domain="ink"]');
+    expect(ink).toContain("--field-line: initial;");
+    expect(ink).toContain("--field-bg: initial;");
+  });
+
+  it("gives every clickable control a pointer cursor", () => {
+    const base = globalsCss.slice(globalsCss.indexOf("button:not(:disabled)"));
+    expect(base.slice(0, base.indexOf("}"))).toContain("cursor: pointer;");
+  });
+
   it("returns to the neutral ink with data-domain=ink", () => {
     const ink = rule('[data-domain="ink"]');
     expect(ink).toContain("--d: var(--fg);");
@@ -77,6 +92,14 @@ describe("shared primitives read the scope", () => {
     const src = uiComponentSource(name);
     expect(src).toContain("focus-visible:outline-ring");
     expect(src).toContain("caret-ring");
+  });
+
+  it.each(["input", "textarea", "select"])("fills %s with the scope's --field-bg", (name) => {
+    expect(uiComponentSource(name)).toContain("bg-[var(--field-bg,hsl(var(--background)))]");
+  });
+
+  it("fills an outline Button with the scope's --field-bg", () => {
+    expect(uiComponentSource("button")).toContain("bg-[var(--field-bg,transparent)]");
   });
 
   it("gives Select a focus ring in --ring", () => {
@@ -126,6 +149,19 @@ describe.each(THEMES)("%s palette", (_name, selector) => {
     const onInput = SCOPE_COLORS.map(([, token]) => contrast(rgb(block, token), rgb(block, "--bg")));
     if (selector === ":root") expect(Math.min(...onInput)).toBeLessThan(4.5);
     expect(contrast(rgb(block, "--muted-fg"), rgb(block, "--bg"))).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it.each(SCOPE_COLORS)("%s: a tinted field keeps its border, text and focus ring readable", (_domain, token) => {
+    const c = rgb(block, token);
+    const bg = rgb(block, "--bg");
+    // `--field-bg`: 7% colour on the input surface. `--field-line`: 60% colour, 40% `--input` (= `--muted-fg`).
+    const fieldBg = mix(c, bg, 0.07);
+    const fieldLine = mix(c, rgb(block, "--muted-fg"), 0.6);
+    expect(contrast(fieldLine, fieldBg), "border on the field").toBeGreaterThanOrEqual(3);
+    expect(contrast(fieldLine, panel), "border on the panel").toBeGreaterThanOrEqual(3);
+    expect(contrast(rgb(block, "--fg"), fieldBg), "text").toBeGreaterThanOrEqual(4.5);
+    expect(contrast(rgb(block, "--muted-fg"), fieldBg), "placeholder and units").toBeGreaterThanOrEqual(4.5);
+    expect(contrast(c, fieldBg), "focus ring").toBeGreaterThanOrEqual(3);
   });
 
   it.each(SCOPE_COLORS)("%s: fills, stripes, pips and focus rings reach 3:1 on every surface", (_domain, token) => {
