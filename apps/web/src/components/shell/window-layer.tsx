@@ -6,6 +6,7 @@ import { WindowFrame } from "@/components/shell/window-frame";
 import { closeWindow, goHome } from "@/hooks/use-window-history";
 import { layoutWindows, useWindowStore, type Area } from "@/stores/window-store";
 import { cn } from "@/lib/utils";
+import { ErrorBoundary } from "@/components/error-boundary";
 
 const WIDE_QUERY = "(min-width: 768px)";
 
@@ -149,10 +150,22 @@ export function WindowLayer({ hidden = false }: { hidden?: boolean }) {
             onMinimise={() => minimise(win.id)}
             onToggleMax={() => toggleMax(win.id)}
             onFocus={() => focusWin(win.id)}
-            overlay={Overlay ? <Overlay win={win} /> : undefined}
+            overlay={
+              Overlay ? (
+                <ErrorBoundary fallback={null}>
+                  <Overlay win={win} />
+                </ErrorBoundary>
+              ) : undefined
+            }
             flushTop={flushTop}
           >
-            <Body win={win} />
+            {/* A window that crashes keeps its frame (so it can be closed)
+                and leaves Home, the other windows and Settings running. It
+                is restored from sessionStorage on every load, so an
+                uncontained crash would also break /settings and Go Home. */}
+            <ErrorBoundary>
+              <Body win={win} />
+            </ErrorBoundary>
           </WindowFrame>
         );
       })}

@@ -12,6 +12,7 @@ import { SysBar } from "@/components/shell/sys-bar";
 import { BottomBar } from "@/components/shell/bottom-bar";
 import { SettingsSheet } from "@/components/settings/settings-sheet";
 import { SETTINGS_PATH } from "@/hooks/use-window-history";
+import { ErrorBoundary } from "@/components/error-boundary";
 
 const noopSubscribe = () => () => {};
 
@@ -89,7 +90,17 @@ function WardShell({ children }: { children: ReactNode }) {
         inert={onShell && homeCovered}
         data-testid="home"
       >
-        {onShell ? <HomePageBody /> : children}
+        {onShell ? (
+          // Its own boundary: a Home card that crashes must not take down the
+          // shell, or the crash screen's "Report this problem" (a hard load
+          // of /settings, which renders Home) would crash again before the
+          // Settings sheet mounts.
+          <ErrorBoundary>
+            <HomePageBody />
+          </ErrorBoundary>
+        ) : (
+          children
+        )}
       </div>
       <WindowLayer hidden={!onShell} />
       {chrome && <BottomBar />}
