@@ -81,7 +81,9 @@ export const POST = withAuth(async ({ request, auth }) => {
 
     // The client's clock (local time, zone, offset) leads the user turn, so
     // the model can date "yesterday at 8pm". It is validated to strict shapes
-    // above and is not PII; nothing else about the device is sent.
+    // above and is not PII; nothing else about the device is sent. An older
+    // cached client sends no clock: the message then states no time and asks
+    // for relative times only.
     const userMessage = buildUserMessage(sanitized, parsed.data.now);
 
     const { toolUse: toolBlock } = await requestToolCall(
@@ -108,7 +110,9 @@ export const POST = withAuth(async ({ request, auth }) => {
       );
     }
 
-    const extracted = extractVoiceItems(toolBlock.input);
+    const extracted = extractVoiceItems(toolBlock.input, {
+      absoluteTimes: parsed.data.now !== undefined,
+    });
     if (!extracted.ok) {
       console.error(
         "[VALIDATION] voice-parse: tool output had no usable items:",

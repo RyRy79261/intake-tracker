@@ -425,10 +425,80 @@ describe("voice-parse spoken times", () => {
     expect(body.dropped).toBeUndefined();
   });
 
-  it("rejects a request with no clock, or a bad one, without calling the model", async () => {
+  describe("a cached client that sends no clock", () => {
+    it("still returns 200 with the items", async () => {
+      messagesCreate.mockResolvedValueOnce(
+        toolUseResponse({
+          items: [
+            { kind: "water", ml: 250 },
+            { kind: "blood_pressure", systolic: 120, diastolic: 80 },
+          ],
+        }),
+      );
+      const { POST } = await import("@/app/api/ai/voice-parse/route");
+      // Exactly what the client sent before the clock existed.
+      const res = await POST(makeRequest({ transcript: "a glass of water, BP 120 over 80" }));
+
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as { items: Record<string, unknown>[] };
+      expect(body.items).toEqual([
+        { kind: "water", ml: 250 },
+        { kind: "blood_pressure", systolic: 120, diastolic: 80 },
+      ]);
+    });
+
+    it("states no current time and asks for relative times only", async () => {
+      messagesCreate.mockResolvedValueOnce(toolUseResponse({ items: [{ kind: "water", ml: 250 }] }));
+      const { POST } = await import("@/app/api/ai/voice-parse/route");
+      await POST(makeRequest({ transcript: "water an hour ago" }));
+
+      const sent = messagesCreate.mock.calls[0]![0] as {
+        tool_choice?: unknown;
+        messages: { content: string }[];
+      };
+      const content = sent.messages[0]!.content;
+      expect(content).not.toContain("Current local time");
+      expect(content).not.toMatch(/\d{4}-\d{2}-\d{2}/);
+      expect(content).not.toContain("Yesterday was");
+      expect(content).toContain("The current local date and time are not known");
+      expect(content).toContain('Return "when" only as {"kind": "relative", "minutesAgo": N}');
+      expect(content).toContain("Do not return an absolute date-time.");
+      expect(content).toContain("water an hour ago");
+      expect(sent.tool_choice).toBeUndefined();
+    });
+
+    it("strips an absolute time the model returned anyway, and keeps a relative one", async () => {
+      messagesCreate.mockResolvedValueOnce(
+        toolUseResponse({
+          items: [
+            {
+              kind: "alcohol",
+              description: "beer",
+              abvPercent: 5,
+              volumeMl: 330,
+              when: { kind: "absolute", localDateTime: "2026-09-29T20:00" },
+            },
+            { kind: "water", ml: 100, when: { kind: "relative", minutesAgo: 60 } },
+          ],
+        }),
+      );
+      const { POST } = await import("@/app/api/ai/voice-parse/route");
+      const res = await POST(makeRequest({ transcript: "a beer yesterday at 8pm, water an hour ago" }));
+
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as { items: Record<string, unknown>[]; dropped?: number };
+      expect(body.items).toEqual([
+        { kind: "alcohol", description: "beer", abvPercent: 5, volumeMl: 330 },
+        { kind: "water", ml: 100, when: { kind: "relative", minutesAgo: 60 } },
+      ]);
+      expect(body.dropped).toBeUndefined();
+    });
+  });
+
+  it("rejects a request with a malformed clock, without calling the model", async () => {
     const { POST } = await import("@/app/api/ai/voice-parse/route");
     for (const body of [
-      { transcript: "water" },
+      { transcript: "water", now: { localDateTime: NOW.localDateTime } },
       { transcript: "water", now: { ...NOW, timeZone: "Not/A_Zone" } },
       { transcript: "water", now: { ...NOW, localDateTime: "2026-09-30T14:00Z" } },
       { transcript: "water", now: { ...NOW, utcOffsetMinutes: 5000 } },

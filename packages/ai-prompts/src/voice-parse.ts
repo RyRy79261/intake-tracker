@@ -168,7 +168,15 @@ export function describeCurrentTime(now: VoiceParseClientNow): string {
   return `Current local time: ${weekdayAndDate(today)} ${time.slice(0, 5)} (${now.timeZone}, ${offset}). Yesterday was ${weekdayAndDate(yesterday)}.`;
 }
 
+/**
+ * What the user turn says when the client sent no clock (a cached client from
+ * before the clock was sent). It states no time, so the model cannot date
+ * anything: only relative times are allowed.
+ */
+export const NO_CLOCK_NOTE =
+  'The current local date and time are not known for this request. Return "when" only as {"kind": "relative", "minutesAgo": N} when the user states a relative time ("an hour ago"), and as null in every other case. Do not return an absolute date-time.';
+
 /** The user turn: the clock line, then the (already sanitised) transcript. */
-export function buildUserMessage(transcript: string, now: VoiceParseClientNow): string {
-  return `${describeCurrentTime(now)}\n\nVoice transcript:\n"""\n${transcript}\n"""\n\nExtract every distinct health log item and return them via the parse_voice_log tool.`;
+export function buildUserMessage(transcript: string, now?: VoiceParseClientNow): string {
+  return `${now ? describeCurrentTime(now) : NO_CLOCK_NOTE}\n\nVoice transcript:\n"""\n${transcript}\n"""\n\nExtract every distinct health log item and return them via the parse_voice_log tool.`;
 }

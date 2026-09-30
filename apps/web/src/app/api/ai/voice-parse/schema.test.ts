@@ -116,6 +116,25 @@ describe("extractVoiceItems", () => {
     expect(result.items[1]).not.toHaveProperty("when");
   });
 
+  it("strips an absolute time, and keeps a relative one, when the request had no clock", () => {
+    // With no client clock the model was given no date, so an absolute time
+    // is a guess. The items themselves are kept.
+    const result = extractVoiceItems(
+      {
+        items: [
+          { ...food, when: { kind: "absolute", localDateTime: "2026-09-29T20:00" } },
+          { ...water, when: { kind: "relative", minutesAgo: 60 } },
+          { ...bp, when: null },
+        ],
+      },
+      { absoluteTimes: false },
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.dropped).toBe(0);
+    expect(result.items).toEqual([food, { ...water, when: { kind: "relative", minutesAgo: 60 } }, bp]);
+  });
+
   it("tidies a time the model wrote loosely", () => {
     const result = extractVoiceItems({
       items: [
@@ -207,14 +226,20 @@ describe("ParseRequestSchema", () => {
 
   it("cuts seconds from the local time", () => {
     const result = parse({ transcript: "water", now: { ...now, localDateTime: "2026-09-30T14:00:31" } });
-    expect(result.success && result.data.now.localDateTime).toBe("2026-09-30T14:00");
+    expect(result.success && result.data.now?.localDateTime).toBe("2026-09-30T14:00");
   });
 
-  it("requires the clock", () => {
-    expect(parse({ transcript: "water" }).success).toBe(false);
+  it("accepts an old client's payload with no clock", () => {
+    const result = parse({ transcript: "water" });
+    expect(result.success).toBe(true);
+    expect(result.success && result.data.now).toBeUndefined();
+  });
+
+  it("rejects a clock that is present but incomplete", () => {
     expect(parse({ transcript: "water", now: { localDateTime: now.localDateTime } }).success).toBe(
       false,
     );
+    expect(parse({ transcript: "water", now: null }).success).toBe(false);
   });
 
   it("rejects a local time that is not a wall-clock date-time", () => {

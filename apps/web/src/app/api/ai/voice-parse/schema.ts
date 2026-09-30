@@ -55,7 +55,11 @@ export const MAX_REQUEST_CHARS = 8000;
 
 export const ParseRequestSchema = z.object({
   transcript: z.string().min(1).max(MAX_REQUEST_CHARS),
-  now: ClientNowSchema,
+  // Optional: a cached client from before this field existed still sends the
+  // transcript alone, and must keep working. Without a clock the model is
+  // asked for relative times only (see `extractVoiceItems`). A clock that is
+  // present but malformed is still a 400.
+  now: ClientNowSchema.optional(),
 });
 
 /** A relative time further back than this is not a slip of the tongue. */
@@ -205,7 +209,15 @@ export type VoiceExtractResult =
  * only when there is no usable items array, or items were present but none
  * survived validation.
  */
-export function extractVoiceItems(input: unknown): VoiceExtractResult {
+export function extractVoiceItems(
+  input: unknown,
+  /**
+   * `absoluteTimes: false` when the request carried no client clock: the
+   * model was given no date, so an absolute `when` can only be a guess and is
+   * stripped (the item is kept and saves at "now").
+   */
+  { absoluteTimes = true }: { absoluteTimes?: boolean } = {},
+): VoiceExtractResult {
   if (typeof input !== "object" || input === null) return { ok: false };
   const obj = input as { items?: unknown; reasoning?: unknown };
   if (!Array.isArray(obj.items)) return { ok: false };
@@ -218,7 +230,8 @@ export function extractVoiceItems(input: unknown): VoiceExtractResult {
       // "No time said" arrives as null, an absent key, or a stripped (caught)
       // value; all three leave the response with no `when` key.
       const { when, ...rest } = parsed.data;
-      items.push((when ? { ...rest, when } : rest) as VoiceParsedItem);
+      const keep = when && (absoluteTimes || when.kind === "relative");
+      items.push((keep ? { ...rest, when } : rest) as VoiceParsedItem);
     } else {
       dropped++;
     }
