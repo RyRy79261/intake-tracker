@@ -42,7 +42,7 @@ export function EditEatingDialog({
 }: EditEatingDialogProps) {
   return (
     <Dialog open={record !== null} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md" data-domain="sodium">
         <DialogHeader>
           <DialogTitle>Edit Eating Entry</DialogTitle>
           <DialogDescription>Update the time or note</DialogDescription>
@@ -88,7 +88,7 @@ export function EditEatingDialog({
             <Button type="button" variant="outline" onClick={onClose}>
               Cancel
             </Button>
-            <Button type="submit" className="bg-orange-600 hover:bg-orange-700">
+            <Button type="submit">
               Save Changes
             </Button>
           </DialogFooter>

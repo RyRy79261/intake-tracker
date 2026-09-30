@@ -11,6 +11,19 @@ async function dismissAnalyticsIntro(page: Page) {
   await expect(gotIt).toBeHidden();
 }
 
+/**
+ * `/analytics` opens the Metrics window over Home (the Ward Console shell is
+ * on by default). Home's cards stay mounted underneath with their own tab
+ * panels and recent entries, so scope assertions to the window.
+ */
+const metricsWindow = (page: Page) => page.getByTestId('window');
+
+/** A Records domain chip (the range row has its own "All"). */
+const recordsFilter = (page: Page, name: string) =>
+  metricsWindow(page)
+    .getByRole('group', { name: 'Filter records' })
+    .getByRole('button', { name, exact: true });
+
 test.describe('History / Analytics', () => {
 
   test('should load analytics page with all four tabs', async ({ page }) => {
@@ -29,7 +42,7 @@ test.describe('History / Analytics', () => {
     // Click each tab and verify the panel renders
     for (const tabName of ['Summary', 'Correlations', 'Titration', 'Records']) {
       await page.locator('[role="tab"]', { hasText: tabName }).click();
-      await expect(page.locator('[role="tabpanel"][data-state="active"]')).toBeVisible();
+      await expect(metricsWindow(page).locator('[role="tabpanel"][data-state="active"]')).toBeVisible();
     }
   });
 
@@ -40,7 +53,7 @@ test.describe('History / Analytics', () => {
     // Records is no longer the default tab — click it explicitly.
     await page.locator('[role="tab"]', { hasText: 'Records' }).click();
     // Records tab should at least render its tab panel (even if empty)
-    await expect(page.locator('[role="tabpanel"][data-state="active"]')).toBeVisible();
+    await expect(metricsWindow(page).locator('[role="tabpanel"][data-state="active"]')).toBeVisible();
   });
 
   test('should show blood pressure data in Records after recording via dashboard (D-12)', async ({ page }) => {
@@ -59,7 +72,7 @@ test.describe('History / Analytics', () => {
     // Records is no longer the default tab — click it before asserting.
     await page.locator('[role="tab"]', { hasText: 'Records' }).click();
     // Look for the BP reading in the records list (format: "130/85 mmHg")
-    await expect(page.locator('text=130/85')).toBeVisible({ timeout: 10000 });
+    await expect(metricsWindow(page).locator('text=130/85')).toBeVisible({ timeout: 10000 });
   });
 
   test('should render chart SVG containers on Summary tab with data (D-11)', async ({ page }) => {
@@ -82,7 +95,7 @@ test.describe('History / Analytics', () => {
     await page.goto('/analytics');
     await dismissAnalyticsIntro(page);
     await page.locator('[role="tab"]', { hasText: 'Summary' }).click();
-    await expect(page.locator('[role="tabpanel"][data-state="active"]')).toBeVisible();
+    await expect(metricsWindow(page).locator('[role="tabpanel"][data-state="active"]')).toBeVisible();
 
     // Per D-11: verify chart containers render (SVG elements present)
     // Do NOT assert on SVG path values -- only check for container/SVG presence
@@ -145,7 +158,7 @@ test.describe('History / Analytics', () => {
     await page.locator('[role="tab"]', { hasText: 'Records' }).click();
 
     for (const filterLabel of ['Water', 'Weight', 'BP', 'Eating', 'Urination', 'Defecation']) {
-      await page.getByRole('button', { name: filterLabel, exact: true }).click();
+      await recordsFilter(page, filterLabel).click();
       await expect(
         page.getByRole('button', { name: 'Edit entry', exact: true }).first(),
         `${filterLabel} record should appear in the Records tab`,
@@ -172,17 +185,49 @@ test.describe('History / Analytics', () => {
     await page.goto('/analytics');
     await dismissAnalyticsIntro(page);
     await page.locator('[role="tab"]', { hasText: 'Records' }).click();
-    await page.getByRole('button', { name: 'Weight', exact: true }).click();
-    await expect(page.getByText('71.35 kg')).toBeVisible();
+    await recordsFilter(page, 'Weight').click();
+    await expect(metricsWindow(page).getByText('71.35 kg')).toBeVisible();
 
-    await page.getByRole('button', { name: 'Edit entry', exact: true }).first().click();
+    await metricsWindow(page).getByRole('button', { name: 'Edit entry', exact: true }).first().click();
     await expect(page.getByRole('dialog')).toBeVisible();
     await page.locator('#edit-weight').fill('80');
     await page.getByRole('button', { name: 'Save Changes' }).click();
 
     await expect(page.getByText('Entry updated', { exact: true })).toBeVisible();
-    await expect(page.getByText('80 kg')).toBeVisible();
-    await expect(page.getByText('71.35 kg')).toHaveCount(0);
+    await expect(metricsWindow(page).getByText('80 kg')).toBeVisible();
+    await expect(metricsWindow(page).getByText('71.35 kg')).toHaveCount(0);
+  });
+
+  test('the History icon opens Metrics on Records, unfiltered', async ({ page }) => {
+    await page.goto('/');
+    await page.getByTestId('sys-bar').getByRole('button', { name: 'History' }).click();
+    await dismissAnalyticsIntro(page);
+
+    await expect(metricsWindow(page).getByRole('tab', { name: 'Records' })).toHaveAttribute('data-state', 'active');
+    await expect(recordsFilter(page, 'All')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page).toHaveURL(/\/analytics\?tab=records$/);
+  });
+
+  test('a Today row opens Records filtered to its domain', async ({ page }) => {
+    await page.goto('/');
+    await page.locator('#section-water').locator('button', { hasText: 'Confirm Entry' }).click();
+    await expect(page.getByText('Water intake recorded', { exact: true })).toBeVisible();
+
+    await page.getByTestId('today-row-water').click();
+    await dismissAnalyticsIntro(page);
+
+    await expect(metricsWindow(page).getByRole('tab', { name: 'Records' })).toHaveAttribute('data-state', 'active');
+    await expect(recordsFilter(page, 'Water')).toHaveAttribute('aria-pressed', 'true');
+    await expect(recordsFilter(page, 'All')).toHaveAttribute('aria-pressed', 'false');
+    await expect(
+      metricsWindow(page).getByRole('button', { name: 'Edit entry', exact: true }).first(),
+    ).toBeVisible();
+
+    // Another domain with nothing logged today shows the empty list.
+    await page.getByRole('navigation', { name: 'Bottom bar' }).getByRole('button', { name: 'Home' }).click();
+    await page.getByTestId('today-row-sodium').click();
+    await expect(recordsFilter(page, 'Sodium')).toHaveAttribute('aria-pressed', 'true');
+    await expect(metricsWindow(page).getByText('No records in this time range')).toBeVisible();
   });
 
   test('delete a record from the Records tab removes it (D-14)', async ({ page }) => {
@@ -193,9 +238,9 @@ test.describe('History / Analytics', () => {
     await page.goto('/analytics');
     await dismissAnalyticsIntro(page);
     await page.locator('[role="tab"]', { hasText: 'Records' }).click();
-    await page.getByRole('button', { name: 'Water', exact: true }).click();
+    await recordsFilter(page, 'Water').click();
 
-    const deleteBtn = page.getByRole('button', { name: 'Delete entry', exact: true }).first();
+    const deleteBtn = metricsWindow(page).getByRole('button', { name: 'Delete entry', exact: true }).first();
     await expect(deleteBtn).toBeVisible();
     await deleteBtn.click();
 
@@ -203,7 +248,7 @@ test.describe('History / Analytics', () => {
     // "Record deleted" undo toast (the redundant plain toast was removed so the
     // Undo action survives), and the row is gone.
     await expect(page.getByText('Record deleted', { exact: true })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Edit entry', exact: true })).toHaveCount(0);
-    await expect(page.getByText('No records in this time range')).toBeVisible();
+    await expect(metricsWindow(page).getByRole('button', { name: 'Edit entry', exact: true })).toHaveCount(0);
+    await expect(metricsWindow(page).getByText('No records in this time range')).toBeVisible();
   });
 });

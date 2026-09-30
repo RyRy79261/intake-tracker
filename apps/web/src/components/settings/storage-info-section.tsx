@@ -10,11 +10,11 @@ import {
   Upload,
   LogIn,
   CheckCircle2,
-  Loader2,
   Download,
 } from "lucide-react";
 import { Badge } from "@intake/ui/badge";
 import { Button } from "@intake/ui/button";
+import { Spinner } from "@intake/ui/spinner";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -36,6 +36,23 @@ import { checkInterruptedMigration } from "@/lib/migration-service";
 import { MigrationWizard } from "@/components/migration/migration-wizard";
 import { DeleteDataControls } from "@/components/settings/delete-data-controls";
 import { DeleteMedicationDataControl } from "@/components/settings/delete-medication-data-control";
+import {
+  SubHead,
+  btnClass,
+  helpClass,
+  plainboxClass,
+  warnboxClass,
+} from "@/components/settings/settings-kit";
+import { domainColor } from "@/lib/domain-colors";
+import { cn } from "@/lib/utils";
+import {
+  descClass,
+  dlgClass,
+  footClass,
+  headClass,
+  stripe,
+  titleClass,
+} from "@/components/migration/dialog-kit";
 
 function tableLabel(name: string): string {
   return name
@@ -100,177 +117,132 @@ export function StorageInfoSection() {
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
-        <HardDrive className="w-4 h-4" />
-        <h3 className="font-semibold">Storage</h3>
+    <div className="flex flex-col gap-3">
+      <SubHead icon={HardDrive}>Storage</SubHead>
+
+      <div className="flex min-h-6 flex-wrap items-center gap-2 text-sm">
+        <Cloud className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+        <span>Sync status</span>
+        {storageMode === "cloud-sync" ? (
+          <Badge variant="outline" className="border-weight text-weight">
+            Cloud Sync
+          </Badge>
+        ) : (
+          <Badge variant="outline" className="border-muted-foreground text-muted-foreground">
+            Local only
+          </Badge>
+        )}
       </div>
-      <div className="space-y-3 pl-6">
-        <div className="flex items-center gap-2">
-          <Cloud className="w-4 h-4 text-muted-foreground" />
-          <span className="text-sm">Sync status</span>
-          {storageMode === "cloud-sync" ? (
-            <Badge className="text-xs bg-green-500/15 text-green-700 dark:text-green-400 border-green-500/30">
-              Cloud Sync
-            </Badge>
+
+      {storageMode === "cloud-sync" && (
+        <div className="flex min-h-6 items-center gap-2 text-sm">
+          {initialSyncComplete ? (
+            <>
+              <CheckCircle2 className="h-4 w-4 text-weight" aria-hidden="true" />
+              <span>Full copy of your data on this device</span>
+            </>
+          ) : isOnline ? (
+            <>
+              <Spinner className="size-4 text-sodium" />
+              <span className="text-muted-foreground">Downloading your full data to this device…</span>
+            </>
           ) : (
-            <Badge variant="secondary" className="text-xs">
-              Local only
-            </Badge>
+            <>
+              <CloudOff className="h-4 w-4 text-sodium" aria-hidden="true" />
+              <span className="text-muted-foreground">Waiting to download your data (offline)</span>
+            </>
           )}
         </div>
+      )}
 
-        {storageMode === "cloud-sync" && (
-          <div className="flex items-center gap-2">
-            {initialSyncComplete ? (
-              <>
-                <CheckCircle2 className="w-4 h-4 text-green-600 dark:text-green-400" />
-                <span className="text-sm">Full copy of your data on this device</span>
-              </>
-            ) : isOnline ? (
-              <>
-                <Loader2 className="w-4 h-4 text-amber-600 dark:text-amber-400 animate-spin" />
-                <span className="text-sm text-muted-foreground">
-                  Downloading your full data to this device…
-                </span>
-              </>
-            ) : (
-              <>
-                <CloudOff className="w-4 h-4 text-amber-600 dark:text-amber-400" />
-                <span className="text-sm text-muted-foreground">
-                  Waiting to download your data (offline)
-                </span>
-              </>
-            )}
-          </div>
-        )}
+      {droppedOps.length > 0 && (
+        <div className={warnboxClass} data-testid="unsynced-records">
+          <p className="flex items-start gap-2 font-medium">
+            <AlertTriangle className="mt-px h-4 w-4 shrink-0 text-sodium" aria-hidden="true" />
+            {droppedOps.length} {droppedOps.length === 1 ? "record" : "records"} couldn&apos;t sync
+          </p>
+          <p className="text-muted-foreground">
+            The server would not accept these. They are still on this device,
+            but not in the cloud. Editing a record sends it again.
+          </p>
+          <ul className="max-h-32 space-y-1 overflow-y-auto font-mono text-xs text-muted-foreground">
+            {droppedOps.map((op) => (
+              <li key={`${op.tableName}:${op.recordId}:${op.droppedAt}`}>
+                {tableLabel(op.tableName)} · {new Date(op.droppedAt).toLocaleString()} ·{" "}
+                {op.error}
+              </li>
+            ))}
+          </ul>
+          <Button variant="outline" className={`${btnClass} self-start`} onClick={clearDroppedOps}>
+            Dismiss
+          </Button>
+        </div>
+      )}
 
-        {droppedOps.length > 0 && (
-          <div
-            className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 space-y-2"
-            data-testid="unsynced-records"
+      {storageMode === "cloud-sync" && lastPushedAt && (
+        <p className={helpClass}>Last synced {new Date(lastPushedAt).toLocaleString()}</p>
+      )}
+
+      {storageMode === "cloud-sync" && (
+        <div>
+          <Button
+            variant="outline"
+            className={btnClass}
+            disabled={!initialSyncComplete || !isOnline}
+            onClick={() => setSwitchOpen(true)}
           >
-            <div className="flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400" />
-              <span className="text-sm font-medium">
-                {droppedOps.length}{" "}
-                {droppedOps.length === 1 ? "record" : "records"} couldn&apos;t sync
-              </span>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              The server would not accept these. They are still on this device,
-              but not in the cloud. Editing a record sends it again.
-            </p>
-            <ul className="max-h-32 overflow-y-auto space-y-1 text-xs text-muted-foreground">
-              {droppedOps.map((op) => (
-                <li key={`${op.tableName}:${op.recordId}:${op.droppedAt}`}>
-                  {tableLabel(op.tableName)} · {new Date(op.droppedAt).toLocaleString()} ·{" "}
-                  {op.error}
-                </li>
-              ))}
-            </ul>
-            <Button variant="ghost" size="sm" onClick={clearDroppedOps}>
-              Dismiss
-            </Button>
-          </div>
-        )}
+            <Download className="h-4 w-4" />
+            Switch to Local only
+          </Button>
+          <p className={`${helpClass} mt-1`}>
+            {initialSyncComplete
+              ? "Keeps a full copy on this device and deletes the cloud copy."
+              : "Available once your full data has finished downloading."}
+          </p>
+        </div>
+      )}
 
-        {storageMode === "cloud-sync" && lastPushedAt && (
-          <p className="text-xs text-muted-foreground">
-            Last synced {new Date(lastPushedAt).toLocaleString()}
+      {storageMode === "local" && ready && !authenticated && (
+        <div className={plainboxClass}>
+          <p className="text-muted-foreground">Sign in to enable cloud sync across your devices.</p>
+          <Button className="self-start" onClick={() => router.push("/auth")}>
+            <LogIn className="h-4 w-4" />
+            Sign In
+          </Button>
+        </div>
+      )}
+
+      {storageMode === "local" && authenticated && hasInterrupted && (
+        <Button variant="outline" className={`${btnClass} self-start`} onClick={() => openMigration(true)}>
+          <Upload className="h-4 w-4" />
+          Resume Migration
+        </Button>
+      )}
+
+      {storageMode === "local" && authenticated && !hasInterrupted && (
+        <Button variant="outline" className={`${btnClass} self-start`} onClick={() => openMigration(false)}>
+          <Cloud className="h-4 w-4" />
+          Switch to Cloud Sync
+        </Button>
+      )}
+
+      <div>
+        <p className="text-[0.8125rem] text-muted-foreground">Estimated usage</p>
+        <p className="font-mono text-[0.9375rem]">
+          {storageUsage
+            ? `${storageUsage}${storageQuota ? ` of ${storageQuota}` : ""}`
+            : "Storage info unavailable"}
+        </p>
+        {totalRecords !== null && (
+          <p className="font-mono text-[0.8125rem] text-muted-foreground">
+            {totalRecords.toLocaleString()} records
           </p>
         )}
-
-        {storageMode === "cloud-sync" && (
-          <div className="space-y-1">
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-2"
-              disabled={!initialSyncComplete || !isOnline}
-              onClick={() => setSwitchOpen(true)}
-            >
-              <Download className="h-3 w-3" />
-              Switch to Local only
-            </Button>
-            <p className="text-xs text-muted-foreground">
-              {initialSyncComplete
-                ? "Keeps a full copy on this device and deletes the cloud copy."
-                : "Available once your full data has finished downloading."}
-            </p>
-          </div>
-        )}
-
-        {storageMode === "local" && ready && !authenticated && (
-          <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
-            <p className="text-xs text-muted-foreground">
-              Sign in to enable cloud sync across your devices.
-            </p>
-            <Button
-              size="sm"
-              className="gap-2"
-              onClick={() => router.push("/auth")}
-            >
-              <LogIn className="h-3 w-3" />
-              Sign In
-            </Button>
-          </div>
-        )}
-
-        {storageMode === "local" && authenticated && hasInterrupted && (
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-2"
-            onClick={() => openMigration(true)}
-          >
-            <Upload className="h-3 w-3" />
-            Resume Migration
-          </Button>
-        )}
-
-        {storageMode === "local" && authenticated && !hasInterrupted && (
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-2"
-            onClick={() => openMigration(false)}
-          >
-            <Cloud className="h-3 w-3" />
-            Switch to Cloud Sync
-          </Button>
-        )}
-
-        <div className="space-y-1">
-          <p className="text-sm font-medium">Estimated usage</p>
-          {storageUsage ? (
-            <p className="text-sm text-muted-foreground">
-              {storageUsage}
-              {storageQuota ? ` of ${storageQuota}` : ""}
-            </p>
-          ) : (
-            <p className="text-sm text-muted-foreground">
-              Storage info unavailable
-            </p>
-          )}
-        </div>
-
-        {totalRecords !== null && (
-          <div className="space-y-1">
-            <p className="text-sm text-muted-foreground">
-              {totalRecords.toLocaleString()} records
-            </p>
-          </div>
-        )}
-
-        <div className="pt-2 border-t">
-          <DeleteDataControls />
-        </div>
-
-        <div className="pt-2 border-t">
-          <DeleteMedicationDataControl />
-        </div>
       </div>
+
+      <DeleteDataControls />
+
+      <DeleteMedicationDataControl />
 
       <MigrationWizard
         open={wizardOpen}
@@ -284,18 +256,24 @@ export function StorageInfoSection() {
           if (!switching) setSwitchOpen(next);
         }}
       >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Switch to local-only?</AlertDialogTitle>
-            <AlertDialogDescription>
+        <AlertDialogContent
+          data-testid="switch-to-local-dialog"
+          style={stripe(domainColor("meds"))}
+          className={dlgClass}
+        >
+          <AlertDialogHeader className={cn(headClass, "pr-4")}>
+            <AlertDialogTitle className={titleClass}>Switch to local-only?</AlertDialogTitle>
+            <AlertDialogDescription className={descClass}>
               Your full dataset will be downloaded to this device, then the copy
               stored in the cloud will be permanently deleted. Your account and
               login stay active, and the data on this device is kept. You can
               re-enable cloud sync later.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={switching}>Cancel</AlertDialogCancel>
+          <AlertDialogFooter className={footClass}>
+            <AlertDialogCancel className="border-muted-foreground" disabled={switching}>
+              Cancel
+            </AlertDialogCancel>
             <AlertDialogAction
               onClick={(e) => {
                 e.preventDefault();
@@ -303,9 +281,7 @@ export function StorageInfoSection() {
               }}
               disabled={!canSwitchToLocal}
             >
-              {switching ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : null}
+              {switching ? <Spinner /> : null}
               {switching ? "Switching…" : "Download & switch"}
             </AlertDialogAction>
           </AlertDialogFooter>

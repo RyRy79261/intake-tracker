@@ -1,7 +1,10 @@
 /* App-level globals. The design-system (Tailwind import, @theme tokens,
    :root/.dark channels, dark variant, base layers) moved to @intake/ui in
-   Phase 4b; imported here. Outfit (next/font) + next-themes stay app-side. */
+   Phase 4b; imported here. IBM Plex (next/font) + next-themes stay app-side. */
 @import "@intake/ui/styles.css";
+@import "./ward-home.css";
+@import "./ward-metrics.css";
+@import "./ward-settings.css";
 
 /* Mobile viewport fix */
 html {

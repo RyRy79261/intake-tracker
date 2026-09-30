@@ -1,5 +1,5 @@
 import "client-only";
-import Dexie, { type EntityTable } from "dexie";
+import Dexie, { RangeSet, type EntityTable, type ObservabilitySet } from "dexie";
 import {
   getTimezoneForTimestamp,
   localHHMMStringToUTCMinutes,
@@ -50,9 +50,12 @@ export type {
   HealthRecordSource,
   InsightReport,
   IntakeRecord,
+  InteractionCheck,
+  InteractionCheckRow,
   InventoryItem,
   InventoryTransaction,
   MedicationPhase,
+  MedicineInfo,
   PhaseSchedule,
   PhaseType,
   PillShape,
@@ -853,28 +856,180 @@ const PREVIEW_STORES = {
   userSettings: "id, updatedAt",
 } as const;
 
+export const PREVIEW_DB_PREFIX = "IntakeTrackerPreviewDB-";
 let previewDbCounter = 0;
+/**
+ * Scopes preview database names to this page load. A preview torn down by a
+ * reload or navigation never runs its cleanup, so its database survives; with
+ * a bare counter the next load would reopen it and seed on top of the old
+ * sample rows.
+ */
+const previewDbSession = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+let stalePreviewsSwept = false;
+
+/** The Web Lock a page holds for as long as its preview databases are in use. */
+const previewSessionLock = (session: string) => `${PREVIEW_DB_PREFIX}${session}`;
+
+/** The lock guarding a preview database: its name minus the `-<counter>`. */
+const previewLockOf = (databaseName: string) =>
+  databaseName.slice(0, databaseName.lastIndexOf("-"));
+
+function webLocks(): LockManager | undefined {
+  return typeof navigator === "undefined" ? undefined : navigator.locks;
+}
+
+/**
+ * Mark this page load's preview databases as in use, until the page goes
+ * away: the lock is held by a promise that never settles, and the browser
+ * releases it when the page is closed or reloaded.
+ */
+function holdPreviewSessionLock(): void {
+  void webLocks()
+    ?.request(previewSessionLock(previewDbSession), () => new Promise<never>(() => {}))
+    .catch(() => {});
+}
+
+/**
+ * Delete preview databases left behind by earlier page loads. Another open
+ * tab (or the installed app) may have a demo on screen right now; deleting
+ * its database would close it mid-use. So only a database whose page no
+ * longer holds its lock is removed, and without the Web Locks API (nothing
+ * proves a database dead) none are.
+ */
+async function sweepStalePreviewDatabases(): Promise<void> {
+  if (typeof indexedDB === "undefined" || typeof indexedDB.databases !== "function") return;
+  const locks = webLocks();
+  if (!locks) return;
+  try {
+    const own = `${PREVIEW_DB_PREFIX}${previewDbSession}-`;
+    const inUse = new Set(((await locks.query()).held ?? []).map((l) => l.name));
+    const stale = (await indexedDB.databases())
+      .map((d) => d.name)
+      .filter((n): n is string => !!n?.startsWith(PREVIEW_DB_PREFIX) && !n.startsWith(own))
+      .filter((n) => !inUse.has(previewLockOf(n)));
+    await Promise.allSettled(stale.map((n) => Dexie.delete(n)));
+  } catch {
+    // Best effort: a leftover preview database only costs a little storage.
+  }
+}
 
 /**
  * Create a fresh, isolated database for an in-app component preview. It has
- * the current schema and a unique name, and holds no data until seeded. Pair
- * with `setActiveDatabase` / `resetActiveDatabase`.
+ * the current schema and a name unique to this page load, and holds no data
+ * until seeded. Pair with `setActiveDatabase` / `resetActiveDatabase`.
  */
 export function createPreviewDatabase(): AppDatabase {
+  if (!stalePreviewsSwept) {
+    stalePreviewsSwept = true;
+    holdPreviewSessionLock();
+    void sweepStalePreviewDatabases();
+  }
   previewDbCounter += 1;
   const preview = new Dexie(
-    `IntakeTrackerPreviewDB-${previewDbCounter}`,
+    `${PREVIEW_DB_PREFIX}${previewDbSession}-${previewDbCounter}`,
   ) as AppDatabase;
   preview.version(DB_SCHEMA_VERSION).stores(PREVIEW_STORES);
   return preview;
 }
 
+/** Resolvers waiting for the real database to be active again. */
+let realDbWaiters: Array<() => void> = [];
+
+/** Bumped on every swap, so a read can tell one happened while it ran. */
+let dbEpoch = 0;
+
 /** Point every `db` consumer at `next` — used by component previews. */
 export function setActiveDatabase(next: AppDatabase): void {
   db = next;
+  dbEpoch += 1;
 }
 
-/** Restore the real database after a preview is torn down. */
+/**
+ * Restore the real database after a preview is torn down.
+ *
+ * Anything that read `db` while the preview was swapped in (a background
+ * window's live query re-running, a component mounting behind the manual)
+ * read the sample data. Firing a "the whole preview database changed" event
+ * makes every live query that observed it run again, now against the real
+ * database; then the reads held back by `whenRealDatabase` go ahead.
+ */
 export function resetActiveDatabase(): void {
+  const previous = db;
   db = realDb;
+  dbEpoch += 1;
+  if (previous !== realDb) touchEverything(previous);
+  const waiters = realDbWaiters;
+  realDbWaiters = [];
+  for (const resolve of waiters) resolve();
+}
+
+/** Is a component preview's sample database swapped in? */
+export function isPreviewDatabaseActive(): boolean {
+  return db !== realDb;
+}
+
+/**
+ * Resolves once the real database is active: at once normally, or when the
+ * preview on screen is torn down. App-wide readers that run in the
+ * background (the shared React Query client, reminder and timezone checks)
+ * wait on this so they never read, or act on, a preview's sample data.
+ */
+export function whenRealDatabase(): Promise<void> {
+  if (db === realDb) return Promise.resolve();
+  return new Promise((resolve) => realDbWaiters.push(resolve));
+}
+
+/**
+ * Runs an async read against the real database only. A read spans several
+ * awaits and reads `db` afresh after each, so a preview mounting mid-read
+ * would feed it sample rows; if a swap happens while it runs, it runs again
+ * once the real database is back.
+ */
+export async function readRealDatabase<T>(read: () => T | Promise<T>): Promise<T> {
+  for (;;) {
+    await whenRealDatabase();
+    const epoch = dbEpoch;
+    const result = await read();
+    if (epoch === dbEpoch) return result;
+  }
+}
+
+/** A background live query paused while a preview's sample data is swapped in. */
+export const PREVIEW_PAUSED: unique symbol = Symbol("preview-paused");
+
+/**
+ * The live-query form of `readRealDatabase`, for a querier run by Dexie's
+ * `liveQuery`. It cannot wait for the preview inside the querier (awaiting a
+ * non-Dexie promise loses the live query's change tracking), so while a
+ * preview is swapped in it returns `PREVIEW_PAUSED` instead, after reading
+ * one row of the preview database: releasing the preview marks that whole
+ * database changed (see `resetActiveDatabase`), which runs the query again
+ * against the real one.
+ */
+export async function liveReadRealDatabase<T>(
+  read: () => T | Promise<T>,
+): Promise<T | typeof PREVIEW_PAUSED> {
+  for (;;) {
+    if (db !== realDb) {
+      await db.table("_syncMeta").get("__preview__");
+      return PREVIEW_PAUSED;
+    }
+    const epoch = dbEpoch;
+    const result = await read();
+    if (epoch === dbEpoch) return result;
+  }
+}
+
+function touchEverything(database: Dexie): void {
+  const parts: ObservabilitySet = {};
+  const all = () => new RangeSet(-Infinity, [[[]]]);
+  for (const table of database.tables) {
+    const base = `idb://${database.name}/${table.name}/`;
+    parts[base] = all();
+    parts[`${base}:dels`] = all();
+    for (const idx of table.schema.indexes) {
+      if (idx.name) parts[`${base}${idx.name}`] = all();
+    }
+  }
+  Dexie.on.storagemutated.fire(parts);
 }

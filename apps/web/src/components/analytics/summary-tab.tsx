@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, type CSSProperties, type ReactNode } from "react";
 import {
   ResponsiveContainer,
   BarChart,
@@ -25,7 +25,6 @@ import {
   Minus,
   BarChart3,
 } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@intake/ui/card";
 import {
   useBPTrend,
   useWeightTrend,
@@ -35,77 +34,93 @@ import { useRecordsTabData } from "@/hooks/use-records-tab-queries";
 import { useSettingsStore } from "@/stores/settings-store";
 import { AiInsightsCard } from "@/components/analytics/ai-insights-card";
 import { NutrientAnalysisCard } from "@/components/analytics/nutrient-analysis-card";
+import {
+  AXIS_PROPS,
+  CHART_COLOR,
+  GRID_PROPS,
+  TOOLTIP_PROPS,
+  roundDomain,
+  squareDot,
+} from "@/components/analytics/chart-theme";
 import { useOptionalTrackerEnabled } from "@/lib/optional-trackers";
 import { getDeviceTimezone } from "@/lib/timezone";
 import { averagePerLoggedDay } from "@intake/core/logical-day";
 import type { DataPoint, TimeRange, TrendDirection } from "@intake/types/analytics";
 
-const TOOLTIP_STYLE = {
-  backgroundColor: "hsl(var(--card))",
-  border: "1px solid hsl(var(--border))",
-  borderRadius: "8px",
-  fontSize: 12,
-};
-
-const CHART_MARGIN = { top: 5, right: 5, left: -20, bottom: 0 };
+const CHART_MARGIN = { top: 8, right: 16, left: -14, bottom: 0 };
 const FLUID_TARGET_ML = 500;
+const WEIGHT_DOT = squareDot(6);
+
+const int = (v: number) => Math.round(v).toLocaleString("en-US");
 
 // ---------------------------------------------------------------------------
 // Small presentational helpers
 // ---------------------------------------------------------------------------
 
 function TrendArrow({ direction }: { direction: TrendDirection["direction"] }) {
-  if (direction === "rising") {
-    return <TrendingUp className="w-3.5 h-3.5 text-muted-foreground" />;
-  }
-  if (direction === "falling") {
-    return <TrendingDown className="w-3.5 h-3.5 text-muted-foreground" />;
-  }
-  return <Minus className="w-3.5 h-3.5 text-muted-foreground" />;
+  const Icon =
+    direction === "rising" ? TrendingUp : direction === "falling" ? TrendingDown : Minus;
+  return (
+    <span className="wm-tr" title={direction} aria-label={`trend ${direction}`} role="img">
+      <Icon />
+    </span>
+  );
 }
 
+/** A KPI tile: domain stripe, label with icon, mono value in the domain colour. */
 function KpiCard({
+  color,
   icon,
   label,
   value,
+  unit,
   sub,
   trend,
 }: {
-  icon: React.ReactNode;
+  color: string;
+  icon: ReactNode;
   label: string;
   value: string;
+  unit?: string;
   sub?: string;
   trend?: TrendDirection["direction"];
 }) {
   return (
-    <div className="rounded-lg border p-3 bg-white/80 dark:bg-slate-900/50">
-      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+    <div
+      className="wm-kpi"
+      style={{ "--c": color } as CSSProperties}
+      data-testid="kpi"
+    >
+      <div className="wm-kl">
         {icon}
         <span>{label}</span>
       </div>
-      <div className="flex items-center gap-1.5 mt-1">
-        <span className="text-lg font-semibold font-mono">{value}</span>
+      <div className="wm-kv" data-testid="kpi-value">
+        <span>
+          {value}
+          {unit && <small> {unit}</small>}
+        </span>
         {trend && <TrendArrow direction={trend} />}
       </div>
-      {sub && <p className="text-[11px] text-muted-foreground mt-0.5">{sub}</p>}
+      {sub && <p className="wm-kd">{sub}</p>}
     </div>
   );
 }
 
 function ChartSection({
   title,
+  color,
   children,
 }: {
   title: string;
-  children: React.ReactNode;
+  color: string;
+  children: ReactNode;
 }) {
   return (
-    <Card className="bg-white/80 dark:bg-slate-900/50 border-slate-200 dark:border-slate-800">
-      <CardHeader className="pt-3 pb-1 px-3">
-        <CardTitle className="text-sm font-medium">{title}</CardTitle>
-      </CardHeader>
-      <CardContent className="px-3 pb-3">{children}</CardContent>
-    </Card>
+    <section className="wm-card" style={{ "--c": color } as CSSProperties}>
+      <h3 className="wm-ct">{title}</h3>
+      <div className="wm-chart">{children}</div>
+    </section>
   );
 }
 
@@ -260,17 +275,15 @@ export function SummaryTab({ range }: { range: TimeRange }) {
     // the parent `range` selector — so they can still have data to analyse
     // (and saved reports to show) even when the selected range is empty.
     return (
-      <div className="space-y-4">
-        <div className="py-12 text-center text-muted-foreground">
-          <BarChart3 className="w-8 h-8 mx-auto mb-3 opacity-50" />
-          <p className="text-lg font-medium">No data for this period</p>
-          <p className="text-sm mt-1 max-w-xs mx-auto">
-            Log entries or widen the time range to see your summary.
-          </p>
+      <>
+        <div className="wm-empty">
+          <BarChart3 aria-hidden="true" />
+          <p className="t">No data for this period</p>
+          <p className="wm-p">Log entries or widen the time range to see your summary.</p>
         </div>
         <AiInsightsCard />
         <NutrientAnalysisCard />
-      </div>
+      </>
     );
   }
 
@@ -300,15 +313,18 @@ export function SummaryTab({ range }: { range: TimeRange }) {
       ? weightReadings[weightReadings.length - 1]!.value - weightReadings[0]!.value
       : 0;
 
+  const c = (v: string) => `hsl(var(--${v}))`;
+
   return (
-    <div className="space-y-4">
+    <>
       <AiInsightsCard />
       <NutrientAnalysisCard />
 
       {/* KPI grid */}
-      <div className="grid grid-cols-2 gap-2">
+      <div className="wm-kpis">
         <KpiCard
-          icon={<Heart className="w-3.5 h-3.5" />}
+          color={c("bp")}
+          icon={<Heart />}
           label="Avg Blood Pressure"
           value={
             bpReadings.length > 0
@@ -325,9 +341,11 @@ export function SummaryTab({ range }: { range: TimeRange }) {
           })}
         />
         <KpiCard
-          icon={<Scale className="w-3.5 h-3.5" />}
+          color={c("weight")}
+          icon={<Scale />}
           label="Avg Weight"
-          value={weightReadings.length > 0 ? `${weight.value.avg.toFixed(1)} kg` : "—"}
+          value={weightReadings.length > 0 ? weight.value.avg.toFixed(1) : "—"}
+          {...(weightReadings.length > 0 && { unit: "kg" })}
           sub={
             weightReadings.length >= 2
               ? `${weightChange > 0 ? "+" : ""}${weightChange.toFixed(1)} kg over period`
@@ -340,9 +358,11 @@ export function SummaryTab({ range }: { range: TimeRange }) {
           })}
         />
         <KpiCard
-          icon={<Droplets className="w-3.5 h-3.5" />}
+          color={c("water")}
+          icon={<Droplets />}
           label="Fluid Balance"
-          value={`${Math.round(fluid.value.avgBalance)} ml`}
+          value={int(fluid.value.avgBalance)}
+          unit="ml"
           sub={
             fluid.value.daysTotal > 0
               ? `${fluid.value.daysAboveTarget}/${fluid.value.daysTotal} days on target`
@@ -350,52 +370,66 @@ export function SummaryTab({ range }: { range: TimeRange }) {
           }
         />
         <KpiCard
-          icon={<Droplets className="w-3.5 h-3.5" />}
+          color={c("water")}
+          icon={<Droplets />}
           label="Water Intake"
-          value={`${Math.round(totals.avg.waterMl)} ml`}
+          value={int(totals.avg.waterMl)}
+          unit="ml"
           sub={`${(totals.waterMl / 1000).toFixed(1)} L total · avg/day`}
         />
         <KpiCard
-          icon={<Activity className="w-3.5 h-3.5" />}
+          color={c("sodium")}
+          icon={<Activity />}
           label="Sodium Intake"
-          value={`${Math.round(totals.avg.saltMg)} mg`}
-          sub={`${Math.round(totals.saltMg)} mg total · avg/day`}
+          value={int(totals.avg.saltMg)}
+          unit="mg"
+          sub={`${int(totals.saltMg)} mg total · avg/day`}
         />
         {sugarEnabled && (
           <KpiCard
-            icon={<Candy className="w-3.5 h-3.5" />}
+            color={c("sugar")}
+            icon={<Candy />}
             label="Sugar Intake"
-            value={`${Math.round(totals.avg.sugarG)} g`}
-            sub={`${Math.round(totals.sugarG)} g total · avg/day`}
+            value={int(totals.avg.sugarG)}
+            unit="g"
+            sub={`${int(totals.sugarG)} g total · avg/day`}
           />
         )}
         {potassiumEnabled && (
           <KpiCard
-            icon={<Banana className="w-3.5 h-3.5" />}
+            color={c("fg")}
+            icon={<Banana />}
             label="Potassium Intake"
-            value={`${Math.round(totals.avg.potassiumMg)} mg`}
-            sub={`${Math.round(totals.potassiumMg)} mg total · avg/day`}
+            value={int(totals.avg.potassiumMg)}
+            unit="mg"
+            sub={`${int(totals.potassiumMg)} mg total · avg/day`}
           />
         )}
         <KpiCard
-          icon={<Activity className="w-3.5 h-3.5" />}
+          color={c("bath")}
+          icon={<Activity />}
           label="Activity"
-          value={`${totals.meals} meals`}
+          value={String(totals.meals)}
+          unit="meals"
           sub={`${totals.urination} urination · ${totals.defecation} defecation`}
         />
         {totals.caffeineMg > 0 && (
           <KpiCard
-            icon={<Activity className="w-3.5 h-3.5" />}
+            color={c("caffeine")}
+            icon={<Activity />}
             label="Caffeine"
-            value={`${Math.round(totals.caffeineMg)} mg`}
-            sub={`${Math.round(totals.avg.caffeineMg)} mg avg/day`}
+            value={int(totals.caffeineMg)}
+            unit="mg"
+            sub={`${int(totals.avg.caffeineMg)} mg avg/day`}
           />
         )}
         {totals.alcoholDrinks > 0 && (
           <KpiCard
-            icon={<Activity className="w-3.5 h-3.5" />}
+            color={c("alcohol")}
+            icon={<Activity />}
             label="Alcohol"
-            value={`${totals.alcoholDrinks.toFixed(1)} drinks`}
+            value={totals.alcoholDrinks.toFixed(1)}
+            unit="drinks"
             sub={`${totals.avg.alcoholDrinks.toFixed(1)} avg/day`}
           />
         )}
@@ -403,78 +437,100 @@ export function SummaryTab({ range }: { range: TimeRange }) {
 
       {/* Observations */}
       {observations.length > 0 && (
-        <Card className="bg-white/80 dark:bg-slate-900/50 border-slate-200 dark:border-slate-800">
-          <CardHeader className="pt-3 pb-1 px-3">
-            <CardTitle className="text-sm font-medium">Observations</CardTitle>
-          </CardHeader>
-          <CardContent className="px-3 pb-3">
-            <ul className="space-y-1.5">
-              {observations.map((o, i) => (
-                <li key={i} className="flex gap-2 text-xs text-muted-foreground">
-                  <span className="text-muted-foreground/60">•</span>
-                  <span>{o}</span>
-                </li>
-              ))}
-            </ul>
-          </CardContent>
-        </Card>
+        <section className="wm-card" style={{ "--c": "hsl(var(--fg))" } as CSSProperties}>
+          <h3 className="wm-ct">Observations</h3>
+          <ul className="wm-obs">
+            {observations.map((o, i) => (
+              <li key={i}>{o}</li>
+            ))}
+          </ul>
+        </section>
       )}
 
       {/* Charts */}
       {bpChart.length > 0 && (
-        <ChartSection title="Blood Pressure">
+        <ChartSection title="Blood Pressure" color={CHART_COLOR.bp}>
           <ResponsiveContainer width="100%" height={180}>
             <LineChart data={bpChart} margin={CHART_MARGIN}>
-              <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-              <XAxis dataKey="time" tick={{ fontSize: 10 }} />
-              <YAxis tick={{ fontSize: 10 }} />
-              <Tooltip contentStyle={TOOLTIP_STYLE} />
-              <Line dataKey="systolic" stroke="hsl(346 77% 50%)" strokeWidth={2} dot={false} />
-              <Line dataKey="diastolic" stroke="hsl(330 65% 55%)" strokeWidth={2} dot={false} />
+              <CartesianGrid {...GRID_PROPS} />
+              <XAxis dataKey="time" {...AXIS_PROPS} padding={{ left: 12, right: 12 }} />
+              <YAxis {...AXIS_PROPS} axisLine={false} domain={roundDomain(5, 10)} />
+              <Tooltip {...TOOLTIP_PROPS} />
+              <Line
+                dataKey="systolic"
+                name="Systolic"
+                stroke={CHART_COLOR.bp}
+                strokeWidth={2}
+                dot={false}
+                activeDot={squareDot(8)}
+                isAnimationActive={false}
+              />
+              <Line
+                dataKey="diastolic"
+                name="Diastolic"
+                stroke={CHART_COLOR.diastolic}
+                strokeWidth={2}
+                dot={false}
+                activeDot={squareDot(8)}
+                isAnimationActive={false}
+              />
             </LineChart>
           </ResponsiveContainer>
         </ChartSection>
       )}
 
       {weightChart.length > 0 && (
-        <ChartSection title="Weight">
+        <ChartSection title="Weight" color={CHART_COLOR.weight}>
           <ResponsiveContainer width="100%" height={180}>
             <LineChart data={weightChart} margin={CHART_MARGIN}>
-              <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-              <XAxis dataKey="time" tick={{ fontSize: 10 }} />
-              <YAxis tick={{ fontSize: 10 }} domain={["dataMin - 1", "dataMax + 1"]} />
+              <CartesianGrid {...GRID_PROPS} />
+              <XAxis dataKey="time" {...AXIS_PROPS} padding={{ left: 12, right: 12 }} />
+              <YAxis {...AXIS_PROPS} axisLine={false} domain={roundDomain(0.5, 1)} />
               <Tooltip
-                contentStyle={TOOLTIP_STYLE}
+                {...TOOLTIP_PROPS}
                 formatter={(v) => [`${Number(v).toFixed(1)} kg`, "Weight"]}
               />
-              <Line dataKey="weight" stroke="hsl(160 84% 39%)" strokeWidth={2} dot={{ r: 3 }} />
+              <Line
+                dataKey="weight"
+                stroke={CHART_COLOR.weight}
+                strokeWidth={2}
+                dot={WEIGHT_DOT}
+                activeDot={squareDot(8)}
+                isAnimationActive={false}
+              />
             </LineChart>
           </ResponsiveContainer>
         </ChartSection>
       )}
 
       {fluidChart.length > 0 && (
-        <ChartSection title="Daily Fluid Balance">
+        <ChartSection title="Daily Fluid Balance" color={CHART_COLOR.water}>
           <ResponsiveContainer width="100%" height={180}>
             <BarChart data={fluidChart} margin={CHART_MARGIN}>
-              <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-              <XAxis dataKey="date" tick={{ fontSize: 10 }} />
-              <YAxis tick={{ fontSize: 10 }} />
+              <CartesianGrid {...GRID_PROPS} />
+              <XAxis dataKey="date" {...AXIS_PROPS} />
+              <YAxis {...AXIS_PROPS} axisLine={false} />
               <Tooltip
-                contentStyle={TOOLTIP_STYLE}
+                {...TOOLTIP_PROPS}
                 formatter={(v) => [`${Number(v)} ml`, "Balance"]}
               />
-              <ReferenceLine y={0} stroke="hsl(var(--border))" />
+              <ReferenceLine y={0} stroke={CHART_COLOR.line} />
               <ReferenceLine
                 y={FLUID_TARGET_ML}
-                stroke="hsl(160 84% 39%)"
+                stroke={CHART_COLOR.weight}
                 strokeDasharray="4 4"
               />
-              <Bar dataKey="balance" fill="hsl(199 89% 48%)" radius={[2, 2, 0, 0]} />
+              <Bar
+                dataKey="balance"
+                fill={CHART_COLOR.water}
+                radius={0}
+                maxBarSize={28}
+                isAnimationActive={false}
+              />
             </BarChart>
           </ResponsiveContainer>
         </ChartSection>
       )}
-    </div>
+    </>
   );
 }

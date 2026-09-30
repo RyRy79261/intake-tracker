@@ -47,42 +47,74 @@
   --color-destructive-foreground: hsl(var(--destructive-foreground));
 
   --color-border: hsl(var(--border));
-  --color-input: hsl(var(--input));
+  /* A domain scope tints field borders (`--field-line`, see below). */
+  --color-input: var(--field-line, hsl(var(--input)));
   --color-ring: hsl(var(--ring));
 
+  /* Ward Console surfaces. `panel` = raised surface, `chrome` = bars and
+     headers, `line` = the 1px rule, `on-domain` = text on a filled domain
+     block (the prototype's --onD). */
+  --color-panel: hsl(var(--panel));
+  --color-chrome: hsl(var(--chrome));
+  --color-line: hsl(var(--line));
+  --color-on-domain: hsl(var(--onD));
+
+  /* Domain colours. Full colours, so bg-water / text-sodium / border-meds
+     work and `var(--color-water)` can be handed to an inline `--c` stripe.
+     apps/web/src/lib/domain-colors.ts maps each domain onto these. */
   --color-water: hsl(var(--water));
-  --color-water-foreground: hsl(var(--water-foreground));
-
-  --color-salt: hsl(var(--salt));
-  --color-salt-foreground: hsl(var(--salt-foreground));
-
-  --color-weight: hsl(var(--weight));
-  --color-weight-foreground: hsl(var(--weight-foreground));
-
-  --color-bp: hsl(var(--bp));
-  --color-bp-foreground: hsl(var(--bp-foreground));
-
-  --color-eating: hsl(var(--eating));
-  --color-eating-foreground: hsl(var(--eating-foreground));
-
-  --color-urination: hsl(var(--urination));
-  --color-urination-foreground: hsl(var(--urination-foreground));
-
-  --color-defecation: hsl(var(--defecation));
-  --color-defecation-foreground: hsl(var(--defecation-foreground));
-
+  --color-sodium: hsl(var(--sodium));
+  --color-sugar: hsl(var(--sugar));
   --color-caffeine: hsl(var(--caffeine));
-  --color-caffeine-foreground: hsl(var(--caffeine-foreground));
-
   --color-alcohol: hsl(var(--alcohol));
-  --color-alcohol-foreground: hsl(var(--alcohol-foreground));
+  --color-bp: hsl(var(--bp));
+  --color-weight: hsl(var(--weight));
+  --color-bath: hsl(var(--bath));
+  --color-meds: hsl(var(--meds));
+  --color-ai: hsl(var(--ai));
+  /* Settings only: the System group. Not a tracked domain. */
+  --color-steel: hsl(var(--steel));
 
-  --color-medication: hsl(var(--medication));
-  --color-medication-foreground: hsl(var(--medication-foreground));
+  /* Legacy domain names kept as aliases so existing bg-salt / ring-eating /
+     text-medication classes resolve onto the Ward palette. */
+  --color-salt: hsl(var(--sodium));
+  --color-eating: hsl(var(--sodium));
+  --color-urination: hsl(var(--bath));
+  --color-defecation: hsl(var(--bath));
+  --color-medication: hsl(var(--meds));
 
+  --color-water-foreground: hsl(var(--onD));
+  --color-sodium-foreground: hsl(var(--onD));
+  --color-sugar-foreground: hsl(var(--onD));
+  --color-caffeine-foreground: hsl(var(--onD));
+  --color-alcohol-foreground: hsl(var(--onD));
+  --color-bp-foreground: hsl(var(--onD));
+  --color-weight-foreground: hsl(var(--onD));
+  --color-bath-foreground: hsl(var(--onD));
+  --color-meds-foreground: hsl(var(--onD));
+  --color-ai-foreground: hsl(var(--onD));
+  --color-salt-foreground: hsl(var(--onD));
+  --color-eating-foreground: hsl(var(--onD));
+  --color-urination-foreground: hsl(var(--onD));
+  --color-defecation-foreground: hsl(var(--onD));
+  --color-medication-foreground: hsl(var(--onD));
+
+  /* IBM Plex Sans for text, IBM Plex Mono for numbers. The next/font
+     variables are set on <body> in apps/web/src/app/layout.tsx. */
+  --font-sans: var(--font-plex-sans), -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, Menlo, Consolas, monospace;
+
+  /* Sharp corners. Every rounded-* step (including the old rounded-xl card)
+     collapses to --radius (0). rounded-full is left alone for marks that are
+     genuinely circular (avatars, dots). */
+  --radius-xs: var(--radius);
+  --radius-sm: var(--radius);
+  --radius-md: var(--radius);
   --radius-lg: var(--radius);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-sm: calc(var(--radius) - 4px);
+  --radius-xl: var(--radius);
+  --radius-2xl: var(--radius);
+  --radius-3xl: var(--radius);
+  --radius-4xl: var(--radius);
 }
 
 /*
@@ -103,93 +135,109 @@
   }
 }
 
+/*
+  Ward Console palettes. Source of truth: the approved prototype
+  (prototypes/os-v2/ward-console-4.html). `day` is :root (light) and `night`
+  is .dark. Values are bare HSL channels (hex in the trailing comment) so the
+  shadcn convention `hsl(var(--token) / <alpha>)` keeps working.
+  The prototype's --muted (a text colour) is --muted-fg here, because shadcn's
+  --muted is a surface colour.
+*/
 @layer base {
   :root {
-    --background: 220 20% 97%;
-    --foreground: 220 20% 10%;
-    --card: 0 0% 100%;
-    --card-foreground: 220 20% 10%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 220 20% 10%;
-    --primary: 220 70% 50%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 220 15% 92%;
-    --secondary-foreground: 220 20% 20%;
-    --muted: 220 15% 92%;
-    --muted-foreground: 220 10% 45%;
-    --accent: 220 15% 92%;
-    --accent-foreground: 220 20% 20%;
-    --destructive: 0 84% 60%;
-    --destructive-foreground: 0 0% 100%;
-    --border: 220 15% 88%;
-    --input: 220 15% 88%;
-    --ring: 220 70% 50%;
-    --radius: 0.75rem;
-    
-    /* Custom colors for water and salt */
-    --water: 200 85% 55%;
-    --water-foreground: 0 0% 100%;
-    --salt: 30 80% 55%;
-    --salt-foreground: 0 0% 100%;
-    --weight: 160 84% 39%;
-    --weight-foreground: 0 0% 100%;
-    --bp: 350 89% 60%;
-    --bp-foreground: 0 0% 100%;
-    --eating: 25 95% 53%;
-    --eating-foreground: 0 0% 100%;
-    --urination: 258 90% 66%;
-    --urination-foreground: 0 0% 100%;
-    --defecation: 33 25% 45%;
-    --defecation-foreground: 0 0% 100%;
-    --caffeine: 48 96% 53%;
-    --caffeine-foreground: 0 0% 0%;
-    --alcohol: 292 84% 61%;
-    --alcohol-foreground: 0 0% 100%;
-    --medication: 168 76% 36%;
-    --medication-foreground: 0 0% 100%;
+    /* Surfaces — day */
+    --bg: 45 15.4% 89.8%; /* #E9E7E1 */
+    --panel: 48 33.3% 97.1%; /* #FAF9F5 */
+    --chrome: 44 16.1% 81.8%; /* #D8D4C9 */
+    --line: 43.3 11.1% 68.2%; /* #B7B2A5 */
+    --fg: 229.1 21.6% 10%; /* #14161F */
+    --muted-fg: 230.5 9.3% 40.2%; /* #5D6070 */
+    --onD: 0 0% 100%; /* #FFFFFF */
+    --grid: rgba(20, 22, 31, 0.07);
+
+    /* Domain colours — day */
+    --water: 207.6 89.7% 38%; /* #0A68B8 */
+    --sodium: 38.3 100% 27.6%; /* #8D5A00 */
+    --sugar: 332.2 71.2% 42.2%; /* #B81F66 */
+    --caffeine: 24.9 50.9% 34.3%; /* #84502B */
+    --alcohol: 257.8 60.7% 53.1%; /* #6A3FD0 */
+    --bp: 358.4 67% 45.1%; /* #C0262A */
+    --weight: 150.9 68.3% 28.4%; /* #177A4A */
+    --bath: 53.2 75.2% 25.3%; /* #716610 */
+    --meds: 175.2 87.5% 25.1%; /* #08786F */
+    --ai: 235.1 61.3% 53.3%; /* #3F4BD1 */
+    /* Settings group colour (System) — day. See settings-groups.ts. */
+    --steel: 199.8 49.7% 33.5%; /* #2B6480 */
+
+    /* shadcn channels mapped onto the Ward palette */
+    --background: var(--bg);
+    --foreground: var(--fg);
+    --card: var(--panel);
+    --card-foreground: var(--fg);
+    --popover: var(--panel);
+    --popover-foreground: var(--fg);
+    --primary: var(--fg);
+    --primary-foreground: var(--bg);
+    --primary-hover: hsl(var(--fg) / 0.85);
+    --secondary: var(--chrome);
+    --secondary-foreground: var(--fg);
+    --muted: var(--chrome);
+    --muted-foreground: var(--muted-fg);
+    --accent: var(--chrome);
+    --accent-foreground: var(--fg);
+    --destructive: var(--bp);
+    --destructive-foreground: var(--onD);
+    --border: var(--line);
+    --input: var(--muted-fg);
+    --ring: var(--fg);
+    --radius: 0px;
   }
 
   .dark {
-    --background: 220 20% 8%;
-    --foreground: 220 10% 95%;
-    --card: 220 20% 12%;
-    --card-foreground: 220 10% 95%;
-    --popover: 220 20% 12%;
-    --popover-foreground: 220 10% 95%;
-    --primary: 210 100% 60%;
-    --primary-foreground: 220 20% 8%;
-    --secondary: 220 15% 18%;
-    --secondary-foreground: 220 10% 90%;
-    --muted: 220 15% 18%;
-    --muted-foreground: 220 10% 60%;
-    --accent: 220 15% 18%;
-    --accent-foreground: 220 10% 90%;
-    --destructive: 0 72% 51%;
-    --destructive-foreground: 0 0% 100%;
-    --border: 220 15% 22%;
-    --input: 220 15% 22%;
-    --ring: 210 100% 60%;
-    
-    --water: 200 90% 50%;
-    --water-foreground: 220 20% 8%;
-    --salt: 35 90% 55%;
-    --salt-foreground: 220 20% 8%;
-    --weight: 160 84% 45%;
-    --weight-foreground: 220 20% 8%;
-    --bp: 350 89% 55%;
-    --bp-foreground: 220 20% 8%;
-    --eating: 25 95% 55%;
-    --eating-foreground: 220 20% 8%;
-    --urination: 258 90% 68%;
-    --urination-foreground: 220 20% 8%;
-    --defecation: 33 25% 55%;
-    --defecation-foreground: 220 20% 8%;
-    --caffeine: 48 96% 50%;
-    --caffeine-foreground: 220 20% 8%;
-    --alcohol: 292 84% 65%;
-    --alcohol-foreground: 220 20% 8%;
-    --medication: 168 76% 42%;
-    --medication-foreground: 220 20% 8%;
+    /* Surfaces — night */
+    --bg: 230 27.3% 8.6%; /* #10121C */
+    --panel: 228.8 25% 12.5%; /* #181B28 */
+    --chrome: 228 21.7% 18%; /* #242838 */
+    --line: 228 19.1% 25.7%; /* #353A4E */
+    --fg: 226.7 33.3% 94.7%; /* #EDEFF6 */
+    --muted-fg: 229.3 15.6% 64.7%; /* #979CB3 */
+    --onD: 230 27.3% 8.6%; /* #10121C */
+    --grid: rgba(237, 239, 246, 0.05);
+
+    /* Domain colours — night */
+    --water: 206.9 100% 64.5%; /* #4AAEFF */
+    --sodium: 39.9 89.2% 60%; /* #F4B73E */
+    --sugar: 332.6 100% 75.1%; /* #FF80BA */
+    --caffeine: 25.6 51.8% 61%; /* #CF9468 */
+    --alcohol: 261.2 100% 77.3%; /* #B48BFF */
+    --bp: 1.5 100% 67.6%; /* #FF5E5A */
+    --weight: 148.4 59.4% 57.5%; /* #52D38F */
+    --bath: 52.6 48.4% 57.5%; /* #C7BA5E */
+    --meds: 174.4 63.8% 50.2%; /* #2FD1C2 */
+    --ai: 232.6 100% 77.8%; /* #8E9CFF */
+    /* Settings group colour (System) — night */
+    --steel: 197.5 57.8% 67.5%; /* #7CC0DC */
+
+    --background: var(--bg);
+    --foreground: var(--fg);
+    --card: var(--panel);
+    --card-foreground: var(--fg);
+    --popover: var(--panel);
+    --popover-foreground: var(--fg);
+    --primary: var(--fg);
+    --primary-foreground: var(--bg);
+    --primary-hover: hsl(var(--fg) / 0.85);
+    --secondary: var(--chrome);
+    --secondary-foreground: var(--fg);
+    --muted: var(--chrome);
+    --muted-foreground: var(--muted-fg);
+    --accent: var(--chrome);
+    --accent-foreground: var(--fg);
+    --destructive: var(--bp);
+    --destructive-foreground: var(--onD);
+    --border: var(--line);
+    --input: var(--muted-fg);
+    --ring: var(--fg);
   }
 }
 
@@ -198,7 +246,128 @@
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground font-sans;
     font-feature-settings: "rlig" 1, "calt" 1;
   }
+  /* Tailwind v4 dropped the pointer cursor on buttons; bring it back for
+     every control that acts on a click. A cursor utility still wins. */
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  [role="tab"],
+  [role="switch"],
+  [role="checkbox"],
+  [role="radio"],
+  [role="option"],
+  [role="menuitem"],
+  [role="menuitemradio"],
+  [role="menuitemcheckbox"],
+  select,
+  summary,
+  label[for] {
+    cursor: pointer;
+  }
+  ::selection {
+    background: hsl(var(--fg));
+    color: hsl(var(--bg));
+  }
+}
+
+/*
+  Domain scope. `data-domain="water"` on a card, window, dialog or field tints
+  everything inside it with that domain's colour, with no per-control classes:
+
+  - `--c` is the colour itself (stripes, pips, sub-headings, value text).
+  - `--primary`, `--primary-foreground` and `--ring` are re-pointed at it, so
+    the shared primitives (Button's primary variant, Switch, Checkbox, the
+    Tabs underline, the selected segment/chip, focus rings and the caret) take
+    the colour. Outside a scope they keep the ink colours set above.
+  - `--primary-hover` is the hover/pressed fill. It mixes towards the ink, so
+    the on-colour text gains contrast on hover in both themes (fading the fill
+    instead drops white-on-colour under AA in the day theme).
+
+  Text on a fill uses `--onD` (white by day, near-black by night): every domain
+  colour passes AA against it, and as text or a 3:1 mark on the panel
+  (domain-scope.test.ts). Scopes nest: an inner `data-domain` wins, and
+  `data-domain="ink"` returns to the neutral ink. Portalled content (dialogs,
+  sheets, popovers) is outside the scope and needs its own attribute.
+
+  `steel` is the Settings "System" group colour, not a tracked domain.
+*/
+@layer base {
+  [data-domain] {
+    --c: hsl(var(--d));
+    --primary: var(--d);
+    --primary-foreground: var(--onD);
+    --primary-hover: color-mix(in srgb, hsl(var(--d)) 85%, hsl(var(--fg)));
+    --ring: var(--d);
+    /* At rest, not only on focus: field and outline-button borders and a
+       faint field fill carry the colour, so each field shows what it logs. */
+    --field-line: color-mix(in srgb, hsl(var(--d)) 60%, hsl(var(--input)));
+    --field-bg: color-mix(in srgb, hsl(var(--d)) 7%, hsl(var(--background)));
+  }
+  [data-domain="water"] { --d: var(--water); }
+  [data-domain="sodium"] { --d: var(--sodium); }
+  [data-domain="sugar"] { --d: var(--sugar); }
+  [data-domain="caffeine"] { --d: var(--caffeine); }
+  [data-domain="alcohol"] { --d: var(--alcohol); }
+  [data-domain="bp"] { --d: var(--bp); }
+  [data-domain="weight"] { --d: var(--weight); }
+  [data-domain="bath"] { --d: var(--bath); }
+  [data-domain="meds"] { --d: var(--meds); }
+  [data-domain="ai"] { --d: var(--ai); }
+  [data-domain="steel"] { --d: var(--steel); }
+  [data-domain="ink"] {
+    --d: var(--fg);
+    --primary-foreground: var(--bg);
+    --primary-hover: hsl(var(--fg) / 0.85);
+    --field-line: initial;
+    --field-bg: initial;
+  }
+}
+
+/* Numbers: IBM Plex Mono with tabular figures. Plain `tabular-nums` keeps
+   the current face; `num` also switches to the mono face. */
+@utility num {
+  /* --font-mono lives in `@theme inline`, so it is not a runtime variable;
+     reference the next/font variable directly. */
+  font-family: var(--font-plex-mono), ui-monospace, Menlo, Consolas, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Inset domain-colour stripe (the prototype's `box-shadow: inset 3px 0 0
+   var(--c)`). Set `--c` (see domainStripeStyle in domain-colors.ts). */
+@utility stripe {
+  box-shadow: inset 3px 0 0 var(--c, hsl(var(--fg)));
+}
+
+/* Sub-heading inside a card, window or settings group (the prototype's
+   `.sub3`): small mono caps in the scope colour `--c`, with a hairline running
+   to the right edge. Outside a scope it keeps the text colour it inherits. */
+@utility subhead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-plex-mono), ui-monospace, Menlo, Consolas, monospace;
+  font-size: 0.75rem;
+  line-height: 1.25rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--c, currentColor);
+  &::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: hsl(var(--line));
+  }
+}
+
+/* A 6px square in the scope colour: marks which domain a field or row belongs
+   to. Decorative (the label beside it names the domain). */
+@utility pip {
+  display: inline-block;
+  flex: none;
+  width: 6px;
+  height: 6px;
+  background: var(--c, hsl(var(--fg)));
 }

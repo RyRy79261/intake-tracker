@@ -32,12 +32,12 @@ export function NumericInput({
   onDecrement,
 }: NumericInputProps) {
   return (
-    <div className="flex gap-1">
+    <div className="flex">
       <Button
         type="button"
         variant="outline"
         size="icon"
-        className="h-10 w-10 shrink-0"
+        className="h-11 w-11 shrink-0"
         onClick={onDecrement}
         aria-label="Decrease value"
       >
@@ -52,13 +52,13 @@ export function NumericInput({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         onBlur={onBlur}
-        className="text-center"
+        className="h-11 border-x-0 text-center num"
       />
       <Button
         type="button"
         variant="outline"
         size="icon"
-        className="h-10 w-10 shrink-0"
+        className="h-11 w-11 shrink-0"
         onClick={onIncrement}
         aria-label="Increase value"
       >

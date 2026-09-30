@@ -56,6 +56,7 @@ vi.mock("@/hooks/use-interaction-check", () => ({
 
 import { AddMedicationWizard } from "@/components/medications/add-medication-wizard";
 import { renderWithFixtures } from "@/__tests__/react-test-utils";
+import { makePrescription, makeMedicationPhase } from "@/__tests__/fixtures/db-fixtures";
 // eslint-disable-next-line no-restricted-imports
 import { db } from "@/lib/db";
 
@@ -102,15 +103,12 @@ describe("AddMedicationWizard — full AI-search flow (MSW integration)", () => 
       );
 
       // ─── Step 1: AI search ──────────────────────────────────────
-      const searchInput = await screen.findByPlaceholderText(
-        /Aviolix.*Clopidogrel/i,
-      );
+      const searchInput = await screen.findByLabelText("Medicine name or brand");
       await user.type(searchInput, "Aviolix 75mg");
       await user.keyboard("{Enter}");
 
-      // Wait for MSW response to populate the form. The wizard displays
-      // "Found: <genericName>" as a confirmation banner once the search
-      // resolves.
+      // The lookup panel shows the result; nothing is filled in until the
+      // user applies the ticked groups.
       await waitFor(
         () => {
           expect(
@@ -119,6 +117,15 @@ describe("AddMedicationWizard — full AI-search flow (MSW integration)", () => 
         },
         { timeout: 5_000 },
       );
+      expect(screen.getByPlaceholderText("e.g. Aviolix")).toHaveValue("");
+      // The only strength is picked for the user.
+      expect(screen.getByRole("checkbox", { name: /^Strength/ })).toHaveAttribute("aria-checked", "true");
+      await user.click(screen.getByRole("button", { name: "Apply to form" }));
+
+      expect(screen.getByText("Filled in from AI lookup")).toBeInTheDocument();
+      expect(screen.getByPlaceholderText("e.g. Aviolix")).toHaveValue("Aviolix 75");
+      expect(screen.getByPlaceholderText("e.g. Clopidogrel")).toHaveValue("Aviolix Compound");
+      expect(screen.getByLabelText("Strength per pill")).toHaveValue("75mg");
 
       // ─── Steps 2-5: walk through with pre-populated state ──────
       await user.click(screen.getByRole("button", { name: /next/i }));
@@ -176,6 +183,8 @@ describe("AddMedicationWizard — full AI-search flow (MSW integration)", () => 
       );
       expect(ourInventory, "inventory item must be created and FK-linked").toBeDefined();
       expect(ourInventory!.pillShape).toBe("round");
+      // The brand came from the lookup's brand + picked strength.
+      expect(ourInventory!.brandName).toBe("Aviolix 75");
       // pillColor: AI returned "purple" which the wizard maps to a hex
       // value via COLOR_NAME_MAP. The exact hex is an implementation
       // detail; assert the field is non-empty.
@@ -190,6 +199,93 @@ describe("AddMedicationWizard — full AI-search flow (MSW integration)", () => 
         ourSchedules.length,
         "at least one schedule must be created and FK-linked to the phase",
       ).toBeGreaterThan(0);
+    },
+    30_000,
+  );
+
+  it(
+    "a compact lookup on a later step looks up the entered name and fills in only that step",
+    async () => {
+      const user = userEvent.setup();
+      await renderWithFixtures(<AddMedicationWizard open onOpenChange={() => {}} />);
+
+      // Step 1 by hand: no lookup yet.
+      await user.type(await screen.findByPlaceholderText("e.g. Aviolix"), "Aviolix");
+      await user.type(screen.getByLabelText("Strength per pill"), "75mg");
+      await user.click(screen.getByRole("button", { name: /next/i }));
+      await screen.findByText("Pill Appearance");
+
+      expect(screen.getByText(/Uses the name you entered/)).toHaveTextContent("Aviolix");
+      await user.click(screen.getByRole("button", { name: "Look up with AI" }));
+      expect(await screen.findByText("Shape, colour and markings:")).toBeInTheDocument();
+      await user.click(screen.getByRole("button", { name: "Use this" }));
+
+      // Purple round, from the lookup.
+      expect(screen.getByRole("radio", { name: "Colour #9C27B0" })).toHaveAttribute("aria-checked", "true");
+      expect(screen.getByRole("radio", { name: /Round/ })).toHaveAttribute("aria-checked", "true");
+      expect(screen.getByText("Filled in from AI lookup")).toBeInTheDocument();
+
+      // The Indication step offers its own groups from the same result.
+      await user.click(screen.getByRole("button", { name: /next/i }));
+      await screen.findByText("Indication & Notes");
+      await user.click(screen.getByRole("button", { name: "Show result" }));
+      expect(screen.getByRole("checkbox", { name: /What it is for/ })).toHaveTextContent("Testing");
+      await user.click(screen.getByRole("button", { name: "Apply to form" }));
+      expect(screen.getByRole("radio", { name: "After eating" })).toHaveAttribute("aria-checked", "true");
+      expect(screen.getByDisplayValue("Testing")).toBeInTheDocument();
+    },
+    30_000,
+  );
+
+  it(
+    "adding a brand to an existing combination prescription fills brand, per-pill strengths and appearance",
+    async () => {
+      server.use(
+        http.post("/api/ai/medicine-search", () =>
+          HttpResponse.json({
+            ...MEDICINE_SEARCH_RESPONSE,
+            brandNames: ["Entresto", "Vymada"],
+            genericName: "Sacubitril/valsartan",
+            activeIngredients: ["Sacubitril", "Valsartan"],
+            dosageStrengths: ["50 mg", "100 mg"],
+            strengthOptions: [
+              { label: "50 mg", compounds: [{ name: "Sacubitril", strength: 24 }, { name: "Valsartan", strength: 26 }] },
+              { label: "100 mg", compounds: [{ name: "Sacubitril", strength: 49 }, { name: "Valsartan", strength: 51 }] },
+            ],
+            pillColor: "yellow",
+            pillShape: "oval",
+          }),
+        ),
+      );
+      const rx = makePrescription({
+        genericName: "Sacubitril/valsartan",
+        compounds: [
+          { name: "Sacubitril", strength: 49 },
+          { name: "Valsartan", strength: 51 },
+        ],
+      });
+      const phase = makeMedicationPhase(rx.id, { unit: "mg" });
+      const user = userEvent.setup();
+      await renderWithFixtures(<AddMedicationWizard open onOpenChange={() => {}} />, {
+        seed: { prescriptions: [rx], medicationPhases: [phase] },
+      });
+
+      await user.selectOptions(await screen.findByRole("combobox"), rx.id);
+      await screen.findByText("Add medication");
+      await user.type(
+        screen.getByPlaceholderText("e.g. Sacubitril/valsartan or a brand name"),
+        "Vymada 100{Enter}",
+      );
+      expect(await screen.findByText("Found: Sacubitril/valsartan")).toBeInTheDocument();
+      // The add-brand host offers brand, strength and appearance only.
+      expect(screen.getByRole("checkbox", { name: /Brand name/ })).toHaveTextContent("Vymada 100");
+      expect(screen.queryByRole("checkbox", { name: /What it is for/ })).not.toBeInTheDocument();
+      expect(screen.getByRole("radio", { name: /100 mg/ })).toHaveAttribute("aria-checked", "true");
+      await user.click(screen.getByRole("button", { name: "Apply to form" }));
+
+      expect(screen.getByPlaceholderText("e.g. Aviolix")).toHaveValue("Vymada 100");
+      expect(screen.getByLabelText("Sacubitril strength per pill")).toHaveValue(49);
+      expect(screen.getByLabelText("Valsartan strength per pill")).toHaveValue(51);
     },
     30_000,
   );

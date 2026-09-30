@@ -56,7 +56,13 @@
  * so any setting the user actually saves on any device outranks it.
  */
 import { liveQuery, type Subscription } from "dexie";
-import { db, type UserSettings, type SyncedLiquidPreset } from "@/lib/db";
+import {
+  db,
+  isPreviewDatabaseActive,
+  readRealDatabase,
+  type UserSettings,
+  type SyncedLiquidPreset,
+} from "@/lib/db";
 import type { LiquidPreset } from "@/lib/constants";
 import { useSettingsStore, type Settings } from "@/stores/settings-store";
 import { useSyncStatusStore } from "@/stores/sync-status-store";
@@ -361,6 +367,12 @@ export function installSettingsSync(): () => void {
       .catch((error) => console.error("[settings-sync]", error));
   };
 
+  // The user's row, never a manual preview's: while a live demo has its
+  // sample database swapped in, this waits for the real one. Reading the
+  // preview instead would seed a row into a database that is thrown away and
+  // leave the real row without the edit.
+  const readRealRow = () => readRealDatabase(getActiveUserSettings);
+
   const isLastSeen = (row: UserSettings) =>
     lastSeen !== null &&
     lastSeen.id === row.id &&
@@ -397,8 +409,11 @@ export function installSettingsSync(): () => void {
 
   /** Write the store's synced settings to the table, if they changed. */
   const writeCurrent = async (seed = false): Promise<void> => {
-    const existing = await getActiveUserSettings();
+    const existing = await readRealRow();
     if (disposed) return;
+    // The read resolves a tick after its own check; everything from here to
+    // the write is synchronous, so the write lands in the real database.
+    if (isPreviewDatabaseActive()) return writeCurrent(seed);
     // A newer row this device has not applied yet: take it first, so this
     // write only carries the keys edited here.
     if (existing && !isLastSeen(existing)) adopt(existing);
@@ -446,7 +461,7 @@ export function installSettingsSync(): () => void {
 
   const reconcile = async (): Promise<void> => {
     if (ready || !mayWrite()) return;
-    const row = await getActiveUserSettings();
+    const row = await readRealRow();
     if (ready || disposed) return;
     // No local row in cloud-sync mode: the cloud may still hold one this
     // device has never pulled (the table is new to an upgraded device whose
@@ -532,7 +547,7 @@ export function installSettingsSync(): () => void {
       if (!ready || !row || isLastSeen(row)) return;
       run(async () => {
         // Re-read inside the chain: the emission may predate a local write.
-        const fresh = await getActiveUserSettings();
+        const fresh = await readRealRow();
         if (fresh && !isLastSeen(fresh)) adopt(fresh);
       });
     },

@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Trash2, Loader2 } from "lucide-react";
+import { Trash2 } from "lucide-react";
+import { Spinner } from "@intake/ui/spinner";
 import { Button } from "@intake/ui/button";
 import {
   AlertDialog,
@@ -19,6 +20,7 @@ import {
   ALL_TIME,
   type DeleteRange,
 } from "@/hooks/use-data-deletion";
+import { SubHead, btnClass, helpClass } from "@/components/settings/settings-kit";
 
 interface Preset {
   label: string;
@@ -70,22 +72,19 @@ export function DeleteDataControls() {
   }
 
   return (
-    <div className="space-y-2">
-      <div className="flex items-center gap-2">
-        <Trash2 className="w-4 h-4 text-muted-foreground" />
-        <p className="text-sm font-medium">Delete data</p>
-      </div>
-      <p className="text-xs text-muted-foreground">
+    <div className="flex flex-col gap-2.5">
+      <SubHead icon={Trash2}>Delete data</SubHead>
+      <p className={helpClass}>
         Permanently delete logged records by time frame. Time-framed deletes
         only remove health logs and dose history; medications, schedules and
         inventory are kept. In cloud-sync mode this also removes the cloud copy.
       </p>
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap gap-1.5">
         {PRESETS.map((preset) => (
           <Button
             key={preset.label}
             variant="outline"
-            size="sm"
+            className={btnClass}
             disabled={mutation.isPending}
             onClick={() => setPending(preset)}
           >
@@ -120,7 +119,7 @@ export function DeleteDataControls() {
               disabled={mutation.isPending}
             >
               {mutation.isPending ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                <Spinner className="size-4 mr-2" />
               ) : null}
               {mutation.isPending ? "Deleting…" : "Delete"}
             </AlertDialogAction>

@@ -12,6 +12,7 @@ import {
   SelectValue,
 } from "@intake/ui/select";
 import { cn } from "@/lib/utils";
+import type { Domain } from "@/lib/domain-colors";
 import { standardDrinksFromAbv } from "@intake/core/alcohol";
 import {
   VOICE_ITEM_COLOR,
@@ -20,8 +21,13 @@ import {
 } from "@/lib/voice-types";
 import { useOptionalTrackerEnabled } from "@/lib/optional-trackers";
 import { validateVoiceItem } from "@/lib/voice-validation";
-import { isEarlierLogicalDay, resolveSpokenTime } from "@/lib/voice-time";
-import { useSettingsStore } from "@/stores/settings-store";
+import {
+  REVIEW_AFTER_DAYS,
+  describeSpokenTime,
+  formatLocalDateTime,
+  isLongAgo,
+} from "@/lib/voice-time";
+import { getDeviceTimezone } from "@/lib/timezone";
 
 /** A note shown on one review row — a merge, a preset, or a warning. */
 export interface ParsedItemNote {
@@ -86,6 +92,22 @@ const COLOR_CLASS: Record<string, ColorClass> = {
     ring: "ring-defecation/30",
     chip: "bg-defecation text-defecation-foreground",
   },
+};
+
+/**
+ * The domain scope of a row, by colour token: its inputs' focus rings and
+ * carets and its Approve button take the colour of the row's stripe.
+ */
+const ROW_DOMAIN: Record<string, Domain> = {
+  bp: "bp",
+  weight: "weight",
+  water: "water",
+  salt: "sodium",
+  eating: "sodium",
+  caffeine: "caffeine",
+  alcohol: "alcohol",
+  urination: "bath",
+  defecation: "bath",
 };
 
 function numberOrZero(v: string): number {
@@ -522,39 +544,75 @@ function ItemEditor({
 const AMOUNT_NONE = "__none__";
 
 /**
- * The item's spoken time ("HH:mm"). Blank means "when saved". A time later
- * than now resolves to the previous day, which the hint makes visible.
+ * When the item happened: the local date and time the user said (pre-filled
+ * from the parse), editable. Blank means "when saved". A time that is not now
+ * is named beside the input ("Yesterday 20:00") so a back-dated row cannot be
+ * approved by accident, and one from over a week ago asks for a second look.
  */
 function TimeField({
   item,
+  index,
   onChange,
   disabled,
 }: {
   item: VoiceParsedItem;
+  index: number;
   onChange: (next: VoiceParsedItem) => void;
   disabled?: boolean;
 }) {
-  const dayStartHour = useSettingsStore((s) => s.dayStartHour);
   const now = Date.now();
-  const yesterday =
-    item.time !== undefined &&
-    isEarlierLogicalDay(resolveSpokenTime(item.time, now, dayStartHour), now, dayStartHour);
+  const timeZone = getDeviceTimezone();
+  const setAt = (value: string) =>
+    onChange(setOptionalEnum<VoiceParsedItem, "at", string>(item, "at", value));
   return (
-    <div className="flex items-end gap-2">
-      <Field label="Time">
-        <Input
-          type="time"
-          className="h-9 w-32"
-          disabled={disabled}
-          value={item.time ?? ""}
-          onChange={(e) =>
-            onChange(setOptionalEnum<VoiceParsedItem, "time", string>(item, "time", e.target.value))
-          }
-        />
-      </Field>
-      <span className="pb-2 text-xs text-muted-foreground">
-        {item.time === undefined ? "when saved" : yesterday ? "yesterday" : "today"}
-      </span>
+    <div className="space-y-1">
+      <div className="flex flex-wrap items-end gap-x-2 gap-y-1">
+        <Field label="Time">
+          <Input
+            type="datetime-local"
+            aria-label="Time"
+            className="h-9 w-[13.5rem]"
+            disabled={disabled}
+            max={formatLocalDateTime(now, timeZone)}
+            value={item.at ?? ""}
+            onChange={(e) => setAt(e.target.value)}
+          />
+        </Field>
+        {item.at === undefined ? (
+          <span
+            className="pb-2 text-xs text-muted-foreground"
+            data-testid={`voice-item-${index}-when`}
+          >
+            now, when saved
+          </span>
+        ) : (
+          <>
+            <span
+              className="mb-1.5 rounded border border-amber-500/50 bg-amber-500/10 px-1.5 py-0.5 font-mono text-xs font-medium text-amber-800 dark:text-amber-300"
+              data-testid={`voice-item-${index}-when`}
+            >
+              {describeSpokenTime(item.at, now, timeZone)}
+            </span>
+            {!disabled && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="mb-0.5 h-7 px-2 text-xs"
+                onClick={() => setAt("")}
+              >
+                Use now
+              </Button>
+            )}
+          </>
+        )}
+      </div>
+      {isLongAgo(item.at, now, timeZone) && (
+        <p className="flex items-start gap-1.5 text-[11px] leading-snug text-amber-700 dark:text-amber-400">
+          <AlertTriangle className="mt-px h-3 w-3 shrink-0" />
+          <span>More than {REVIEW_AFTER_DAYS} days ago. Check the date.</span>
+        </p>
+      )}
     </div>
   );
 }
@@ -595,6 +653,7 @@ export function ParsedItemRow({
         approved === true && c.ring
       )}
       data-testid={`voice-item-${index}`}
+      data-domain={ROW_DOMAIN[token]}
     >
       <div className={cn("absolute left-0 top-0 h-full w-1.5", c.bar)} />
       <div className="flex items-start gap-3 p-3 pl-5">
@@ -622,6 +681,7 @@ export function ParsedItemRow({
           />
           <TimeField
             item={item}
+            index={index}
             onChange={onChange}
             disabled={disabled || approved !== null}
           />

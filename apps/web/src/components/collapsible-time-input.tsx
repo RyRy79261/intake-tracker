@@ -1,10 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { Button } from "@intake/ui/button";
 import { Input } from "@intake/ui/input";
 import { Label } from "@intake/ui/label";
-import { Clock, ChevronDown, ChevronUp } from "lucide-react";
+import { Clock } from "lucide-react";
+import { SubToggle } from "@/components/domain-scope";
 import { getCurrentDateTimeLocal } from "@/lib/date-utils";
 
 interface CollapsibleTimeInputProps {
@@ -34,29 +34,19 @@ export function CollapsibleTimeInput({
 
   return (
     <div className="space-y-2">
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        className="w-full justify-between text-muted-foreground hover:text-foreground"
-        onClick={() => {
+      <SubToggle
+        expanded={expanded}
+        icon={Clock}
+        onToggle={() => {
           if (!expanded) onChange(getCurrentDateTimeLocal());
           setExpanded(!expanded);
         }}
       >
-        <span className="flex items-center gap-2">
-          <Clock className="w-4 h-4" />
-          {expanded ? "Using custom time" : "Set different time"}
-        </span>
-        {expanded ? (
-          <ChevronUp className="w-4 h-4" />
-        ) : (
-          <ChevronDown className="w-4 h-4" />
-        )}
-      </Button>
+        {expanded ? "Using custom time" : "Set different time"}
+      </SubToggle>
 
       {expanded && (
-        <div className="p-3 rounded-lg bg-muted/50 border">
+        <div className="border border-line bg-muted/50 p-3">
           <Label htmlFor={id} className="text-sm">
             {label}
           </Label>
@@ -93,29 +83,19 @@ export function CollapsibleTimeInputControlled({
 }) {
   return (
     <div className="space-y-2">
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        className="w-full justify-between text-muted-foreground hover:text-foreground"
-        onClick={() => {
+      <SubToggle
+        expanded={expanded}
+        icon={Clock}
+        onToggle={() => {
           if (!expanded) onChange(getCurrentDateTimeLocal());
           onToggle();
         }}
       >
-        <span className="flex items-center gap-2">
-          <Clock className="w-4 h-4" />
-          {expanded ? "Using custom time" : "Set different time"}
-        </span>
-        {expanded ? (
-          <ChevronUp className="w-4 h-4" />
-        ) : (
-          <ChevronDown className="w-4 h-4" />
-        )}
-      </Button>
+        {expanded ? "Using custom time" : "Set different time"}
+      </SubToggle>
 
       {expanded && (
-        <div className="p-3 rounded-lg bg-muted/50 border">
+        <div className="border border-line bg-muted/50 p-3">
           <Label htmlFor={id} className="text-sm">
             {label}
           </Label>

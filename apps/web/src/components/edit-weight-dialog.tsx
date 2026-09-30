@@ -42,7 +42,7 @@ export function EditWeightDialog({
 }: EditWeightDialogProps) {
   return (
     <Dialog open={record !== null} onOpenChange={(dialogOpen) => !dialogOpen && onClose()}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md" data-domain="weight">
         <DialogHeader>
           <DialogTitle>Edit Weight Entry</DialogTitle>
           <DialogDescription>Update the weight, time, or note</DialogDescription>
@@ -103,7 +103,7 @@ export function EditWeightDialog({
             <Button type="button" variant="outline" onClick={onClose}>
               Cancel
             </Button>
-            <Button type="submit" className="bg-emerald-600 hover:bg-emerald-700">
+            <Button type="submit">
               Save Changes
             </Button>
           </DialogFooter>

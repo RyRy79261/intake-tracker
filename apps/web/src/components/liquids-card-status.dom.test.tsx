@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi } from "vitest";
-import { screen } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
 
 // PresetTab (rendered inside the card) gates its AI lookup on useAuthGate;
 // open the gate so the card renders its full UI without a real session.
@@ -25,10 +25,11 @@ describe("LiquidsCard header status", () => {
     });
 
     // Inside the buffer: the extended (orange) tone, as on the Today summary.
-    const header = await screen.findByText(/^1\.04L \/ 1\.0L$/, undefined, {
-      timeout: 5000,
-    });
-    expect(header.className).toMatch(/text-orange-600/);
-    expect(header.className).not.toMatch(/text-red-600/);
+    // The header reads "<b>1.04L</b> / 1.0L"; the total carries the colour.
+    const total = await screen.findByTestId("liquids-today-total");
+    await waitFor(() => expect(total).toHaveTextContent(/^1\.04L$/), { timeout: 5000 });
+    expect(total.parentElement).toHaveTextContent(/1\.04L \/ 1\.0L/);
+    expect(total.className).toMatch(/text-orange-600/);
+    expect(total.className).not.toMatch(/text-red-600/);
   });
 });

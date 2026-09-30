@@ -16,7 +16,7 @@ interface PermissionBadgeProps {
 export function PermissionBadge({ state, onRequest, onReset }: PermissionBadgeProps) {
   if (state === "granted") {
     return (
-      <span className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400 font-medium">
+      <span className="flex items-center gap-1 text-xs font-medium text-weight">
         <CheckCircle2 className="w-3.5 h-3.5" />
         Enabled
       </span>
@@ -26,12 +26,12 @@ export function PermissionBadge({ state, onRequest, onReset }: PermissionBadgePr
   if (state === "denied") {
     return (
       <div className="flex items-center gap-2">
-        <span className="flex items-center gap-1 text-xs text-red-600 dark:text-red-400">
+        <span className="flex items-center gap-1 text-xs text-bp">
           <X className="w-3.5 h-3.5" />
           Blocked
         </span>
         {onReset && (
-          <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={onReset}>
+          <Button variant="outline" size="sm" className="h-9 px-2 text-xs" onClick={onReset}>
             Reset
           </Button>
         )}
@@ -48,7 +48,7 @@ export function PermissionBadge({ state, onRequest, onReset }: PermissionBadgePr
   }
 
   return (
-    <Button variant="outline" size="sm" onClick={onRequest}>
+    <Button variant="outline" className="h-9 border-muted-foreground" onClick={onRequest}>
       Enable
     </Button>
   );

@@ -15,7 +15,8 @@ import { Label } from "@intake/ui/label";
 import { z } from "zod";
 import { cn } from "@/lib/utils";
 import { logAudit } from "@/lib/audit";
-import { Clock, ChevronDown, ChevronUp, StickyNote } from "lucide-react";
+import { Clock, StickyNote } from "lucide-react";
+import { SubToggle, segOnClass } from "@/components/domain-scope";
 
 import { Textarea } from "@intake/ui/textarea";
 import {
@@ -164,7 +165,7 @@ export function ManualInputDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md" data-domain={isWater ? "water" : "sodium"}>
         <DialogHeader>
           <DialogTitle>
             {title ?? `Enter ${isWater ? "Water" : "Sodium"} Amount`}
@@ -186,7 +187,7 @@ export function ManualInputDialog({
               value={value}
               onChange={(e) => setValue(e.target.value)}
               placeholder={`Enter amount in ${unit}`}
-              className="text-lg h-12"
+              className="num text-lg h-12"
               autoFocus
             />
             {fieldErrors.amount && (
@@ -205,13 +206,8 @@ export function ManualInputDialog({
                   variant="outline"
                   size="sm"
                   onClick={() => setValue(v.toString())}
-                  className={cn(
-                    "transition-all",
-                    value === v.toString() &&
-                      (isWater
-                        ? "bg-sky-100 border-sky-300 dark:bg-sky-900/50"
-                        : "bg-amber-100 border-amber-300 dark:bg-amber-900/50")
-                  )}
+                  aria-pressed={value === v.toString()}
+                  className={cn("num", value === v.toString() && segOnClass)}
                 >
                   {v}
                   {unit}
@@ -222,26 +218,16 @@ export function ManualInputDialog({
 
           {/* Custom time section */}
           <div className="space-y-2">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="w-full justify-between text-muted-foreground hover:text-foreground"
-              onClick={() => setShowTimeInput(!showTimeInput)}
+            <SubToggle
+              expanded={showTimeInput}
+              icon={Clock}
+              onToggle={() => setShowTimeInput(!showTimeInput)}
             >
-              <span className="flex items-center gap-2">
-                <Clock className="w-4 h-4" />
-                {showTimeInput ? "Using custom time" : "Set different time"}
-              </span>
-              {showTimeInput ? (
-                <ChevronUp className="w-4 h-4" />
-              ) : (
-                <ChevronDown className="w-4 h-4" />
-              )}
-            </Button>
+              {showTimeInput ? "Using custom time" : "Set different time"}
+            </SubToggle>
             
             {showTimeInput && (
-              <div className="space-y-2 p-3 rounded-lg bg-muted/50 border">
+              <div className="space-y-2 border border-line bg-muted/50 p-3">
                 <Label htmlFor="custom-time" className="text-sm">
                   When did this happen?
                 </Label>
@@ -268,26 +254,16 @@ export function ManualInputDialog({
 
           {/* Note section */}
           <div className="space-y-2">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="w-full justify-between text-muted-foreground hover:text-foreground"
-              onClick={() => setShowNoteInput(!showNoteInput)}
+            <SubToggle
+              expanded={showNoteInput}
+              icon={StickyNote}
+              onToggle={() => setShowNoteInput(!showNoteInput)}
             >
-              <span className="flex items-center gap-2">
-                <StickyNote className="w-4 h-4" />
-                {showNoteInput ? "Adding note" : "Add a note"}
-              </span>
-              {showNoteInput ? (
-                <ChevronUp className="w-4 h-4" />
-              ) : (
-                <ChevronDown className="w-4 h-4" />
-              )}
-            </Button>
+              {showNoteInput ? "Adding note" : "Add a note"}
+            </SubToggle>
             
             {showNoteInput && (
-              <div className="space-y-2 p-3 rounded-lg bg-muted/50 border">
+              <div className="space-y-2 border border-line bg-muted/50 p-3">
                 <Label htmlFor="note" className="text-sm">
                   Note (optional)
                 </Label>
@@ -323,11 +299,6 @@ export function ManualInputDialog({
                 amountValue <= 0 ||
                 liveTimeError !== null
               }
-              className={cn(
-                isWater
-                  ? "bg-sky-600 hover:bg-sky-700"
-                  : "bg-amber-600 hover:bg-amber-700"
-              )}
             >
               {isSubmitting ? "Adding..." : submitLabel}
             </Button>

@@ -16,14 +16,16 @@ import {
   beforeAll,
   afterAll,
   afterEach,
+  beforeEach,
 } from "vitest";
-import { screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
 // eslint-disable-next-line no-restricted-imports
 import { db } from "@/lib/db";
 import type { VoiceParsedItem } from "@/lib/voice-types";
+import { logicalDayKey } from "@intake/core/logical-day";
 
 // The real recorder needs MediaRecorder + getUserMedia. Replace it with a
 // button that hands the panel a blob directly, so the test drives the same
@@ -55,10 +57,14 @@ const transcribeBody = { text: "dictated transcript" };
 
 const server = setupServer(
   http.post("*/api/ai/voice-transcribe", () => HttpResponse.json(transcribeBody)),
-  http.post("*/api/ai/voice-parse", () =>
-    HttpResponse.json({ items: parsedItems, ...parseExtras }),
-  ),
+  http.post("*/api/ai/voice-parse", async ({ request }) => {
+    lastParseRequest = await request.json();
+    return HttpResponse.json({ items: parsedItems, ...parseExtras });
+  }),
 );
+
+/** Body of the most recent parse request the panel sent. */
+let lastParseRequest: unknown = null;
 
 beforeAll(() => server.listen({ onUnhandledRequest: "bypass" }));
 afterEach(() => {
@@ -420,20 +426,138 @@ describe("VoicePanel review — validation", () => {
 });
 
 describe("VoicePanel commit — timing", () => {
-  it("saves an item at the time the user said", async () => {
-    // Dictated "BP at 8 this morning": it must not land at save time.
-    const before = Date.now();
-    await dictateAndSave([
-      { kind: "blood_pressure", systolic: 118, diastolic: 76, time: "08:00" },
-    ]);
-    await waitFor(async () => {
-      expect(await db.bloodPressureRecords.count()).toBe(1);
+  // "Now" is 2026-09-30 14:00 on the device's own wall clock, in whatever
+  // zone the suite runs (CI: Europe/Berlin and Africa/Johannesburg). Only
+  // Date is faked, so Dexie, msw and waitFor keep their real timers.
+  const NOW = new Date(2026, 8, 30, 14, 0);
+  const local = (day: number, hour: number) => new Date(2026, 8, day, hour, 0).getTime();
+
+  describe("with a fixed clock", () => {
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(NOW);
     });
-    const [bp] = await db.bloodPressureRecords.toArray();
-    const when = new Date(bp!.timestamp);
-    expect(when.getHours()).toBe(8);
-    expect(when.getMinutes()).toBe(0);
-    expect(bp!.timestamp).toBeLessThanOrEqual(before + 60_000);
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("saves each approved item at the time the user said", async () => {
+      // "I had a beer yesterday evening at 8pm, a bagel right now and 100mls
+      // of water an hour ago."
+      parsedItems = [
+        {
+          kind: "alcohol",
+          description: "beer",
+          abvPercent: 5,
+          volumeMl: 500,
+          when: { kind: "absolute", localDateTime: "2026-09-29T20:00" },
+        },
+        { kind: "food", description: "bagel" },
+        { kind: "water", ml: 100, when: { kind: "relative", minutesAgo: 60 } },
+      ];
+      const user = userEvent.setup();
+      await renderWithFixtures(<VoicePanel />);
+      await user.click(screen.getByRole("button", { name: "mock-record" }));
+      await screen.findByText(/Items \(/);
+
+      // The request carried the device's clock, and nothing else new.
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      expect(lastParseRequest).toEqual({
+        transcript: "dictated transcript",
+        now: {
+          localDateTime: "2026-09-30T14:00",
+          timeZone: tz,
+          utcOffsetMinutes: -NOW.getTimezoneOffset() + 0, // + 0 turns -0 into 0 (UTC)
+        },
+      });
+
+      // Each row shows its parsed time before anything is saved.
+      expect(screen.getByTestId("voice-item-0-when")).toHaveTextContent("Yesterday 20:00");
+      expect(screen.getByTestId("voice-item-1-when")).toHaveTextContent("now, when saved");
+      expect(screen.getByTestId("voice-item-2-when")).toHaveTextContent("Today 13:00");
+
+      await user.click(screen.getByRole("button", { name: /Approve all/i }));
+      await user.click(screen.getByRole("button", { name: /^Save/ }));
+      await waitFor(() => {
+        expect(screen.queryByText(/Items \(/)).not.toBeInTheDocument();
+      });
+
+      const [beer] = await db.substanceRecords.toArray();
+      expect(beer!.timestamp).toBe(local(29, 20));
+      const [bagel] = await db.eatingRecords.toArray();
+      expect(bagel!.timestamp).toBe(NOW.getTime());
+      const water = await waterRows();
+      expect(water).toHaveLength(2);
+      // The beer's own water share is booked with the beer, yesterday.
+      expect(water.find((r) => r.amount === 475)!.timestamp).toBe(local(29, 20));
+      expect(water.find((r) => r.amount === 100)!.timestamp).toBe(local(30, 13));
+
+      // Day buckets under the app's 2am day start: the beer is yesterday's.
+      expect(logicalDayKey(beer!.timestamp, 2, tz)).toBe("2026-09-29");
+      expect(logicalDayKey(bagel!.timestamp, 2, tz)).toBe("2026-09-30");
+    });
+
+    it("saves at the time the user corrected the row to", async () => {
+      parsedItems = [
+        {
+          kind: "blood_pressure",
+          systolic: 118,
+          diastolic: 76,
+          when: { kind: "absolute", localDateTime: "2026-09-30T08:00" },
+        },
+      ];
+      const user = userEvent.setup();
+      const { container } = await renderWithFixtures(<VoicePanel />);
+      await user.click(screen.getByRole("button", { name: "mock-record" }));
+      await screen.findByText(/Items \(/);
+
+      const input = container.querySelector('input[type="datetime-local"]') as HTMLInputElement;
+      expect(input.value).toBe("2026-09-30T08:00");
+      fireEvent.change(input, { target: { value: "2026-09-30T07:30" } });
+      expect(screen.getByTestId("voice-item-0-when")).toHaveTextContent("Today 07:30");
+
+      await user.click(screen.getByRole("button", { name: /Approve all/i }));
+      await user.click(screen.getByRole("button", { name: /^Save/ }));
+      await waitFor(() => {
+        expect(screen.queryByText(/Items \(/)).not.toBeInTheDocument();
+      });
+      const [bp] = await db.bloodPressureRecords.toArray();
+      expect(bp!.timestamp).toBe(new Date(2026, 8, 30, 7, 30).getTime());
+    });
+
+    it("saves a time the parser put in the future as now", async () => {
+      await dictateAndSave([
+        { kind: "water", ml: 250, when: { kind: "absolute", localDateTime: "2026-09-30T21:00" } },
+      ]);
+      const [water] = await waterRows();
+      expect(water!.timestamp).toBe(NOW.getTime());
+    });
+
+    it("leaves a row dated over a week back for the user to approve by hand", async () => {
+      parsedItems = [
+        { kind: "water", ml: 250, when: { kind: "absolute", localDateTime: "2026-09-10T09:00" } },
+        { kind: "water", ml: 100 },
+      ];
+      const user = userEvent.setup();
+      await renderWithFixtures(<VoicePanel />);
+      await user.click(screen.getByRole("button", { name: "mock-record" }));
+      await screen.findByText(/Items \(/);
+      expect(screen.getByText(/More than 7 days ago/)).toBeInTheDocument();
+
+      await user.click(screen.getByRole("button", { name: /Approve all/i }));
+      expect(screen.getAllByText("approved")).toHaveLength(1);
+
+      // The user can still approve it; it saves at the old date.
+      await user.click(screen.getAllByRole("button", { name: /approve water/i })[0]!);
+      await user.click(screen.getByRole("button", { name: /^Save/ }));
+      await waitFor(() => {
+        expect(screen.queryByText(/Items \(/)).not.toBeInTheDocument();
+      });
+      const rows = await waterRows();
+      expect(rows.find((r) => r.amount === 250)!.timestamp).toBe(
+        new Date(2026, 8, 10, 9, 0).getTime(),
+      );
+    });
   });
 
   it("gives every item of one save the same timestamp", async () => {
@@ -487,5 +611,27 @@ describe("VoicePanel — recording again", () => {
       expect(await db.weightRecords.count()).toBe(1);
     });
     expect(await waterRows()).toHaveLength(1);
+  });
+});
+
+describe("VoicePanel — clip recorded by the host (hold to talk)", () => {
+  it("transcribes and parses an initial clip once, on mount", async () => {
+    let transcribeCalls = 0;
+    server.use(
+      http.post("*/api/ai/voice-transcribe", () => {
+        transcribeCalls += 1;
+        return HttpResponse.json(transcribeBody);
+      }),
+    );
+    parsedItems = [{ kind: "water", ml: 250 }];
+    const clip = { blob: new Blob(["audio"]), mimeType: "audio/webm" };
+
+    const { rerender } = await renderWithFixtures(<VoicePanel initialClip={clip} />);
+    await screen.findByText(/Items \(/);
+    // A re-render with the same clip must not send the audio again.
+    rerender(<VoicePanel initialClip={clip} />);
+    await screen.findByText(/Items \(/);
+    expect(transcribeCalls).toBe(1);
+    expect(screen.getByText(/dictated transcript/)).toBeInTheDocument();
   });
 });

@@ -3,11 +3,11 @@
 import { useState, useEffect } from "react";
 import { Button } from "@intake/ui/button";
 import { Input } from "@intake/ui/input";
-import { Minus, Plus, Check, Loader2 } from "lucide-react";
+import { Minus, Plus, Check } from "lucide-react";
+import { Spinner } from "@intake/ui/spinner";
 import { z } from "zod";
-import { cn } from "@/lib/utils";
 import { CARD_THEMES } from "@/lib/card-themes";
-import { CardShell } from "@/components/card-shell";
+import { ModuleCard, WhenLabel } from "@/components/home/module-card";
 import { logAudit } from "@/lib/audit";
 import { InlineEdit } from "@intake/ui/inline-edit";
 import { Skeleton } from "@intake/ui/skeleton";
@@ -28,12 +28,14 @@ import { useWeightRecords, useAddWeight, useDeleteWeight, useUpdateWeight } from
 import {
   getCurrentDateTimeLocal,
   dateTimeLocalToTimestamp,
-  formatDateTime,
 } from "@/lib/date-utils";
+import { useFieldId, useOnLogged } from "@/components/log-form-scope";
 
 const theme = CARD_THEMES.weight;
 
 export function WeightCard() {
+  const onLogged = useOnLogged();
+  const fid = useFieldId();
   const { toast } = useToast();
   const settings = useSettings();
   const [pendingWeight, setPendingWeight] = useState<number | null>(null);
@@ -141,6 +143,7 @@ export function WeightCard() {
         description: `${pendingWeight.toFixed(2)} kg logged successfully`,
         variant: "success",
       });
+      onLogged();
       // Keep current value as starting point for next entry
       setNote("");
       setShowTimeInput(false);
@@ -156,23 +159,20 @@ export function WeightCard() {
   };
 
   return (
-    <CardShell
-      theme={theme}
-      headerRight={
+    <ModuleCard
+      domain={theme.domain}
+      icon={theme.icon}
+      title={theme.label}
+      data-testid="weight-card"
+      right={
         isLoading ? (
-          <div className="animate-pulse text-right">
-            <div className={cn("h-6 w-16 rounded ml-auto", theme.loadingBg)} />
-            <div className="h-4 w-24 bg-muted rounded mt-1 ml-auto" />
-          </div>
+          <span className="inline-block h-8 w-20 animate-pulse bg-foreground/10" />
         ) : latestWeight ? (
-          <div className="text-right">
-            <p className={cn("text-lg font-bold", theme.latestValueColor)}>
-              {latestWeight.weight.toFixed(2)} kg
-            </p>
-            <p className="text-xs text-muted-foreground">
-              {formatDateTime(latestWeight.timestamp)}
-            </p>
-          </div>
+          <>
+            <b>{latestWeight.weight.toFixed(2)} kg</b>
+            <br />
+            <WhenLabel timestamp={latestWeight.timestamp} />
+          </>
         ) : null
       }
     >
@@ -180,38 +180,42 @@ export function WeightCard() {
       {isLoading ? (
         <div className="space-y-3">
           <div className="flex items-center justify-between gap-3">
-            <Skeleton className="h-14 w-14 rounded-full shrink-0" />
+            <Skeleton className="h-12 w-12 shrink-0" />
             <div className="flex-1 text-center">
-              <Skeleton className="h-10 w-32 mx-auto rounded" />
+              <Skeleton className="h-10 w-32 mx-auto" />
             </div>
-            <Skeleton className="h-14 w-14 rounded-full shrink-0" />
+            <Skeleton className="h-12 w-12 shrink-0" />
           </div>
-          <Skeleton className="h-11 w-full rounded-md" />
+          <Skeleton className="h-11 w-full" />
         </div>
       ) : (
         <div className="space-y-3">
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex items-stretch justify-between gap-1.5">
             {/* Minus Button */}
             <Button
-              variant="outline"
               size="icon"
               onClick={handleDecrement}
               disabled={pendingWeight === null || pendingWeight <= settings.weightIncrement}
-              className={cn("h-14 w-14 shrink-0 rounded-full transition-all", theme.hoverBg)}
+              variant="secondary"
+              className="h-12 w-12 shrink-0 text-xl"
               aria-label="Decrease weight"
             >
-              <Minus className="w-6 h-6" />
+              <Minus className="w-5 h-5" />
             </Button>
 
             {/* Center Display — tap to type (D-01, D-02) */}
-            <div className="flex-1 text-center">
+            <div className="flex flex-1 border border-input bg-background focus-within:ring-2 focus-within:ring-ring">
               <InlineEdit
+                // The label is the tap target: it must fill the whole box.
+                className="h-full w-full items-center justify-center"
                 value={pendingWeight}
                 onValueChange={setPendingWeight}
                 formatDisplay={(v) => v?.toFixed(2) ?? "--"}
                 suffix="kg"
-                displayClassName="text-4xl font-bold tabular-nums"
-                suffixClassName="text-lg text-muted-foreground ml-1"
+                displayClassName="text-2xl font-semibold num"
+                // Muted, not the card colour: the value sits on the darker input
+                // surface, where the weight green is under AA as text.
+                suffixClassName="text-sm text-muted-foreground ml-1 num"
                 // Keep the typed scale reading (2 dp). The increment only
                 // drives the +/- buttons; out-of-range values are rejected
                 // by the schema on Record rather than clamped here.
@@ -227,14 +231,14 @@ export function WeightCard() {
 
             {/* Plus Button */}
             <Button
-              variant="outline"
               size="icon"
               onClick={handleIncrement}
               disabled={pendingWeight === null}
-              className={cn("h-14 w-14 shrink-0 rounded-full transition-all", theme.hoverBg)}
+              variant="secondary"
+              className="h-12 w-12 shrink-0 text-xl"
               aria-label="Increase weight"
             >
-              <Plus className="w-6 h-6" />
+              <Plus className="w-5 h-5" />
             </Button>
           </div>
 
@@ -247,7 +251,7 @@ export function WeightCard() {
             onChange={setCustomTime}
             expanded={showTimeInput}
             onToggle={() => setShowTimeInput(!showTimeInput)}
-            id="weight-time"
+            id={fid("weight-time")}
           />
           {fieldErrors.timestamp && (
             <p className="text-sm text-destructive text-center">{fieldErrors.timestamp}</p>
@@ -258,17 +262,17 @@ export function WeightCard() {
             placeholder="Note (optional)"
             value={note}
             onChange={(e) => setNote(e.target.value)}
-            className="h-9 text-sm"
+            className="text-sm"
           />
 
           <Button
             onClick={handleSubmit}
             disabled={addMutation.isPending || pendingWeight === null}
-            className={cn("w-full h-11", theme.buttonBg)}
+            className="w-full"
           >
             {addMutation.isPending ? (
               <>
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                <Spinner className="size-4 mr-2" />
                 Recording...
               </>
             ) : (
@@ -288,21 +292,16 @@ export function WeightCard() {
         onDelete={handleDelete}
         onEdit={openEdit}
         editingId={editingRecord?.id ?? null}
-        borderColor={theme.border}
-        renderEntry={(record) => (
-          <>
-            <span className="text-muted-foreground">{formatDateTime(record.timestamp)}</span>
-            <div className="flex items-center gap-2">
-              <span className="font-medium">{record.weight.toFixed(2)} kg</span>
-            </div>
-          </>
+        renderLabel={(record) => (
+          <span className="text-muted-foreground">{record.note}</span>
         )}
+        renderValue={(record) => `${record.weight.toFixed(2)} kg`}
         renderEditForm={() => (
-          <InlineEditFormShell timestamp={editTimestamp} onTimestampChange={setEditTimestamp} note={editNote} onNoteChange={setEditNote} onSave={() => handleEditSubmit()} onCancel={closeEdit} buttonClassName={theme.buttonBg}>
+          <InlineEditFormShell timestamp={editTimestamp} onTimestampChange={setEditTimestamp} note={editNote} onNoteChange={setEditNote} onSave={() => handleEditSubmit()} onCancel={closeEdit}>
             <Input type="number" step="any" min={WEIGHT_RANGE_KG.min} max={WEIGHT_RANGE_KG.max} placeholder="Weight (kg)" value={editWeight} onChange={(e) => setEditWeight(e.target.value)} className="h-8 text-sm" />
           </InlineEditFormShell>
         )}
       />
-    </CardShell>
+    </ModuleCard>
   );
 }

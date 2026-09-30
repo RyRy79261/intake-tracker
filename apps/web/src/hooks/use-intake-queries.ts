@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback } from "react";
-import { useLiveQuery } from "dexie-react-hooks";
+import { useLiveQuery } from "@/hooks/use-live-query";
 import { useMutation } from "@tanstack/react-query";
 import {
   addIntakeRecord,

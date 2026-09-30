@@ -3,15 +3,16 @@
  * open). It must agree with the Today view and the other reminder paths.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { db } from "@/lib/db";
+import { createPreviewDatabase, db, resetActiveDatabase, setActiveDatabase } from "@/lib/db";
 import {
   makePrescription,
   makeMedicationPhase,
   makePhaseSchedule,
   makeDoseLog,
+  makeInventoryItem,
   makeTitrationPlan,
 } from "@/__tests__/fixtures/db-fixtures";
-import { checkDoseReminders } from "@/lib/medication-notification-service";
+import { checkDoseReminders, checkRefillAlerts } from "@/lib/medication-notification-service";
 
 const mockShowNotification = vi.fn();
 
@@ -109,5 +110,59 @@ describe("checkDoseReminders", () => {
     await checkDoseReminders(NOW + 10 * 60 * 1000);
 
     expect(mockShowNotification).not.toHaveBeenCalled();
+  });
+});
+
+describe("checkRefillAlerts", () => {
+  beforeEach(() => {
+    mockShowNotification.mockReset().mockResolvedValue(true);
+  });
+
+  it("checks the real inventory, not a manual preview's sample inventory", async () => {
+    // Real: Lopressor, well stocked. Sample: Lasix, below its threshold.
+    const { rx } = await seed();
+    await db.inventoryItems.add(makeInventoryItem(rx.id, { currentStock: 500 }));
+
+    const preview = createPreviewDatabase();
+    await preview.open();
+    const sampleRx = makePrescription({ genericName: "Furosemide" });
+    const samplePhase = makeMedicationPhase(sampleRx.id);
+    await preview.prescriptions.add(sampleRx);
+    await preview.medicationPhases.add(samplePhase);
+    await preview.phaseSchedules.add(makePhaseSchedule(samplePhase.id));
+    await preview.inventoryItems.add(
+      makeInventoryItem(sampleRx.id, { brandName: "Lasix", currentStock: 6, refillAlertPills: 10 }),
+    );
+
+    setActiveDatabase(preview);
+    try {
+      let done = false;
+      const check = checkRefillAlerts().then(() => (done = true));
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      // Held back while the preview is on screen: no alert, nothing saved.
+      expect(done).toBe(false);
+      expect(mockShowNotification).not.toHaveBeenCalled();
+
+      resetActiveDatabase();
+      await check;
+      expect(mockShowNotification).not.toHaveBeenCalled();
+    } finally {
+      resetActiveDatabase();
+      await preview.delete();
+    }
+  });
+
+  it("alerts for a real prescription that is running low", async () => {
+    const { rx } = await seed();
+    await db.inventoryItems.add(
+      makeInventoryItem(rx.id, { brandName: "Lopressor", currentStock: 6, refillAlertPills: 10 }),
+    );
+
+    await checkRefillAlerts();
+
+    expect(mockShowNotification).toHaveBeenCalledWith(
+      "Refill needed: Lopressor",
+      expect.objectContaining({ tag: `refill-${rx.id}` }),
+    );
   });
 });

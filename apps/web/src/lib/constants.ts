@@ -25,17 +25,17 @@ export interface BPCategory {
  */
 export function getBPCategory(systolic: number, diastolic: number): BPCategory {
   if (systolic >= 180 || diastolic >= 110) {
-    return { label: "Grade 3 hypertension", color: "text-red-700 dark:text-red-300" };
+    return { label: "Grade 3 hypertension", color: "text-bp" };
   } else if (systolic >= 160 || diastolic >= 100) {
-    return { label: "Grade 2 hypertension", color: "text-red-600 dark:text-red-400" };
+    return { label: "Grade 2 hypertension", color: "text-bp" };
   } else if (systolic >= 140 || diastolic >= 90) {
-    return { label: "Grade 1 hypertension", color: "text-orange-600 dark:text-orange-400" };
+    return { label: "Grade 1 hypertension", color: "text-bp" };
   } else if (systolic >= 130 || diastolic >= 85) {
-    return { label: "High normal", color: "text-yellow-600 dark:text-yellow-400" };
+    return { label: "High normal", color: "text-sodium" };
   } else if (systolic >= 120 || diastolic >= 80) {
-    return { label: "Normal", color: "text-lime-600 dark:text-lime-400" };
+    return { label: "Normal", color: "text-weight" };
   } else {
-    return { label: "Optimal", color: "text-green-600 dark:text-green-400" };
+    return { label: "Optimal", color: "text-weight" };
   }
 }
 

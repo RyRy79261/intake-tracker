@@ -12,7 +12,13 @@ export type UnifiedRecord =
   | { type: "caffeine"; record: SubstanceRecord }
   | { type: "alcohol"; record: SubstanceRecord };
 
-export type FilterType = "all" | "water" | "salt" | "sugar" | "potassium" | "weight" | "bp" | "eating" | "urination" | "defecation" | "caffeine" | "alcohol";
+export const FILTER_TYPES = ["all", "water", "salt", "sugar", "potassium", "weight", "bp", "eating", "urination", "defecation", "caffeine", "alcohol"] as const;
+
+export type FilterType = (typeof FILTER_TYPES)[number];
+
+export function isFilterType(value: unknown): value is FilterType {
+  return typeof value === "string" && (FILTER_TYPES as readonly string[]).includes(value);
+}
 
 /** Get timestamp from unified record */
 export function getRecordTimestamp(unified: UnifiedRecord): number {

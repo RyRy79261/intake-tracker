@@ -54,7 +54,7 @@ const nextConfig = {
     ? { typescript: { tsconfigPath: "tsconfig.cap.json" } }
     : {}),
   reactStrictMode: true,
-  // Trace the bundled Outfit TTFs into the OG/Twitter image route functions —
+  // Trace the bundled IBM Plex Sans TTFs into the OG/Twitter image route functions —
   // each metadata image route is its own serverless function on Vercel, and
   // without this satori silently drops the brand font. (`src/app` because the
   // app lives under src/.) No-op for the Capacitor static export.

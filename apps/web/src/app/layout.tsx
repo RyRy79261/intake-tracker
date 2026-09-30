@@ -1,13 +1,10 @@
 import type { Metadata, Viewport } from "next";
-import { Outfit } from "next/font/google";
+import localFont from "next/font/local";
 import "@/app/globals.css";
 import { Toaster } from "@intake/ui/toaster";
 import { Providers } from "@/app/providers";
 import { UpdateNotification } from "@/components/update-notification";
-import { SwipeNav } from "@/components/swipe-nav";
-import { AppHeader } from "@/components/app-header";
-import { HomeFloatingBars } from "@/components/home-floating-bars";
-import { MedicationsFloatingBars } from "@/components/medications-floating-bars";
+import { AppChrome } from "@/components/shell/app-chrome";
 import { SerwistProvider } from "@serwist/turbopack/react";
 
 // The service worker (served at /serwist/sw.js) is registered only on the
@@ -15,9 +12,31 @@ import { SerwistProvider } from "@serwist/turbopack/react";
 // non-"production" NEXT_PUBLIC_VERCEL_ENV, matching the previous next-pwa gate.
 const swDisabled = process.env.NEXT_PUBLIC_VERCEL_ENV !== "production";
 
-const outfit = Outfit({
-  subsets: ["latin"],
-  variable: "--font-outfit",
+// Ward Console type: IBM Plex Sans for text, IBM Plex Mono for numbers.
+// The variables feed --font-sans / --font-mono in @intake/ui/styles.css.
+// Self-hosted static latin cuts (IBM Plex, SIL OFL 1.1, via Fontsource):
+// the next/font/google files rendered with uneven glyph spacing in Chromium
+// on Linux, and local files also keep builds independent of Google Fonts.
+const plexSans = localFont({
+  src: [
+    { path: "./_fonts/web/ibm-plex-sans-latin-400.woff2", weight: "400", style: "normal" },
+    { path: "./_fonts/web/ibm-plex-sans-latin-500.woff2", weight: "500", style: "normal" },
+    { path: "./_fonts/web/ibm-plex-sans-latin-600.woff2", weight: "600", style: "normal" },
+  ],
+  variable: "--font-plex-sans",
+  display: "swap",
+  fallback: ["-apple-system", "Segoe UI", "Roboto", "sans-serif"],
+});
+
+const plexMono = localFont({
+  src: [
+    { path: "./_fonts/web/ibm-plex-mono-latin-400.woff2", weight: "400", style: "normal" },
+    { path: "./_fonts/web/ibm-plex-mono-latin-500.woff2", weight: "500", style: "normal" },
+    { path: "./_fonts/web/ibm-plex-mono-latin-600.woff2", weight: "600", style: "normal" },
+  ],
+  variable: "--font-plex-mono",
+  display: "swap",
+  fallback: ["ui-monospace", "Menlo", "Consolas", "monospace"],
 });
 
 // Inline watchdog: detects a previous page-load that never reached React's
@@ -30,13 +49,13 @@ const BOOT_WATCHDOG = `(function(){try{var k='itrk:bootState',n=Date.now(),r=loc
 // paint so Android dismisses the WebAPK splash even if app JS fails to
 // boot, and reveals a manual reset link after 8s as a last resort.
 const BOOT_SHELL_CSS = `
-#__boot_shell{position:fixed;inset:0;z-index:2147483647;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#f5f7fa;color:#1f2937;font-family:system-ui,-apple-system,sans-serif;transition:opacity 200ms ease-out}
-@media (prefers-color-scheme:dark){#__boot_shell{background:#111827;color:#e5e7eb}}
+#__boot_shell{position:fixed;inset:0;z-index:2147483647;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#E9E7E1;color:#14161F;font-family:system-ui,-apple-system,sans-serif;transition:opacity 200ms ease-out}
+@media (prefers-color-scheme:dark){#__boot_shell{background:#10121C;color:#EDEFF6}}
 html.app-booted #__boot_shell{opacity:0;pointer-events:none}
 #__boot_shell .label{font-size:15px;opacity:.7}
-#__boot_shell .spinner{width:22px;height:22px;border:3px solid rgba(127,127,127,.2);border-top-color:#3b82f6;border-radius:50%;animation:itrk-spin .8s linear infinite;margin-top:18px}
+#__boot_shell .spinner{width:22px;height:22px;border:3px solid rgba(127,127,127,.2);border-top-color:currentColor;border-radius:50%;animation:itrk-spin .8s linear infinite;margin-top:18px}
 @keyframes itrk-spin{to{transform:rotate(360deg)}}
-#__boot_shell .recover{display:none;margin-top:28px;padding:10px 16px;border:1px solid rgba(127,127,127,.4);border-radius:8px;background:transparent;color:inherit;font:inherit;text-decoration:none}
+#__boot_shell .recover{display:none;margin-top:28px;padding:10px 16px;border:1px solid rgba(127,127,127,.4);border-radius:0;background:transparent;color:inherit;font:inherit;text-decoration:none}
 #__boot_shell.show-recover .recover{display:inline-block}
 `;
 
@@ -85,8 +104,8 @@ export const viewport: Viewport = {
   // drawers reflow above it instead of being covered.
   interactiveWidget: "resizes-content",
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#f5f7fa" },
-    { media: "(prefers-color-scheme: dark)", color: "#111827" },
+    { media: "(prefers-color-scheme: light)", color: "#E9E7E1" },
+    { media: "(prefers-color-scheme: dark)", color: "#10121C" },
   ],
 };
 
@@ -96,14 +115,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" data-scroll-behavior="smooth" suppressHydrationWarning>
       <head>
         <link rel="apple-touch-icon" href="/icons/icon-192.svg" />
         <link rel="icon" href="/favicon.ico" sizes="any" />
         <script dangerouslySetInnerHTML={{ __html: BOOT_WATCHDOG }} />
         <style dangerouslySetInnerHTML={{ __html: BOOT_SHELL_CSS }} />
       </head>
-      <body className={`${outfit.variable} font-sans antialiased`}>
+      <body className={`${plexSans.variable} ${plexMono.variable} font-sans antialiased`}>
         <div id="__boot_shell" aria-hidden="true">
           <div className="label">Loading…</div>
           <div className="spinner" />
@@ -121,14 +140,7 @@ export default function RootLayout({
           options={{ scope: "/" }}
         >
           <Providers>
-            <main className="min-h-screen overflow-x-clip bg-linear-to-b from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900">
-              <div className="container mx-auto max-w-lg px-4 pt-6">
-                <AppHeader />
-              </div>
-              <SwipeNav>{children}</SwipeNav>
-              <HomeFloatingBars />
-              <MedicationsFloatingBars />
-            </main>
+            <AppChrome>{children}</AppChrome>
           </Providers>
           <UpdateNotification />
           <Toaster />

@@ -126,6 +126,70 @@ const compoundsSchema = z
   .nullable()
   .optional();
 
+/** A text field inside stored AI JSON: pulled rows may carry null. */
+const aiText = z.string().nullable().optional();
+const aiTextList = z.array(z.string()).nullable().optional();
+
+/**
+ * "About this medicine" (Prescription.medicineInfo). Lenient on the prose —
+ * the view normalises missing parts on read — but the timestamp must be a
+ * real number and the lists must be lists.
+ */
+const medicineInfoSchema = z
+  .object({
+    fetchedAt: finiteNumber,
+    forName: aiText,
+    drugClass: aiText,
+    compounds: z
+      .array(
+        z
+          .object({
+            name: z.string(),
+            drugClass: aiText,
+            forText: aiText,
+            howItWorks: aiText,
+            sideEffects: aiTextList,
+          })
+          .passthrough(),
+      )
+      .nullable()
+      .optional(),
+    warnings: z
+      .array(z.object({ risk: z.string(), whatToDo: aiText }).passthrough())
+      .nullable()
+      .optional(),
+    contraindications: aiTextList,
+    foodInstruction: aiText,
+    foodNote: aiText,
+    pillDescription: aiText,
+    visualIdentification: aiText,
+  })
+  .passthrough()
+  .nullable()
+  .optional();
+
+/** The last stored interaction check (Prescription.interactionCheck). */
+const interactionCheckSchema = z
+  .object({
+    checkedAt: finiteNumber,
+    forName: aiText,
+    medications: z.array(z.string()),
+    summary: aiText,
+    rows: z.array(
+      z
+        .object({
+          medication: z.string(),
+          severity: z.enum(["AVOID", "CAUTION", "OK"]),
+          description: z.string(),
+          notAssessed: z.boolean().nullable().optional(),
+        })
+        .passthrough(),
+    ),
+  })
+  .passthrough()
+  .nullable()
+  .optional();
+
 export const prescriptionSchema = baseRecordNoTz
   .extend({
     genericName: z.string(),
@@ -133,6 +197,8 @@ export const prescriptionSchema = baseRecordNoTz
     indication: z.string().nullable().optional(),
     isActive: z.boolean(),
     compounds: compoundsSchema,
+    medicineInfo: medicineInfoSchema,
+    interactionCheck: interactionCheckSchema,
   })
   .passthrough();
 

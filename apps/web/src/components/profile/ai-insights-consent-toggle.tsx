@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import { Info } from "lucide-react";
 import { Button } from "@intake/ui/button";
 import { Label } from "@intake/ui/label";
 import { Switch } from "@intake/ui/switch";
+import { cn } from "@/lib/utils";
 import {
   Dialog,
   DialogContent,
@@ -79,7 +80,9 @@ export function AiInsightsConsentToggle({ field, label, noun }: Props) {
   // Nullish check: both null and a missing (undefined) field mean "not yet
   // consented" — `!== null` alone would let an undefined value bypass the gate.
   const hasConsented = profile.aiInsightsConsentAt != null;
-  const inputId = `toggle-${field}`;
+  // Per-instance id: the Profile window stays mounted behind the Settings
+  // sheet, so a fixed id would point both labels at the first switch.
+  const inputId = `${useId()}-toggle-${field}`;
 
   const handleToggle = (next: boolean) => {
     // First enable ever → the dialog is the consent gate; don't save yet.
@@ -97,22 +100,25 @@ export function AiInsightsConsentToggle({ field, label, noun }: Props) {
 
   return (
     <>
-      <div className="flex items-center justify-between gap-3">
-        <div className="space-y-0.5">
-          <div className="flex items-center gap-1.5">
-            <Label htmlFor={inputId} className="text-sm">
+      <div className="flex min-h-11 items-center gap-2.5 py-1">
+        <div className="flex min-w-0 flex-1 flex-col">
+          <div className="flex items-center">
+            <Label
+              htmlFor={inputId}
+              className="text-[0.9375rem] font-normal leading-snug"
+            >
               {label}
             </Label>
             <button
               type="button"
               aria-label="About AI insights"
               onClick={() => setDialog("info")}
-              className="text-muted-foreground hover:text-foreground"
+              className="-my-3 flex h-11 w-11 shrink-0 items-center justify-center text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring"
             >
-              <Info className="w-3.5 h-3.5" />
+              <Info className="h-3.5 w-3.5" />
             </button>
           </div>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-[0.8125rem] text-muted-foreground">
             {enabled
               ? `Your ${noun} are included when generating AI insights.`
               : // Not "stay on this device": the profile backs up and syncs.
@@ -120,6 +126,15 @@ export function AiInsightsConsentToggle({ field, label, noun }: Props) {
           </p>
         </div>
         <Switch id={inputId} checked={enabled} onCheckedChange={handleToggle} />
+        <span
+          aria-hidden="true"
+          className={cn(
+            "w-[2.2em] font-mono text-xs",
+            enabled ? "font-semibold text-foreground" : "text-muted-foreground",
+          )}
+        >
+          {enabled ? "On" : "Off"}
+        </span>
       </div>
 
       <Dialog

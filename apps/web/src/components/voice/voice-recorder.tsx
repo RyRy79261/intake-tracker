@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@intake/ui/button";
-import { Mic, Square, Loader2 } from "lucide-react";
+import { Mic, Square } from "lucide-react";
+import { Spinner } from "@intake/ui/spinner";
 import { cn } from "@/lib/utils";
 
 type RecorderState = "idle" | "requesting" | "recording" | "processing" | "error";
@@ -22,7 +23,8 @@ const PREFERRED_MIME_TYPES = [
   "audio/mp4;codecs=mp4a.40.2",
 ];
 
-function pickMimeType(): string | undefined {
+/** The first audio MIME type this browser's MediaRecorder supports. */
+export function pickMimeType(): string | undefined {
   if (typeof window === "undefined") return undefined;
   if (typeof MediaRecorder === "undefined") return undefined;
   for (const t of PREFERRED_MIME_TYPES) {
@@ -244,7 +246,7 @@ export function VoiceRecorder({ onRecorded, busy, disabled }: VoiceRecorderProps
           aria-label={isRecording ? "Stop recording" : "Start recording"}
         >
           {state === "processing" || state === "requesting" ? (
-            <Loader2 className="h-7 w-7 animate-spin" />
+            <Spinner className="size-7" />
           ) : isRecording ? (
             <Square className="h-6 w-6 fill-current" />
           ) : (

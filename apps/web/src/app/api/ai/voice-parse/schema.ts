@@ -7,21 +7,83 @@ import { BP_RANGES, WEIGHT_RANGE_KG } from "@intake/core/record-schemas";
  * request machinery (mirrors api/ai/substance-lookup/schema.ts).
  */
 
+const LOCAL_DATE_TIME = /^(\d{4})-(\d{2})-(\d{2})T([01]\d|2[0-3]):([0-5]\d)(?::[0-5]\d(?:\.\d+)?)?$/;
+
 /**
- * Optional "when" of an item, shared by every kind. `time` is a 24-hour
- * "HH:mm" clock time the user said ("at 1pm" → "13:00"); `minutesAgo` is a
- * relative offset ("half an hour ago" → 30). Both are resolved to a timestamp
- * on the client, which knows the user's clock and day-start hour. A malformed
- * value is stripped (`.catch`) rather than failing the item, so a bad time
- * never costs the user the reading itself.
+ * A local wall-clock "YYYY-MM-DDTHH:mm" with no zone, cut to the minute
+ * (seconds, if the sender added them, are dropped). Rejects a date that does
+ * not exist (2026-02-30) as well as a wrong shape.
+ */
+const localDateTime = z
+  .string()
+  .refine((value) => {
+    const m = LOCAL_DATE_TIME.exec(value);
+    if (!m) return false;
+    const [y, mo, d] = [Number(m[1]), Number(m[2]), Number(m[3])];
+    const date = new Date(Date.UTC(y, mo - 1, d));
+    return date.getUTCFullYear() === y && date.getUTCMonth() === mo - 1 && date.getUTCDate() === d;
+  })
+  .transform((value) => value.slice(0, 16));
+
+function isIanaTimeZone(value: string): boolean {
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: value });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The client's clock when it sent the transcript. The server has no idea what
+ * time it is for the user, so "yesterday at 8pm" can only be dated from this.
+ * It goes into the prompt, hence the strict shapes: the zone must be one Intl
+ * knows, not free text.
+ */
+export const ClientNowSchema = z.object({
+  localDateTime,
+  timeZone: z
+    .string()
+    .max(64)
+    .regex(/^[A-Za-z0-9_+\-/]+$/)
+    .refine(isIanaTimeZone),
+  // Real zones span UTC-12:00 to UTC+14:00.
+  utcOffsetMinutes: z.number().int().min(-720).max(840),
+});
+
+export const MAX_REQUEST_CHARS = 8000;
+
+export const ParseRequestSchema = z.object({
+  transcript: z.string().min(1).max(MAX_REQUEST_CHARS),
+  // Optional: a cached client from before this field existed still sends the
+  // transcript alone, and must keep working. Without a clock the model is
+  // asked for relative times only (see `extractVoiceItems`). A clock that is
+  // present but malformed is still a 400.
+  now: ClientNowSchema.optional(),
+});
+
+/** A relative time further back than this is not a slip of the tongue. */
+const MAX_MINUTES_AGO = 366 * 24 * 60;
+
+/**
+ * Optional "when" of an item, shared by every kind: either a local wall-clock
+ * date-time the user stated ("yesterday at 8pm" → absolute), or an offset
+ * from now ("an hour ago" → relative, 60). The client turns both into a
+ * timestamp with the device's zone, and clamps a future time to now. A
+ * malformed value is stripped (`.catch`) rather than failing the item, so a
+ * bad time never costs the user the reading itself.
  */
 const timing = {
-  time: z
-    .string()
-    .regex(/^([01]\d|2[0-3]):[0-5]\d$/)
-    .optional()
+  when: z
+    .discriminatedUnion("kind", [
+      z.object({ kind: z.literal("absolute"), localDateTime }),
+      z.object({
+        kind: z.literal("relative"),
+        minutesAgo: z.number().min(0).max(MAX_MINUTES_AGO).transform(Math.round),
+      }),
+    ])
+    .nullish()
     .catch(undefined),
-  minutesAgo: z.number().int().min(0).max(1439).optional().catch(undefined),
 };
 
 export const ItemSchema = z.discriminatedUnion("kind", [
@@ -106,7 +168,11 @@ export const ItemSchema = z.discriminatedUnion("kind", [
   }),
 ]);
 
-export type VoiceParsedItem = z.infer<typeof ItemSchema>;
+type ParsedItem = z.infer<typeof ItemSchema>;
+type ItemWhen = NonNullable<ParsedItem["when"]>;
+/** An item as the route returns it: `when` is present only when a time was said. */
+type WithWhen<T> = T extends unknown ? Omit<T, "when"> & { when?: ItemWhen } : never;
+export type VoiceParsedItem = WithWhen<ParsedItem>;
 
 export const MAX_ITEMS = 20;
 const MAX_REASONING_CHARS = 1000;
@@ -143,7 +209,15 @@ export type VoiceExtractResult =
  * only when there is no usable items array, or items were present but none
  * survived validation.
  */
-export function extractVoiceItems(input: unknown): VoiceExtractResult {
+export function extractVoiceItems(
+  input: unknown,
+  /**
+   * `absoluteTimes: false` when the request carried no client clock: the
+   * model was given no date, so an absolute `when` can only be a guess and is
+   * stripped (the item is kept and saves at "now").
+   */
+  { absoluteTimes = true }: { absoluteTimes?: boolean } = {},
+): VoiceExtractResult {
   if (typeof input !== "object" || input === null) return { ok: false };
   const obj = input as { items?: unknown; reasoning?: unknown };
   if (!Array.isArray(obj.items)) return { ok: false };
@@ -153,12 +227,11 @@ export function extractVoiceItems(input: unknown): VoiceExtractResult {
   for (const raw of obj.items) {
     const parsed = ItemSchema.safeParse(raw);
     if (parsed.success) {
-      // A stripped (caught) timing field parses to an explicit `undefined`;
-      // drop the key so the item matches the optional-field shape.
-      const item = parsed.data as Record<string, unknown>;
-      if (item.time === undefined) delete item.time;
-      if (item.minutesAgo === undefined) delete item.minutesAgo;
-      items.push(parsed.data);
+      // "No time said" arrives as null, an absent key, or a stripped (caught)
+      // value; all three leave the response with no `when` key.
+      const { when, ...rest } = parsed.data;
+      const keep = when && (absoluteTimes || when.kind === "relative");
+      items.push((keep ? { ...rest, when } : rest) as VoiceParsedItem);
     } else {
       dropped++;
     }

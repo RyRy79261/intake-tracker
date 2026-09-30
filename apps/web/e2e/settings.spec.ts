@@ -1,87 +1,99 @@
 import { test, expect, type Page } from '@playwright/test';
 
 /**
- * Settings page is a two-level accordion (see src/app/settings/page.tsx):
- *   - Top level: Radix Accordion with groups like "Tracking", "Customization",
- *     "Data & Storage", etc. Only one group open at a time. All closed by
- *     default.
- *   - Inside each group, several sections use ExpandableSettingsSection which
- *     is an independent Collapsible (closed by default).
- *
- * Sections like Appearance, Data Management, Storage Info, Quick Nav render
- * their h3 directly (no inner Collapsible) — expanding the parent group is
- * enough. Sections like Day Settings, Water Settings, etc. ARE wrapped in
- * ExpandableSettingsSection and need a second click to reveal their controls.
+ * Settings is a global sheet (src/components/settings/settings-sheet.tsx),
+ * opened by the sys-bar gear or the /settings deep link. Its groups are
+ * independent collapsibles (Tracking starts open); Drink presets is a
+ * sub-page with a Back button.
  */
-async function openGroup(page: Page, name: string) {
-  await page.getByRole('button', { name, exact: true }).click();
+function sheet(page: Page) {
+  return page.getByRole('dialog', { name: 'Settings' });
 }
 
-async function openInnerSection(
-  page: Page,
-  name: string
-) {
-  // The inner trigger is a button containing <h3>{name}</h3>. Scope to the
-  // h3 and click the enclosing button to avoid clashing with the h3 selector
-  // assertions below.
-  await page.locator('button', { has: page.locator('h3', { hasText: name }) }).click();
+async function openSettings(page: Page) {
+  await page.goto('/settings');
+  await expect(sheet(page)).toBeVisible();
+}
+
+async function openGroup(page: Page, name: string) {
+  const group = sheet(page).getByRole('button', { name, exact: true });
+  if ((await group.getAttribute('aria-expanded')) !== 'true') await group.click();
+  await expect(group).toHaveAttribute('aria-expanded', 'true');
 }
 
 test.describe('Settings', () => {
+  test('the gear opens the sheet over Home and Back closes it', async ({ page }) => {
+    await page.goto('/');
+    await page.getByTestId('sys-bar').getByRole('button', { name: 'Settings' }).click();
+    await expect(sheet(page)).toBeVisible();
+    await expect(page).toHaveURL(/\/settings$/);
+
+    await page.goBack();
+    await expect(sheet(page)).toBeHidden();
+    await expect(page).toHaveURL(/\/$/);
+  });
+
+  test('Drink presets opens as a page with Back', async ({ page }) => {
+    await openSettings(page);
+    await sheet(page).getByRole('button', { name: /Drink presets/ }).click();
+
+    const presets = page.getByRole('dialog', { name: 'Drink presets' });
+    await expect(presets).toBeVisible();
+    await expect(presets.getByRole('button', { name: 'Edit Espresso' })).toBeVisible();
+
+    await presets.getByRole('button', { name: 'Back to settings' }).click();
+    await expect(sheet(page).getByRole('button', { name: 'Tracking', exact: true })).toBeVisible();
+  });
+
   test('theme persists across page reload', async ({ page }) => {
-    await page.goto('/settings');
-    await openGroup(page, 'Customization');
-
-    // Appearance renders its h3 directly once the parent group is open.
-    await expect(page.locator('h3', { hasText: 'Appearance' })).toBeVisible();
-
-    await page.locator('#theme').click();
-    await page.locator('[role="option"]', { hasText: 'Dark' }).click();
-
-    await expect(page.locator('html')).toHaveAttribute('class', /dark/);
+    await openSettings(page);
+    await openGroup(page, 'Appearance');
+    await sheet(page).getByRole('radio', { name: 'Dark' }).click();
+    await expect(page.locator('html')).toHaveClass(/dark/);
 
     await page.reload();
-    await openGroup(page, 'Customization');
-    await expect(page.locator('h3', { hasText: 'Appearance' })).toBeVisible();
-    await expect(page.locator('html')).toHaveAttribute('class', /dark/);
+    await expect(sheet(page)).toBeVisible();
+    await expect(page.locator('html')).toHaveClass(/dark/);
+    await openGroup(page, 'Appearance');
+    await expect(sheet(page).getByRole('radio', { name: 'Dark' })).toHaveAttribute('aria-checked', 'true');
+  });
+
+  test('Bigger text and Reduce motion apply to the whole app', async ({ page }) => {
+    await openSettings(page);
+    await openGroup(page, 'Appearance');
+    await sheet(page).getByRole('switch', { name: /Bigger text/ }).click();
+    await sheet(page).getByRole('switch', { name: /Reduce motion/ }).click();
+    await expect(page.locator('html')).toHaveClass(/big-text/);
+    await expect(page.locator('html')).toHaveClass(/reduce-motion/);
+    const size = await page.evaluate(() => getComputedStyle(document.documentElement).fontSize);
+    expect(size).toBe('18px');
+
+    await page.reload();
+    await expect(page.locator('html')).toHaveClass(/big-text/);
   });
 
   test('day-start-hour persists across page reload', async ({ page }) => {
-    await page.goto('/settings');
+    await openSettings(page);
     await openGroup(page, 'Tracking');
 
-    // Day Settings uses ExpandableSettingsSection — the h3 is in the always-
-    // visible trigger but the #day-start select is in the collapsed body.
-    await expect(page.locator('h3', { hasText: 'Day Settings' })).toBeVisible();
-    await openInnerSection(page, 'Day Settings');
-
-    await page.locator('#day-start').click();
+    await page.locator('#set-day-start').click();
     await page.locator('[role="option"]', { hasText: '4:00 AM' }).click();
-    await expect(page.locator('#day-start')).toContainText('4:00 AM');
+    await expect(page.locator('#set-day-start')).toContainText('4:00 AM');
 
     await page.reload();
+    await expect(sheet(page)).toBeVisible();
     await openGroup(page, 'Tracking');
-    await openInnerSection(page, 'Day Settings');
-    await expect(page.locator('#day-start')).toContainText('4:00 AM');
+    await expect(page.locator('#set-day-start')).toContainText('4:00 AM');
   });
 
   test('export data triggers download', async ({ page }) => {
-    await page.goto('/settings');
-    await openGroup(page, 'Data & Storage');
-    await expect(page.locator('h3', { hasText: 'Data Management' })).toBeVisible();
+    await openSettings(page);
+    await openGroup(page, 'Data & storage');
 
     const downloadPromise = page.waitForEvent('download');
-    await page.locator('button', { hasText: 'Export Data' }).click();
+    await sheet(page).getByRole('button', { name: 'Export Data' }).click();
 
     const download = await downloadPromise;
     expect(download.suggestedFilename()).toMatch(/\.json$/);
-  });
-
-  test('account section displays email and sign out option', async ({ page }) => {
-    // AccountSection is rendered above the accordion (no h3 heading) — just
-    // verify the "Signed in via Neon Auth" copy and a Sign Out button.
-    await page.goto('/settings');
-    await expect(page.locator('text=Signed in via Neon Auth')).toBeVisible();
-    await expect(page.locator('button', { hasText: 'Sign Out' })).toBeVisible();
   });
 });

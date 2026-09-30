@@ -11,6 +11,7 @@ import {
 import { useToast } from "@intake/ui/use-toast";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useSyncStatusStore } from "@/stores/sync-status-store";
+import { whenRealDatabase } from "@/lib/db";
 
 // ---------------------------------------------------------------------------
 // Home timezone (audit gap-timezone-travel-recalc#1)
@@ -144,6 +145,8 @@ export function useTimezoneDetection(): TimezoneChangeState {
     // Always bust the cache first, so the dose list and new records pick up
     // the real zone even when the prompt stays dismissed.
     clearTimezoneCache();
+    // Never compare a manual preview's sample schedules.
+    await whenRealDatabase();
     const deviceTz = getDeviceTimezone();
 
     try {

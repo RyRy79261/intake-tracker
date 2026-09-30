@@ -40,6 +40,15 @@ describe("RetroactiveTimePicker", () => {
     expect(onConfirm).not.toHaveBeenCalled();
   });
 
+  it("opens the meds scope: the sheet renders outside the Medications window", () => {
+    renderPicker();
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toHaveAttribute("data-domain", "meds");
+    const logBtn = screen.getByRole("button", { name: "Log Dose" });
+    expect(logBtn.className).toContain("bg-primary");
+    expect(logBtn.closest("[data-domain]")).toBe(dialog);
+  });
+
   it("rejects a time later than now when notAfterNow is set", () => {
     const { input, onConfirm } = renderPicker({ notAfterNow: true, defaultTime: "10:00" });
     expect(input().max).toBe("10:14");

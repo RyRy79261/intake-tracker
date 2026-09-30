@@ -7,12 +7,22 @@ import {
   DrawerTitle,
 } from "@intake/ui/drawer";
 import { Button } from "@intake/ui/button";
-import { useMedicineSearch, MedicineSearchCancelledError } from "@/hooks/use-medicine-search";
+import {
+  MedicineLookupPanel,
+  useMedicineLookup,
+  type ApplyContext,
+} from "@/components/medications/medicine-lookup-panel";
+import {
+  applyToNewBrand,
+  applyToNewPrescription,
+  type LookupGroup,
+} from "@/components/medications/medicine-lookup";
 import { useAuthGate } from "@/components/auth-guard";
 import { useAddPrescription, usePrescriptions, useAddMedicationToPrescription, usePhasesForPrescription } from "@/hooks/use-medication-queries";
 import { useToast } from "@intake/ui/use-toast";
-import type { PillShape, MedicationPhase, CompoundStrength, Prescription } from "@/lib/db";
-import { AlertTriangle, ArrowLeft, ArrowRight, Loader2, Check, X } from "lucide-react";
+import type { MedicationPhase, CompoundStrength, Prescription } from "@/lib/db";
+import { AlertTriangle, ArrowLeft, ArrowRight, Check } from "lucide-react";
+import { Spinner } from "@intake/ui/spinner";
 import { useInteractionCheck } from "@/hooks/use-interaction-check";
 import { cn } from "@/lib/utils";
 import {
@@ -33,8 +43,7 @@ import { DosageStep } from "@/components/medications/add-medication-steps/dosage
 import { ScheduleStep } from "@/components/medications/add-medication-steps/schedule-step";
 import { InventoryStep } from "@/components/medications/add-medication-steps/inventory-step";
 import { ConflictCheckOverlay, type ConflictCheckState } from "@/components/medications/add-medication-steps/conflict-check-overlay";
-import { PILL_SHAPES, COLOR_NAME_MAP } from "@/components/medications/add-medication-steps/types";
-import { compoundSum, formatCompoundNames } from "@intake/core/compound";
+import { formatCompoundNames } from "@intake/core/compound";
 
 const STEPS: WizardStep[] = ["search", "appearance", "indication", "dosage", "schedule", "inventory"];
 const STEP_LABELS: Record<WizardStep, string> = {
@@ -44,6 +53,29 @@ const STEP_LABELS: Record<WizardStep, string> = {
   dosage: "Dosage",
   schedule: "Schedule",
   inventory: "Inventory",
+};
+/**
+ * What the AI lookup can fill in on each step of a new prescription. Step 1
+ * offers everything; later steps offer only their own fields (prototype
+ * `lookGroups`). The Inventory step has no lookup.
+ */
+const NEW_RX_LOOKUP_GROUPS: Record<WizardStep, LookupGroup[]> = {
+  search: ["names", "strength", "appearance", "indication", "food"],
+  appearance: ["appearance"],
+  indication: ["indication", "food"],
+  dosage: ["strength"],
+  schedule: ["food"],
+  inventory: [],
+};
+
+/** The question each step asks (`.wq`). */
+const STEP_QUESTIONS: Record<WizardStep, string> = {
+  search: "Which medicine?",
+  appearance: "What does the pill look like?",
+  indication: "What is it for?",
+  dosage: "How much is each dose?",
+  schedule: "When do you take it?",
+  inventory: "How many do you have?",
 };
 
 interface AddMedicationWizardProps {
@@ -77,7 +109,9 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
   const { toast } = useToast();
   const [step, setStep] = useState<WizardStep>("search");
   const showAi = useAuthGate();
-  const searchMutation = useMedicineSearch();
+  // The AI lookup is shared by every step, like the prototype's `wiz.look`:
+  // a result found on step 1 can still fill in a later step.
+  const lookup = useMedicineLookup();
   const addPrescriptionMutation = useAddPrescription();
   const addMedicationToPrescriptionMutation = useAddMedicationToPrescription();
   const existingPrescriptions = usePrescriptions();
@@ -135,6 +169,7 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
 
   const handleClose = useCallback(() => {
     onOpenChange(false);
+    lookup.clear();
     setTimeout(() => {
       resetForm();
       setStep("search");
@@ -143,95 +178,49 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
       setDuplicate(null);
       setDuplicateChoice(null);
     }, 300);
-  }, [onOpenChange, resetForm, resetConflicts]);
+  }, [onOpenChange, resetForm, resetConflicts, lookup]);
 
-  const handleSearch = async () => {
-    const query = formState.searchQuery.trim();
-    if (!query) return;
-    if (document.activeElement instanceof HTMLElement) {
-      document.activeElement.blur();
-    }
-    window.scrollTo(0, 0);
-    try {
-      const result = await searchMutation.mutateAsync(query);
-      const partial: Partial<AddMedicationFormState> = { searchResult: result };
+  // Adding a brand to an existing prescription is the prototype's add-brand
+  // host: brand, strength and appearance only.
+  const existingRx = isExistingPrescription
+    ? existingPrescriptions.find((p) => p.id === formState.selectedPrescriptionId)
+    : undefined;
+  const lookupGroups: LookupGroup[] = isExistingPrescription
+    ? step === "search"
+      ? ["brand", "strength", "appearance"]
+      : step === "appearance"
+        ? ["appearance"]
+        : []
+    : NEW_RX_LOOKUP_GROUPS[step];
+  const lookupFallback = isExistingPrescription
+    ? formState.brandName || existingRx?.genericName || ""
+    : formState.brandName || formState.genericName;
 
-      if (!formState.brandName) {
-        partial.brandName = capitalizeWords(query);
-      }
-
-      if (result.genericName) partial.genericName = capitalizeWords(result.genericName);
-      // Auto-select dosage strength from search query (e.g., "Eliquis 5mg" -> select "5mg")
-      if (result.dosageStrengths.length > 0) {
-        const doseMatch = query.match(/(\d+(?:\.\d+)?)\s*mg/i);
-        if (doseMatch && doseMatch[1]) {
-          const queryDose = doseMatch[1];
-          const matchingStrength = result.dosageStrengths.find(s =>
-            s.toLowerCase().includes(queryDose + "mg") || s.toLowerCase().includes(queryDose + " mg")
-          );
-          partial.dosageStrength = matchingStrength ?? result.dosageStrengths[0] ?? "";
-        } else if (result.dosageStrengths[0]) {
-          partial.dosageStrength = result.dosageStrengths[0];
-        }
-      }
-      // Combination drug: mirror the AI's verdict. ≥2 active ingredients ⇒
-      // enable combo mode and pre-fill compounds from a marketed strength
-      // option (matching the query's number when given), falling back to the
-      // ingredient names alone. A single-ingredient result clears any stale
-      // combo state left from a previous search.
-      const comboOptions = (result.strengthOptions ?? []).filter(
-        (o) => o.compounds.length >= 2,
-      );
-      if ((result.activeIngredients?.length ?? 0) >= 2) {
-        partial.isCombination = true;
-        if (comboOptions.length > 0) {
-          const doseMatch = query.match(/(\d+(?:\.\d+)?)/);
-          let chosen = comboOptions[0];
-          if (doseMatch && doseMatch[1]) {
-            const q = doseMatch[1];
-            const matched = comboOptions.find(
-              (o) =>
-                o.label.includes(q) ||
-                String(compoundSum(o.compounds)).startsWith(q),
-            );
-            if (matched) chosen = matched;
-          }
-          if (chosen) {
-            partial.compounds = chosen.compounds.map((c) => ({
-              name: c.name,
-              strength: c.strength,
-            }));
-          }
-        } else {
-          partial.compounds = result.activeIngredients!.map((name) => ({
-            name,
-            strength: 0,
-          }));
-        }
-      } else {
-        partial.isCombination = false;
-        partial.compounds = emptyCompounds();
-      }
-      if (result.commonIndications.length > 0) partial.indication = result.commonIndications.join(", ");
-      if (result.contraindications) partial.contraindications = result.contraindications;
-      if (result.warnings) partial.warnings = result.warnings;
-      if (result.visualIdentification) partial.visualIdentification = result.visualIdentification;
-      if (result.foodInstruction) partial.foodInstruction = result.foodInstruction;
-      if (result.foodNote) partial.foodNote = result.foodNote;
-      if (result.pillColor) {
-        const hex = COLOR_NAME_MAP[result.pillColor.toLowerCase()];
-        if (hex) partial.pillColor = hex;
-      }
-      if (result.pillShape) {
-        const shape = result.pillShape.toLowerCase() as PillShape;
-        if (PILL_SHAPES.some((s) => s.value === shape)) partial.pillShape = shape;
-      }
-
-      patch(partial);
-    } catch {
-      // error is in searchMutation.error
-    }
+  const handleLookupApply = ({ groups, result, option }: ApplyContext) => {
+    patch(
+      isExistingPrescription
+        ? applyToNewBrand(groups, result, option, formState)
+        : applyToNewPrescription(groups, result, option),
+    );
+    clearErrors();
   };
+
+  const lookupPanel =
+    lookupGroups.length > 0 ? (
+      <MedicineLookupPanel
+        lookup={lookup}
+        groups={lookupGroups}
+        compact={step !== "search"}
+        fallbackQuery={lookupFallback}
+        placeholder={
+          existingRx
+            ? `e.g. ${existingRx.genericName} or a brand name`
+            : "e.g. Entresto, Vymada 100 or Dapagliflozin"
+        }
+        showSignIn={step === "search"}
+        onApply={handleLookupApply}
+      />
+    ) : null;
 
   const currentStepIndex = activeSteps.indexOf(step);
   const canGoBack = currentStepIndex > 0;
@@ -294,7 +283,7 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
         try {
           const result = await checkInteractions({
             mode: "conflict",
-            newMedication: formState.genericName || formState.searchQuery,
+            newMedication: finalGenericName,
             activePrescriptions: activeMeds.map((p) => ({ genericName: p.genericName })),
           });
           if (result) {
@@ -405,17 +394,14 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
     }
   };
 
-  const searchError =
-    searchMutation.error &&
-    !(searchMutation.error instanceof MedicineSearchCancelledError) &&
-    searchMutation.error.message
-      ? searchMutation.error.message
-      : undefined;
+  const saving = addPrescriptionMutation.isPending || addMedicationToPrescriptionMutation.isPending;
 
   return (
     <Drawer open={open} onOpenChange={(o) => { if (!o) handleClose(); }} repositionInputs={false}>
-      <DrawerContent className="w-full max-w-[100vw] overflow-hidden max-h-[90dvh]" aria-describedby={undefined}>
-        <DrawerTitle className="sr-only">Add medication</DrawerTitle>
+      <DrawerContent data-domain="meds"
+        className="flex h-[92dvh] w-full max-w-[100vw] flex-col overflow-hidden bg-panel shadow-[inset_0_3px_0_hsl(var(--meds))]"
+        aria-describedby={undefined}
+      >
         <ConflictCheckOverlay
           state={conflictCheckState}
           data={conflictData}
@@ -429,25 +415,26 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
           }}
         />
         {duplicate && duplicateChoice === null && (
-          <div className="absolute inset-0 bg-background/95 z-10 flex flex-col p-4 overflow-y-auto">
-            <div className="flex items-center gap-2 mb-4">
-              <AlertTriangle className="w-5 h-5 text-amber-500" />
-              <h3 className="text-sm font-semibold">Possible duplicate</h3>
+          <div className="absolute inset-0 z-10 flex flex-col overflow-y-auto bg-panel p-4">
+            <div className="border border-sodium bg-sodium/10 px-3 py-2.5">
+              <h3 className="mb-1 flex items-center gap-2 text-[0.9375rem] font-semibold text-sodium">
+                <AlertTriangle className="h-4 w-4" aria-hidden="true" />
+                Possible duplicate
+              </h3>
+              <p className="mb-2 text-sm">
+                You already have an active prescription for{" "}
+                <span className="font-semibold">{duplicate.genericName}</span>.
+                A second one would put both on your schedule, so &ldquo;take all&rdquo;
+                would log a double dose.
+              </p>
+              <p className="text-[0.8125rem] text-muted-foreground">
+                Adding to the existing prescription stocks this box as another
+                brand and keeps its current schedule — change the dose there if it
+                changed.
+              </p>
             </div>
-            <p className="text-sm text-muted-foreground mb-2">
-              You already have an active prescription for{" "}
-              <span className="font-medium text-foreground">{duplicate.genericName}</span>.
-              A second one would put both on your schedule, so &ldquo;take all&rdquo;
-              would log a double dose.
-            </p>
-            <p className="text-xs text-muted-foreground">
-              Adding to the existing prescription stocks this box as another
-              brand and keeps its current schedule — change the dose there if it
-              changed.
-            </p>
-            <div className="flex flex-col gap-2 mt-auto pt-4">
+            <div className="mt-auto flex flex-col gap-2 pt-4">
               <Button
-                className="bg-teal-600 hover:bg-teal-700"
                 onClick={() => {
                   setDuplicateChoice("addToExisting");
                   handleSave("addToExisting");
@@ -464,45 +451,43 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
               >
                 Save as a separate prescription
               </Button>
-              <Button variant="ghost" onClick={() => setDuplicate(null)}>
+              <Button variant="outline" onClick={() => setDuplicate(null)}>
                 Go back
               </Button>
             </div>
           </div>
         )}
 
-        <div className="p-4 px-5">
-          <div className="flex items-center justify-between mb-4">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={canGoBack ? goBack : handleClose}
-              aria-label={canGoBack ? "Previous step" : "Close wizard"}
-            >
-              {canGoBack ? <ArrowLeft className="w-5 h-5" /> : <X className="w-5 h-5" />}
-            </Button>
-            <div className="text-center">
-              <p className="text-sm font-medium">{STEP_LABELS[step]}</p>
-              <p className="text-xs text-muted-foreground">
-                Step {currentStepIndex + 1} of {activeSteps.length}
+        <div className="flex min-h-0 flex-1 flex-col">
+          {/* Header: title, step counter, Cancel (`.wiz-h`) */}
+          <div className="flex flex-none items-center gap-2 px-3.5 pb-1.5 pt-2">
+            <div className="min-w-0 flex-1">
+              <DrawerTitle className="text-base font-semibold">
+                {isExistingPrescription ? "Add medication" : "Add prescription"}
+              </DrawerTitle>
+              <p className="text-[0.8125rem] text-muted-foreground">
+                Step {currentStepIndex + 1} of {activeSteps.length} ·{" "}
+                <span data-testid="wizard-step-label">{STEP_LABELS[step]}</span>
               </p>
             </div>
-            <div className="w-10" />
+            <Button variant="outline" onClick={handleClose} aria-label="Cancel and close">
+              Cancel
+            </Button>
           </div>
 
-          <div className="flex gap-1 mb-6">
+          {/* Progress segments (`.steps`) */}
+          <div className="grid flex-none gap-[3px] px-3.5 pb-1" style={{ gridTemplateColumns: `repeat(${activeSteps.length}, minmax(0, 1fr))` }} aria-hidden="true">
             {activeSteps.map((s, i) => (
-              <div
+              <i
                 key={s}
-                className={cn(
-                  "h-1 flex-1 rounded-full transition-colors",
-                  i <= currentStepIndex ? "bg-teal-500" : "bg-muted"
-                )}
+                className={cn("block h-1", i <= currentStepIndex ? "bg-meds" : "bg-foreground/14")}
               />
             ))}
           </div>
 
-          <div className="min-h-[300px] max-h-[60dvh] overflow-y-auto px-2 pb-2">
+          {/* Body (`.wiz-b`) */}
+          <div className="flex min-h-[300px] flex-1 flex-col gap-3.5 overflow-y-auto px-3.5 pb-4 pt-3">
+            <h3 className="text-[1.0625rem] font-semibold">{STEP_QUESTIONS[step]}</h3>
             {step === "search" && (
               <SearchStep
                 formState={formState}
@@ -510,21 +495,15 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
                 errors={errors}
                 existingPrescriptions={existingPrescriptions}
                 onSelectPrescription={handlePrescriptionSelect}
-                onSearch={handleSearch}
-                isSearching={searchMutation.isPending}
-                {...(searchError && { searchError })}
+                lookup={lookupPanel}
               />
             )}
+            {step !== "search" && lookupPanel}
             {step === "appearance" && (
               <AppearanceStep formState={formState} onFieldChange={onFieldChange} />
             )}
             {step === "indication" && (
-              <IndicationStep
-                formState={formState}
-                onFieldChange={onFieldChange}
-                onRefreshAI={handleSearch}
-                isRefreshing={searchMutation.isPending}
-              />
+              <IndicationStep formState={formState} onFieldChange={onFieldChange} />
             )}
             {step === "dosage" && (
               <DosageStep formState={formState} onFieldChange={onFieldChange} error={errors.dosage} />
@@ -539,36 +518,34 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
             {Object.entries(errors)
               .filter(([field]) => !INLINE_ERROR_FIELDS.has(field))
               .map(([field, message]) => (
-                <p key={field} role="alert" className="text-sm text-destructive mt-2">
+                <p key={field} role="alert" className="text-[0.8125rem] text-bp">
                   {message}
                 </p>
               ))}
           </div>
 
-          <div className="flex gap-3 mt-6">
+          {/* Sticky footer: Back (1fr) + Next / Save (2fr) (`.wiz-f`) */}
+          <div
+            className={cn(
+              "sticky bottom-0 z-[2] grid flex-none gap-2 border-t border-line bg-panel px-3.5 pb-[calc(12px+env(safe-area-inset-bottom,0px))] pt-2.5",
+              canGoBack ? "grid-cols-[1fr_2fr]" : "grid-cols-1",
+            )}
+          >
             {canGoBack && (
-              <Button variant="outline" onClick={goBack} className="flex-1 gap-2">
-                <ArrowLeft className="w-4 h-4" />
+              <Button variant="outline" onClick={goBack}>
+                <ArrowLeft aria-hidden="true" />
                 Back
               </Button>
             )}
             {isLastStep ? (
-              <Button
-                onClick={() => handleSave()}
-                disabled={addPrescriptionMutation.isPending || addMedicationToPrescriptionMutation.isPending}
-                className="flex-1 gap-2 bg-teal-600 hover:bg-teal-700"
-              >
-                {(addPrescriptionMutation.isPending || addMedicationToPrescriptionMutation.isPending) ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Check className="w-4 h-4" />
-                )}
+              <Button onClick={() => handleSave()} disabled={saving}>
+                {saving ? <Spinner /> : <Check aria-hidden="true" />}
                 Save Medication
               </Button>
             ) : (
-              <Button onClick={goNext} className="flex-1 gap-2 bg-teal-600 hover:bg-teal-700">
+              <Button onClick={goNext}>
                 Next
-                <ArrowRight className="w-4 h-4" />
+                <ArrowRight aria-hidden="true" />
               </Button>
             )}
           </div>

@@ -9,7 +9,13 @@ vi.mock("@/lib/sync-engine", () => ({
   schedulePush: vi.fn(),
 }));
 
-import { db, type UserSettings } from "@/lib/db";
+import {
+  createPreviewDatabase,
+  db,
+  resetActiveDatabase,
+  setActiveDatabase,
+  type UserSettings,
+} from "@/lib/db";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useSyncStatusStore } from "@/stores/sync-status-store";
 import {
@@ -355,6 +361,55 @@ describe("settings-sync (audit state-settings-cache#2)", () => {
     await db.userSettings.put(remoteRow({ weekStartsOn: 9, updatedAt: Date.now() + 1_000 }));
     await settle();
     expect(useSettingsStore.getState().weekStartsOn).toBe(0);
+  });
+
+  describe("while a manual preview's sample database is swapped in", () => {
+    it("writes an edit to the real row once the real database is back, never to the preview", async () => {
+      dispose = installSettingsSync();
+      await settle();
+      useSettingsStore.getState().setWaterLimit(1500);
+      await settle();
+
+      const preview = createPreviewDatabase();
+      await preview.open();
+      setActiveDatabase(preview);
+      try {
+        useSettingsStore.getState().setWaterLimit(1700);
+        await settle();
+        expect(await preview.userSettings.count()).toBe(0);
+        expect(await preview._syncQueue.count()).toBe(0);
+
+        resetActiveDatabase();
+        await settle();
+        const rows = await db.userSettings.toArray();
+        expect(rows).toHaveLength(1);
+        expect(rows[0]!.waterLimit).toBe(1700);
+      } finally {
+        resetActiveDatabase();
+        await preview.delete();
+      }
+    });
+
+    it("does not seed a row into the preview when the app starts with a guide open", async () => {
+      useSettingsStore.setState({ saltLimit: 1800 });
+      const preview = createPreviewDatabase();
+      await preview.open();
+      setActiveDatabase(preview);
+      try {
+        dispose = installSettingsSync();
+        await settle();
+        expect(await preview.userSettings.count()).toBe(0);
+
+        resetActiveDatabase();
+        await settle();
+        const rows = await db.userSettings.toArray();
+        expect(rows).toHaveLength(1);
+        expect(rows[0]!.saltLimit).toBe(1800);
+      } finally {
+        resetActiveDatabase();
+        await preview.delete();
+      }
+    });
   });
 
   it("ignores tombstoned rows", async () => {

@@ -205,7 +205,7 @@ test.describe('Dashboard', () => {
     await page.goto('/');
     await expect(page.locator('text=Intake Tracker')).toBeVisible();
 
-    // The "Today" summary (TextMetrics) starts at 0 in a fresh context.
+    // The Today gadget starts at 0 in a fresh context.
     const waterValue = page.getByTestId('today-water-value');
     await expect(waterValue).toHaveText('0');
 

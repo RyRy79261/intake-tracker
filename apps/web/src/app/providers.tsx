@@ -14,6 +14,7 @@ import { SyncPulseIndicator } from "@/components/sync/sync-pulse-indicator";
 import { MigrationGuard } from "@/components/migration/migration-guard";
 import { ShakeToReport } from "@/components/shake-to-report";
 import { WelcomeDialog } from "@/components/welcome-dialog";
+import { DisplayPrefs } from "@/components/display-prefs";
 
 /**
  * Simplified provider stack (D-27). Privy wrappers and the PIN gate
@@ -119,15 +120,17 @@ export function Providers({ children }: { children: React.ReactNode }) {
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-          <TimezoneGuard>
-            {children}
-            <SyncLifecycleMount />
-            <SyncPulseIndicator />
-            <SyncErrorBanner />
-            <MigrationGuard />
-            <ShakeToReport />
-            <WelcomeDialog />
-          </TimezoneGuard>
+          <DisplayPrefs>
+            <TimezoneGuard>
+              {children}
+              <SyncLifecycleMount />
+              <SyncPulseIndicator />
+              <SyncErrorBanner />
+              <MigrationGuard />
+              <ShakeToReport />
+              <WelcomeDialog />
+            </TimezoneGuard>
+          </DisplayPrefs>
         </ThemeProvider>
       </QueryClientProvider>
     </ErrorBoundary>

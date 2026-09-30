@@ -19,9 +19,11 @@ import {
   __resetEngineForTests,
   __startEngineForTests,
   MAX_PUSH_ATTEMPTS,
+  resumeEngine,
   runPullCycle,
   runPushCycle,
   startEngine,
+  suspendEngine,
   waitForSyncIdle,
 } from "@/lib/sync-engine";
 import { useSyncStatusStore } from "@/stores/sync-status-store";
@@ -644,6 +646,44 @@ describe("sync-engine correctness (audit 2026-09)", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     startEngine();
+    await flushRealAsync();
+    await waitForSyncIdle();
+
+    expect(order[0]).toBe("push");
+    expect(order).toContain("pull");
+    expect(await db._syncQueue.count()).toBe(0);
+  });
+
+  it("resumeEngine catches up on the startup push and pull dropped while suspended", async () => {
+    // A reload with a manual's live demo open: the preview suspends the
+    // engine before it starts, so the startup flush is dropped.
+    installDom();
+    await db.intakeRecords.add(makeIntake({ id: "left-over" }));
+    await enqueue("intakeRecords", "left-over", "upsert");
+
+    const order: string[] = [];
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (String(url).includes("/api/sync/push")) {
+        order.push("push");
+        const body = JSON.parse(String(init!.body)) as {
+          ops: Array<{ queueId: number }>;
+        };
+        return jsonResponse({
+          accepted: body.ops.map((o) => ({ queueId: o.queueId, serverUpdatedAt: 1 })),
+        });
+      }
+      order.push("pull");
+      return emptyPull();
+    }) as unknown as Mock;
+    vi.stubGlobal("fetch", fetchMock);
+
+    suspendEngine();
+    startEngine();
+    await flushRealAsync();
+    await waitForSyncIdle();
+    expect(order).toEqual([]);
+
+    resumeEngine();
     await flushRealAsync();
     await waitForSyncIdle();
 

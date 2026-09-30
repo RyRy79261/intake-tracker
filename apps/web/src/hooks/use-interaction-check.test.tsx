@@ -4,6 +4,7 @@ import { renderHook, act } from "@testing-library/react";
 import {
   useInteractionCheck,
   useRefreshInteractions,
+  resetInteractionRefreshes,
   type InteractionResult,
 } from "@/hooks/use-interaction-check";
 
@@ -187,6 +188,7 @@ describe("useInteractionCheck (timeout)", () => {
 
 describe("useRefreshInteractions", () => {
   beforeEach(() => {
+    resetInteractionRefreshes();
     apiFetchSpy.mockReset();
     mutateAsyncSpy.mockClear();
   });
@@ -201,11 +203,11 @@ describe("useRefreshInteractions", () => {
         402,
       ),
     );
-    const { result } = renderHook(() => useRefreshInteractions());
+    const { result } = renderHook(() => useRefreshInteractions("rx-1"));
 
     let returned: unknown;
     await act(async () => {
-      returned = await result.current.refresh("rx-1", "bisoprolol", [
+      returned = await result.current.refresh("bisoprolol", [
         { genericName: "warfarin" },
       ]);
     });
@@ -213,5 +215,46 @@ describe("useRefreshInteractions", () => {
     expect(returned).toBeNull();
     expect(result.current.error).toMatch(/Add one in Settings/);
     expect(mutateAsyncSpy).not.toHaveBeenCalled();
+  });
+
+  it("keeps a check running after the view unmounts, stores it, and shows it busy to a new view", async () => {
+    let resolve!: (r: Response) => void;
+    let signal: AbortSignal | undefined;
+    apiFetchSpy.mockImplementationOnce((_path: string, init?: RequestInit) => {
+      signal = init?.signal ?? undefined;
+      return new Promise<Response>((r) => {
+        resolve = r;
+      });
+    });
+    const first = renderHook(() => useRefreshInteractions("rx-1"));
+
+    let pending: Promise<unknown> | undefined;
+    act(() => {
+      pending = first.result.current.refresh("bisoprolol", [{ genericName: "warfarin" }]);
+    });
+    expect(first.result.current.isRefreshing).toBe(true);
+    first.unmount();
+    expect(signal?.aborted).toBe(false);
+
+    // The same prescription opened again sees the running check; another does not.
+    const again = renderHook(() => useRefreshInteractions("rx-1"));
+    const other = renderHook(() => useRefreshInteractions("rx-2"));
+    expect(again.result.current.isRefreshing).toBe(true);
+    expect(other.result.current.isRefreshing).toBe(false);
+
+    await act(async () => {
+      resolve(jsonResponse(ibuprofenOnBisoprolol));
+      await pending;
+    });
+
+    expect(mutateAsyncSpy).toHaveBeenCalledTimes(1);
+    const saved = (mutateAsyncSpy.mock.calls[0] as unknown[])[0] as {
+      id: string;
+      updates: { interactionCheck: { forName?: string; medications: string[] } };
+    };
+    expect(saved.id).toBe("rx-1");
+    expect(saved.updates.interactionCheck.forName).toBe("bisoprolol");
+    expect(saved.updates.interactionCheck.medications).toEqual(["warfarin"]);
+    expect(again.result.current.isRefreshing).toBe(false);
   });
 });

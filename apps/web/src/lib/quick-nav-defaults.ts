@@ -9,7 +9,7 @@ export interface QuickNavItem {
 
 /**
  * Default footer items -- one per root card visible on the main intake screen.
- * Order matches the visual order in src/app/page.tsx (top-to-bottom).
+ * Order matches the module cards on Home (components/home-page-body.tsx).
  * NOTE: "water" theme is used for the Liquids root card; "eating" theme for the
  * Food & Sodium root card. Label overrides for these two keys are applied in
  * quick-nav-footer.tsx so the footer reads "Liquids" / "Food & Sodium".

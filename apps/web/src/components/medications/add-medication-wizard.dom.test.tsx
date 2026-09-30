@@ -13,12 +13,14 @@ vi.mock("@/lib/auth-client", () => ({
   useSession: () => sessionMock(),
 }));
 
-// The medicine-search hook hits the server Claude API; never exercised on the
-// signed-out path, but the module is imported eagerly so provide a stub that
-// preserves the named `MedicineSearchCancelledError` export the wizard imports.
+// The medicine lookup hits the server Claude API; never exercised on the
+// signed-out path, but the module is imported eagerly so provide a stub with
+// the named exports the lookup panel imports.
 vi.mock("@/hooks/use-medicine-search", () => ({
   useMedicineSearch: () => ({ mutateAsync: vi.fn(), isPending: false, error: null }),
+  searchMedicine: vi.fn(),
   MedicineSearchCancelledError: class MedicineSearchCancelledError extends Error {},
+  MedicineSearchError: class MedicineSearchError extends Error {},
 }));
 
 import { AddMedicationWizard } from "@/components/medications/add-medication-wizard";
@@ -72,6 +74,10 @@ describe("AddMedicationWizard", () => {
     expect(screen.getByText(/step 1 of 6/i)).toBeInTheDocument();
     // The brand-name field is the gateway field on the search step.
     expect(screen.getByPlaceholderText(/e\.g\. Aviolix/i)).toBeInTheDocument();
+    // Signed out, the AI lookup is a notice with a Sign in link.
+    expect(screen.getByText("Sign in to use AI lookup")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Sign in" })).toHaveAttribute("href", "/auth");
+    expect(screen.queryByLabelText("Medicine name or brand")).not.toBeInTheDocument();
   }, WALK_TIMEOUT);
 
   it("blocks Next until the required brand name is supplied", async () => {
