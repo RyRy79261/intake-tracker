@@ -10,6 +10,9 @@ vi.mock("next/navigation", () => ({
 
 vi.mock("@/components/shell/sys-bar", () => ({ SysBar: () => <div data-testid="sys-bar" /> }));
 vi.mock("@/components/shell/bottom-bar", () => ({ BottomBar: () => <div data-testid="bottom-bar" /> }));
+vi.mock("@/components/shell/desk-band", () => ({
+  DeskBand: ({ modules }: { modules?: boolean }) => <div data-testid="desk-band" data-modules={String(modules)} />,
+}));
 vi.mock("@/components/shell/window-layer", () => ({
   WindowLayer: () => <div data-testid="window-layer" />,
   useIsWide: () => false,
@@ -26,7 +29,7 @@ vi.mock("@/hooks/use-window-history", () => ({ useWindowHistory: () => {}, SETTI
 vi.mock("@/components/settings/settings-sheet", () => ({ SettingsSheet: () => <div data-testid="settings-sheet" /> }));
 
 import { AppChrome } from "@/components/shell/app-chrome";
-import { useWindowStore, type Win } from "@/stores/window-store";
+import { useWindowStore } from "@/stores/window-store";
 
 describe("AppChrome", () => {
   beforeEach(() => {
@@ -135,21 +138,14 @@ describe("AppChrome", () => {
     container.remove();
   });
 
-  describe("desktop mode (1024px or more with a mouse)", () => {
-    const win = (id: string, extra: Partial<Win> = {}): Win => ({
-      id,
-      app: "meds",
-      st: {},
-      z: 1,
-      min: false,
-      max: false,
-      x: 16,
-      y: 12,
-      w: 720,
-      h: 520,
-      ...extra,
-    });
+  it("phone and tablet: the bottom bar, no desk band", () => {
+    render(<AppChrome>page</AppChrome>);
+    expect(screen.getByTestId("bottom-bar")).toBeInTheDocument();
+    expect(screen.queryByTestId("desk-band")).not.toBeInTheDocument();
+    expect(document.documentElement.dataset.shellMode).toBeUndefined();
+  });
 
+  describe("desktop mode (1024px or more with a mouse)", () => {
     beforeEach(() => {
       vi.stubGlobal(
         "matchMedia",
@@ -161,47 +157,38 @@ describe("AppChrome", () => {
     afterEach(() => {
       cleanup();
       vi.unstubAllGlobals();
-      useWindowStore.setState({ wins: [], focus: null, showHome: true });
     });
 
-    it("has no bottom bar, and tells the stylesheet so", () => {
+    it("has the desk band instead of the bottom bar, and tells the stylesheet so", () => {
       const { unmount } = render(<AppChrome>page</AppChrome>);
       expect(screen.getByTestId("sys-bar")).toBeInTheDocument();
       expect(screen.queryByTestId("bottom-bar")).not.toBeInTheDocument();
+      expect(screen.getByTestId("desk-band")).toHaveAttribute("data-modules", "true");
       expect(document.documentElement.dataset.shellMode).toBe("desktop");
-      // Home takes the whole width instead of the phone column.
-      expect(screen.getByTestId("home")).not.toHaveClass("max-w-lg");
       unmount();
       expect(document.documentElement.dataset.shellMode).toBeUndefined();
     });
 
-    it("keeps Home in use behind free windows", () => {
-      useWindowStore.setState({ wins: [win("w1"), win("w2", { app: "metrics", z: 2 })], focus: "w2", showHome: false });
+    it("has no Home column: the modules are windows in the window layer", () => {
       render(<AppChrome>page</AppChrome>);
-      expect(screen.getByTestId("home")).not.toHaveAttribute("inert");
-      expect(screen.getByTestId("home")).not.toHaveClass("invisible");
+      expect(screen.queryByTestId("home-body")).not.toBeInTheDocument();
+      expect(screen.getByTestId("home")).toHaveClass("hidden");
+      expect(screen.getByTestId("window-layer")).toBeInTheDocument();
     });
 
-    it("takes Home out of reach under a maximised window or a snapped pair", () => {
-      useWindowStore.setState({ wins: [win("w1", { max: true })], focus: "w1", showHome: false });
+    it("the same on /settings and the window routes", () => {
+      pathname = "/medications";
       render(<AppChrome>page</AppChrome>);
-      expect(screen.getByTestId("home")).toHaveAttribute("inert");
-      expect(screen.getByTestId("home")).toHaveClass("invisible");
+      expect(screen.queryByTestId("home-body")).not.toBeInTheDocument();
+      expect(screen.getByTestId("desk-band")).toHaveAttribute("data-modules", "true");
+      expect(screen.queryByText("page")).not.toBeInTheDocument();
+    });
 
-      // One snapped window leaves the other half of Home showing.
-      act(() => useWindowStore.setState({ wins: [win("w1", { snap: "l" })] }));
-      expect(screen.getByTestId("home")).not.toHaveAttribute("inert");
-      act(() =>
-        useWindowStore.setState({ wins: [win("w1", { snap: "l" }), win("w2", { app: "metrics", snap: "r" })] }),
-      );
-      expect(screen.getByTestId("home")).toHaveAttribute("inert");
-      // A minimised window covers nothing.
-      act(() =>
-        useWindowStore.setState({
-          wins: [win("w1", { snap: "l" }), win("w2", { app: "metrics", snap: "r", min: true })],
-        }),
-      );
-      expect(screen.getByTestId("home")).not.toHaveAttribute("inert");
+    it("another page keeps its content, with the band but no module icons", () => {
+      pathname = "/privacy";
+      render(<AppChrome>privacy text</AppChrome>);
+      expect(screen.getByText("privacy text")).toBeInTheDocument();
+      expect(screen.getByTestId("home")).not.toHaveClass("hidden");
     });
   });
 });

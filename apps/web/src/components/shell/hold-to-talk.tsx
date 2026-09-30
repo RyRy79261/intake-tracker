@@ -19,8 +19,8 @@ type Phase = "listen" | "hint" | null;
 
 /** Bottom offset that puts a panel just above the bottom bar. */
 const ABOVE_BOTTOM_BAR = "calc(56px + env(safe-area-inset-bottom, 0px) + 8px)";
-/** Top offset that puts a panel just under the sys-bar (desktop tray). */
-const BELOW_SYS_BAR = "calc(44px + env(safe-area-inset-top, 0px) + 6px)";
+/** Bottom offset that puts a panel just above the desk band (desktop). */
+const ABOVE_DESK_BAND = "calc(72px + env(safe-area-inset-bottom, 0px) + 8px)";
 
 /**
  * "Hold to talk": the AI voice logger on a press-and-hold button.
@@ -31,11 +31,11 @@ const BELOW_SYS_BAR = "calc(44px + env(safe-area-inset-top, 0px) + 6px)";
  * keyboard. Render only when signed in (the caller checks `useAuthGate`).
  *
  * `variant="cell"` is the bottom bar cell, with its panels just above the
- * bar. `variant="tray"` is the compact desktop button in the sys-bar, with
- * its panels under the bar on the right.
+ * bar. `variant="corner"` is the square button at the bottom right of the
+ * desktop (the desk band), with its panels just above it on the right.
  */
-export function HoldToTalk({ className, variant = "cell" }: { className?: string; variant?: "cell" | "tray" }) {
-  const tray = variant === "tray";
+export function HoldToTalk({ className, variant = "cell" }: { className?: string; variant?: "cell" | "corner" }) {
+  const corner = variant === "corner";
   const recorder = useHoldRecorder();
   const { toast } = useToast();
 
@@ -164,7 +164,8 @@ export function HoldToTalk({ className, variant = "cell" }: { className?: string
       <button
         type="button"
         data-mic
-        aria-label="Hold to talk to the AI logger"
+        aria-label={corner ? "Hold to talk" : "Hold to talk to the AI logger"}
+        title={corner ? "Hold to talk" : undefined}
         aria-pressed={listening}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
@@ -175,7 +176,7 @@ export function HoldToTalk({ className, variant = "cell" }: { className?: string
         onContextMenu={(e) => e.preventDefault()}
         className={cn(
           "relative flex items-center justify-center border",
-          tray ? "h-8 shrink-0 gap-1.5 px-2" : "min-h-11 flex-col gap-1",
+          corner ? "h-14 w-14 shrink-0 flex-col gap-0.5" : "min-h-11 flex-col gap-1",
           "touch-none select-none [-webkit-touch-callout:none] [-webkit-user-select:none]",
           listening
             ? "border-ai bg-ai text-on-domain"
@@ -183,14 +184,16 @@ export function HoldToTalk({ className, variant = "cell" }: { className?: string
           className,
         )}
       >
-        <ShellIcon name="mic" size={tray ? 16 : 20} />
-        <span className={cn("whitespace-nowrap text-xs font-medium", tray && "hidden xl:inline")}>Hold to talk</span>
+        <ShellIcon name="mic" size={20} />
+        <span className={cn("whitespace-nowrap font-medium", corner ? "text-[0.6875rem]" : "text-xs")}>
+          {corner ? "Talk" : "Hold to talk"}
+        </span>
       </button>
 
       {listening && (
         <div
-          className={cn("pointer-events-none fixed z-[65]", tray ? "right-1.5 w-[400px]" : "inset-x-2")}
-          style={tray ? { top: BELOW_SYS_BAR } : { bottom: ABOVE_BOTTOM_BAR }}
+          className={cn("pointer-events-none fixed z-[65]", corner ? "right-1.5 w-[400px]" : "inset-x-2")}
+          style={{ bottom: corner ? ABOVE_DESK_BAND : ABOVE_BOTTOM_BAR }}
         >
           <div
             role="dialog"
@@ -236,7 +239,7 @@ export function HoldToTalk({ className, variant = "cell" }: { className?: string
       {phase === "hint" && (
         <div
           className="fixed inset-x-0 top-0 z-[64]"
-          style={{ bottom: tray ? 0 : "calc(56px + env(safe-area-inset-bottom, 0px))" }}
+          style={{ bottom: corner ? "calc(72px + env(safe-area-inset-bottom, 0px))" : "calc(56px + env(safe-area-inset-bottom, 0px))" }}
         >
           <button
             type="button"
@@ -249,9 +252,8 @@ export function HoldToTalk({ className, variant = "cell" }: { className?: string
             aria-label="AI logger"
             className={cn(
               "pointer-events-none absolute border-2 border-ai bg-panel px-3.5 py-3",
-              tray ? "right-1.5 w-[400px]" : "inset-x-2 bottom-2",
+              corner ? "bottom-2 right-1.5 w-[400px]" : "inset-x-2 bottom-2",
             )}
-            style={tray ? { top: BELOW_SYS_BAR } : undefined}
           >
             <p>
               <span className="mr-1 inline-flex items-center gap-1 align-middle text-ai">

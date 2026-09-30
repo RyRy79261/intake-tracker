@@ -180,18 +180,17 @@ describe("HoldToTalk", () => {
     );
   });
 
-  it("tray (desktop sys-bar): a compact 32px button, with its panel under the sys-bar on the right", () => {
-    render(<HoldToTalk variant="tray" />);
-    const btn = micButton();
-    expect(btn).toHaveClass("h-8");
-    expect(btn).not.toHaveClass("min-h-11", "flex-col");
+  it("corner (desktop desk band): a square button named Hold to talk, with its panel above the band on the right", () => {
+    render(<HoldToTalk variant="corner" />);
+    const btn = screen.getByRole("button", { name: "Hold to talk" });
+    expect(btn).toHaveClass("h-14", "w-14");
+    expect(btn).toHaveAttribute("title", "Hold to talk");
 
-    fireEvent.pointerDown(btn, { button: 0, pointerId: 1, clientX: 900, clientY: 20 });
+    fireEvent.pointerDown(btn, { button: 0, pointerId: 1, clientX: 1400, clientY: 870 });
     const panel = screen.getByTestId("hold-to-talk-listening").parentElement as HTMLElement;
     expect(panel).toHaveClass("right-1.5", "w-[400px]");
-    // 44px sys-bar + 6px (jsdom folds the sum).
-    expect(panel.style.top).toContain("50px");
-    expect(panel.style.bottom).toBe("");
+    // 72px desk band + 8px (jsdom folds the sum).
+    expect(panel.style.bottom).toContain("80px");
   });
 
   it("cell (bottom bar): the panel sits just above the bar", () => {

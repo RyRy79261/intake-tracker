@@ -9,6 +9,12 @@ import { snapRect } from "@/lib/window-geometry";
 import { focusWindowTitle, useIsDesktop, useIsWide } from "@/hooks/use-shell-mode";
 import { cn } from "@/lib/utils";
 import { ErrorBoundary } from "@/components/error-boundary";
+import { ModuleBody } from "@/components/shell/desk-modules";
+import { DESK_MODULES, MODULE_IDS, type ModuleId } from "@/lib/desk-modules";
+import { moduleRect, useModuleWindowStore } from "@/stores/module-window-store";
+
+/** The frame id of a module's window (its title is `wt-m-<id>`). */
+export const moduleFrameId = (id: ModuleId) => `m-${id}`;
 
 export { useIsWide, useIsDesktop } from "@/hooks/use-shell-mode";
 
@@ -39,11 +45,33 @@ const WindowOverlay = memo(
 );
 
 /**
+ * Desktop: focus the next (1) or previous (-1) window among the modules and
+ * the app windows that are on screen. Returns the frame id it went to.
+ */
+export function cycleAll(dir: 1 | -1): string | null {
+  const apps = useWindowStore.getState();
+  const mods = useModuleWindowStore.getState();
+  const ring: Array<{ frame: string; module?: ModuleId; app?: string }> = [
+    ...MODULE_IDS.filter((id) => !mods.wins[id].min).map((id) => ({ frame: moduleFrameId(id), module: id })),
+    ...apps.wins.filter((w) => !w.min).map((w) => ({ frame: w.id, app: w.id })),
+  ];
+  if (ring.length === 0) return null;
+  const current = apps.focus ?? (mods.focus ? moduleFrameId(mods.focus) : null);
+  const at = ring.findIndex((r) => r.frame === current);
+  const next = ring[(at + dir + ring.length) % ring.length]!;
+  if (next.module) mods.restore(next.module);
+  else if (next.app) apps.switchTo(next.app);
+  return next.frame;
+}
+
+/**
  * The area under the sys-bar where windows live. Phone: the focused window
  * fills it and Home is hidden. Tiled (from 768px): windows sit side by side
  * over Home (see `layoutWindows`). Desktop (from 1024px with a mouse):
- * windows are free and overlap. Esc closes the focused one; Ctrl+` (or
- * Alt+`) cycles through them, with Shift to go backwards.
+ * windows are free and overlap, and the intake modules (Today, Liquids,
+ * Food, ...) are windows here too, in the same stacking order as the app
+ * windows. Esc closes the focused app window; Ctrl+` (or Alt+`) cycles
+ * through every window, with Shift to go backwards.
  *
  * `hidden` keeps every window mounted but off screen (e.g. on /settings).
  */
@@ -68,6 +96,9 @@ export function WindowLayer({ hidden = false }: { hidden?: boolean }) {
   /** A window is being dragged or resized. */
   const [gesture, setGesture] = useState(false);
 
+  const modules = useModuleWindowStore((s) => s.wins);
+  const moduleFocus = useModuleWindowStore((s) => s.focus);
+
   useEffect(() => setWide(wide), [wide, setWide]);
   useEffect(() => setDesktop(desktop), [desktop, setDesktop]);
 
@@ -84,6 +115,16 @@ export function WindowLayer({ hidden = false }: { hidden?: boolean }) {
     ro.observe(el);
     return () => ro.disconnect();
   }, [setArea]);
+
+  // The first time this device is in desktop mode the modules take their
+  // default arrangement for the area just measured (above). After that they
+  // stay where they were put; the stacking counter starts above them.
+  useEffect(() => {
+    if (!desktop) return;
+    const mods = useModuleWindowStore.getState();
+    if (!mods.arranged) mods.arrange(useWindowStore.getState().area);
+    mods.syncZ();
+  }, [desktop]);
 
   // While a window is dragged or resized nothing else reacts to the pointer:
   // no text gets selected and window contents don't see hovers.
@@ -102,7 +143,7 @@ export function WindowLayer({ hidden = false }: { hidden?: boolean }) {
       if (e.defaultPrevented || modalOpen()) return;
       // Ctrl+` / Alt+` (Shift for backwards): the next window.
       if (e.code === "Backquote" && (e.ctrlKey || e.altKey) && !e.metaKey) {
-        const next = useWindowStore.getState().cycle(e.shiftKey ? -1 : 1);
+        const next = desktop ? cycleAll(e.shiftKey ? -1 : 1) : useWindowStore.getState().cycle(e.shiftKey ? -1 : 1);
         if (!next) return;
         e.preventDefault();
         focusWindowTitle(next);
@@ -122,7 +163,7 @@ export function WindowLayer({ hidden = false }: { hidden?: boolean }) {
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [wide]);
+  }, [wide, desktop]);
 
   // When the window holding keyboard focus closes or is minimised, focus
   // would drop to <body>. Hand it to the window now on top, or back to the
@@ -156,7 +197,18 @@ export function WindowLayer({ hidden = false }: { hidden?: boolean }) {
   const tiled = wide && !desktop ? layoutWindows(wins, area) : {};
   const rectOf = (win: Win): Rect | undefined => (desktop ? winRect(win, area) : tiled[win.id]);
   const phoneActive = phone && !showHome && wins.some((w) => w.id === focus && !w.min);
-  const anyShown = phone ? phoneActive : wins.some((w) => !w.min);
+  const shownModules = desktop ? MODULE_IDS.filter((id) => !modules[id].min) : [];
+  const anyShown = phone ? phoneActive : wins.some((w) => !w.min) || shownModules.length > 0;
+  // A maximised window covers everything under it: those windows stay
+  // mounted but leave the tab order and the accessibility tree.
+  const coverZ = desktop
+    ? Math.max(
+        0,
+        ...wins.filter((w) => !w.min && w.max).map((w) => w.z),
+        ...shownModules.filter((id) => modules[id].max).map((id) => modules[id].z),
+      )
+    : 0;
+  const focusedModule = focus === null ? moduleFocus : null;
 
   /** Pointer position in the layer's own coordinates. */
   const toLayer = (clientX: number, clientY: number): [number, number] => {
@@ -184,6 +236,35 @@ export function WindowLayer({ hidden = false }: { hidden?: boolean }) {
     },
     nudge: (dirX, dirY, resize) => useWindowStore.getState().nudge(id, dirX, dirY, resize),
   });
+
+  const moduleHandlers = (id: ModuleId): FreeWindowHandlers => ({
+    beginDrag: (clientX, clientY) => {
+      setGesture(true);
+      return useModuleWindowStore.getState().beginDrag(id, toLayer(clientX, clientY)[0]);
+    },
+    drag: (x, y, clientX, clientY) => {
+      const [px, py] = toLayer(clientX, clientY);
+      useModuleWindowStore.getState().moveWin(id, x, y, px, py);
+    },
+    beginResize: () => {
+      setGesture(true);
+      return useModuleWindowStore.getState().beginResize(id);
+    },
+    resize: (from, edge, dx, dy) => useModuleWindowStore.getState().resizeWin(id, from, edge, dx, dy),
+    end: (kind) => {
+      setGesture(false);
+      if (kind === "move") useModuleWindowStore.getState().endDrag(id);
+    },
+    nudge: (dirX, dirY, resize) => useModuleWindowStore.getState().nudge(id, dirX, dirY, resize),
+  });
+
+  /** A module is never closed: it goes to its icon on the desk band, which takes the focus. */
+  const minimiseModule = (id: ModuleId) => {
+    useModuleWindowStore.getState().minimise(id);
+    requestAnimationFrame(() =>
+      document.querySelector<HTMLElement>(`[data-desk-icon="${id}"]`)?.focus({ preventScroll: true }),
+    );
+  };
 
   const hintRect: Rect | null =
     desktop && snapHint ? (snapHint === "max" ? { x: 0, y: 0, w: area.w, h: area.h } : snapRect(snapHint, area)) : null;
@@ -215,6 +296,37 @@ export function WindowLayer({ hidden = false }: { hidden?: boolean }) {
           }}
         />
       )}
+      {desktop &&
+        MODULE_IDS.map((id, i) => {
+          const mod = modules[id];
+          const meta = DESK_MODULES[id];
+          return (
+            <WindowFrame
+              key={id}
+              win={{ id: moduleFrameId(id), app: id, z: mod.z, max: mod.max, snap: mod.snap }}
+              chrome={meta}
+              testId="module-window"
+              bare
+              index={i + 1}
+              total={MODULE_IDS.length}
+              phone={false}
+              visible={!hidden && !mod.min}
+              focused={focusedModule === id && !mod.min}
+              inert={mod.z < coverZ}
+              rect={moduleRect(mod, area)}
+              free={moduleHandlers(id)}
+              onClose={() => minimiseModule(id)}
+              onHome={() => {}}
+              onMinimise={() => minimiseModule(id)}
+              onToggleMax={() => useModuleWindowStore.getState().toggleMax(id)}
+              onFocus={() => useModuleWindowStore.getState().focusWin(id)}
+            >
+              <ErrorBoundary>
+                <ModuleBody id={id} />
+              </ErrorBoundary>
+            </WindowFrame>
+          );
+        })}
       {wins.map((win, i) => {
         const { Overlay, flushTop } = WINDOW_APPS[win.app];
         const focused = win.id === focus;
@@ -223,6 +335,7 @@ export function WindowLayer({ hidden = false }: { hidden?: boolean }) {
           <WindowFrame
             key={win.id}
             win={win}
+            inert={win.z < coverZ}
             index={i + 1}
             total={wins.length}
             phone={phone}

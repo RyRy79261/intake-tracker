@@ -1,12 +1,16 @@
 /*
- * Ward Console desktop mode (1024px or more with a mouse): free windows over
- * Home, which becomes a grid of the Today gadget and the module cards.
+ * Ward Console desktop mode (1024px or more with a mouse): a desk of free
+ * windows. The intake modules (Today and the logging cards) are windows
+ * too, and the desk band along the bottom holds what is not a window.
  * `data-shell-mode="desktop"` is set on <html> by the shell (app-chrome.tsx).
  */
 
-/* No bottom bar on the desktop: nothing needs to sit above it. */
+/*
+ * The desk band (desk-band.tsx) takes the bottom bar's place: windows,
+ * banners and page padding stay above it.
+ */
 html[data-shell-mode="desktop"] {
-  --bbh: 0px;
+  --bbh: 72px;
 }
 
 /* The desk: the prototype's faint 32px grid behind Home and the windows. */
@@ -40,83 +44,34 @@ html[data-window-gesture="true"] [data-testid="window-body"] {
 
 @layer components {
   /*
-   * Home on the desktop: a masonry of the Today gadget (top left, two
-   * columns wide) and the module cards. Two columns from 1024px, three from
-   * 1200px, four from 1600px, so a card is never narrower than a phone.
-   *
-   * Every card keeps its natural height and sits 16px under the one above
-   * it in its column. The grid's rows are 1px tall; `home-page-body.tsx`
-   * measures each card and sets how many rows it spans (its height plus the
-   * gutter), and `dense` packs each column from the top. The columns below
-   * are picked so that they end up about the same height.
+   * A module in its window (desk-modules.tsx): the card gives up its own
+   * frame, stripe, icon and title, which the window has. What is left of
+   * its header is the running total on the right; a header with nothing
+   * else in it goes.
    */
-  .wd-home {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    grid-auto-rows: 1px;
-    grid-auto-flow: row dense;
-    column-gap: 16px;
-    row-gap: 0;
-    align-items: start;
+  .wd-module .wc-mod,
+  .wd-module .wc-gadget {
+    border: 0;
+    box-shadow: none;
   }
-  .wd-home > .wc-today {
-    grid-column: 1 / span 2;
-    /* Until measured. */
-    grid-row-end: span 420;
+  .wd-module .wc-mhead > svg,
+  .wd-module .wc-mhead > .t {
+    display: none;
   }
-  /* The cards sit straight on Home's grid. */
-  .wd-home > .wc-mods {
-    display: contents;
+  .wd-module .wc-mhead {
+    min-height: 0;
+    padding: 6px 12px;
   }
-  .wd-home > .wc-mods > * {
-    min-width: 0;
-    grid-row-end: span 420;
+  .wd-module .wc-mhead:not(:has(> .r)) {
+    display: none;
   }
-  .wd-home #section-water,
-  .wd-home #section-bp,
-  .wd-home #section-weight {
-    grid-column: 1;
+  /* Today's rows a little tighter, so it and Blood Pressure under it fit 900px. */
+  .wd-module .wc-today-wide {
+    --mh: 42px;
   }
-  .wd-home #section-food-salt,
-  .wd-home #section-urination,
-  .wd-home #section-defecation {
-    grid-column: 2;
-  }
-  @media (min-width: 1200px) {
-    .wd-home {
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-    }
-    .wd-home #section-food-salt {
-      grid-column: 1;
-    }
-    .wd-home #section-bp,
-    .wd-home #section-urination {
-      grid-column: 2;
-    }
-    .wd-home #section-water,
-    .wd-home #section-weight,
-    .wd-home #section-defecation {
-      grid-column: 3;
-    }
-  }
-  @media (min-width: 1600px) {
-    .wd-home {
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-    }
-    .wd-home #section-bp {
-      grid-column: 1;
-    }
-    .wd-home #section-weight {
-      grid-column: 2;
-    }
-    .wd-home #section-water,
-    .wd-home #section-urination,
-    .wd-home #section-defecation {
-      grid-column: 3;
-    }
-    .wd-home #section-food-salt {
-      grid-column: 4;
-    }
+  .wd-module .wc-today-wide .wc-tg-row {
+    min-height: 54px;
+    padding: 6px 0;
   }
 
   /*

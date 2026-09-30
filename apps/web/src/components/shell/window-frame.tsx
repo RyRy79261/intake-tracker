@@ -9,7 +9,7 @@ import {
   type PointerEvent,
   type ReactNode,
 } from "react";
-import { SHELL_APPS } from "@/lib/nav-routes";
+import { SHELL_APPS, type ShellIconName, type WindowAppId } from "@/lib/nav-routes";
 import { ShellIcon } from "@/components/shell/shell-icon";
 import type { Edge, Rect, Win } from "@/stores/window-store";
 import { cn } from "@/lib/utils";
@@ -69,8 +69,25 @@ export interface FreeWindowHandlers {
   nudge: (dirX: number, dirY: number, resize: boolean) => void;
 }
 
+/** What the frame needs to know about the window it draws. */
+export interface FrameWin {
+  id: string;
+  /** App id (or module id), for `data-app`. */
+  app: string;
+  z: number;
+  max: boolean;
+  snap?: Win["snap"];
+}
+
+export interface WindowChrome {
+  title: string;
+  icon: ShellIconName;
+  color: string;
+}
+
 export interface WindowFrameProps {
-  win: Win;
+  /** An app window, or anything with the same geometry (a desk module). */
+  win: FrameWin;
   /** 1-based position in the open windows, for the phone's "n/N". */
   index: number;
   total: number;
@@ -93,6 +110,14 @@ export interface WindowFrameProps {
   overlay?: ReactNode | undefined;
   /** No top padding: the body starts with its own tab bar. */
   flushTop?: boolean | undefined;
+  /** Title, icon and colour; an app window takes them from `SHELL_APPS`. */
+  chrome?: WindowChrome | undefined;
+  /** `data-testid` of the frame ("window" for app windows). */
+  testId?: string | undefined;
+  /** No padding around the content: the body brings its own. */
+  bare?: boolean | undefined;
+  /** Wholly behind a maximised window: out of reach until that one moves. */
+  inert?: boolean | undefined;
   children: ReactNode;
 }
 
@@ -155,9 +180,17 @@ export function WindowFrame({
   onFocus,
   overlay,
   flushTop = false,
+  chrome,
+  testId = "window",
+  bare = false,
+  inert = false,
   children,
 }: WindowFrameProps) {
-  const app = SHELL_APPS[win.app];
+  const app = chrome ?? {
+    title: SHELL_APPS[win.app as WindowAppId].title,
+    icon: SHELL_APPS[win.app as WindowAppId].icon,
+    color: appColor(win.app as WindowAppId),
+  };
   const title = app.title;
   const titleId = `wt-${win.id}`;
   const hintId = `wk-${win.id}`;
@@ -181,7 +214,7 @@ export function WindowFrame({
 
   const wide = !phone;
   const isFree = wide && !!free;
-  const style: CSSProperties = { "--c": appColor(win.app) } as CSSProperties;
+  const style: CSSProperties = { "--c": app.color } as CSSProperties;
   if (wide && rect) {
     style.left = rect.x;
     style.top = rect.y;
@@ -270,7 +303,8 @@ export function WindowFrame({
     <section
       role="region"
       aria-labelledby={titleId}
-      data-testid="window"
+      data-testid={testId}
+      inert={inert || undefined}
       data-app={win.app}
       data-wid={win.id}
       data-focused={focused}
@@ -423,7 +457,7 @@ export function WindowFrame({
           scrollTop.current = e.currentTarget.scrollTop;
         }}
       >
-        <div className={cn("px-4 pb-6", !flushTop && "pt-3")}>{children}</div>
+        {bare ? children : <div className={cn("px-4 pb-6", !flushTop && "pt-3")}>{children}</div>}
       </div>
       {overlay}
       {isFree && !win.max && (

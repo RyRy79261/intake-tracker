@@ -15,6 +15,8 @@ vi.mock("@intake/ui/use-toast", () => ({ toast: vi.fn() }));
 import { TaskStrip } from "@/components/shell/task-strip";
 import { useWindowStore, type Win } from "@/stores/window-store";
 import { useSettingsSheetStore } from "@/stores/settings-sheet-store";
+import { useModuleWindowStore } from "@/stores/module-window-store";
+import { MODULE_IDS, arrangeModules } from "@/lib/desk-modules";
 
 const win = (id: string, app: Win["app"], extra: Partial<Win> = {}): Win => ({
   id,
@@ -154,9 +156,9 @@ describe("TaskStrip", () => {
     expect(push).toHaveBeenCalledWith("/");
   });
 
-  it("Tidy arranges the visible windows side by side", () => {
+  it("Tidy arranges the visible app windows side by side", () => {
     render(<TaskStrip />);
-    fireEvent.click(screen.getByRole("button", { name: "Arrange windows side by side" }));
+    fireEvent.click(screen.getByRole("button", { name: "Tidy windows" }));
     const [a, b, c] = store().wins;
     expect(a).toMatchObject({ x: 8, y: 8, w: 708, h: 840 });
     expect(b).toMatchObject({ x: 724, y: 8, w: 708, h: 840 });
@@ -164,11 +166,36 @@ describe("TaskStrip", () => {
     expect(c).toMatchObject({ x: 16, y: 12, w: 720, h: 520, min: true });
   });
 
-  it("has no window buttons and no Tidy when nothing is open", () => {
+  it("Tidy puts every module back in the default arrangement, open", () => {
+    const mods = () => useModuleWindowStore.getState();
+    const area = store().area;
+    mods().arrange(area);
+    mods().moveWin("food", 30, 30);
+    mods().minimise("liquids");
+    mods().toggleMax("today");
+    render(<TaskStrip />);
+    fireEvent.click(screen.getByRole("button", { name: "Tidy windows" }));
+    const expected = arrangeModules(area);
+    for (const id of MODULE_IDS) {
+      const { x, y, w, h, min, max } = mods().wins[id];
+      expect({ x, y, w, h }).toEqual(expected[id]);
+      expect(min || max).toBe(false);
+    }
+  });
+
+  it("lists app windows only: the modules have no buttons here", () => {
+    render(<TaskStrip />);
+    const names = within(screen.getByRole("toolbar", { name: "Open windows" }))
+      .getAllByRole("button")
+      .map((b) => b.getAttribute("aria-label"));
+    expect(names).toEqual(["Medications window", "Metrics window", "Profile window, minimised"]);
+  });
+
+  it("has no window buttons when no app is open; Tidy is still there for the modules", () => {
     useWindowStore.setState({ wins: [], focus: null, showHome: true });
     render(<TaskStrip />);
     expect(within(screen.getByRole("toolbar", { name: "Open windows" })).queryAllByRole("button")).toHaveLength(0);
-    expect(screen.queryByRole("button", { name: "Arrange windows side by side" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Tidy windows" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Home" })).toHaveAttribute("aria-pressed", "true");
   });
 

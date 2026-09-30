@@ -218,14 +218,10 @@ describe("SysBar", () => {
       expect(within(apps).getByRole("button", { name: "Medications" })).toHaveAttribute("aria-pressed", "true");
     });
 
-    it("shows Hold to talk only when signed in", () => {
-      render(<SysBar />);
-      expect(screen.queryByRole("button", { name: "Hold to talk to the AI logger" })).not.toBeInTheDocument();
-      cleanup();
-
+    it("has no mic, signed in or not: Hold to talk is on the desk band", () => {
       auth = { ready: true, authenticated: true, user: { id: "u1", email: "ryan@x.com", name: "Ryan Noble" } };
       render(<SysBar />);
-      expect(screen.getByRole("button", { name: "Hold to talk to the AI logger" })).toHaveClass("h-8");
+      expect(screen.queryByRole("button", { name: /Hold to talk/ })).not.toBeInTheDocument();
     });
   });
 });

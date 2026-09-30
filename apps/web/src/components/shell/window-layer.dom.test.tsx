@@ -2,6 +2,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { cleanup, render, screen, within, fireEvent } from "@testing-library/react";
 
+// The intake modules are windows on the desktop too; their cards are not under test here.
+vi.mock("@/components/shell/desk-modules", () => ({ ModuleBody: ({ id }: { id: string }) => <p>{id} module</p> }));
 vi.mock("@/components/shell/app-registry", () => ({
   WINDOW_APPS: {
     meds: {

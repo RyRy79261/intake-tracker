@@ -7,6 +7,7 @@ import { SETTINGS_PATH, goHome } from "@/hooks/use-window-history";
 import { focusWindowTitle } from "@/hooks/use-shell-mode";
 import { useWindowStore, type Win } from "@/stores/window-store";
 import { useSettingsSheetStore } from "@/stores/settings-sheet-store";
+import { useModuleWindowStore } from "@/stores/module-window-store";
 import { ShellIcon } from "@/components/shell/shell-icon";
 import { appColor } from "@/components/shell/window-frame";
 import { cn } from "@/lib/utils";
@@ -18,9 +19,10 @@ const stripButton =
   "disabled:text-muted-foreground disabled:hover:border-line";
 
 /**
- * Desktop mode's task strip, in the sys-bar: Home (minimise every window to
- * show the desktop), a button for each open window, and Tidy (arrange the
- * windows side by side). A window's button focuses it, restores it when it
+ * Desktop mode's task strip, in the sys-bar: Home (minimise every app
+ * window to show the desk), a button for each open app window, and Tidy
+ * (every module back in the default arrangement, the app windows side by
+ * side). A window's button focuses it, restores it when it
  * is minimised, and minimises it when it is already the one in front.
  * Replaces the bottom bar's Home and Windows on the desktop.
  */
@@ -97,18 +99,18 @@ export function TaskStrip() {
           );
         })}
       </div>
-      {wins.length > 0 && (
-        <button
-          type="button"
-          className={cn(stripButton, "w-8")}
-          aria-label="Arrange windows side by side"
-          title="Tidy: arrange windows side by side"
-          disabled={shown.length === 0}
-          onClick={() => tidy()}
-        >
-          <ShellIcon name="tidy" size={16} />
-        </button>
-      )}
+      <button
+        type="button"
+        className={cn(stripButton, "w-8")}
+        aria-label="Tidy windows"
+        title="Tidy: every module back in its place, app windows side by side"
+        onClick={() => {
+          useModuleWindowStore.getState().arrange(useWindowStore.getState().area);
+          tidy();
+        }}
+      >
+        <ShellIcon name="tidy" size={16} />
+      </button>
     </div>
   );
 }

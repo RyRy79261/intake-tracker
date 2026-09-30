@@ -2,6 +2,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { cleanup, render, screen, fireEvent, within } from "@testing-library/react";
 
+// The intake modules are windows on the desktop too; their cards are not under test here.
+vi.mock("@/components/shell/desk-modules", () => ({ ModuleBody: ({ id }: { id: string }) => <p>{id} module</p> }));
 vi.mock("@/components/shell/app-registry", () => ({
   WINDOW_APPS: {
     meds: { Body: () => <p>Meds body</p> },
@@ -334,13 +336,15 @@ describe("WindowLayer on the desktop", () => {
     expect(region("Metrics").style.height).toBe("584px");
   });
 
-  it("Ctrl+` cycles to the next window and moves keyboard focus into it", () => {
+  it("Ctrl+` cycles through the windows and moves keyboard focus into each", () => {
     render(<WindowLayer />);
-    fireEvent.keyDown(document.body, { key: "`", code: "Backquote", ctrlKey: true });
+    // Backwards from Metrics: Medications, the app window before it.
+    fireEvent.keyDown(document.body, { key: "`", code: "Backquote", ctrlKey: true, shiftKey: true });
     expect(useWindowStore.getState().focus).toBe("w1");
     expect(within(region("Medications")).getByRole("heading", { name: "Medications" })).toHaveFocus();
-    fireEvent.keyDown(document.body, { key: "`", code: "Backquote", altKey: true, shiftKey: true });
+    fireEvent.keyDown(document.body, { key: "`", code: "Backquote", altKey: true });
     expect(useWindowStore.getState().focus).toBe("w2");
+    expect(within(region("Metrics")).getByRole("heading", { name: "Metrics" })).toHaveFocus();
   });
 
   it("a window moved off the edge by a smaller viewport is drawn back on screen", () => {

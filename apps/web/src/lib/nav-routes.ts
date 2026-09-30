@@ -20,6 +20,7 @@ export type ShellIconName =
   | "home"
   | "windows"
   | "tidy"
+  | "today"
   | "mic"
   | "plus"
   | "drop"
