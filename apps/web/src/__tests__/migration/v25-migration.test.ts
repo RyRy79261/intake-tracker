@@ -7,14 +7,18 @@ import { db } from "@/lib/db";
  * (95% of a typed 5% beer, 60% of a spirit), while clinical intake/output
  * charts and fluid restrictions count every drink at its whole volume.
  *
- * The drink volume comes from the group's caffeine/alcohol record. Meals,
+ * Only drinks written since that reduction shipped are corrected. The drink
+ * volume comes from the group's caffeine/alcohol record. Meals,
  * groups with no single live water row, and rows already at or above the
  * volume are left alone.
  */
 
+// Written after the water-content reduction shipped (2026-09-26 23:05 UTC).
+const AFTER_CHANGE = 1_790_500_000_000;
+
 const SYNC = {
-  createdAt: 1_700_000_000_000,
-  updatedAt: 1_700_000_000_000,
+  createdAt: AFTER_CHANGE,
+  updatedAt: AFTER_CHANGE,
   deletedAt: null,
   deviceId: "test-device",
   timezone: "UTC",
@@ -116,6 +120,15 @@ describe("v25 migration: drinks count at full volume", () => {
     expect(queued.map((q) => [q.tableName, q.recordId])).toEqual([
       ["intakeRecords", "g1-water"],
     ]);
+  });
+
+  it("leaves a drink logged before the reduction shipped untouched", async () => {
+    const seed = drink("g0", 1000, 950);
+    seed.intakeRecords![0]!.createdAt = 1_790_000_000_000;
+    await seedAtV24(seed);
+
+    expect((await db.intakeRecords.get("g0-water"))!.amount).toBe(950);
+    expect(await db._syncQueue.count()).toBe(0);
   });
 
   it("leaves a drink already booked at full volume untouched", async () => {

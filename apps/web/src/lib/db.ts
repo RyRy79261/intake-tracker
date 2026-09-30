@@ -795,11 +795,18 @@ realDb.version(24).stores({
 // its caffeine/alcohol record. Stores are byte-identical to v24; the version
 // bump exists to carry the `upgrade` hook.
 //
+// Only drinks written since the water-content reduction shipped
+// (WATER_SHARE_SHIPPED_AT, commit b19f6f0) are corrected; anything logged
+// before it was already booked at full volume and is left exactly as it is.
+//
 // Only drink groups are touched: a group with a live eating record is a meal
 // (its water row is food water, not a drink volume) and is skipped, as is a
 // group with more than one live water row, where there is no single row to
 // correct. A drink logged without caffeine or alcohol stored no volume, so a
 // reduced water row there cannot be recovered and is left as it is.
+/** When `logDrink` started booking a reduced water share (2026-09-26 23:05 UTC). */
+const WATER_SHARE_SHIPPED_AT = 1_790_463_936_000;
+
 realDb.version(25).stores({
   // --- REPEAT all v24 stores verbatim ---
   intakeRecords:           "id, [type+timestamp], timestamp, source, groupId, updatedAt",
@@ -877,6 +884,7 @@ realDb.version(25).stores({
       );
       if (waters.length !== 1) continue;
       const water = waters[0]!;
+      if (typeof water.createdAt !== "number" || water.createdAt < WATER_SHARE_SHIPPED_AT) continue;
       const amount = Math.round(volume);
       if (typeof water.amount !== "number" || water.amount >= amount) continue;
 
