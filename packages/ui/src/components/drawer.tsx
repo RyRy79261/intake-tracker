@@ -118,6 +118,8 @@ const DrawerContent = React.forwardRef<
       target.tagName === "SELECT"
     ) {
       window.setTimeout(() => {
+        // The drawer (or the whole page) can be gone by the time this fires.
+        if (typeof document === "undefined" || !target.isConnected) return;
         // No smooth scroll under reduced motion (the OS setting, or the
         // app's Reduce motion switch, which sets `html.reduce-motion`).
         const reduced =
