@@ -65,7 +65,7 @@ export const DESK_MODULES: Record<ModuleId, DeskModule> = {
   wee: {
     id: "wee",
     title: "Urination",
-    short: "Urine",
+    short: "Urination",
     icon: "wee",
     color: domainColor("bath"),
     natural: 226,
@@ -74,7 +74,7 @@ export const DESK_MODULES: Record<ModuleId, DeskModule> = {
   bowel: {
     id: "bowel",
     title: "Defecation",
-    short: "Bowel",
+    short: "Defecation",
     icon: "bowel",
     color: domainColor("bath"),
     natural: 226,

@@ -677,6 +677,51 @@ test.describe("Intake modules as windows on the desktop", () => {
     await expect(moduleWindow(page, "liquids").getByRole("tab", { name: "Beverage" })).toBeVisible();
   });
 
+  test("the Food form is taller than its window: it scrolls inside, down to the last field", async ({ page }) => {
+    await openDesktop(page);
+    const food = moduleWindow(page, "food");
+    const body = food.getByTestId("window-body");
+    const win = await boxOf(food);
+    expect(await body.evaluate((el) => el.scrollHeight > el.clientHeight)).toBe(true);
+    // Only up and down: nothing is cut off sideways.
+    expect(await body.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+
+    // The top of the form shows without scrolling.
+    await expect(food.getByPlaceholder("What I ate…").or(food.getByPlaceholder("What I ate...")).first()).toBeInViewport({
+      ratio: 1,
+    });
+
+    // Scrolled to the end, the save button and the last line are whole and inside the window.
+    await body.evaluate((el) => el.scrollTo(0, el.scrollHeight));
+    const save = food.getByRole("button", { name: "Record with details" });
+    await expect(save).toBeInViewport({ ratio: 1 });
+    const last = await boxOf(food.locator("#section-food-salt").getByText("Nothing logged yet."));
+    expect(last.y + last.height).toBeLessThanOrEqual(win.y + win.height - 1);
+    expect(last.y).toBeGreaterThanOrEqual(win.y + 32);
+    // The window itself did not move or grow.
+    expect(await boxOf(food)).toEqual(win);
+  });
+
+  test("minimised modules show their real names on the desk icons", async ({ page }) => {
+    await openDesktop(page);
+    for (const name of ["Urination", "Defecation", "Food"]) {
+      await page.getByRole("button", { name: `Minimise ${name}` }).click();
+    }
+    for (const [id, name] of [
+      ["wee", "Urination"],
+      ["bowel", "Defecation"],
+      ["food", "Food"],
+    ] as const) {
+      const icon = deskIcon(page, id);
+      await expect(icon).toHaveText(name);
+      await expect(icon).toHaveAccessibleName(`Open ${name}`);
+      await expect(icon).toHaveAttribute("title", `Open ${name}`);
+      // The label fits the 56px tile: not cut off.
+      const label = icon.locator("span");
+      expect(await label.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+    }
+  });
+
   test("the default arrangement also fits 1920×1080 without overlap", async ({ page }) => {
     await page.setViewportSize({ width: 1920, height: 1080 });
     await openDesktop(page);

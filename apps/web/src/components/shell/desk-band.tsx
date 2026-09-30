@@ -39,7 +39,9 @@ export function DeskIcon({ id }: { id: ModuleId }) {
       }}
     >
       <ShellIcon name={meta.icon} size={20} className="text-[color:var(--c)]" />
-      <span className="max-w-full truncate px-0.5 text-[0.6875rem] font-medium leading-none">{meta.short}</span>
+      <span className="max-w-full truncate px-px text-[0.625rem] font-medium leading-none tracking-tight">
+        {meta.short}
+      </span>
     </button>
   );
 }
@@ -71,7 +73,7 @@ export function DeskBand({ modules = true }: { modules?: boolean }) {
           onClick={() => setBugOpen(true)}
         >
           <TriangleAlert aria-hidden="true" className="h-5 w-5" strokeWidth={1.5} />
-          <span className="text-[0.6875rem] font-medium leading-none">Report</span>
+          <span className="text-[0.625rem] font-medium leading-none tracking-tight">Report</span>
         </button>
         {/* Always in the tree, so a screen reader hears a module arrive. */}
         <ul aria-label="Minimised modules" className="flex min-w-0 flex-1 items-start gap-2 overflow-hidden pl-2">
