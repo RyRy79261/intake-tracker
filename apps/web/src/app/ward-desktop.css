@@ -27,28 +27,42 @@ html[data-window-gesture="true"] [data-testid="window-body"] {
   pointer-events: none;
 }
 
+/* The prototype's `--shadow`: the hard offset shadow under a free window. */
+:root {
+  --win-shadow: rgba(20, 22, 31, 0.22);
+  /* Under the window in front: the same shadow, deeper. */
+  --win-shadow-front: rgba(20, 22, 31, 0.36);
+}
+.dark {
+  --win-shadow: rgba(0, 0, 0, 0.5);
+  --win-shadow-front: rgba(0, 0, 0, 0.72);
+}
+
 @layer components {
   /*
-   * Home on the desktop: Today across two columns, then the module cards,
-   * all on one grid with equal gutters. Two columns from 1024px, three from
+   * Home on the desktop: a masonry of the Today gadget (top left, two
+   * columns wide) and the module cards. Two columns from 1024px, three from
    * 1200px, four from 1600px, so a card is never narrower than a phone.
-   * Cards in a row share its height.
+   *
+   * Every card keeps its natural height and sits 16px under the one above
+   * it in its column. The grid's rows are 1px tall; `home-page-body.tsx`
+   * measures each card and sets how many rows it spans (its height plus the
+   * gutter), and `dense` packs each column from the top. The columns below
+   * are picked so that they end up about the same height.
    */
   .wd-home {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    /* Food is about twice as tall as the others, so it takes two rows. */
-    grid-template-areas:
-      "today   today"
-      "liquids food"
-      "bp      food"
-      "weight  wee"
-      "weight  bowel";
-    gap: 16px;
-    align-items: stretch;
+    grid-auto-rows: 1px;
+    grid-auto-flow: row dense;
+    column-gap: 16px;
+    row-gap: 0;
+    align-items: start;
   }
   .wd-home > .wc-today {
-    grid-area: today;
+    grid-column: 1 / span 2;
+    /* Until measured. */
+    grid-row-end: span 420;
   }
   /* The cards sit straight on Home's grid. */
   .wd-home > .wc-mods {
@@ -56,53 +70,59 @@ html[data-window-gesture="true"] [data-testid="window-body"] {
   }
   .wd-home > .wc-mods > * {
     min-width: 0;
-    display: flex;
-    flex-direction: column;
+    grid-row-end: span 420;
   }
-  .wd-home > .wc-mods > * > * {
-    flex: 1 1 auto;
-  }
-  .wd-home #section-water {
-    grid-area: liquids;
-  }
-  .wd-home #section-food-salt {
-    grid-area: food;
-  }
-  .wd-home #section-bp {
-    grid-area: bp;
-  }
+  .wd-home #section-water,
+  .wd-home #section-bp,
   .wd-home #section-weight {
-    grid-area: weight;
+    grid-column: 1;
   }
-  .wd-home #section-urination {
-    grid-area: wee;
-  }
+  .wd-home #section-food-salt,
+  .wd-home #section-urination,
   .wd-home #section-defecation {
-    grid-area: bowel;
+    grid-column: 2;
   }
   @media (min-width: 1200px) {
     .wd-home {
       grid-template-columns: repeat(3, minmax(0, 1fr));
-      grid-template-areas:
-        "today today liquids"
-        "food  bp    weight"
-        "food  wee   bowel";
+    }
+    .wd-home #section-food-salt {
+      grid-column: 1;
+    }
+    .wd-home #section-bp,
+    .wd-home #section-urination {
+      grid-column: 2;
+    }
+    .wd-home #section-water,
+    .wd-home #section-weight,
+    .wd-home #section-defecation {
+      grid-column: 3;
     }
   }
   @media (min-width: 1600px) {
     .wd-home {
       grid-template-columns: repeat(4, minmax(0, 1fr));
-      grid-template-areas:
-        "today today  liquids food"
-        "bp    weight wee     food"
-        "bp    weight bowel   food";
+    }
+    .wd-home #section-bp {
+      grid-column: 1;
+    }
+    .wd-home #section-weight {
+      grid-column: 2;
+    }
+    .wd-home #section-water,
+    .wd-home #section-urination,
+    .wd-home #section-defecation {
+      grid-column: 3;
+    }
+    .wd-home #section-food-salt {
+      grid-column: 4;
     }
   }
 
   /*
    * Today with room to spare (the prototype's wide `.g-today`): dated day
    * labels, each day's total under its column, bigger figures, and rows that
-   * share out the height of the grid row.
+   * keep their natural height.
    */
   .wc-today-wide {
     --lc: 92px;

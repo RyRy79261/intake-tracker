@@ -287,11 +287,18 @@ export function WindowFrame({
           ? "absolute inset-0"
           : [
               "pointer-events-auto absolute border",
-              focused
-                ? "border-foreground shadow-[6px_6px_0_rgba(20,22,31,.22)] dark:shadow-[6px_6px_0_rgba(0,0,0,.5)]"
-                : isFree
-                  ? // Floating over Home's cards: a window behind still reads as a window.
-                    "border-muted-foreground shadow-[4px_4px_0_rgba(20,22,31,.12)] dark:shadow-[4px_4px_0_rgba(0,0,0,.35)]"
+              isFree
+                ? // Floating over Home's cards and each other: every window
+                  // has a solid ink edge and a hard shadow (deeper for the
+                  // one in front), so a window behind still reads as one.
+                  [
+                    "border-foreground",
+                    focused
+                      ? "shadow-[10px_10px_0_var(--win-shadow-front)]"
+                      : "shadow-[4px_4px_0_var(--win-shadow)]",
+                  ]
+                : focused
+                  ? "border-foreground shadow-[6px_6px_0_rgba(20,22,31,.22)] dark:shadow-[6px_6px_0_rgba(0,0,0,.5)]"
                   : "border-line",
             ],
       )}
@@ -306,14 +313,18 @@ export function WindowFrame({
         data-wide={wide}
         data-testid="window-titlebar"
         className={cn(
-          "group/tbar relative flex shrink-0 items-center bg-chrome",
+          "group/tbar relative flex shrink-0 items-center",
           phone
-            ? "h-12 text-foreground shadow-[inset_0_-2px_0_var(--c)]"
+            ? "h-12 bg-chrome text-foreground shadow-[inset_0_-2px_0_var(--c)]"
             : [
                 "h-8 gap-2 pl-2",
                 focused
-                  ? "text-foreground shadow-[inset_0_-2px_0_var(--c)]"
-                  : "border-b border-line text-muted-foreground",
+                  ? ["bg-chrome text-foreground", isFree ? "shadow-[inset_0_-3px_0_var(--c)]" : "shadow-[inset_0_-2px_0_var(--c)]"]
+                  : [
+                      "border-b text-muted-foreground",
+                      // A free window behind: a flat, muted bar with an ink rule.
+                      isFree ? "border-foreground bg-background" : "border-line bg-chrome",
+                    ],
               ],
           isFree && "cursor-grab touch-none select-none active:cursor-grabbing",
         )}

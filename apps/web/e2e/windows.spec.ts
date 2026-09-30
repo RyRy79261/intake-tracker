@@ -579,6 +579,39 @@ test.describe("Windows on the desktop", () => {
     // Every card is inside the viewport's width.
     for (const b of boxes) expect(b.x + b.width).toBeLessThanOrEqual(1440);
 
+    // Masonry: Today sits top left, every card keeps its natural height (no
+    // empty slab stretched to a neighbour's), and each card sits one gutter
+    // under whatever is above it in its column.
+    const masonry = () =>
+      home.evaluate((root) => {
+        const items = [...root.querySelectorAll<HTMLElement>(".wd-home > .wc-today, .wd-home > .wc-mods > *")].map(
+          (el) => {
+            const r = el.getBoundingClientRect();
+            const inner = el.classList.contains("wc-today") ? r : el.firstElementChild!.getBoundingClientRect();
+            return { id: el.id || "today", x: r.x, right: r.right, y: r.y, bottom: r.bottom, stretch: r.height - inner.height };
+          },
+        );
+        const top = Math.min(...items.map((i) => i.y));
+        const gaps = items
+          .filter((i) => i.y > top + 1)
+          .map((i) => {
+            const above = items.filter((o) => o !== i && o.bottom <= i.y && o.x < i.right && o.right > i.x);
+            return Math.round(i.y - Math.max(...above.map((o) => o.bottom)));
+          });
+        const today = items.find((i) => i.id === "today")!;
+        return {
+          todayTopLeft: today.y === top && today.x === Math.min(...items.map((i) => i.x)),
+          stretched: items.filter((i) => Math.abs(i.stretch) > 1).map((i) => i.id),
+          gaps,
+        };
+      });
+    await expect.poll(async () => (await masonry()).gaps.every((g) => g >= 16 && g <= 17)).toBe(true);
+    const packed = await masonry();
+    expect(packed.todayTopLeft).toBe(true);
+    expect(packed.stretched).toEqual([]);
+    // Three columns: five cards sit under another (only Today and Liquids are on top).
+    expect(packed.gaps).toHaveLength(5);
+
     // The cards are the full forms; no compact Log gadget duplicates them.
     await expect(home.locator("#section-water").getByRole("tab", { name: "Beverage" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Log", exact: true })).toHaveCount(0);
@@ -590,9 +623,14 @@ test.describe("Windows on the desktop", () => {
     await expect(home.getByTestId("today-gadget")).toBeVisible();
   });
 
-  for (const width of [1024, 1440, 1920]) {
+  for (const [width, height] of [
+    [1024, 768],
+    [1440, 900],
+    [1920, 1080],
+    [2560, 1440],
+  ] as const) {
     test(`nothing scrolls sideways at ${width}px, with no windows and with three`, async ({ page }) => {
-      await page.setViewportSize({ width, height: width === 1024 ? 768 : width === 1440 ? 900 : 1080 });
+      await page.setViewportSize({ width, height });
       // The /profile deep link opens Profile (signed in or not).
       await openDesktop(page, "/profile");
       const profile = windowNamed(page, "Profile");
