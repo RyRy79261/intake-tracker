@@ -121,11 +121,23 @@ const InlineEdit = React.forwardRef<HTMLInputElement, InlineEditProps>(
     );
 
     return (
-      <label className={cn("cursor-text inline-flex items-baseline", className)}>
+      <label className={cn("cursor-text inline-flex items-center", className)}>
+        {/* Inner row keeps the value and its suffix on one baseline while the
+            label itself can stretch to fill (and centre in) its container. */}
+        <span className="inline-flex items-baseline">
         <span className={cn(displayClassName, isEditing && "border-b-2 border-current")}>
           {isEditing ? editValue : formatDisplay(value)}
+          {isEditing && (
+            // The real input is visually hidden, so draw the caret here.
+            <span
+              aria-hidden="true"
+              data-testid="inline-edit-caret"
+              className="ml-px inline-block h-[1em] w-0.5 translate-y-[0.15em] animate-pulse bg-current motion-reduce:animate-none"
+            />
+          )}
         </span>
         {suffix && <span className={suffixClassName}>{suffix}</span>}
+        </span>
         <input
           ref={mergedRef}
           type={type ?? "text"}

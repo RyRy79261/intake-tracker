@@ -292,6 +292,20 @@ export function WindowFrame({
     onLostPointerCapture: onGesturePointerEnd,
   };
 
+  const closeButton = (
+    <button
+      type="button"
+      className={cn(
+        "flex shrink-0 items-center justify-center focus-visible:outline-offset-[-4px]",
+        phone ? "h-12 w-12" : "h-8 w-8",
+      )}
+      aria-label={`Close ${title}`}
+      onClick={onClose}
+    >
+      <ControlGlyph kind="close" />
+    </button>
+  );
+
   const onTitleKeyDown = (e: KeyboardEvent<HTMLHeadingElement>) => {
     const dir = ARROWS[e.key];
     if (!free || !dir || e.altKey || e.ctrlKey || e.metaKey) return;
@@ -418,7 +432,9 @@ export function WindowFrame({
           </span>
         )}
         {wide && (
-          <span className="flex">
+          // One group for the three controls: the same 32px hit size each
+          // and no gap between them (the title bar's own gap stays outside).
+          <span className="flex shrink-0" data-testid="window-controls">
             <button
               type="button"
               className="flex h-8 w-8 items-center justify-center"
@@ -435,19 +451,10 @@ export function WindowFrame({
             >
               <ControlGlyph kind="max" restored={win.max} />
             </button>
+            {closeButton}
           </span>
         )}
-        <button
-          type="button"
-          className={cn(
-            "flex shrink-0 items-center justify-center focus-visible:outline-offset-[-4px]",
-            phone ? "h-12 w-12" : "h-8 w-8",
-          )}
-          aria-label={`Close ${title}`}
-          onClick={onClose}
-        >
-          <ControlGlyph kind="close" />
-        </button>
+        {phone && closeButton}
       </header>
       <div
         ref={bodyRef}
