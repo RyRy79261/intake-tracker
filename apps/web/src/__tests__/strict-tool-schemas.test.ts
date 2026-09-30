@@ -127,16 +127,42 @@ describe("voice-parse tool", () => {
   // kind), which puts this tool closest to the optional-parameter limit. A
   // new per-item field is fine; one that tips it over is a 400 on every
   // voice log, so the headroom is pinned where a change will be seen.
-  it("keeps headroom under the optional-parameter limit", () => {
+  it("keeps headroom under the optional-parameter and union limits", () => {
     const result: Audit = { problems: [], optional: 0, unions: 0 };
     audit(PARSE_TOOL.input_schema as Schema, PARSE_TOOL.name, result);
-    expect(result.optional).toBe(20);
+    expect(result.optional).toBe(18);
+    // `when` is the only union. Making the 18 optional fields required and
+    // nullable instead would be 19 unions, over the limit of 16.
+    expect(result.unions).toBe(1);
     expect(PARSE_TOOL.input_schema.required).toEqual(["items", "reasoning"]);
   });
 
   it("closes the per-item object, which strict mode requires of every object", () => {
     const item = PARSE_TOOL.input_schema.properties.items.items;
     expect(item.additionalProperties).toBe(false);
-    expect(item.required).toEqual(["kind"]);
+    expect(item.required).toEqual(["kind", "when"]);
+  });
+
+  it("states `when` as a required union of two closed objects and null", () => {
+    const when = PARSE_TOOL.input_schema.properties.items.items.properties.when;
+    expect("type" in when).toBe(false);
+    const [absolute, relative, none] = when.anyOf as {
+      type: string;
+      properties?: Record<string, { enum?: string[] }>;
+      required?: string[];
+      additionalProperties?: boolean;
+    }[];
+    expect(none).toEqual({ type: "null" });
+    for (const [branch, kind, field] of [
+      [absolute, "absolute", "localDateTime"],
+      [relative, "relative", "minutesAgo"],
+    ] as const) {
+      expect(branch?.type).toBe("object");
+      expect(branch?.additionalProperties).toBe(false);
+      expect(branch?.properties?.kind?.enum).toEqual([kind]);
+      // Every property of a branch is required: none is left optional.
+      expect(branch?.required).toEqual(["kind", field]);
+      expect(Object.keys(branch?.properties ?? {})).toEqual(["kind", field]);
+    }
   });
 });

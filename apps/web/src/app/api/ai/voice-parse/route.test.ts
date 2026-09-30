@@ -386,8 +386,8 @@ describe("voice-parse spoken times", () => {
     // The prompt carries the defaults for vague words and the null rule.
     expect(sent.system).toContain("evening 19:00");
     expect(sent.system).toContain("when: null");
-    // Claude Sonnet 5.5 rejects a forced tool_choice: the first turn never forces.
-    expect(sent.tool_choice).toBeUndefined();
+    // Claude Sonnet 5.5 rejects a forced tool_choice: the first turn is `auto`, never forced.
+    expect(sent.tool_choice).toEqual({ type: "auto" });
   });
 
   it("works out yesterday across a month end, and a zone west of UTC", async () => {
@@ -517,7 +517,7 @@ describe("voice-parse spoken times", () => {
       expect(content).toContain('Return "when" only as {"kind": "relative", "minutesAgo": N}');
       expect(content).toContain("Do not return an absolute date-time.");
       expect(content).toContain("water an hour ago");
-      expect(sent.tool_choice).toBeUndefined();
+      expect(sent.tool_choice).toEqual({ type: "auto" });
     });
 
     it("strips an absolute time the model returned anyway, and keeps a relative one", async () => {
