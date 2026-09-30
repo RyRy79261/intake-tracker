@@ -244,6 +244,11 @@ export const useModuleWindowStore = create<ModuleWindowState>()(
   ),
 );
 
+// The modules' stacking positions outlive the tab (localStorage) but the
+// counter does not (sessionStorage): lift it above them as soon as both
+// stores exist, before anything (a deep link, say) opens an app window.
+useModuleWindowStore.getState().syncZ();
+
 /** The module with focus, or null when an app window has it. */
 export function focusedModule(moduleFocus: ModuleId | null, appFocus: string | null): ModuleId | null {
   return appFocus === null ? moduleFocus : null;

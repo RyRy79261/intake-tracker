@@ -69,7 +69,7 @@ export const DESK_MODULES: Record<ModuleId, DeskModule> = {
     icon: "wee",
     color: domainColor("bath"),
     natural: 226,
-    comfy: 170,
+    comfy: 226,
   },
   bowel: {
     id: "bowel",
@@ -78,7 +78,7 @@ export const DESK_MODULES: Record<ModuleId, DeskModule> = {
     icon: "bowel",
     color: domainColor("bath"),
     natural: 226,
-    comfy: 170,
+    comfy: 226,
   },
 };
 

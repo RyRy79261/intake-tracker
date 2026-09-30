@@ -181,6 +181,20 @@ for (const vp of [
         await expect(strip.getByRole("button", { name: "Medications window, minimised" })).toBeVisible();
         await scan(page, "desktop: task strip with a minimised window");
       });
+
+      test("The desk: seven module windows, then two minimised to icons", async ({ page }) => {
+        await page.goto("/");
+        const modules = page.getByTestId("module-window");
+        await expect(modules).toHaveCount(7);
+        await expect(page.getByRole("region", { name: "Today", exact: true }).first()).toBeVisible();
+        await scan(page, "desktop: module windows");
+
+        for (const name of ["Liquids", "Blood Pressure"]) {
+          await page.getByRole("button", { name: `Minimise ${name}` }).click();
+          await expect(page.getByRole("button", { name: `Open ${name}` })).toBeVisible();
+        }
+        await scan(page, "desktop: desk band with module icons");
+      });
     }
   });
 }

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { cleanup, render, screen, fireEvent, within } from "@testing-library/react";
+import { render, screen, fireEvent, within } from "@testing-library/react";
 
 const push = vi.fn();
 let pathname = "/";

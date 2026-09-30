@@ -5,7 +5,8 @@ import { test, expect, type Locator, type Page } from "@playwright/test";
  * Phone (390×844): one full-screen window at a time, Back closes it.
  * Tiled (1000×800, and touch tablets): windows tile side by side.
  * Desktop (1440×900 with a mouse): free windows that drag, resize, snap and
- * maximise, a task strip in the sys-bar, and Home as a grid behind them.
+ * maximise, a task strip in the sys-bar, the intake modules as windows of
+ * their own, and a desk band (bug report, minimised modules, mic).
  */
 
 async function skipAnalyticsIntro(page: Page) {
@@ -204,6 +205,15 @@ const taskStrip = (page: Page) => page.getByRole("toolbar", { name: "Open window
 const task = (page: Page, name: string) => taskStrip(page).getByRole("button", { name, exact: true });
 const layer = (page: Page) => page.getByTestId("window-layer");
 
+/** The intake modules: on the desktop each is a window of its own. */
+const MODULES = ["today", "liquids", "food", "bp", "weight", "wee", "bowel"] as const;
+const moduleWindows = (page: Page) => page.getByTestId("module-window");
+const moduleWindow = (page: Page, id: (typeof MODULES)[number]) =>
+  page.locator(`[data-testid="module-window"][data-app="${id}"]`);
+/** A minimised module's square icon on the desk band. */
+const deskIcons = (page: Page) => page.getByTestId("desk-icon");
+const deskIcon = (page: Page, id: (typeof MODULES)[number]) => page.locator(`[data-desk-icon="${id}"]`);
+
 interface Box {
   x: number;
   y: number;
@@ -231,6 +241,8 @@ async function openDesktop(page: Page, path = "/") {
   await page.goto(path);
   await expect(sysBar(page)).toBeVisible();
   await expect(layer(page)).toHaveAttribute("data-mode", "desktop");
+  // `next dev` pins its own indicator to the bottom left, over the desk band.
+  await page.addStyleTag({ content: "nextjs-portal { display: none !important; }" });
 }
 
 async function openMeds(page: Page) {
@@ -288,7 +300,7 @@ test.describe("Windows on the desktop", () => {
     await mouseDrag(page, { x: after.x + 200, y: after.y + 16 }, { x: 3000, y: 3000 });
     const edge = await boxOf(meds);
     expect(edge.x + edge.width).toBe(1440);
-    expect(edge.y + edge.height).toBe(900);
+    expect(edge.y + edge.height).toBe(828);
     // ...and never goes under the sys-bar.
     await mouseDrag(page, { x: edge.x + 200, y: edge.y + 16 }, { x: 900, y: 100 }, 6);
     expect((await boxOf(meds)).y).toBeGreaterThanOrEqual(44);
@@ -308,13 +320,13 @@ test.describe("Windows on the desktop", () => {
     await page.mouse.move(start.x + 6, start.y + 6);
     // Mid-drag: nothing else reacts to the pointer.
     await expect(metrics.getByTestId("window-body")).toHaveCSS("pointer-events", "none");
-    await page.mouse.move(start.x + 500, start.y + 330, { steps: 1 });
-    await page.mouse.move(start.x + 420, start.y + 300, { steps: 3 });
+    await page.mouse.move(start.x + 500, start.y + 250, { steps: 1 });
+    await page.mouse.move(start.x + 420, start.y + 220, { steps: 3 });
     await page.mouse.up();
 
     expect(await boxOf(meds)).toEqual({
       x: before.x + 420,
-      y: before.y + 300,
+      y: before.y + 220,
       width: before.width,
       height: before.height,
     });
@@ -364,17 +376,18 @@ test.describe("Windows on the desktop", () => {
     const before = await boxOf(meds);
 
     await titleBar(page, "Medications").dblclick({ position: { x: 200, y: 16 } });
-    expect(await boxOf(meds)).toEqual({ x: 0, y: 44, width: 1440, height: 856 });
+    expect(await boxOf(meds)).toEqual({ x: 0, y: 44, width: 1440, height: 784 });
     await expect(meds).toHaveAttribute("data-max", "true");
     // Home is covered: out of the tab order and the accessibility tree.
-    await expect(page.getByTestId("home")).toHaveAttribute("inert", "");
+    // The module windows under it are out of the tab order and the accessibility tree.
+    await expect(moduleWindow(page, "liquids")).toHaveAttribute("inert", "");
 
     await titleBar(page, "Medications").dblclick({ position: { x: 200, y: 16 } });
     expect(await boxOf(meds)).toEqual(before);
-    await expect(page.getByTestId("home")).not.toHaveAttribute("inert", "");
+    await expect(moduleWindow(page, "liquids")).not.toHaveAttribute("inert", "");
 
     await meds.getByRole("button", { name: "Maximise Medications" }).click();
-    expect(await boxOf(meds)).toEqual({ x: 0, y: 44, width: 1440, height: 856 });
+    expect(await boxOf(meds)).toEqual({ x: 0, y: 44, width: 1440, height: 784 });
     await meds.getByRole("button", { name: "Restore Medications" }).click();
     expect(await boxOf(meds)).toEqual(before);
   });
@@ -391,13 +404,13 @@ test.describe("Windows on the desktop", () => {
     await expect(page.getByTestId("snap-hint")).toBeVisible();
     await page.mouse.up();
     await expect(page.getByTestId("snap-hint")).toHaveCount(0);
-    expect(await boxOf(meds)).toEqual({ x: 0, y: 44, width: 720, height: 856 });
+    expect(await boxOf(meds)).toEqual({ x: 0, y: 44, width: 720, height: 784 });
 
     // Right edge.
     const metrics = await openMetrics(page);
     const m = await boxOf(metrics);
     await mouseDrag(page, { x: m.x + m.width - 200, y: m.y + 16 }, { x: 1438, y: 300 });
-    expect(await boxOf(metrics)).toEqual({ x: 720, y: 44, width: 720, height: 856 });
+    expect(await boxOf(metrics)).toEqual({ x: 720, y: 44, width: 720, height: 784 });
 
     // Dragging a snapped window away gives it its own size back.
     await mouseDrag(page, { x: 200, y: 60 }, { x: 500, y: 300 });
@@ -407,7 +420,7 @@ test.describe("Windows on the desktop", () => {
 
     // Top edge: maximise.
     await mouseDrag(page, { x: restored.x + 200, y: restored.y + 16 }, { x: 700, y: 20 });
-    expect(await boxOf(meds)).toEqual({ x: 0, y: 44, width: 1440, height: 856 });
+    expect(await boxOf(meds)).toEqual({ x: 0, y: 44, width: 1440, height: 784 });
   });
 
   test("the task strip focuses, minimises and restores windows", async ({ page }) => {
@@ -446,7 +459,7 @@ test.describe("Windows on the desktop", () => {
     // Tidy puts the windows side by side.
     await task(page, "Medications window, minimised").click();
     await task(page, "Metrics window, minimised").click();
-    await page.getByRole("button", { name: "Arrange windows side by side" }).click();
+    await page.getByRole("button", { name: "Tidy windows" }).click();
     const a = await boxOf(meds);
     const b = await boxOf(metrics);
     expect(a.width).toBe(b.width);
@@ -506,10 +519,10 @@ test.describe("Windows on the desktop", () => {
 
     const metrics = await openMetrics(page);
     await expect(metrics.getByRole("heading", { name: "Metrics" })).toBeFocused();
-    await page.keyboard.press("Control+Backquote");
+    await page.keyboard.press("Control+Shift+Backquote");
     await expect(meds).toHaveAttribute("data-focused", "true");
     await expect(title).toBeFocused();
-    await page.keyboard.press("Control+Shift+Backquote");
+    await page.keyboard.press("Control+Backquote");
     await expect(metrics.getByRole("heading", { name: "Metrics" })).toBeFocused();
 
     await page.keyboard.press("Escape");
@@ -534,11 +547,11 @@ test.describe("Windows on the desktop", () => {
     await openDesktop(page);
     const metrics = await openMetrics(page);
     const before = await boxOf(metrics);
-    await mouseDrag(page, { x: before.x + 300, y: before.y + 16 }, { x: before.x + 800, y: before.y + 216 });
+    await mouseDrag(page, { x: before.x + 300, y: before.y + 16 }, { x: before.x + 800, y: before.y + 116 });
     const se = centre(await boxOf(grip(page, "Metrics", "se")));
     await mouseDrag(page, se, { x: se.x - 100, y: se.y - 60 });
     const placed = await boxOf(metrics);
-    expect(placed).toEqual({ x: before.x + 500, y: before.y + 200, width: 780, height: 540 });
+    expect(placed).toEqual({ x: before.x + 500, y: before.y + 100, width: 780, height: 540 });
 
     await page.reload();
     await expect(metrics).toBeVisible();
@@ -550,7 +563,7 @@ test.describe("Windows on the desktop", () => {
     await expect
       .poll(async () => {
         const b = await boxOf(metrics);
-        return b.x >= 0 && b.y >= 44 && b.x + b.width <= 1100 && b.y + b.height <= 700;
+        return b.x >= 0 && b.y >= 44 && b.x + b.width <= 1100 && b.y + b.height <= 700 - 72;
       })
       .toBe(true);
     // Back at full size it returns to where it was put.
@@ -558,69 +571,20 @@ test.describe("Windows on the desktop", () => {
     await expect.poll(() => boxOf(metrics)).toEqual(placed);
   });
 
-  test("Home is a grid of the Today gadget and every card, with no Log gadget or bottom bar", async ({ page }) => {
+  test("the three title bar controls are one group: equal sizes, no gaps", async ({ page }) => {
     await openDesktop(page);
-    const home = page.getByTestId("home");
-    await expect(home.getByTestId("today-gadget")).toBeVisible();
-    const ids = ["section-water", "section-food-salt", "section-bp", "section-weight", "section-urination", "section-defecation"];
-    const boxes: Box[] = [];
-    for (const id of ids) {
-      const card = home.locator(`#${id}`);
-      await expect(card).toBeVisible();
-      boxes.push(await boxOf(card));
+    const meds = await openMeds(page);
+    for (const win of [meds, moduleWindow(page, "liquids")]) {
+      const [min, max, close] = await Promise.all(
+        [/^Minimise /, /^(Maximise|Restore) /, /^Close /].map((name) => boxOf(win.getByRole("button", { name }))),
+      );
+      expect([min!.width, max!.width, close!.width]).toEqual([32, 32, 32]);
+      expect([min!.height, max!.height, close!.height]).toEqual([32, 32, 32]);
+      // Minimise | Maximise | Close, touching, with the same (zero) gap.
+      expect(max!.x - (min!.x + min!.width)).toBe(0);
+      expect(close!.x - (max!.x + max!.width)).toBe(0);
+      expect(new Set([min!.y, max!.y, close!.y]).size).toBe(1);
     }
-    // A grid, not one column: three columns at 1440px, with equal gutters.
-    const columns = [...new Set(boxes.map((b) => Math.round(b.x)))].sort((a, b) => a - b);
-    expect(columns).toHaveLength(3);
-    // Equal widths and equal gutters (to the pixel the grid rounds to).
-    const widths = boxes.map((b) => b.width);
-    expect(Math.max(...widths) - Math.min(...widths)).toBeLessThanOrEqual(1);
-    expect(Math.abs(columns[1]! - columns[0]! - (columns[2]! - columns[1]!))).toBeLessThanOrEqual(1);
-    // Every card is inside the viewport's width.
-    for (const b of boxes) expect(b.x + b.width).toBeLessThanOrEqual(1440);
-
-    // Masonry: Today sits top left, every card keeps its natural height (no
-    // empty slab stretched to a neighbour's), and each card sits one gutter
-    // under whatever is above it in its column.
-    const masonry = () =>
-      home.evaluate((root) => {
-        const items = [...root.querySelectorAll<HTMLElement>(".wd-home > .wc-today, .wd-home > .wc-mods > *")].map(
-          (el) => {
-            const r = el.getBoundingClientRect();
-            const inner = el.classList.contains("wc-today") ? r : el.firstElementChild!.getBoundingClientRect();
-            return { id: el.id || "today", x: r.x, right: r.right, y: r.y, bottom: r.bottom, stretch: r.height - inner.height };
-          },
-        );
-        const top = Math.min(...items.map((i) => i.y));
-        const gaps = items
-          .filter((i) => i.y > top + 1)
-          .map((i) => {
-            const above = items.filter((o) => o !== i && o.bottom <= i.y && o.x < i.right && o.right > i.x);
-            return Math.round(i.y - Math.max(...above.map((o) => o.bottom)));
-          });
-        const today = items.find((i) => i.id === "today")!;
-        return {
-          todayTopLeft: today.y === top && today.x === Math.min(...items.map((i) => i.x)),
-          stretched: items.filter((i) => Math.abs(i.stretch) > 1).map((i) => i.id),
-          gaps,
-        };
-      });
-    await expect.poll(async () => (await masonry()).gaps.every((g) => g >= 16 && g <= 17)).toBe(true);
-    const packed = await masonry();
-    expect(packed.todayTopLeft).toBe(true);
-    expect(packed.stretched).toEqual([]);
-    // Three columns: five cards sit under another (only Today and Liquids are on top).
-    expect(packed.gaps).toHaveLength(5);
-
-    // The cards are the full forms; no compact Log gadget duplicates them.
-    await expect(home.locator("#section-water").getByRole("tab", { name: "Beverage" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Log", exact: true })).toHaveCount(0);
-    await expect(page.getByRole("navigation", { name: "Bottom bar" })).toHaveCount(0);
-
-    // Home stays in use behind a free window.
-    await openMeds(page);
-    await expect(home).not.toHaveAttribute("inert", "");
-    await expect(home.getByTestId("today-gadget")).toBeVisible();
   });
 
   for (const [width, height] of [
@@ -655,6 +619,260 @@ test.describe("Windows on the desktop", () => {
       await expect(apps(page).getByRole("button", { name: "Settings" })).toBeInViewport({ ratio: 1 });
     });
   }
+});
+
+test.describe("Intake modules as windows on the desktop", () => {
+  test.use({ viewport: { width: 1440, height: 900 } });
+  test.beforeEach(async ({ page }) => skipAnalyticsIntro(page));
+
+  const overlapping = (boxes: Record<string, Box>) => {
+    const ids = Object.keys(boxes);
+    const out: string[] = [];
+    ids.forEach((a, i) =>
+      ids.slice(i + 1).forEach((b) => {
+        const p = boxes[a]!;
+        const q = boxes[b]!;
+        if (p.x < q.x + q.width && q.x < p.x + p.width && p.y < q.y + q.height && q.y < p.y + p.height) {
+          out.push(`${a}/${b}`);
+        }
+      }),
+    );
+    return out;
+  };
+
+  async function moduleBoxes(page: Page) {
+    const boxes: Record<string, Box> = {};
+    for (const id of MODULES) boxes[id] = await boxOf(moduleWindow(page, id));
+    return boxes;
+  }
+
+  test("first load: all seven modules are open, side by side, with nothing scrolling sideways", async ({ page }) => {
+    await openDesktop(page);
+    await expect(moduleWindows(page)).toHaveCount(7);
+    for (const id of MODULES) await expect(moduleWindow(page, id)).toBeVisible();
+
+    const boxes = await moduleBoxes(page);
+    expect(overlapping(boxes)).toEqual([]);
+    for (const b of Object.values(boxes)) {
+      expect(b.x).toBeGreaterThanOrEqual(8);
+      expect(b.x + b.width).toBeLessThanOrEqual(1440 - 8);
+      // Under the sys-bar, over the desk band.
+      expect(b.y).toBeGreaterThanOrEqual(44 + 8);
+      expect(b.y + b.height).toBeLessThanOrEqual(900 - 72 - 8);
+    }
+    // Today is top left, two columns wide, in its wide layout.
+    expect(boxes.today).toMatchObject({ x: 8, y: 52, width: 708 });
+    await expect(moduleWindow(page, "today").getByTestId("today-day-label").first()).toHaveText(/^[A-Z][a-z]{2} \d+$/);
+    expect(await noSidewaysScroll(page)).toEqual({ page: true, body: true, layer: true });
+    const vertical = await page.evaluate(() => document.documentElement.scrollHeight <= document.documentElement.clientHeight);
+    expect(vertical).toBe(true);
+
+    // Nothing is minimised, there is no bottom bar and no compact Log gadget.
+    await expect(deskIcons(page)).toHaveCount(0);
+    await expect(page.getByRole("navigation", { name: "Bottom bar" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Log", exact: true })).toHaveCount(0);
+    // The task strip lists app windows only.
+    await expect(taskStrip(page).getByRole("button")).toHaveCount(0);
+    // The cards are the full forms.
+    await expect(moduleWindow(page, "liquids").getByRole("tab", { name: "Beverage" })).toBeVisible();
+  });
+
+  test("the default arrangement also fits 1920×1080 without overlap", async ({ page }) => {
+    await page.setViewportSize({ width: 1920, height: 1080 });
+    await openDesktop(page);
+    await expect(moduleWindows(page)).toHaveCount(7);
+    const boxes = await moduleBoxes(page);
+    expect(overlapping(boxes)).toEqual([]);
+    for (const b of Object.values(boxes)) {
+      expect(b.x + b.width).toBeLessThanOrEqual(1920 - 8);
+      expect(b.y + b.height).toBeLessThanOrEqual(1080 - 72 - 8);
+    }
+    expect(await noSidewaysScroll(page)).toEqual({ page: true, body: true, layer: true });
+  });
+
+  test("drag and resize the Liquids window with the mouse", async ({ page }) => {
+    await openDesktop(page);
+    const liquids = moduleWindow(page, "liquids");
+    const before = await boxOf(liquids);
+
+    // Across other windows: the title bar keeps the pointer.
+    const start = { x: before.x + 120, y: before.y + 16 };
+    await mouseDrag(page, start, { x: start.x - 400, y: start.y + 200 });
+    const moved = await boxOf(liquids);
+    expect(moved).toEqual({ x: before.x - 400, y: before.y + 200, width: before.width, height: before.height });
+    await expect(liquids).toHaveAttribute("data-focused", "true");
+
+    const se = centre(await boxOf(liquids.locator('[data-grip="se"]')));
+    await mouseDrag(page, se, { x: se.x + 150, y: se.y - 60 });
+    const bigger = await boxOf(liquids);
+    expect(bigger).toEqual({ x: moved.x, y: moved.y, width: moved.width + 150, height: moved.height - 60 });
+
+    // Down to the minimum: still the whole phone layout, nothing cut off sideways.
+    const again = centre(await boxOf(liquids.locator('[data-grip="se"]')));
+    await mouseDrag(page, again, { x: 0, y: again.y });
+    expect((await boxOf(liquids)).width).toBe(340);
+    const body = liquids.getByTestId("window-body");
+    expect(await body.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+    // (The tab row hangs 1px over its rule, so not quite ratio 1.)
+    await expect(liquids.getByRole("tab", { name: "Alcohol" })).toBeInViewport({ ratio: 0.95 });
+    const tab = await boxOf(liquids.getByRole("tab", { name: "Alcohol" }));
+    expect(tab.x + tab.width).toBeLessThanOrEqual(moved.x + 340);
+    // ...and to the minimum height: it scrolls.
+    const last = centre(await boxOf(liquids.locator('[data-grip="se"]')));
+    await mouseDrag(page, last, { x: last.x, y: 0 });
+    expect(await boxOf(liquids)).toEqual({ x: moved.x, y: moved.y, width: 340, height: 150 });
+  });
+
+  test("minimise Liquids: its icon appears on the desk, and the icon restores the same rect", async ({ page }) => {
+    await openDesktop(page);
+    const liquids = moduleWindow(page, "liquids");
+    const at = await boxOf(liquids);
+    await mouseDrag(page, { x: at.x + 120, y: at.y + 16 }, { x: at.x + 20, y: at.y + 116 });
+    const placed = await boxOf(liquids);
+    expect(placed.x).toBe(at.x - 100);
+
+    await liquids.getByRole("button", { name: "Minimise Liquids" }).click();
+    await expect(liquids).toBeHidden();
+    const icon = deskIcon(page, "liquids");
+    await expect(icon).toBeVisible();
+    await expect(icon).toHaveAccessibleName("Open Liquids");
+    await expect(icon).toBeFocused();
+    await expect(deskIcons(page)).toHaveCount(1);
+    // A square tile on the desk band, left of centre, clear of the windows.
+    const tile = await boxOf(icon);
+    expect(tile.width).toBe(56);
+    expect(tile.height).toBe(56);
+    expect(tile.y).toBeGreaterThanOrEqual(900 - 72);
+    expect(tile.x).toBeLessThan(200);
+
+    await icon.click();
+    await expect(liquids).toBeVisible();
+    expect(await boxOf(liquids)).toEqual(placed);
+    await expect(deskIcons(page)).toHaveCount(0);
+    await expect(liquids.getByRole("heading", { name: "Liquids" })).toBeFocused();
+
+    // Close (×) is the same as minimise: a module can never be lost. Enter restores it.
+    await liquids.getByRole("button", { name: "Close Liquids" }).click();
+    await expect(liquids).toBeHidden();
+    await expect(moduleWindows(page)).toHaveCount(7);
+    await expect(icon).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(liquids).toBeVisible();
+    expect(await boxOf(liquids)).toEqual(placed);
+  });
+
+  test("a reload keeps each module's place and which ones are minimised", async ({ page }) => {
+    await openDesktop(page);
+    const liquids = moduleWindow(page, "liquids");
+    const at = await boxOf(liquids);
+    await mouseDrag(page, { x: at.x + 120, y: at.y + 16 }, { x: at.x - 80, y: at.y + 96 });
+    const se = centre(await boxOf(liquids.locator('[data-grip="se"]')));
+    await mouseDrag(page, se, { x: se.x + 70, y: se.y + 30 });
+    const placed = await boxOf(liquids);
+    expect(placed).toEqual({ x: at.x - 200, y: at.y + 80, width: at.width + 70, height: at.height + 30 });
+    await moduleWindow(page, "bp").getByRole("button", { name: "Minimise Blood Pressure" }).click();
+    await expect(deskIcon(page, "bp")).toBeVisible();
+
+    await page.reload();
+    await expect(layer(page)).toHaveAttribute("data-mode", "desktop");
+    await expect(liquids).toBeVisible();
+    expect(await boxOf(liquids)).toEqual(placed);
+    await expect(moduleWindow(page, "bp")).toBeHidden();
+    await expect(deskIcon(page, "bp")).toBeVisible();
+
+    // Tidy: every module back in the default arrangement, open.
+    await page.getByRole("button", { name: "Tidy windows" }).click();
+    await expect(moduleWindow(page, "bp")).toBeVisible();
+    await expect(deskIcons(page)).toHaveCount(0);
+    expect(await boxOf(liquids)).toEqual(at);
+    expect(overlapping(await moduleBoxes(page))).toEqual([]);
+  });
+
+  test("modules share the stacking order with app windows, and Back never closes one", async ({ page }) => {
+    await openDesktop(page);
+    const meds = await openMeds(page);
+    const today = moduleWindow(page, "today");
+    const zOf = (l: Locator) => l.evaluate((el) => Number(getComputedStyle(el).zIndex));
+    expect(await zOf(meds)).toBeGreaterThan(await zOf(today));
+    await expect(taskStrip(page).getByRole("button")).toHaveCount(1);
+
+    // Liquids shows to the right of Medications: a click on its title bar raises it over the app window.
+    await page.mouse.click(900, 68);
+    await expect(moduleWindow(page, "liquids")).toHaveAttribute("data-focused", "true");
+    expect(await zOf(moduleWindow(page, "liquids"))).toBeGreaterThan(await zOf(meds));
+    await expect(meds).toHaveAttribute("data-focused", "false");
+
+    // Back closes the app window; the seven modules stay.
+    await page.goBack();
+    await expect(meds).toHaveCount(0);
+    await expect(moduleWindows(page)).toHaveCount(7);
+    for (const id of MODULES) await expect(moduleWindow(page, id)).toBeVisible();
+    await expect(page).toHaveURL(/\/$/);
+  });
+
+  test("the hazard button opens the bug report dialog", async ({ page }) => {
+    await openDesktop(page);
+    const hazard = page.getByRole("button", { name: "Report a bug" });
+    await expect(hazard).toBeVisible();
+    // Bottom left of the desk, a square, clear of every window.
+    const box = await boxOf(hazard);
+    expect(box).toMatchObject({ x: 8, width: 56, height: 56 });
+    expect(box.y).toBeGreaterThanOrEqual(900 - 72);
+
+    await hazard.click();
+    const dialog = page.getByRole("dialog", { name: "Report a bug" });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByRole("textbox").first()).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(dialog).toHaveCount(0);
+  });
+
+  test("logging 250 ml of water in the Liquids window updates the Today window", async ({ page }) => {
+    await openDesktop(page);
+    const today = moduleWindow(page, "today");
+    await expect(today.getByTestId("today-water-value")).toHaveText("0");
+
+    const liquids = moduleWindow(page, "liquids");
+    await expect(liquids.getByRole("button", { name: /\+250ml/ })).toBeVisible();
+    await liquids.getByRole("button", { name: "Confirm Entry" }).click();
+    await expect(page.getByText("Water intake recorded", { exact: true })).toBeVisible();
+
+    await expect(today.getByTestId("today-water-value")).toHaveText("250");
+    await expect(liquids.locator("#section-water")).toContainText("250");
+  });
+
+  test("the whole value box takes the tap: Weight, the Liquids amount and the BP fields", async ({ page }) => {
+    await openDesktop(page);
+    // Weight: a click in the corner of the big box, far from the "-- kg" text, starts typing.
+    const weight = moduleWindow(page, "weight");
+    const tapBox = weight.locator("label").filter({ hasText: "kg" }).first();
+    const field = tapBox.locator("input");
+    const box = await boxOf(tapBox);
+    expect(box.width).toBeGreaterThan(150);
+    await page.mouse.click(box.x + 6, box.y + 6);
+    await expect(field).toBeFocused();
+    await page.keyboard.type("78.4");
+    await page.keyboard.press("Tab");
+    await expect(weight.locator("#section-weight")).toContainText("78.40");
+
+    // Liquids: the whole amount box is the button.
+    const liquids = moduleWindow(page, "liquids");
+    const amount = liquids.getByRole("button", { name: /tap to edit/i });
+    const a = await boxOf(amount);
+    await page.mouse.click(a.x + 5, a.y + 5);
+    // It opens the amount editor.
+    await expect(page.getByRole("dialog")).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+
+    // Blood pressure: the big fields are inputs edge to edge.
+    const bp = moduleWindow(page, "bp");
+    const sys = bp.getByLabel(/Systolic/);
+    const s = await boxOf(sys);
+    expect(s.width).toBeGreaterThan(100);
+    await page.mouse.click(s.x + 4, s.y + 4);
+    await expect(sys).toBeFocused();
+  });
 });
 
 test.describe("Windows on a touch tablet", () => {
