@@ -130,8 +130,37 @@ describe("apply mapping per host", () => {
       warnings: ["Low blood pressure"],
       foodInstruction: "none",
       foodNote: "",
-      searchQuery: "Entresto 100",
     });
+    // The query has no field in the form: it must not become a hidden brand
+    // name that passes validation after the user clears Brand name.
+    expect(p).not.toHaveProperty("searchQuery");
+    expect(
+      applyToNewBrand(["brand"], r, r.options[1]!, { isCombination: false, compounds: [] }),
+    ).not.toHaveProperty("searchQuery");
+  });
+
+  it("new prescription: safety notes are stored whatever groups are ticked", () => {
+    const r = normalizeLookupResult(ENTRESTO, "Entresto 100");
+    // "What it is for" unticked: the user types their own indication.
+    const p = applyToNewPrescription(["names", "strength"], r, r.options[1]!);
+    expect(p).not.toHaveProperty("indication");
+    expect(p.contraindications).toEqual(["Angioedema"]);
+    expect(p.warnings).toEqual(["Low blood pressure"]);
+    // A result with no indication at all still carries its safety notes.
+    const bare = normalizeLookupResult({ ...ENTRESTO, commonIndications: [] }, "Entresto");
+    expect(applyToNewPrescription(["appearance"], bare, null).contraindications).toEqual(["Angioedema"]);
+  });
+
+  it("new prescription: a single drug's names clear combination state left by an earlier lookup", () => {
+    // Several strengths and none named in the query: no strength is picked.
+    const r = normalizeLookupResult(BISOPROLOL, "Bisoprolol");
+    const p = applyToNewPrescription(["names"], r, null);
+    expect(p.genericName).toBe("Bisoprolol");
+    expect(p.isCombination).toBe(false);
+    expect(p.compounds).toEqual([
+      { name: "", strength: 0 },
+      { name: "", strength: 0 },
+    ]);
   });
 
   it("new prescription: a single drug sets the strength text and clears combo mode", () => {

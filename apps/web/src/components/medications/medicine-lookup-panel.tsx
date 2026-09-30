@@ -477,7 +477,10 @@ function LookupResultView({
     // A single drug has no compounds to fill in anywhere: say that, not where
     // compounds are edited.
     const elsewhere = g === "compounds" && r.activeIngredients.length < 2 ? undefined : unavailable[g];
-    return { g, v, why: elsewhere ?? groupWhy(g, r), on: !!v && L.sel[g] !== false };
+    // A lone group has no checkbox to tick again, so a group unticked on an
+    // earlier wizard step (the lookup is shared) must not switch it off here.
+    const ticked = groups.length === 1 || L.sel[g] !== false;
+    return { g, v, why: elsewhere ?? groupWhy(g, r), on: !!v && ticked };
   });
   const any = rows.some((x) => x.on);
   const food =

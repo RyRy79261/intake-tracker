@@ -80,6 +80,10 @@ describe("PrescriptionViewDrawer", () => {
     const timeInput = await screen.findByDisplayValue("08:00");
     expect(timeInput).toBeInTheDocument();
     expect(screen.getByDisplayValue("10")).toBeInTheDocument();
+    // The food segments are 44px tap targets.
+    const food = within(screen.getByRole("radiogroup", { name: "Food instruction" })).getAllByRole("radio");
+    expect(food).toHaveLength(3);
+    for (const f of food) expect(f).toHaveClass("min-h-11");
   });
 
   it("orders the schedule day picker from the user's week start", async () => {
@@ -350,6 +354,11 @@ describe("PrescriptionViewDrawer", () => {
 
     await user.click(screen.getByRole("tab", { name: /medicine/i }));
     await user.click(await screen.findByRole("button", { name: /edit zestril/i }));
+
+    // Colour swatches are 44px tap targets, so neighbours aren't mis-tapped.
+    const swatches = screen.getAllByRole("button", { name: /^Colour #/ });
+    expect(swatches.length).toBeGreaterThan(1);
+    for (const s of swatches) expect(s).toHaveClass("h-11", "w-11");
 
     const strength = screen.getByLabelText(/^strength$/i);
     await user.clear(strength);

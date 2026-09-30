@@ -310,7 +310,7 @@ function ScheduleTab({ prescription }: { prescription: Prescription }) {
               role="radio"
               aria-checked={foodInstruction === fi}
               className={cn(
-                "min-h-10 flex-1 border-l border-input px-2 text-[0.8125rem] font-medium first:border-l-0",
+                "min-h-11 flex-1 border-l border-input px-2 text-[0.8125rem] font-medium first:border-l-0",
                 foodInstruction === fi ? "bg-foreground text-background" : "hover:bg-foreground/6",
               )}
               onClick={() => { setFoodInstruction(fi); setDirty(true); }}
@@ -719,7 +719,7 @@ function MedicineEditForm({
               aria-pressed={pillColor === c}
               onClick={() => setPillColor(c)}
               className={cn(
-                "h-8 w-8 border",
+                "h-11 w-11 border",
                 pillColor === c ? "border-foreground shadow-[0_0_0_2px_hsl(var(--panel)),0_0_0_3px_hsl(var(--fg))]" : "border-[#5E5A70]",
               )}
               style={{ backgroundColor: c }}

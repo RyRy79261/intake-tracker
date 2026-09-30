@@ -251,17 +251,27 @@ export function applyToNewPrescription(
   r: LookupResult,
   o: LookupOption | null,
 ): Partial<AddMedicationFormState> {
+  // The query is not written to the form: `searchQuery` has no field any
+  // more, so it must not stand in for a brand name the user cleared.
   const p: Partial<AddMedicationFormState> = {
     searchResult: r,
-    searchQuery: r.query,
+    // The safety notes belong to the medicine, not to a ticked group: every
+    // apply stores them on the prescription.
+    contraindications: r.contraindications,
+    warnings: r.warnings,
   };
   const on = (g: LookupGroup) => groups.includes(g);
   if (on("names")) {
     p.genericName = capWords(r.genericName);
     p.brandName = brandLabel(r, o);
-    // A combination with no strength filled in: name its compounds so only
-    // the per-pill mg are left to enter.
-    if (r.activeIngredients.length >= 2 && !(on("strength") && o)) {
+    if (r.activeIngredients.length < 2) {
+      // A single drug: clear combination state left by an earlier lookup
+      // (the strength group below sets it again when it applies).
+      p.isCombination = false;
+      p.compounds = emptyCompounds();
+    } else if (!(on("strength") && o)) {
+      // A combination with no strength filled in: name its compounds so only
+      // the per-pill mg are left to enter.
       p.isCombination = true;
       p.compounds = r.activeIngredients.map((name) => ({ name, strength: 0 }));
     }
@@ -279,12 +289,7 @@ export function applyToNewPrescription(
     p.customDosage = "";
   }
   if (on("appearance")) Object.assign(p, appearancePatch(r));
-  if (on("indication")) {
-    p.indication = plainIndication(r);
-    // Stored on the prescription with the indication, as before.
-    p.contraindications = r.contraindications;
-    p.warnings = r.warnings;
-  }
+  if (on("indication")) p.indication = plainIndication(r);
   if (on("food")) {
     p.foodInstruction = r.foodInstruction;
     p.foodNote = r.foodNote ?? "";
@@ -303,7 +308,7 @@ export function applyToNewBrand(
   o: LookupOption | null,
   form: Pick<AddMedicationFormState, "isCombination" | "compounds">,
 ): Partial<AddMedicationFormState> {
-  const p: Partial<AddMedicationFormState> = { searchResult: r, searchQuery: r.query };
+  const p: Partial<AddMedicationFormState> = { searchResult: r };
   const on = (g: LookupGroup) => groups.includes(g);
   if (on("brand")) p.brandName = brandLabel(r, o);
   if (on("strength") && o) {

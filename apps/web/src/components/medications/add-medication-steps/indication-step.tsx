@@ -75,7 +75,7 @@ export function IndicationStep({
               aria-checked={foodInstruction === opt.value}
               onClick={() => onFieldChange("foodInstruction", opt.value)}
               className={cn(
-                "min-h-10 flex-1 border-l border-input px-2 text-[0.8125rem] font-medium first:border-l-0",
+                "min-h-11 flex-1 border-l border-input px-2 text-[0.8125rem] font-medium first:border-l-0",
                 foodInstruction === opt.value ? "bg-foreground text-background" : "hover:bg-foreground/6",
               )}
             >

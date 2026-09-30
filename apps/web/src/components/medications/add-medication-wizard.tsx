@@ -283,7 +283,7 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
         try {
           const result = await checkInteractions({
             mode: "conflict",
-            newMedication: formState.genericName || formState.searchQuery,
+            newMedication: finalGenericName,
             activePrescriptions: activeMeds.map((p) => ({ genericName: p.genericName })),
           });
           if (result) {

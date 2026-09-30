@@ -55,7 +55,7 @@ export function AppearanceStep({
               aria-label={`Colour ${c}`}
               onClick={() => onFieldChange("pillColor", c)}
               className={cn(
-                "h-10 w-10 border border-[#5E5A70]",
+                "h-11 w-11 border border-[#5E5A70]",
                 color === c && "shadow-[0_0_0_2px_hsl(var(--panel)),0_0_0_4px_hsl(var(--fg))]",
               )}
               style={{ backgroundColor: c }}

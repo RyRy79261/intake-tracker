@@ -107,7 +107,7 @@ export function SearchStep({
                       type="button"
                       onClick={() => applyComboOption(opt)}
                       className={cn(
-                        "min-h-9 border px-2.5 font-mono text-[0.8125rem]",
+                        "min-h-11 border px-2.5 font-mono text-[0.8125rem]",
                         selected
                           ? "border-foreground bg-foreground text-background"
                           : "border-line hover:bg-foreground/6"
@@ -167,7 +167,7 @@ export function SearchStep({
                     type="button"
                     onClick={() => onFieldChange("dosageStrength", s)}
                     className={cn(
-                      "min-h-9 border px-2.5 font-mono text-[0.8125rem]",
+                      "min-h-11 border px-2.5 font-mono text-[0.8125rem]",
                       dosageStrength === s
                         ? "border-foreground bg-foreground text-background"
                         : "border-line hover:bg-foreground/6"

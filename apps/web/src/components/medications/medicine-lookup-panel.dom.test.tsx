@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { useState } from "react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -264,6 +265,43 @@ describe("MedicineLookupPanel", () => {
 
     await user.click(screen.getByRole("button", { name: "Use this" }));
     expect((onApply.mock.calls[0]![0] as ApplyContext).groups).toEqual(["appearance"]);
+  });
+
+  it("a group unticked on the first step can still be used on a later single-group step", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => json(ENTRESTO)));
+    const onApply = vi.fn();
+    const user = userEvent.setup();
+    // The wizard shares one lookup across its steps and swaps the groups.
+    function Steps() {
+      const lookup = useMedicineLookup();
+      const [later, setLater] = useState(false);
+      return (
+        <>
+          <button type="button" onClick={() => setLater(true)}>Next step</button>
+          <MedicineLookupPanel
+            lookup={lookup}
+            groups={later ? ["appearance"] : ["names", "strength", "appearance"]}
+            compact={later}
+            fallbackQuery="Entresto"
+            onApply={onApply}
+          />
+        </>
+      );
+    }
+    render(<Steps />);
+    await lookUp(user, "Entresto 100");
+    await user.click(await screen.findByRole("checkbox", { name: /Shape, colour and markings/ }));
+    await user.click(screen.getByRole("button", { name: "Apply to form" }));
+    expect((onApply.mock.calls[0]![0] as ApplyContext).groups).toEqual(["names", "strength"]);
+
+    await user.click(screen.getByRole("button", { name: "Next step" }));
+    await user.click(screen.getByRole("button", { name: "Show result" }));
+    // One group: no checkbox to tick again, so it must be usable as it is.
+    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+    const use = screen.getByRole("button", { name: "Use this" });
+    expect(use).toBeEnabled();
+    await user.click(use);
+    expect((onApply.mock.calls[1]![0] as ApplyContext).groups).toEqual(["appearance"]);
   });
 
   it("compact with no name yet: the lookup is disabled", () => {
