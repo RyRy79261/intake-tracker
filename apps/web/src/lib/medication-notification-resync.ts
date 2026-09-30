@@ -20,11 +20,14 @@ export const RESYNC_DEBOUNCE_MS = 1_500;
 type ResyncTarget = () => Promise<void> | void;
 
 async function resyncAll(): Promise<void> {
-  const [{ syncMedicationNotifications }, { syncPushSchedule }] = await Promise.all([
+  const [{ syncMedicationNotifications }, { syncPushSchedule, syncPushSettings }] = await Promise.all([
     import("@/lib/local-notifications"),
     import("@/lib/push-notification-service"),
   ]);
-  await Promise.allSettled([syncMedicationNotifications(), syncPushSchedule()]);
+  // The follow-up settings go too: they are edited in the Settings sheet,
+  // which can be open with no Medications window (and so no
+  // usePushScheduleSync) mounted.
+  await Promise.allSettled([syncMedicationNotifications(), syncPushSchedule(), syncPushSettings()]);
 }
 
 /**
@@ -71,8 +74,8 @@ export function installMedicationNotificationResync(
     error: (error) => console.error("[reminders] Observer failed:", error),
   });
 
-  // Follow-up count/interval shape the native reminders; the reminders
-  // toggle gates web push.
+  // Follow-up count/interval shape the native reminders and are posted to
+  // the push server; the reminders toggle gates web push.
   const unsubscribeSettings = useSettingsStore.subscribe((state, prev) => {
     if (
       state.reminderFollowUpCount !== prev.reminderFollowUpCount ||
