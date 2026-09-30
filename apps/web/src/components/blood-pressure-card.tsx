@@ -4,7 +4,8 @@ import { useState } from "react";
 import { Button } from "@intake/ui/button";
 import { Input } from "@intake/ui/input";
 import { Label } from "@intake/ui/label";
-import { Check, ChevronDown, ChevronUp } from "lucide-react";
+import { Check } from "lucide-react";
+import { SubToggle, optOnClass as SEG_ON, unitClass } from "@/components/domain-scope";
 import { Spinner } from "@intake/ui/spinner";
 import { z } from "zod";
 import { cn } from "@/lib/utils";
@@ -17,8 +18,6 @@ function pulsePressureColor(pp: number) {
   return pp > 60 || pp < 30 ? "text-bp" : "text-muted-foreground";
 }
 
-/** A selected segmented toggle: solid ink, like the prototype's `.seg`. */
-const SEG_ON = "bg-foreground text-background border-foreground hover:bg-foreground/90 hover:text-background";
 
 import {
   BP_RANGES,
@@ -300,7 +299,7 @@ export function BloodPressureCard() {
                 onChange={(e) => setHeartRateInput(e.target.value)}
                 className="text-center num"
               />
-              <div className="flex items-center border border-line px-3 text-sm num text-muted-foreground">
+              <div className={cn("flex items-center border border-line px-3 text-sm", unitClass)}>
                 BPM
               </div>
             </div>
@@ -310,20 +309,9 @@ export function BloodPressureCard() {
           </div>
 
           {/* Expandable details section */}
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            aria-expanded={showDetails}
-            onClick={() => setShowDetails(!showDetails)}
-          >
-            <span>More options</span>
-            {showDetails ? (
-              <ChevronUp className="w-4 h-4" />
-            ) : (
-              <ChevronDown className="w-4 h-4" />
-            )}
-          </Button>
+          <SubToggle expanded={showDetails} onToggle={() => setShowDetails(!showDetails)}>
+            More options
+          </SubToggle>
 
           {showDetails && (
             <div className="space-y-3">
@@ -335,10 +323,8 @@ export function BloodPressureCard() {
                     type="button"
                     variant="outline"
                     size="sm"
-                    className={cn(
-                      "flex-1 transition-all",
-                      position === "sitting" && SEG_ON
-                    )}
+                    aria-pressed={position === "sitting"}
+                    className={cn("flex-1", position === "sitting" && SEG_ON)}
                     onClick={() => setPosition("sitting")}
                   >
                     Sitting
@@ -347,10 +333,8 @@ export function BloodPressureCard() {
                     type="button"
                     variant="outline"
                     size="sm"
-                    className={cn(
-                      "flex-1 transition-all",
-                      position === "standing" && SEG_ON
-                    )}
+                    aria-pressed={position === "standing"}
+                    className={cn("flex-1", position === "standing" && SEG_ON)}
                     onClick={() => setPosition("standing")}
                   >
                     Standing
@@ -366,10 +350,8 @@ export function BloodPressureCard() {
                     type="button"
                     variant="outline"
                     size="sm"
-                    className={cn(
-                      "flex-1 transition-all",
-                      arm === "left" && SEG_ON
-                    )}
+                    aria-pressed={arm === "left"}
+                    className={cn("flex-1", arm === "left" && SEG_ON)}
                     onClick={() => setArm("left")}
                   >
                     Left
@@ -378,10 +360,8 @@ export function BloodPressureCard() {
                     type="button"
                     variant="outline"
                     size="sm"
-                    className={cn(
-                      "flex-1 transition-all",
-                      arm === "right" && SEG_ON
-                    )}
+                    aria-pressed={arm === "right"}
+                    className={cn("flex-1", arm === "right" && SEG_ON)}
                     onClick={() => setArm("right")}
                   >
                     Right
@@ -397,10 +377,8 @@ export function BloodPressureCard() {
                     type="button"
                     variant="outline"
                     size="sm"
-                    className={cn(
-                      "flex-1 transition-all",
-                      !irregularHeartbeat && SEG_ON
-                    )}
+                    aria-pressed={!irregularHeartbeat}
+                    className={cn("flex-1", !irregularHeartbeat && SEG_ON)}
                     onClick={() => setIrregularHeartbeat(false)}
                   >
                     No
@@ -409,10 +387,8 @@ export function BloodPressureCard() {
                     type="button"
                     variant="outline"
                     size="sm"
-                    className={cn(
-                      "flex-1 transition-all",
-                      irregularHeartbeat && SEG_ON
-                    )}
+                    aria-pressed={irregularHeartbeat}
+                    className={cn("flex-1", irregularHeartbeat && SEG_ON)}
                     onClick={() => setIrregularHeartbeat(true)}
                   >
                     Yes
@@ -492,7 +468,7 @@ export function BloodPressureCard() {
             );
           }}
           renderEditForm={() => (
-            <InlineEditFormShell timestamp={editTimestamp} onTimestampChange={setEditTimestamp} note={editNote} onNoteChange={setEditNote} onSave={() => handleEditSubmit()} onCancel={closeEdit} buttonClassName={theme.buttonBg}>
+            <InlineEditFormShell timestamp={editTimestamp} onTimestampChange={setEditTimestamp} note={editNote} onNoteChange={setEditNote} onSave={() => handleEditSubmit()} onCancel={closeEdit}>
               <div className="grid grid-cols-2 gap-2">
                 <Input aria-label="Systolic pressure" type="number" min={BP_RANGES.systolic.min} max={BP_RANGES.systolic.max} placeholder="Systolic" value={editSystolic} onChange={(e) => setEditSystolic(e.target.value)} className="h-8 text-sm" />
                 <Input aria-label="Diastolic pressure" type="number" min={BP_RANGES.diastolic.min} max={BP_RANGES.diastolic.max} placeholder="Diastolic" value={editDiastolic} onChange={(e) => setEditDiastolic(e.target.value)} className="h-8 text-sm" />

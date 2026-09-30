@@ -33,7 +33,7 @@ export function AppearanceStep({
               onClick={() => onFieldChange("pillShape", s.value)}
               className={cn(
                 "flex min-h-[60px] flex-col items-center justify-center gap-1 border text-[0.8125rem]",
-                shape === s.value ? "border-foreground bg-foreground text-background" : "border-line hover:bg-foreground/6",
+                shape === s.value ? "border-primary bg-primary text-primary-foreground" : "border-line hover:bg-foreground/6",
               )}
             >
               <PillIcon shape={s.value} color={color} size={24} />

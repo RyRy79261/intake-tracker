@@ -145,7 +145,7 @@ export function DoseDetailDialog({
   return (
     <>
       <Drawer open={open} onOpenChange={onOpenChange}>
-        <DrawerContent className="max-h-[85vh] bg-panel" aria-describedby={undefined}>
+        <DrawerContent data-domain="meds" className="max-h-[85vh] bg-panel" aria-describedby={undefined}>
           <div className="px-4 pb-[calc(20px+env(safe-area-inset-bottom,0px))] pt-3">
             {/* Header with pill icon */}
             <div className="mb-4 grid grid-cols-[48px_minmax(0,1fr)] items-center gap-3 border-b border-line pb-3">

@@ -54,7 +54,7 @@ const HELP = "text-[0.8125rem] leading-[1.45] text-muted-foreground";
 
 function Busy({ title, sub, onCancel }: { title: string; sub: string; onCancel?: () => void }) {
   return (
-    <div className={BUSY_BOX} role="status" aria-live="polite">
+    <div data-domain="ai" className={BUSY_BOX} role="status" aria-live="polite">
       <div className="flex items-start gap-2.5 text-[0.8125rem]">
         <Spinner className="size-4 mt-0.5 shrink-0 text-ai" />
         <div className="min-w-0 flex-1">
@@ -304,7 +304,7 @@ export function AboutMedicineView({ prescription, prescriptions, onBack }: About
           </>
         ) : !about.busy ? (
           signedIn ? (
-            <div className="grid grid-cols-[28px_minmax(0,1fr)] items-start gap-x-3 gap-y-2.5 border border-ai/50 bg-ai/6 py-3 pl-[15px] pr-3 shadow-[inset_3px_0_0_hsl(var(--ai))]">
+            <div data-domain="ai" className="grid grid-cols-[28px_minmax(0,1fr)] items-start gap-x-3 gap-y-2.5 border border-ai/50 bg-ai/6 py-3 pl-[15px] pr-3 shadow-[inset_3px_0_0_hsl(var(--ai))]">
               <AiIcon className="h-7 w-7 text-ai" />
               <div>
                 <b className="block font-semibold">Look up this medicine with AI</b>
@@ -313,7 +313,7 @@ export function AboutMedicineView({ prescription, prescriptions, onBack }: About
                   only the name: {prescription.genericName}. The result is saved on this prescription.
                 </p>
               </div>
-              <Button className="col-span-full min-h-11 border-ai bg-ai text-on-domain hover:bg-ai/90" onClick={() => void lookUp()}>
+              <Button className="col-span-full min-h-11" onClick={() => void lookUp()}>
                 <AiIcon />
                 Look up with AI
               </Button>

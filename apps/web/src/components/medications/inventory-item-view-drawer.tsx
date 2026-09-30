@@ -62,7 +62,7 @@ export function InventoryItemViewDrawer({ item, prescription, open, onOpenChange
 
   return (
     <Drawer open={open} onOpenChange={onOpenChange}>
-      <DrawerContent className="flex max-h-[90dvh] flex-col bg-panel shadow-[inset_0_3px_0_hsl(var(--meds))]">
+      <DrawerContent data-domain="meds" className="flex max-h-[90dvh] flex-col bg-panel shadow-[inset_0_3px_0_hsl(var(--meds))]">
         <DrawerHeader className="shrink-0 border-b border-line text-left">
           <DrawerTitle className="text-base font-semibold">
             {current.brandName}{" "}

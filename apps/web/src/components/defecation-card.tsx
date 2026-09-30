@@ -12,9 +12,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@intake/ui/select";
-import { ChevronDown } from "lucide-react";
+import { SubToggle } from "@/components/domain-scope";
 import { Spinner } from "@intake/ui/spinner";
-import { cn } from "@/lib/utils";
 import { CARD_THEMES } from "@/lib/card-themes";
 import { ModuleCard, WhenLabel, useLogicalTodayRange } from "@/components/home/module-card";
 import { RecentEntriesList, InlineEditFormShell } from "@/components/recent-entries-list";
@@ -204,17 +203,9 @@ export function DefecationCard() {
         ))}
       </div>
 
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        className="self-start"
-        aria-expanded={showDetails}
-        onClick={toggleDetails}
-      >
+      <SubToggle expanded={showDetails} onToggle={toggleDetails}>
         {showDetails ? "Hide details" : "Add details"}
-        <ChevronDown className={cn("w-4 h-4", showDetails && "rotate-180")} />
-      </Button>
+      </SubToggle>
 
       {showDetails && (
         <div className="space-y-3">
@@ -285,7 +276,7 @@ export function DefecationCard() {
           <span className="capitalize">{record.amountEstimate || "—"}</span>
         )}
         renderEditForm={() => (
-          <InlineEditFormShell timestamp={editTimestamp} onTimestampChange={setEditTimestamp} note={editNote} onNoteChange={setEditNote} onSave={() => handleEditSubmit()} onCancel={closeEdit} buttonClassName={theme.buttonBg}>
+          <InlineEditFormShell timestamp={editTimestamp} onTimestampChange={setEditTimestamp} note={editNote} onNoteChange={setEditNote} onSave={() => handleEditSubmit()} onCancel={closeEdit}>
             <Select value={editAmountEstimate || NO_ESTIMATE_VALUE} onValueChange={setEditAmountEstimate}>
               <SelectTrigger aria-label="Amount estimate" className="h-8 text-sm">
                 <SelectValue placeholder="Amount estimate" />

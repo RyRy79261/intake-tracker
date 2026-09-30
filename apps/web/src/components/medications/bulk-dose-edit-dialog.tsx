@@ -120,7 +120,7 @@ export function BulkDoseEditDialog({ open, onOpenChange, time, slots, date }: Bu
   return (
     <>
       <Drawer open={open} onOpenChange={onOpenChange}>
-        <DrawerContent className="max-h-[85vh] bg-panel" aria-describedby={undefined}>
+        <DrawerContent data-domain="meds" className="max-h-[85vh] bg-panel" aria-describedby={undefined}>
           <div className="px-4 pb-[calc(20px+env(safe-area-inset-bottom,0px))] pt-3">
             {/* Header */}
             <div className="mb-3 flex items-center justify-between">

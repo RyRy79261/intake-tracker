@@ -5,6 +5,7 @@ import { Info } from "lucide-react";
 import { Button } from "@intake/ui/button";
 import { Label } from "@intake/ui/label";
 import { Switch } from "@intake/ui/switch";
+import { cn } from "@/lib/utils";
 import {
   Dialog,
   DialogContent,
@@ -127,7 +128,10 @@ export function AiInsightsConsentToggle({ field, label, noun }: Props) {
         <Switch id={inputId} checked={enabled} onCheckedChange={handleToggle} />
         <span
           aria-hidden="true"
-          className="w-[2.2em] font-mono text-xs text-muted-foreground"
+          className={cn(
+            "w-[2.2em] font-mono text-xs",
+            enabled ? "font-semibold text-foreground" : "text-muted-foreground",
+          )}
         >
           {enabled ? "On" : "Off"}
         </span>

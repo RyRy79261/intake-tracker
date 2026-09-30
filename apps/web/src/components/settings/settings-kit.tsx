@@ -6,7 +6,7 @@ import { Switch } from "@intake/ui/switch";
 import { SettingFieldMessage } from "@/components/settings/setting-field-message";
 import { validateAndSave } from "@intake/core/settings";
 import { cn } from "@/lib/utils";
-import { settingsGroupStyle, type SettingsColor } from "@/components/settings/settings-groups";
+import { settingsGroupScope, type SettingsColor } from "@/components/settings/settings-groups";
 
 /*
  * Ward Console settings building blocks, ported from the prototype's
@@ -14,8 +14,8 @@ import { settingsGroupStyle, type SettingsColor } from "@/components/settings/se
  * `.help`, `.seg`, `.tog`, `.lim`, `.setrow`, `.sub3`, `.warnbox`,
  * `.plainbox` and `.hr`. Sharp corners, 1px rules.
  *
- * Colour: each group sets `--g` (its own colour) and re-points `--primary` /
- * `--ring` at it (see settings-groups.ts), so the header icon, the stripe,
+ * Colour: each group is a domain scope (`data-domain`, see settings-groups.ts):
+ * it sets `--c` (its own colour) and re-points `--primary` / `--ring` at it, so the header icon, the stripe,
  * the sub-headings, the selected segment, the switch on-state, the primary
  * button and the focus rings all take the group colour. Group-coloured text
  * only sits on the panel surface, where every colour passes AA in both themes.
@@ -59,7 +59,7 @@ export function SubHead({
     <h3
       id={id}
       data-settings-subhead=""
-      className="flex items-center gap-2 pt-2 font-mono text-xs font-semibold uppercase leading-5 tracking-[0.08em] text-[color:var(--c,var(--g,currentColor))] after:h-px after:flex-1 after:bg-line after:content-['']"
+      className="subhead pt-2"
       style={color ? ({ "--c": color } as CSSProperties) : undefined}
     >
       {Icon && <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />}
@@ -94,10 +94,10 @@ export function SetGroup({
   const bodyId = `settings-group-${id}`;
   return (
     <section
-      className={cn("border-t border-line", open && "shadow-[inset_3px_0_0_var(--g)]")}
+      className={cn("border-t border-line", open && "shadow-[inset_3px_0_0_var(--c)]")}
       data-testid={`settings-group-${id}`}
       data-settings-color={color}
-      style={settingsGroupStyle(color)}
+      {...settingsGroupScope(color)}
     >
       <h2>
         <button
@@ -107,7 +107,7 @@ export function SetGroup({
           onClick={onToggle}
           className="flex min-h-12 w-full items-center gap-2.5 px-3.5 text-left text-[0.9375rem] font-semibold focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
         >
-          <Icon aria-hidden="true" className="h-[18px] w-[18px] shrink-0 text-[color:var(--g)]" />
+          <Icon aria-hidden="true" className="h-[18px] w-[18px] shrink-0 text-[color:var(--c)]" />
           {title}
           <ChevronDown
             aria-hidden="true"
@@ -259,7 +259,7 @@ export function SetRow({
       className="grid min-h-14 w-full grid-cols-[20px_minmax(0,1fr)_16px] items-center gap-2.5 border border-line bg-background px-2.5 py-1.5 text-left hover:border-muted-foreground focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
       style={color ? ({ "--c": color } as CSSProperties) : undefined}
     >
-      <Icon aria-hidden="true" className="h-5 w-5 text-[color:var(--c,var(--g,currentColor))]" />
+      <Icon aria-hidden="true" className="h-5 w-5 text-[color:var(--c,currentColor)]" />
       <span className="min-w-0">
         <b className="block text-[0.9375rem] font-semibold">{title}</b>
         <small className="block text-[0.8125rem] leading-[1.35] text-muted-foreground">{summary}</small>

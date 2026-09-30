@@ -10,7 +10,11 @@ import { useSettingsStore } from "@/stores/settings-store";
 import { cn } from "@/lib/utils";
 
 interface ModuleCardProps {
-  /** Domain colour for the top stripe and the icon. */
+  /**
+   * The card's domain. Opens a `data-domain` scope: the top stripe and icon
+   * take the colour, and so do the card's primary button, selected chips,
+   * tab underline, focus rings and carets.
+   */
   domain: Domain;
   icon: LucideIcon;
   title: string;
@@ -24,13 +28,14 @@ interface ModuleCardProps {
 /**
  * A Home module card (the prototype's `.mod`): a panel with a 3px top stripe
  * in the domain colour, a header with the icon, title and a right-side stat,
- * and the body (form, then the Recent list).
+ * and the body (form, then the Recent list). The whole card is a domain
+ * scope, so its controls are tinted with the same colour.
  */
 export function ModuleCard({ domain, icon: Icon, title, right, children, className, ...rest }: ModuleCardProps) {
   return (
     <section
       className={cn("wc-mod", className)}
-      style={domainStripeStyle(domain)}
+      data-domain={domain}
       aria-label={title}
       data-testid={rest["data-testid"]}
     >

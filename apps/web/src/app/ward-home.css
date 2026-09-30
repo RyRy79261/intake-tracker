@@ -372,10 +372,18 @@
   .wc-qchips button:hover {
     background: color-mix(in srgb, hsl(var(--fg)) 6%, transparent);
   }
+  /* Selected: the card's domain colour (ink outside a domain scope). */
   .wc-qchips button[aria-pressed="true"] {
-    background: hsl(var(--fg));
-    color: hsl(var(--bg));
-    border-color: hsl(var(--fg));
+    background: hsl(var(--primary));
+    color: hsl(var(--primary-foreground));
+    border-color: hsl(var(--primary));
+  }
+  .wc-qchips button:focus-visible,
+  .wc-lstep button:focus-visible,
+  .wc-pgrid > button:focus-visible,
+  .wc-quick3 > button:focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
   }
 
   /* − amount + stepper */
@@ -457,12 +465,12 @@
     white-space: nowrap;
   }
   .wc-pgrid > button[aria-pressed="true"] {
-    background: hsl(var(--fg));
-    color: hsl(var(--bg));
-    border-color: hsl(var(--fg));
+    background: hsl(var(--primary));
+    color: hsl(var(--primary-foreground));
+    border-color: hsl(var(--primary));
   }
   .wc-pgrid > button[aria-pressed="true"] span {
-    color: hsl(var(--bg));
+    color: hsl(var(--primary-foreground));
   }
 
   /* Small / Medium / Large */
@@ -519,15 +527,14 @@
   }
 
   /* Recent (3): time | label | value | delete */
+  /* The heading is a `subhead` (mono caps in the card colour); its hairline
+     replaces the rule that used to sit above the list. 7px = that rule + the
+     old padding, so the list stays where it was. */
   .wc-rec {
-    border-top: 1px solid hsl(var(--line));
-    padding-top: 6px;
+    padding-top: 7px;
   }
   .wc-rec h4 {
-    font-size: 0.75rem;
-    font-weight: 500;
-    color: hsl(var(--muted-fg));
-    margin: 2px 0 4px;
+    margin: 0 0 4px;
   }
   .wc-ri {
     display: grid;

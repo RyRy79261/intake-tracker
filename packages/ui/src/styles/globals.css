@@ -177,6 +177,7 @@
     --popover-foreground: var(--fg);
     --primary: var(--fg);
     --primary-foreground: var(--bg);
+    --primary-hover: hsl(var(--fg) / 0.85);
     --secondary: var(--chrome);
     --secondary-foreground: var(--fg);
     --muted: var(--chrome);
@@ -224,6 +225,7 @@
     --popover-foreground: var(--fg);
     --primary: var(--fg);
     --primary-foreground: var(--bg);
+    --primary-hover: hsl(var(--fg) / 0.85);
     --secondary: var(--chrome);
     --secondary-foreground: var(--fg);
     --muted: var(--chrome);
@@ -252,6 +254,53 @@
   }
 }
 
+/*
+  Domain scope. `data-domain="water"` on a card, window, dialog or field tints
+  everything inside it with that domain's colour, with no per-control classes:
+
+  - `--c` is the colour itself (stripes, pips, sub-headings, value text).
+  - `--primary`, `--primary-foreground` and `--ring` are re-pointed at it, so
+    the shared primitives (Button's primary variant, Switch, Checkbox, the
+    Tabs underline, the selected segment/chip, focus rings and the caret) take
+    the colour. Outside a scope they keep the ink colours set above.
+  - `--primary-hover` is the hover/pressed fill. It mixes towards the ink, so
+    the on-colour text gains contrast on hover in both themes (fading the fill
+    instead drops white-on-colour under AA in the day theme).
+
+  Text on a fill uses `--onD` (white by day, near-black by night): every domain
+  colour passes AA against it, and as text or a 3:1 mark on the panel
+  (domain-scope.test.ts). Scopes nest: an inner `data-domain` wins, and
+  `data-domain="ink"` returns to the neutral ink. Portalled content (dialogs,
+  sheets, popovers) is outside the scope and needs its own attribute.
+
+  `steel` is the Settings "System" group colour, not a tracked domain.
+*/
+@layer base {
+  [data-domain] {
+    --c: hsl(var(--d));
+    --primary: var(--d);
+    --primary-foreground: var(--onD);
+    --primary-hover: color-mix(in srgb, hsl(var(--d)) 85%, hsl(var(--fg)));
+    --ring: var(--d);
+  }
+  [data-domain="water"] { --d: var(--water); }
+  [data-domain="sodium"] { --d: var(--sodium); }
+  [data-domain="sugar"] { --d: var(--sugar); }
+  [data-domain="caffeine"] { --d: var(--caffeine); }
+  [data-domain="alcohol"] { --d: var(--alcohol); }
+  [data-domain="bp"] { --d: var(--bp); }
+  [data-domain="weight"] { --d: var(--weight); }
+  [data-domain="bath"] { --d: var(--bath); }
+  [data-domain="meds"] { --d: var(--meds); }
+  [data-domain="ai"] { --d: var(--ai); }
+  [data-domain="steel"] { --d: var(--steel); }
+  [data-domain="ink"] {
+    --d: var(--fg);
+    --primary-foreground: var(--bg);
+    --primary-hover: hsl(var(--fg) / 0.85);
+  }
+}
+
 /* Numbers: IBM Plex Mono with tabular figures. Plain `tabular-nums` keeps
    the current face; `num` also switches to the mono face. */
 @utility num {
@@ -265,4 +314,36 @@
    var(--c)`). Set `--c` (see domainStripeStyle in domain-colors.ts). */
 @utility stripe {
   box-shadow: inset 3px 0 0 var(--c, hsl(var(--fg)));
+}
+
+/* Sub-heading inside a card, window or settings group (the prototype's
+   `.sub3`): small mono caps in the scope colour `--c`, with a hairline running
+   to the right edge. Outside a scope it keeps the text colour it inherits. */
+@utility subhead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-plex-mono), ui-monospace, Menlo, Consolas, monospace;
+  font-size: 0.75rem;
+  line-height: 1.25rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--c, currentColor);
+  &::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: hsl(var(--line));
+  }
+}
+
+/* A 6px square in the scope colour: marks which domain a field or row belongs
+   to. Decorative (the label beside it names the domain). */
+@utility pip {
+  display: inline-block;
+  flex: none;
+  width: 6px;
+  height: 6px;
+  background: var(--c, hsl(var(--fg)));
 }

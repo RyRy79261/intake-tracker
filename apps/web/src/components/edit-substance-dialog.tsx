@@ -52,7 +52,7 @@ export function EditSubstanceDialog({
 
   return (
     <Dialog open={record !== null} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md" data-domain={theme.domain}>
         <DialogHeader>
           <DialogTitle>
             Edit {isCaffeine ? "Caffeine" : "Alcohol"} Entry
@@ -119,7 +119,7 @@ export function EditSubstanceDialog({
             <Button type="button" variant="outline" onClick={onClose}>
               Cancel
             </Button>
-            <Button type="submit" className={theme.buttonBg}>
+            <Button type="submit">
               Save Changes
             </Button>
           </DialogFooter>

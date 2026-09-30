@@ -30,7 +30,7 @@ import { useApiKeyStatus } from "@/hooks/use-ai-keys";
 import { useSubmitBugReport } from "@/hooks/use-bug-report";
 import { useToast } from "@intake/ui/use-toast";
 import { apiFetch } from "@/lib/api-fetch";
-import { DOMAIN_CLASSES, domainStripeStyle } from "@/lib/domain-colors";
+import { domainStripeStyle } from "@/lib/domain-colors";
 import { cn } from "@/lib/utils";
 import {
   collectEnvironmentInfo,
@@ -248,7 +248,7 @@ export function ReportBugDialog({
                       className={cn(
                         "flex min-h-11 flex-1 items-center justify-center gap-1.5 text-[0.8125rem] font-medium focus-visible:outline-2 focus-visible:-outline-offset-4 focus-visible:outline-ring",
                         i > 0 && "border-l border-muted-foreground",
-                        on && "bg-foreground font-semibold text-background",
+                        on && "bg-primary font-semibold text-primary-foreground",
                       )}
                     >
                       <Icon aria-hidden="true" className="h-4 w-4" />
@@ -373,6 +373,7 @@ export function ReportBugDialog({
                   means "how does this work?", not "this is broken". */}
               <div
                 data-testid="bug-manual-box"
+                data-domain="water"
                 className="flex flex-col gap-1.5 border border-water bg-water/10 p-3"
               >
                 <h3 className="flex items-center gap-2 text-sm font-semibold">
@@ -384,7 +385,7 @@ export function ReportBugDialog({
                   button and feature works — step by step.
                 </p>
                 <Button
-                  className={cn("mt-1", DOMAIN_CLASSES.water.solid)}
+                  className="mt-1"
                   onClick={() => {
                     onOpenChange(false);
                     router.push("/help");

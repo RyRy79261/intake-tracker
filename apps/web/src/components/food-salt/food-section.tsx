@@ -12,9 +12,9 @@ import {
   SelectValue,
 } from "@intake/ui/select";
 import { Sparkles } from "lucide-react";
+import { FieldScope, Pip } from "@/components/domain-scope";
 import { Spinner } from "@intake/ui/spinner";
 import { cn } from "@/lib/utils";
-import { CARD_THEMES } from "@/lib/card-themes";
 import { RecentEntriesList, InlineEditFormShell } from "@/components/recent-entries-list";
 import { parseIntakeWithAI } from "@/lib/ai-client";
 import {
@@ -59,7 +59,6 @@ import { useOptionalTrackerEnabled } from "@/lib/optional-trackers";
 import { waterContentPercentFromAbv } from "@intake/core/alcohol";
 import { useFieldId, useOnLogged } from "@/components/log-form-scope";
 
-const theme = CARD_THEMES.eating;
 
 // ─── Sodium entry ──────────────────────────────────────────────────
 // Salt is not sodium. The field takes an amount of salt, MSG or sodium in mg
@@ -653,12 +652,14 @@ export function FoodSection() {
             placeholder="e.g. 250"
             value={detailGrams}
             onChange={(e) => setDetailGrams(e.target.value)}
+            className="num"
           />
         </div>
 
         {/* Sodium section */}
         <div className="space-y-1">
           <Label htmlFor={fid("eating-sodium")} className="text-[0.8125rem] text-muted-foreground">
+            <Pip />
             Sodium
           </Label>
           <div className="flex gap-2">
@@ -670,7 +671,7 @@ export function FoodSection() {
               placeholder={sodiumUnit}
               value={sodiumMg}
               onChange={(e) => setSodiumMg(e.target.value)}
-              className="flex-1 min-w-0"
+              className="num flex-1 min-w-0"
             />
             <SodiumSourceSelect
               value={sodiumSource}
@@ -694,8 +695,9 @@ export function FoodSection() {
 
         {/* Sugar section — optional tracker */}
         {sugarEnabled && (
-          <div className="space-y-1" data-testid="eating-sugar-field">
+          <FieldScope domain="sugar" className="space-y-1" data-testid="eating-sugar-field">
             <Label htmlFor={fid("eating-sugar")} className="text-[0.8125rem] text-muted-foreground">
+              <Pip />
               Sugar (g){" "}
               <span className="font-normal">(optional)</span>
             </Label>
@@ -706,14 +708,16 @@ export function FoodSection() {
               placeholder="g"
               value={sugarG}
               onChange={(e) => setSugarG(e.target.value)}
+              className="num"
             />
-          </div>
+          </FieldScope>
         )}
 
         {/* Potassium section — optional tracker */}
         {potassiumEnabled && (
-          <div className="space-y-1" data-testid="eating-potassium-field">
+          <FieldScope domain="ink" className="space-y-1" data-testid="eating-potassium-field">
             <Label htmlFor={fid("eating-potassium")} className="text-[0.8125rem] text-muted-foreground">
+              <Pip />
               Potassium (mg){" "}
               <span className="font-normal">(optional)</span>
             </Label>
@@ -724,13 +728,15 @@ export function FoodSection() {
               placeholder="mg"
               value={potassiumMg}
               onChange={(e) => setPotassiumMg(e.target.value)}
+              className="num"
             />
-          </div>
+          </FieldScope>
         )}
 
         {/* Water content */}
-        <div className="space-y-1">
+        <FieldScope domain="water" className="space-y-1">
           <Label htmlFor={fid("eating-water")} className="text-[0.8125rem] text-muted-foreground">
+            <Pip />
             Water content (ml){" "}
             <span className="font-normal">(optional)</span>
           </Label>
@@ -741,8 +747,9 @@ export function FoodSection() {
             placeholder="ml"
             value={waterMl}
             onChange={(e) => setWaterMl(e.target.value)}
+            className="num"
           />
-        </div>
+        </FieldScope>
 
         <CollapsibleTimeInputControlled
           value={customTime}
@@ -809,7 +816,7 @@ export function FoodSection() {
           return sodium ? <span className="text-sodium">{sodium}mg Na</span> : null;
         }}
         renderEditForm={() => (
-          <InlineEditFormShell timestamp={editTimestamp} onTimestampChange={setEditTimestamp} note={editNote} onNoteChange={setEditNote} onSave={() => handleEditSubmit()} onCancel={closeEdit} buttonClassName={theme.buttonBg}>
+          <InlineEditFormShell timestamp={editTimestamp} onTimestampChange={setEditTimestamp} note={editNote} onNoteChange={setEditNote} onSave={() => handleEditSubmit()} onCancel={closeEdit}>
             {editPrefill !== "ready" && (
               <p className="text-xs text-muted-foreground" role="status">
                 {editPrefill === "loading"

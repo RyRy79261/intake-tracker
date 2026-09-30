@@ -73,7 +73,7 @@ export function DosageStep({
                 onClick={() => { onFieldChange("dosageAmount", mult); onFieldChange("customDosage", ""); }}
                 className={cn(
                   "min-h-11 border px-1 font-mono text-sm font-medium",
-                  dosageAmount === mult && !customDosage ? "border-foreground bg-foreground text-background" : "border-line hover:bg-foreground/6",
+                  dosageAmount === mult && !customDosage ? "border-primary bg-primary text-primary-foreground" : "border-line hover:bg-foreground/6",
                 )}
               >
                 {label}

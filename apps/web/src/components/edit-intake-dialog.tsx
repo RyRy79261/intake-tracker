@@ -10,9 +10,9 @@ import {
   DialogTitle,
 } from "@intake/ui/dialog";
 import { Button } from "@intake/ui/button";
+import type { DomainScope } from "@/lib/domain-colors";
 import { Input } from "@intake/ui/input";
 import { Label } from "@intake/ui/label";
-import { cn } from "@/lib/utils";
 import { type IntakeRecord } from "@/lib/db";
 
 interface EditIntakeDialogProps {
@@ -50,9 +50,18 @@ export function EditIntakeDialog({
       : record?.type === "sugar"
         ? "sugar amount in grams"
         : "sodium amount in milligrams";
+  // Potassium has no domain colour of its own; it stays ink (as in Metrics).
+  const domain: DomainScope =
+    record?.type === "water"
+      ? "water"
+      : record?.type === "sugar"
+        ? "sugar"
+        : record?.type === "potassium"
+          ? "ink"
+          : "sodium";
   return (
     <Dialog open={record !== null} onOpenChange={(dialogOpen) => !dialogOpen && onClose()}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md" data-domain={domain}>
         <DialogHeader>
           <DialogTitle>Edit {typeLabel} Entry</DialogTitle>
           <DialogDescription>Update the amount, time, or note for this entry</DialogDescription>
@@ -111,18 +120,7 @@ export function EditIntakeDialog({
             <Button type="button" variant="outline" onClick={onClose}>
               Cancel
             </Button>
-            <Button
-              type="submit"
-              className={cn(
-                record?.type === "water"
-                  ? "bg-sky-600 hover:bg-sky-700"
-                  : record?.type === "sugar"
-                    ? "bg-pink-600 hover:bg-pink-700"
-                    : "bg-amber-600 hover:bg-amber-700"
-              )}
-            >
-              Save Changes
-            </Button>
+            <Button type="submit">Save Changes</Button>
           </DialogFooter>
         </form>
       </DialogContent>

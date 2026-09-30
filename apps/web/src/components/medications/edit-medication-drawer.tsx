@@ -77,7 +77,7 @@ export function PrescriptionViewDrawer({ prescription, open, onOpenChange }: Pre
 
   return (
     <Drawer open={open} onOpenChange={onOpenChange}>
-      <DrawerContent className="flex max-h-[90dvh] flex-col bg-panel shadow-[inset_0_3px_0_hsl(var(--meds))]">
+      <DrawerContent data-domain="meds" className="flex max-h-[90dvh] flex-col bg-panel shadow-[inset_0_3px_0_hsl(var(--meds))]">
         <DrawerHeader className="shrink-0 border-b border-line text-left">
           <DrawerTitle className="text-base font-semibold">{currentPrescription.genericName}</DrawerTitle>
           <p className="text-[0.8125rem] text-muted-foreground">
@@ -311,7 +311,7 @@ function ScheduleTab({ prescription }: { prescription: Prescription }) {
               aria-checked={foodInstruction === fi}
               className={cn(
                 "min-h-11 flex-1 border-l border-input px-2 text-[0.8125rem] font-medium first:border-l-0",
-                foodInstruction === fi ? "bg-foreground text-background" : "hover:bg-foreground/6",
+                foodInstruction === fi ? "bg-primary text-primary-foreground" : "hover:bg-foreground/6",
               )}
               onClick={() => { setFoodInstruction(fi); setDirty(true); }}
             >
@@ -366,7 +366,7 @@ function ScheduleTab({ prescription }: { prescription: Prescription }) {
                   className={cn(
                     "min-h-11 border text-xs font-medium",
                     row.daysOfWeek.includes(day)
-                      ? "border-foreground bg-foreground text-background"
+                      ? "border-primary bg-primary text-primary-foreground"
                       : "border-line text-muted-foreground hover:bg-foreground/6",
                   )}
                 >
@@ -703,7 +703,7 @@ function MedicineEditForm({
               onClick={() => setPillShape(s.value)}
               className={cn(
                 "inline-flex h-11 w-11 items-center justify-center border",
-                pillShape === s.value ? "border-foreground bg-foreground/10 shadow-[inset_0_0_0_1px_hsl(var(--fg))]" : "border-line",
+                pillShape === s.value ? "border-primary bg-foreground/10 shadow-[inset_0_0_0_1px_hsl(var(--primary))]" : "border-line",
               )}
             >
               <PillIcon shape={s.value} color={pillColor} size={20} />

@@ -92,7 +92,14 @@ describe("SettingsSheet", () => {
       if (!meta) return;
       expect(colors[i]).toBe(meta.color);
       // The colour itself, as the CSS variable the header icon and stripe read.
-      expect(section.style.getPropertyValue("--g")).toBe(settingsColor(meta.color));
+      // The colour reaches the header icon, stripe and controls through the
+      // domain scope; the neutral group only sets `--c`.
+      if (meta.color === "muted") {
+        expect(section.style.getPropertyValue("--c")).toBe(settingsColor(meta.color));
+        expect(section).not.toHaveAttribute("data-domain");
+      } else {
+        expect(section).toHaveAttribute("data-domain", meta.color);
+      }
       // Its header carries an icon before the title.
       const header = within(section).getByRole("button", { name: meta.title });
       expect(header.querySelector("svg")).not.toBeNull();
@@ -108,8 +115,8 @@ describe("SettingsSheet", () => {
 
     const tracking = within(sheet).getByTestId("settings-group-tracking");
     const meds = within(sheet).getByTestId("settings-group-meds");
-    expect(tracking.className).toContain("inset_3px_0_0_var(--g)");
-    expect(meds.className).not.toContain("inset_3px_0_0_var(--g)");
+    expect(tracking.className).toContain("inset_3px_0_0_var(--c)");
+    expect(meds.className).not.toContain("inset_3px_0_0_var(--c)");
 
     const heads = within(tracking).getAllByRole("heading", { level: 3 });
     expect(heads.map((h) => h.textContent)).toEqual([
@@ -120,11 +127,11 @@ describe("SettingsSheet", () => {
       "Bathroom defaults",
       "Drinks",
     ]);
-    for (const h of heads) expect(h.className).toContain("var(--g");
+    for (const h of heads) expect(h.className).toContain("subhead");
 
     // The selected segment and the switch take the group colour through
     // `--primary`, which the group re-points at its own colour.
-    expect(tracking.style.getPropertyValue("--primary")).toBe("var(--water)");
+    expect(tracking).toHaveAttribute("data-domain", "water");
     const selected = within(tracking).getAllByRole("radio", { checked: true });
     expect(selected.length).toBeGreaterThan(0);
     for (const radio of selected) expect(radio.className).toContain("bg-primary");

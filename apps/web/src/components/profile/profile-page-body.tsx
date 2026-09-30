@@ -106,7 +106,7 @@ export function ProfilePageBody() {
 
       <MedicalContextSection signedIn={!signedOut} />
 
-      <section aria-labelledby="profile-account">
+      <section aria-labelledby="profile-account" data-domain="steel">
         <ProfileSec id="profile-account">Account</ProfileSec>
         {!ready ? (
           <div className="flex items-center justify-center border border-line p-6">

@@ -78,3 +78,23 @@ describe("MedicationsPageBody — About this medicine", () => {
     expect(flashed).toEqual([]);
   });
 });
+
+describe("MedicationsPageBody — domain scope", () => {
+  it("tints the whole window with the meds colour", async () => {
+    useMedicationUIStore.setState({ activeTab: "prescriptions" });
+    await renderWithFixtures(<MedicationsPageBody />, {
+      seed: { prescriptions: [makePrescription({ genericName: "Ramipril" })] },
+    });
+    await screen.findByRole("button", { name: /Ramipril/, expanded: false });
+
+    const body = screen.getByTestId("medications-body");
+    expect(body).toHaveAttribute("data-domain", "meds");
+    // `contents`: the scope adds no box, so the sticky tab bar still pins to
+    // the window's scroller.
+    expect(body.className).toContain("contents");
+    // The selected tab's underline reads the scope colour.
+    const tab = screen.getByRole("tab", { selected: true });
+    expect(tab.closest("[data-domain]")).toBe(body);
+    expect(tab.className).toContain("hsl(var(--primary))");
+  });
+});

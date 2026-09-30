@@ -6,7 +6,7 @@ import { ReportBugDialog } from "@/components/report-bug-dialog";
 import { useSettingsSheetStore, type SettingsGroupId } from "@/stores/settings-sheet-store";
 import { openSettingsPage } from "@/hooks/use-window-history";
 import { SetGroup } from "@/components/settings/settings-kit";
-import { SETTINGS_GROUP_META, settingsGroupStyle } from "@/components/settings/settings-groups";
+import { SETTINGS_GROUP_META, settingsGroupScope } from "@/components/settings/settings-groups";
 import { TrackingSettingsSection } from "@/components/settings/tracking-settings-section";
 import { AppearanceSection } from "@/components/settings/appearance-section";
 import { MedicationPrefsSection } from "@/components/settings/medication-prefs-section";
@@ -137,10 +137,10 @@ export function SettingsBody() {
   if (page !== "presets") return <SettingsGroups />;
   return (
     <div
-      className="px-3.5 shadow-[inset_3px_0_0_var(--g)]"
+      className="px-3.5 shadow-[inset_3px_0_0_var(--c)]"
       data-testid="settings-presets-page"
       data-settings-color={PRESETS_COLOR}
-      style={settingsGroupStyle(PRESETS_COLOR)}
+      {...settingsGroupScope(PRESETS_COLOR)}
     >
       <LiquidPresetsSection />
     </div>

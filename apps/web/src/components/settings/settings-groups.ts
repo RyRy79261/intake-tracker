@@ -80,24 +80,27 @@ export function settingsColor(color: SettingsColor): string {
   return `hsl(var(${SETTINGS_COLOR_TOKEN[color]}))`;
 }
 
+/** What a settings group spreads on its root element (see `settingsGroupScope`). */
+export interface SettingsGroupScope {
+  "data-domain"?: SettingsColor;
+  style?: CSSProperties;
+}
+
 /**
- * Inline style that tints everything inside a settings group:
+ * Props that tint everything inside a settings group. This is the app-wide
+ * domain scope (`data-domain`, packages/ui/src/styles/globals.css):
  *
- * - `--g` is the group colour (header icon, stripe, sub-headings).
+ * - `--c` is the group colour (header icon, stripe, sub-headings).
  * - `--primary`, `--primary-foreground` and `--ring` are re-pointed at it, so
  *   the group's primary buttons, switch on-state, selected segment and focus
  *   rings take the colour with no per-control classes. Dialogs and popovers
  *   render in a portal, outside the group, and keep the ink primary.
  *
- * `muted` only sets `--g`: a grey primary button would read as disabled.
+ * `muted` only sets `--c`: a grey primary button would read as disabled.
  */
-export function settingsGroupStyle(color: SettingsColor): CSSProperties {
-  const token = SETTINGS_COLOR_TOKEN[color];
-  const style: Record<string, string> = { "--g": `hsl(var(${token}))` };
-  if (color !== "muted") {
-    style["--primary"] = `var(${token})`;
-    style["--primary-foreground"] = "var(--onD)";
-    style["--ring"] = `var(${token})`;
+export function settingsGroupScope(color: SettingsColor): SettingsGroupScope {
+  if (color === "muted") {
+    return { style: { "--c": settingsColor(color) } as CSSProperties };
   }
-  return style as CSSProperties;
+  return { "data-domain": color };
 }

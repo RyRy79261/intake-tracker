@@ -180,7 +180,7 @@ export function LogDoseDialog({ open, onOpenChange }: LogDoseDialogProps) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent
+      <DialogContent data-domain="meds"
         className="flex w-[calc(100%-24px)] max-w-[460px] flex-col gap-0 border-line bg-panel p-0 shadow-[inset_0_3px_0_hsl(var(--meds))]"
       >
         <div className="flex-none px-4 pb-2.5 pr-12 pt-3.5">

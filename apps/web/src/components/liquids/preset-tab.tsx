@@ -6,6 +6,7 @@ import { Input } from "@intake/ui/input";
 import { Label } from "@intake/ui/label";
 import { SegmentBar } from "@/components/home/module-card";
 import { Sparkles, Check } from "lucide-react";
+import { FieldScope, Pip } from "@/components/domain-scope";
 import { Spinner } from "@intake/ui/spinner";
 import { apiFetch } from "@/lib/api-fetch";
 import { readAiErrorMessage } from "@/lib/ai-error-message";
@@ -620,8 +621,9 @@ export function PresetTab({ tab }: PresetTabProps) {
 
       {/* 3. Volume and Substance Fields */}
       <div className="grid grid-cols-2 gap-2">
-        <div>
+        <FieldScope domain="water">
           <Label htmlFor={fid(`${tab}-volume`)} className="text-xs text-muted-foreground">
+            <Pip />
             Volume (ml)
           </Label>
           <Input
@@ -634,12 +636,13 @@ export function PresetTab({ tab }: PresetTabProps) {
             className="num"
             min={0}
           />
-        </div>
+        </FieldScope>
         <div>
           <Label
             htmlFor={fid(`${tab}-per100ml`)}
             className="text-xs text-muted-foreground"
           >
+            <Pip />
             {primarySubstanceLabel}
           </Label>
           <Input
@@ -662,11 +665,12 @@ export function PresetTab({ tab }: PresetTabProps) {
 
       {/* Optional sugar content — only while the sugar tracker is on */}
       {sugarEnabled && (
-        <div className="space-y-1">
+        <FieldScope domain="sugar" className="space-y-1">
           <Label
             htmlFor={fid(`${tab}-sugar`)}
             className="text-xs text-muted-foreground"
           >
+            <Pip />
             Sugar (g) — optional
           </Label>
           <Input
@@ -679,13 +683,13 @@ export function PresetTab({ tab }: PresetTabProps) {
             onChange={(e) => dispatch({ type: "setSugar", value: e.target.value })}
             className="num"
           />
-        </div>
+        </FieldScope>
       )}
 
       {/* 4. Calculated Amount Display */}
       <div>
         {calculatedDisplay ? (
-          <p className={cn("text-sm font-semibold", theme.iconColor)}>
+          <p className={cn("num text-sm font-semibold", theme.iconColor)}>
             {calculatedDisplay}
           </p>
         ) : (

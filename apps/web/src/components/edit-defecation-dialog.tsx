@@ -26,7 +26,7 @@ export function EditDefecationDialog({ record, ...rest }: EditDefecationDialogPr
       amountOptions={DEFECATION_AMOUNT_OPTIONS}
       allowNoEstimate
       notePlaceholder="e.g. consistency, urgency"
-      accentClassName="bg-stone-600 hover:bg-stone-700"
+      domain="bath"
       idPrefix="edit-defecation"
       {...rest}
     />
