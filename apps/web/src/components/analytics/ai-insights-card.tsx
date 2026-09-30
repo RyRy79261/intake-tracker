@@ -190,7 +190,8 @@ function ReportContent({ report }: { report: InsightReport }) {
 /**
  * On-demand AI summary of the last 30 days of tracked data. Two flavours:
  *
- *   • Fast analysis — synchronous Sonnet summary, returns in ~10s.
+ *   • Fast analysis — synchronous Sonnet summary, returned while the user
+ *     waits.
  *   • Deep analysis — Opus + web search, submitted as an Anthropic batch.
  *     Returns minutes later; the user can close the page and come back.
  *

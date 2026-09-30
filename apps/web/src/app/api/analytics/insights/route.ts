@@ -1,11 +1,10 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import type Anthropic from "@anthropic-ai/sdk";
 import { withAuth } from "@/lib/auth-middleware";
 import {
   AnalyticsInsightsRequestSchema,
   InsightResponseSchema,
-  INSIGHT_TOOL,
+  FAST_INSIGHT_TOOL,
   INSIGHTS_SYSTEM_PROMPT,
   buildInsightsPrompt,
 } from "@intake/ai-prompts/analytics-insights";
@@ -16,9 +15,10 @@ import {
   CLAUDE_MODELS,
 } from "@/app/api/ai/_shared/claude-client";
 import {
-  recordUsage,
-  tokensFromAnthropic,
-} from "@/app/api/ai/_shared/usage-tracker";
+  AiRefusalError,
+  AiTruncatedError,
+  requestToolCall,
+} from "@/app/api/ai/_shared/claude-call";
 import { aiErrorResponse } from "@/app/api/ai/_shared/ai-error-response";
 import { sanitizeInsightsRequest } from "@/lib/server/sanitize-insights-request";
 
@@ -37,16 +37,20 @@ import { sanitizeInsightsRequest } from "@/lib/server/sanitize-insights-request"
  * summaries (which can quote those conditions back). Those are sent on
  * purpose, so sanitizeInsightsRequest only redacts incidental PII in them
  * (emails, phone and ID numbers) before the prompt is built.
+ *
+ * The Claude call goes through the shared claude-call helpers, which branch
+ * on `stop_reason` (a refusal, a max_tokens cut-off), record usage for every
+ * upstream response and hold the call to one route-wide deadline.
  */
 
 export const runtime = "nodejs";
 
-const rateLimiter = createRateLimiter(10);
+// Vercel function limit. The shared deadline stops short of it so a slow
+// model call ends in a JSON 504 rather than the platform's own.
+export const maxDuration = 90;
+const DEADLINE_MS = 80_000;
 
-type ToolUseBlock = Extract<
-  Anthropic.Messages.ContentBlock,
-  { type: "tool_use" }
->;
+const rateLimiter = createRateLimiter(10);
 
 export const POST = withAuth(async ({ request, auth }) => {
   try {
@@ -80,66 +84,53 @@ export const POST = withAuth(async ({ request, auth }) => {
 
     console.log(`[AUDIT] analytics insights from user: ${auth.userId}`);
 
-    const startedAt = Date.now();
-    // The response schema permits ~2000 chars summary + 12×500 chars
-    // observations ≈ well over 1024 tokens once tool-call JSON overhead is
-    // added. Comparison output (when priorAssessments is included) reliably
-    // approaches that ceiling, so 1024 truncates mid-JSON and the tool_use
-    // input fails schema validation downstream.
-    const response = await client.messages.create({
-      model: CLAUDE_MODELS.quality,
-      max_tokens: 4096, // headroom for Sonnet 5 adaptive thinking
-      system: INSIGHTS_SYSTEM_PROMPT,
-      tools: [INSIGHT_TOOL],
-      tool_choice: { type: "tool", name: INSIGHT_TOOL.name },
-      messages: [
-        {
-          role: "user",
-          content: buildInsightsPrompt(sanitizeInsightsRequest(parsed.data)),
-        },
-      ],
-    });
-    // Usage telemetry must never turn a successful AI call into a 502.
-    try {
-      recordUsage({
-        userId: auth.userId!,
-        keyOwnerId: resolved.keyOwnerId,
-        keySource: resolved.source,
-        provider: "anthropic",
+    // Quality tier (Claude Sonnet 5.5): a forced tool_choice is a 400 on
+    // this model, so the request is `auto` with a strict tool. The system
+    // prompt says to always answer through the tool, and if the reply is
+    // prose anyway requestToolCall asks once more on an unforced,
+    // append-only turn. No sampling parameters either (also a 400).
+    const { toolUse: toolBlock, responses } = await requestToolCall(
+      client,
+      {
         model: CLAUDE_MODELS.quality,
-        route: "/api/analytics/insights",
-        status: "success",
-        durationMs: Date.now() - startedAt,
-        ...tokensFromAnthropic(response.usage),
-      });
-    } catch (usageError) {
-      console.error("[analytics/insights] usage recording failed:", usageError);
-    }
-
-    const toolBlock = response.content.find(
-      (b): b is ToolUseBlock =>
-        b.type === "tool_use" && b.name === INSIGHT_TOOL.name,
-    );
-    // When the model hits max_tokens the tool_use block is still emitted but
-    // its `input` JSON is truncated mid-object — surface that as a distinct,
-    // actionable error instead of the generic "format invalid" toast.
-    if (response.stop_reason === "max_tokens") {
-      console.error(
-        "[analytics/insights] response truncated by max_tokens",
-        { hasToolBlock: Boolean(toolBlock) },
-      );
-      return NextResponse.json(
-        {
-          error:
-            "AI response was cut off before it finished. Try again, or generate without 'Include my previous summary'.",
-          code: "RESPONSE_TRUNCATED",
+        // The response schema permits a 4000-char summary plus 16 × 2000-char
+        // observations, and a comparison (priorAssessments) runs long: 1024
+        // used to truncate the tool call mid-JSON. Adaptive thinking is
+        // always on for this model and shares the ceiling, and high effort
+        // thinks more, so this leaves room for both. A short answer still
+        // bills short.
+        max_tokens: 8192,
+        // A written assessment of the period, read later rather than waited
+        // on like a lookup: high. Set explicitly on every quality request.
+        output_config: { effort: "high" },
+        system: INSIGHTS_SYSTEM_PROMPT,
+        tools: [FAST_INSIGHT_TOOL],
+        tool_choice: { type: "auto" },
+        messages: [
+          {
+            role: "user",
+            content: buildInsightsPrompt(sanitizeInsightsRequest(parsed.data)),
+          },
+        ],
+      },
+      {
+        usage: {
+          userId: auth.userId!,
+          resolved,
+          route: "/api/analytics/insights",
         },
-        { status: 502 },
-      );
-    }
+        deadline: Date.now() + DEADLINE_MS,
+        toolName: FAST_INSIGHT_TOOL.name,
+        retryInstruction:
+          "Now return the summary and observations via the analytics_insight tool.",
+        forceOnRetry: false,
+      },
+    );
+
+    const stopReason = responses.at(-1)?.stop_reason;
     if (!toolBlock) {
       console.error("[analytics/insights] model did not call the insight tool", {
-        stopReason: response.stop_reason,
+        stopReason,
       });
       return NextResponse.json(
         { error: "AI response format invalid" },
@@ -152,7 +143,7 @@ export const POST = withAuth(async ({ request, auth }) => {
       console.error(
         "[analytics/insights] AI response validation failed:",
         JSON.stringify(z.flattenError(validated.error)),
-        { stopReason: response.stop_reason },
+        { stopReason },
       );
       return NextResponse.json(
         { error: "AI response format invalid" },
@@ -166,6 +157,30 @@ export const POST = withAuth(async ({ request, auth }) => {
       generatedAt: Date.now(),
     });
   } catch (error) {
+    // Still cut off after the budget was raised once: a distinct, actionable
+    // error instead of the generic "format invalid" toast.
+    if (error instanceof AiTruncatedError) {
+      console.error("[analytics/insights] response truncated by max_tokens");
+      return NextResponse.json(
+        {
+          error:
+            "AI response was cut off before it finished. Try again, or generate without 'Include my previous summary'.",
+          code: "RESPONSE_TRUNCATED",
+        },
+        { status: 502 },
+      );
+    }
+    // The shared refusal message tells the user to enter the value by hand,
+    // which means nothing for a summary.
+    if (error instanceof AiRefusalError) {
+      return NextResponse.json(
+        {
+          error: "The AI declined to summarise this data.",
+          code: "AI_REFUSED",
+        },
+        { status: 422 },
+      );
+    }
     const mapped = aiErrorResponse(error);
     if (mapped) return mapped;
     console.error("[analytics/insights] error:", error);

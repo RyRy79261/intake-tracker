@@ -48,6 +48,13 @@ export const PARSE_TOOL = {
   name: "parse_voice_log" as const,
   description:
     "Return a structured list of health log items extracted from a voice transcript.",
+  // Schema-valid arguments are guaranteed without forcing the tool, which
+  // the quality model (Claude Sonnet 5.5) rejects. Strict mode allows at
+  // most 24 optional parameters per request, and every per-item field
+  // except `kind` is one — so `reasoning` is required, and a new per-item
+  // field has to stay inside that limit (strict-tool-schemas.test.ts counts
+  // them).
+  strict: true,
   input_schema: {
     type: "object" as const,
     properties: {
@@ -71,9 +78,10 @@ export const PARSE_TOOL = {
                 "defecation",
               ],
             },
-            // Fields are union — Anthropic tool input schemas don't enforce
-            // discriminated unions, so we list everything and validate
-            // server-side with Zod.
+            // Fields are a union across kinds. One flat object with optional
+            // fields keeps the strict schema small; which fields belong to
+            // which kind, and their ranges, is validated server-side with
+            // Zod.
             systolic: { type: "number" },
             diastolic: { type: "number" },
             heartRate: { type: "number" },
@@ -112,6 +120,7 @@ export const PARSE_TOOL = {
             },
           },
           required: ["kind"],
+          additionalProperties: false,
         },
       },
       reasoning: {
@@ -119,7 +128,7 @@ export const PARSE_TOOL = {
         description: "Brief (one or two sentences) explanation of estimates and assumptions.",
       },
     },
-    required: ["items"],
+    required: ["items", "reasoning"],
     additionalProperties: false,
   },
 };
