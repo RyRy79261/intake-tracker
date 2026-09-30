@@ -472,6 +472,7 @@ export const MANUALS: Manual[] = [
         steps: [
           "Tap the Voice log button on the home screen.",
           "Tap record and describe your readings, drinks, food or weight — all in one take.",
+          "Say when something happened if it was not just now — \"a beer yesterday at 8pm\", \"water an hour ago\". Each row shows its time, and you can change it.",
           "Stop recording. The app turns your speech into text and parses it into rows.",
           "Review each parsed row, correct anything that is wrong, then approve to save.",
         ],

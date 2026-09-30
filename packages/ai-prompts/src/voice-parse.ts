@@ -20,10 +20,13 @@ Item kinds (use exactly these strings):
 - "urination": amountEstimate ("small"|"medium"|"large", optional)
 - "defecation": amountEstimate ("small"|"medium"|"large", optional)
 
-Every item kind may also carry WHEN it happened:
-- time: 24-hour "HH:mm" clock time, only when the user states one for that item ("lunch at 1pm" → "13:00", "BP at 7:30 this morning" → "07:30", "a beer at 9 last night" → "21:00").
-- minutesAgo: integer minutes before now, only when the user states a relative time ("an hour ago" → 60, "half an hour ago" → 30).
-Give at most one of the two per item. Omit both when no time is stated for that item — the app then uses the time the log is saved. Never guess a time from vague words like "earlier" or "this morning" without a clock time.
+Every item kind may also carry WHEN it happened, in its "when" field. The user message gives the current local date and time and yesterday's date — use them to work out the date.
+- A clock time, or a named part of a day → {"kind": "absolute", "localDateTime": "YYYY-MM-DDTHH:mm"}, on the user's local 24-hour clock. With the current time 2026-09-30 14:00: "lunch at 1pm" → "2026-09-30T13:00", "BP at 7:30 this morning" → "2026-09-30T07:30", "a beer yesterday evening at 8pm" → "2026-09-29T20:00".
+- A relative time → {"kind": "relative", "minutesAgo": N}: "an hour ago" → 60, "half an hour ago" → 30, "20 minutes ago" → 20, "two hours ago" → 120. Do not turn a relative time into a clock time yourself — the app does that sum.
+- "right now", "just now", "just had", or no time stated for that item → when: null. The app then uses the time the log is saved.
+Words for a part of the day, said without a clock time, mean these times: morning 08:00, lunch or midday 12:30, afternoon 15:00, evening 19:00, night 21:00. So "this morning" → today 08:00, "at lunch" → today 12:30, "yesterday evening" → yesterday 19:00, "last night" → yesterday 21:00. A stated clock time always wins over these: "yesterday evening at 8pm" → yesterday 20:00, not 19:00.
+Never return a time later than the current time. When the user names no day and the stated clock time has not happened yet today, the user means the day before: "a beer at 9pm", said at 14:00 → yesterday 21:00. When the user says today ("this morning") and that time is still ahead, use null.
+A time belongs only to the item it was said with: "a beer yesterday evening at 8pm, a bagel right now and 100ml of water an hour ago" → the beer is absolute (yesterday 20:00), the bagel is null, the water is relative (60). Never guess a time from a word like "earlier" alone — use null.
 
 Rules:
 1. Numbers spoken loosely ("about 110 over 75", "around 80") → take the central number verbatim.
@@ -89,15 +92,23 @@ export const PARSE_TOOL = {
             volumeMl: { type: "number" },
             amountEstimate: { type: "string", enum: ["small", "medium", "large"] },
             note: { type: "string" },
-            time: {
-              type: "string",
+            when: {
+              type: ["object", "null"],
               description:
-                'Clock time the user stated for this item, 24-hour "HH:mm". Omit when none was stated.',
-            },
-            minutesAgo: {
-              type: "number",
-              description:
-                "Minutes before now, when the user stated a relative time. Omit when none was stated.",
+                'When this item happened. null when the user stated no time for it (the app uses the save time). kind "absolute" needs localDateTime; kind "relative" needs minutesAgo.',
+              properties: {
+                kind: { type: "string", enum: ["absolute", "relative"] },
+                localDateTime: {
+                  type: "string",
+                  description:
+                    'Local wall-clock date and time, 24-hour "YYYY-MM-DDTHH:mm" (e.g. "2026-09-29T20:00"). No timezone suffix.',
+                },
+                minutesAgo: {
+                  type: "number",
+                  description: "Whole minutes before the current time.",
+                },
+              },
+              required: ["kind"],
             },
           },
           required: ["kind"],
@@ -112,3 +123,52 @@ export const PARSE_TOOL = {
     additionalProperties: false,
   },
 };
+
+/** The client's clock at the moment of the request (not PII). */
+export interface VoiceParseClientNow {
+  /** Local wall-clock "YYYY-MM-DDTHH:mm". */
+  localDateTime: string;
+  /** IANA zone, e.g. "Africa/Johannesburg". */
+  timeZone: string;
+  /** Minutes east of UTC at that moment (UTC+02:00 → 120). */
+  utcOffsetMinutes: number;
+}
+
+const WEEKDAYS = [
+  "Sunday",
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+] as const;
+
+function pad(n: number): string {
+  return String(n).padStart(2, "0");
+}
+
+/** "Wednesday 2026-09-30" for a wall-clock date held in UTC fields. */
+function weekdayAndDate(wall: Date): string {
+  return `${WEEKDAYS[wall.getUTCDay()]} ${wall.getUTCFullYear()}-${pad(wall.getUTCMonth() + 1)}-${pad(wall.getUTCDate())}`;
+}
+
+/**
+ * The line that tells the model what "now" and "yesterday" are. The date
+ * arithmetic is done here, on the wall-clock fields alone, so the model never
+ * has to subtract a day across a month end.
+ */
+export function describeCurrentTime(now: VoiceParseClientNow): string {
+  const [date = "", time = ""] = now.localDateTime.split("T");
+  const [y = 0, m = 1, d = 1] = date.split("-").map(Number);
+  const today = new Date(Date.UTC(y, m - 1, d, 12));
+  const yesterday = new Date(Date.UTC(y, m - 1, d - 1, 12));
+  const abs = Math.abs(now.utcOffsetMinutes);
+  const offset = `UTC${now.utcOffsetMinutes < 0 ? "-" : "+"}${pad(Math.floor(abs / 60))}:${pad(abs % 60)}`;
+  return `Current local time: ${weekdayAndDate(today)} ${time.slice(0, 5)} (${now.timeZone}, ${offset}). Yesterday was ${weekdayAndDate(yesterday)}.`;
+}
+
+/** The user turn: the clock line, then the (already sanitised) transcript. */
+export function buildUserMessage(transcript: string, now: VoiceParseClientNow): string {
+  return `${describeCurrentTime(now)}\n\nVoice transcript:\n"""\n${transcript}\n"""\n\nExtract every distinct health log item and return them via the parse_voice_log tool.`;
+}

@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { z } from "zod";
 import { withAuth } from "@/lib/auth-middleware";
 import { sanitizeForAI } from "@/lib/security";
 import { getClaudeClientForUser, CLAUDE_MODELS } from "@/app/api/ai/_shared/claude-client";
@@ -7,8 +6,12 @@ import { parseJsonBody, zodErrorResponse } from "@/app/api/_shared/validation";
 import { createRateLimiter, rateLimitKey } from "@/app/api/_shared/rate-limit";
 import { requestToolCall } from "@/app/api/ai/_shared/claude-call";
 import { aiErrorResponse } from "@/app/api/ai/_shared/ai-error-response";
-import { SYSTEM_PROMPT } from "@intake/ai-prompts/voice-parse";
-import { PARSE_TOOL, extractVoiceItems } from "@/app/api/ai/voice-parse/schema";
+import { SYSTEM_PROMPT, buildUserMessage } from "@intake/ai-prompts/voice-parse";
+import {
+  PARSE_TOOL,
+  ParseRequestSchema,
+  extractVoiceItems,
+} from "@/app/api/ai/voice-parse/schema";
 
 /**
  * Parse a voice transcript into a heterogeneous list of health record items
@@ -31,16 +34,11 @@ const DEADLINE_MS = 50_000;
 
 /**
  * Characters of transcript sent to the model — about two minutes of speech.
- * Longer transcripts are accepted (up to MAX_REQUEST_CHARS) and cut to this,
+ * Longer transcripts are accepted (up to MAX_REQUEST_CHARS in schema.ts) and cut to this,
  * with `transcriptTruncated` in the response so the review panel can say the
  * tail was not parsed, rather than silently losing it.
  */
 const MAX_TRANSCRIPT_CHARS = 2000;
-const MAX_REQUEST_CHARS = 8000;
-
-const ParseRequestSchema = z.object({
-  transcript: z.string().min(1).max(MAX_REQUEST_CHARS),
-});
 
 const rateLimiter = createRateLimiter(20);
 
@@ -81,7 +79,10 @@ export const POST = withAuth(async ({ request, auth }) => {
 
     console.log(`[AUDIT] voice-parse from user: ${auth.userId}`);
 
-    const userMessage = `Voice transcript:\n"""\n${sanitized}\n"""\n\nExtract every distinct health log item and return them via the parse_voice_log tool.`;
+    // The client's clock (local time, zone, offset) leads the user turn, so
+    // the model can date "yesterday at 8pm". It is validated to strict shapes
+    // above and is not PII; nothing else about the device is sent.
+    const userMessage = buildUserMessage(sanitized, parsed.data.now);
 
     const { toolUse: toolBlock } = await requestToolCall(
       client,
