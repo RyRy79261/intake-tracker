@@ -234,7 +234,7 @@ export function TitrationDrawer({
 
   return (
     <Drawer open={open} onOpenChange={onOpenChange}>
-      <DrawerContent className="flex max-h-[90dvh] flex-col bg-panel shadow-[inset_0_3px_0_hsl(var(--meds))] outline-hidden">
+      <DrawerContent data-domain="meds" className="flex max-h-[90dvh] flex-col bg-panel shadow-[inset_0_3px_0_hsl(var(--meds))] outline-hidden">
         <DrawerHeader className="shrink-0 border-b border-line text-left">
           <DrawerTitle>{isEditing ? "Edit Titration Plan" : "New Titration Plan"}</DrawerTitle>
         </DrawerHeader>

@@ -21,14 +21,15 @@ export interface CardTheme {
   domain: Domain;
   /** Domain-coloured text (headings, accents). */
   iconColor: string;
-  /** Solid domain-coloured button. */
-  buttonBg: string;
 }
 
-/** A domain's label, icon and the two accent classes the cards still use. */
+/**
+ * A domain's label, icon and text accent. Buttons and other controls take the
+ * colour from a `data-domain` scope on the card or dialog (domain-colors.ts).
+ */
 function theme(domain: Domain, meta: { label: string; icon: LucideIcon }): CardTheme {
   const c = DOMAIN_CLASSES[domain];
-  return { ...meta, domain, iconColor: c.text, buttonBg: c.solid };
+  return { ...meta, domain, iconColor: c.text };
 }
 
 export const CARD_THEMES = {

@@ -83,7 +83,11 @@ export function MedicationsPageBody() {
   }, [setWizardOpen]);
 
   return (
-    <>
+    // The whole Medications window is a `meds` domain scope: its primary
+    // buttons, selected chips, focus rings and carets are teal. `contents`
+    // keeps the sticky tab bar tied to the window's scroller. Status colours
+    // (taken / skipped / low stock / warnings) are set explicitly and stay.
+    <div data-domain="meds" className="contents" data-testid="medications-body">
       {aboutRx && <AboutMedicineView prescription={aboutRx} prescriptions={prescriptions} onBack={() => setAboutId(null)} />}
       {/* `contents` keeps the sticky tab bar tied to the window's scroller. */}
       <div ref={tabsRef} className={aboutRx ? "hidden" : "contents"}>
@@ -125,6 +129,6 @@ export function MedicationsPageBody() {
         isToday={isToday}
         isFuture={isFuture}
       />
-    </>
+    </div>
   );
 }

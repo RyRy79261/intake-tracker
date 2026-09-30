@@ -125,14 +125,15 @@ const InlineEdit = React.forwardRef<HTMLInputElement, InlineEditProps>(
         {/* Inner row keeps the value and its suffix on one baseline while the
             label itself can stretch to fill (and centre in) its container. */}
         <span className="inline-flex items-baseline">
-        <span className={cn(displayClassName, isEditing && "border-b-2 border-current")}>
+        <span className={cn(displayClassName, isEditing && "border-b-2 border-ring")}>
           {isEditing ? editValue : formatDisplay(value)}
           {isEditing && (
-            // The real input is visually hidden, so draw the caret here.
+            // The real input is visually hidden, so draw the caret here, in
+            // the focus-ring colour like a native caret (`caret-ring`).
             <span
               aria-hidden="true"
               data-testid="inline-edit-caret"
-              className="ml-px inline-block h-[1em] w-0.5 translate-y-[0.15em] animate-pulse bg-current motion-reduce:animate-none"
+              className="ml-px inline-block h-[1em] w-0.5 translate-y-[0.15em] animate-pulse bg-ring motion-reduce:animate-none"
             />
           )}
         </span>

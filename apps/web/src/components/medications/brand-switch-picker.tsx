@@ -61,7 +61,7 @@ export function BrandSwitchPicker({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className={dlgClass}>
+      <DialogContent data-domain="meds" className={dlgClass}>
         <DialogHeader className="px-4 pb-2.5 pr-12 pt-3.5 text-left">
           <DialogTitle className="text-base font-semibold">Switch Active Brand</DialogTitle>
         </DialogHeader>

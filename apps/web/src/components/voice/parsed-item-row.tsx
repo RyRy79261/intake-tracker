@@ -12,6 +12,7 @@ import {
   SelectValue,
 } from "@intake/ui/select";
 import { cn } from "@/lib/utils";
+import type { Domain } from "@/lib/domain-colors";
 import { standardDrinksFromAbv } from "@intake/core/alcohol";
 import {
   VOICE_ITEM_COLOR,
@@ -91,6 +92,22 @@ const COLOR_CLASS: Record<string, ColorClass> = {
     ring: "ring-defecation/30",
     chip: "bg-defecation text-defecation-foreground",
   },
+};
+
+/**
+ * The domain scope of a row, by colour token: its inputs' focus rings and
+ * carets and its Approve button take the colour of the row's stripe.
+ */
+const ROW_DOMAIN: Record<string, Domain> = {
+  bp: "bp",
+  weight: "weight",
+  water: "water",
+  salt: "sodium",
+  eating: "sodium",
+  caffeine: "caffeine",
+  alcohol: "alcohol",
+  urination: "bath",
+  defecation: "bath",
 };
 
 function numberOrZero(v: string): number {
@@ -636,6 +653,7 @@ export function ParsedItemRow({
         approved === true && c.ring
       )}
       data-testid={`voice-item-${index}`}
+      data-domain={ROW_DOMAIN[token]}
     >
       <div className={cn("absolute left-0 top-0 h-full w-1.5", c.bar)} />
       <div className="flex items-start gap-3 p-3 pl-5">

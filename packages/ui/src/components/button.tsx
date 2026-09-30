@@ -4,15 +4,17 @@ import { cva, type VariantProps } from "class-variance-authority"
 
 import { cn } from "../lib/utils"
 
-// Ward Console buttons: sharp corners, solid ink primary (`.btn-p`), 1px
+// Ward Console buttons: sharp corners, solid primary (`.btn-p`), 1px
 // outlined secondary (`.btn`), 44px touch targets for the default size.
+// The primary is ink, or the domain colour inside a `data-domain` scope
+// (globals.css); disabled it keeps the dashed outline either way.
 const buttonVariants = cva(
   "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-none text-sm font-medium ring-offset-background transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
   {
     variants: {
       variant: {
         default:
-          "bg-primary font-semibold text-primary-foreground hover:bg-primary/85 active:bg-primary/80 disabled:border disabled:border-dashed disabled:border-muted-foreground disabled:bg-transparent disabled:font-medium disabled:text-muted-foreground disabled:opacity-100",
+          "bg-primary font-semibold text-primary-foreground hover:bg-(--primary-hover) active:bg-(--primary-hover) disabled:border disabled:border-dashed disabled:border-muted-foreground disabled:bg-transparent disabled:font-medium disabled:text-muted-foreground disabled:opacity-100",
         destructive:
           "bg-destructive font-semibold text-destructive-foreground hover:bg-destructive/90",
         outline:

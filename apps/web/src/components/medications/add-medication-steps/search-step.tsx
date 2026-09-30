@@ -109,7 +109,7 @@ export function SearchStep({
                       className={cn(
                         "min-h-11 border px-2.5 font-mono text-[0.8125rem]",
                         selected
-                          ? "border-foreground bg-foreground text-background"
+                          ? "border-primary bg-primary text-primary-foreground"
                           : "border-line hover:bg-foreground/6"
                       )}
                     >
@@ -169,7 +169,7 @@ export function SearchStep({
                     className={cn(
                       "min-h-11 border px-2.5 font-mono text-[0.8125rem]",
                       dosageStrength === s
-                        ? "border-foreground bg-foreground text-background"
+                        ? "border-primary bg-primary text-primary-foreground"
                         : "border-line hover:bg-foreground/6"
                     )}
                   >

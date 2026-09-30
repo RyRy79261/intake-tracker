@@ -213,6 +213,8 @@ export function WeightCard() {
                 formatDisplay={(v) => v?.toFixed(2) ?? "--"}
                 suffix="kg"
                 displayClassName="text-2xl font-semibold num"
+                // Muted, not the card colour: the value sits on the darker input
+                // surface, where the weight green is under AA as text.
                 suffixClassName="text-sm text-muted-foreground ml-1 num"
                 // Keep the typed scale reading (2 dp). The increment only
                 // drives the +/- buttons; out-of-range values are rejected
@@ -295,7 +297,7 @@ export function WeightCard() {
         )}
         renderValue={(record) => `${record.weight.toFixed(2)} kg`}
         renderEditForm={() => (
-          <InlineEditFormShell timestamp={editTimestamp} onTimestampChange={setEditTimestamp} note={editNote} onNoteChange={setEditNote} onSave={() => handleEditSubmit()} onCancel={closeEdit} buttonClassName={theme.buttonBg}>
+          <InlineEditFormShell timestamp={editTimestamp} onTimestampChange={setEditTimestamp} note={editNote} onNoteChange={setEditNote} onSave={() => handleEditSubmit()} onCancel={closeEdit}>
             <Input type="number" step="any" min={WEIGHT_RANGE_KG.min} max={WEIGHT_RANGE_KG.max} placeholder="Weight (kg)" value={editWeight} onChange={(e) => setEditWeight(e.target.value)} className="h-8 text-sm" />
           </InlineEditFormShell>
         )}

@@ -129,6 +129,8 @@ describe("MedicineLookupPanel", () => {
 
     expect(await screen.findByText("Looking up “Entresto”")).toBeInTheDocument();
     expect(screen.getByRole("status")).toHaveTextContent(/up to a minute/);
+    // The AI box keeps the ai colour inside the teal Medications window.
+    expect(screen.getByTestId("medicine-lookup")).toHaveAttribute("data-domain", "ai");
     expect(fn).toHaveBeenCalledTimes(1);
     const body = JSON.parse(String(fn.mock.calls[0]![1]!.body)) as { query: string };
     expect(body.query).toBe("Entresto");

@@ -7,7 +7,6 @@ import { Input } from "@intake/ui/input";
 import { Label } from "@intake/ui/label";
 import { Trash2 } from "lucide-react";
 import { Spinner } from "@intake/ui/spinner";
-import { cn } from "@/lib/utils";
 import { formatTimeOnly, getCurrentDateTimeLocal } from "@/lib/date-utils";
 import { recentDayLabel } from "@/lib/week-utils";
 import { useSettingsStore } from "@/stores/settings-store";
@@ -16,6 +15,8 @@ import { useNowTick } from "@intake/ui/use-now-tick";
 /**
  * Shared shell for inline edit forms used by card components.
  * Renders domain-specific children, then timestamp, note, and Save/Cancel.
+ * Save is a plain primary button: it takes the colour of the card's domain
+ * scope (ModuleCard).
  * When `labeled` is true, the timestamp and note inputs render visible
  * `<Label>` elements above them; otherwise they fall back to placeholders
  * + `aria-label` for backwards compatibility with cards that haven't been
@@ -30,7 +31,6 @@ export function InlineEditFormShell({
   onNoteChange,
   onSave,
   onCancel,
-  buttonClassName,
   labeled = false,
   idPrefix = "edit",
 }: {
@@ -41,7 +41,6 @@ export function InlineEditFormShell({
   onNoteChange: (value: string) => void;
   onSave: () => void;
   onCancel: () => void;
-  buttonClassName?: string;
   labeled?: boolean;
   idPrefix?: string;
 }) {
@@ -75,7 +74,7 @@ export function InlineEditFormShell({
         </>
       )}
       <div className="flex gap-2">
-        <Button size="sm" className={cn("flex-1 h-8", buttonClassName)} onClick={onSave}>Save</Button>
+        <Button size="sm" className="flex-1 h-8" onClick={onSave}>Save</Button>
         <Button size="sm" variant="outline" className="flex-1 h-8" onClick={onCancel}>Cancel</Button>
       </div>
     </div>
@@ -128,7 +127,7 @@ export function RecentEntriesList<T extends { id: string; timestamp: number }>({
 
   return (
     <div className="wc-rec" data-testid="recent-entries">
-      <h4>Recent</h4>
+      <h4 className="subhead">Recent</h4>
       {displayRecords.length === 0 && <p className="empty">{emptyText}</p>}
       {displayRecords.map((record) => {
         const isEditing = editingId === record.id && renderEditForm;

@@ -391,7 +391,6 @@ export function LiquidsCard() {
               onNoteChange={setEditNote}
               onSave={() => handleEditSubmit()}
               onCancel={closeEdit}
-              buttonClassName={CARD_THEMES.water.buttonBg}
               labeled
               idPrefix="edit-liquid"
             >

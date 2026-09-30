@@ -57,7 +57,7 @@ export function RetroactiveTimePicker({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className={bottomSheetClass} aria-describedby={undefined}>
+      <DialogContent data-domain="meds" className={bottomSheetClass} aria-describedby={undefined}>
         <DialogHeader className="text-left">
           <DialogTitle className="text-base font-semibold">
             When did you take {compoundName}?

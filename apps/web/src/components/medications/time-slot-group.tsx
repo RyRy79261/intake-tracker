@@ -99,7 +99,6 @@ export function TimeSlotGroup({
               Skip All
             </Button>
             <Button
-              variant="outline"
               size="sm"
               className={slotButton}
               onClick={() => onMarkAll(time, openSlots)}

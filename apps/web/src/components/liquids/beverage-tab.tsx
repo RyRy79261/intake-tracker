@@ -6,6 +6,7 @@ import { Input } from "@intake/ui/input";
 import { Label } from "@intake/ui/label";
 import { SegmentBar } from "@/components/home/module-card";
 import { Minus, Plus, Check } from "lucide-react";
+import { FieldScope, Pip } from "@/components/domain-scope";
 import { formatAmount } from "@/lib/utils";
 import { ManualInputDialog } from "@/components/manual-input-dialog";
 import { useSettings } from "@/hooks/use-settings";
@@ -236,8 +237,9 @@ export function BeverageTab() {
       </div>
 
       {sugarEnabled && (
-        <div className="space-y-1">
+        <FieldScope domain="sugar" className="space-y-1">
           <Label htmlFor={fid("beverage-sugar")} className="text-[0.8125rem] text-muted-foreground">
+            <Pip />
             Sugar (g) (optional)
           </Label>
           <Input
@@ -250,7 +252,7 @@ export function BeverageTab() {
             onChange={(e) => setSugarG(e.target.value)}
             className="num"
           />
-        </div>
+        </FieldScope>
       )}
 
       <Button

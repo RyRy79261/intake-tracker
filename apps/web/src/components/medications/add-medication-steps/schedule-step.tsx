@@ -84,7 +84,7 @@ export function ScheduleStep({
                 className={cn(
                   "min-h-11 border text-xs font-medium",
                   sched.daysOfWeek.includes(dayIndex)
-                    ? "border-foreground bg-foreground text-background"
+                    ? "border-primary bg-primary text-primary-foreground"
                     : "border-line text-muted-foreground hover:bg-foreground/6",
                 )}
               >

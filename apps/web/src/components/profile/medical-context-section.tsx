@@ -62,7 +62,7 @@ export function MedicalContextSection({
 
   return (
     <>
-      <section aria-labelledby="profile-health">
+      <section aria-labelledby="profile-health" data-domain="meds">
         <ProfileSec id="profile-health">Health</ProfileSec>
         <dl className={kvClass}>
           <dt>Conditions</dt>
@@ -141,10 +141,8 @@ export function MedicalContextSection({
         </p>
       </section>
 
-      <section aria-labelledby="profile-ai">
-        <ProfileSec id="profile-ai" className="[&>span]:text-ai">
-          AI
-        </ProfileSec>
+      <section aria-labelledby="profile-ai" data-domain="ai">
+        <ProfileSec id="profile-ai">AI</ProfileSec>
         {!signedIn && (
           <p className="py-1.5 text-[0.8125rem] text-muted-foreground">
             Sign in to use AI features. These choices apply once you do.

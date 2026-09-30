@@ -79,7 +79,7 @@ export function WardMedTabs({ activeTab, onTabChange, panelId }: WardMedTabsProp
             className={cn(
               "flex min-h-11 min-w-0 flex-1 basis-0 items-center justify-center whitespace-nowrap px-1 text-sm font-medium",
               "focus-visible:outline-2 focus-visible:-outline-offset-4 focus-visible:outline-ring",
-              on ? "text-foreground shadow-[inset_0_-3px_0_hsl(var(--fg))]" : "text-muted-foreground hover:text-foreground",
+              on ? "text-foreground shadow-[inset_0_-3px_0_hsl(var(--primary))]" : "text-muted-foreground hover:text-foreground",
             )}
           >
             {tab.label}

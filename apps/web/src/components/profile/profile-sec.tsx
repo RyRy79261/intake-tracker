@@ -2,8 +2,10 @@ import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
 /**
- * Ward Console section label (the prototype's `.sec`): an uppercase muted
- * label followed by a 1px rule that runs to the edge.
+ * Ward Console section label (the prototype's `.sec`), in the same style as a
+ * Settings sub-heading: mono caps followed by a 1px rule that runs to the
+ * edge. It takes the colour of the section's `data-domain` scope, or the
+ * muted text colour outside one.
  */
 export function ProfileSec({
   children,
@@ -17,15 +19,10 @@ export function ProfileSec({
   return (
     <h3
       id={id}
-      className={cn(
-        "mb-1.5 mt-3.5 flex items-center gap-2 text-muted-foreground",
-        "after:h-px after:flex-1 after:bg-line after:content-['']",
-        className,
-      )}
+      // The line height stays at the old label's, so nothing below moves.
+      className={cn("subhead mb-1.5 mt-3.5 leading-[1.15]! text-[color:var(--c,hsl(var(--muted-fg)))]", className)}
     >
-      <span className="text-xs font-semibold uppercase leading-[1.15] tracking-[0.06em]">
-        {children}
-      </span>
+      <span>{children}</span>
     </h3>
   );
 }

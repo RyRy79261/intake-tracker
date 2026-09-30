@@ -398,7 +398,7 @@ export function AddMedicationWizard({ open, onOpenChange }: AddMedicationWizardP
 
   return (
     <Drawer open={open} onOpenChange={(o) => { if (!o) handleClose(); }} repositionInputs={false}>
-      <DrawerContent
+      <DrawerContent data-domain="meds"
         className="flex h-[92dvh] w-full max-w-[100vw] flex-col overflow-hidden bg-panel shadow-[inset_0_3px_0_hsl(var(--meds))]"
         aria-describedby={undefined}
       >

@@ -222,7 +222,9 @@ export function AiIcon({ className }: { className?: string }) {
   );
 }
 
-/** `.ailk` / `.ailr`: AI-violet stripe box. */
+/** `.ailk` / `.ailr`: AI-violet stripe box. It opens an `ai` domain scope, so
+ * its buttons, selected option and focus rings stay violet inside the teal
+ * Medications window. */
 const BOX =
   "flex min-w-0 flex-col gap-2 border border-ai/50 py-2.5 pl-[13px] pr-2.5 shadow-[inset_3px_0_0_hsl(var(--ai))]";
 const HELP = "text-[0.8125rem] leading-[1.4] text-muted-foreground";
@@ -301,7 +303,7 @@ export function MedicineLookupPanel({
 
   if (L.status === "busy") {
     return (
-      <div data-testid="medicine-lookup" className={cn(BOX, "bg-ai/6", className)} role="status" aria-live="polite">
+      <div data-testid="medicine-lookup" data-domain="ai" className={cn(BOX, "bg-ai/6", className)} role="status" aria-live="polite">
         <div className="flex items-start gap-2.5 text-[0.8125rem]">
           <Spinner className="size-4 mt-0.5 shrink-0 text-ai" />
           <div className="min-w-0 flex-1">
@@ -339,7 +341,7 @@ export function MedicineLookupPanel({
 
   if (compact) {
     return (
-      <div data-testid="medicine-lookup" className={cn(BOX, "bg-ai/6", className)}>
+      <div data-testid="medicine-lookup" data-domain="ai" className={cn(BOX, "bg-ai/6", className)}>
         <div className="flex items-center gap-1.5 text-[0.8125rem] font-semibold text-ai">
           <AiIcon />
           Look up with AI
@@ -364,7 +366,7 @@ export function MedicineLookupPanel({
   }
 
   return (
-    <div data-testid="medicine-lookup" className={cn(BOX, "bg-ai/6", className)}>
+    <div data-testid="medicine-lookup" data-domain="ai" className={cn(BOX, "bg-ai/6", className)}>
       <div className="flex items-center gap-1.5 text-[0.8125rem] font-semibold text-ai">
         <AiIcon />
         Look up with AI
@@ -618,11 +620,11 @@ function LookupResultView({
                 onClick={() => set({ opt: i })}
                 className={cn(
                   "flex min-h-12 flex-col items-start justify-center gap-px border-t border-line px-2.5 py-1 text-left first:border-t-0",
-                  L.opt === i ? "bg-foreground text-background" : "bg-panel hover:bg-foreground/6",
+                  L.opt === i ? "bg-primary text-primary-foreground" : "bg-panel hover:bg-foreground/6",
                 )}
               >
                 <b className="font-mono text-sm font-semibold">{x.label}</b>
-                <span className={cn("text-xs", L.opt === i ? "text-background" : "text-muted-foreground")}>
+                <span className={cn("text-xs", L.opt === i ? "text-primary-foreground" : "text-muted-foreground")}>
                   {optionText(x)} per pill
                 </span>
               </button>
@@ -653,7 +655,7 @@ function LookupResultView({
                 aria-hidden="true"
                 className={cn(
                   "flex h-5 w-5 flex-none items-center justify-center border border-muted-foreground",
-                  x.on && "border-foreground bg-foreground text-background",
+                  x.on && "border-primary bg-primary text-primary-foreground",
                 )}
               >
                 {x.on && <Check className="h-4 w-4" />}

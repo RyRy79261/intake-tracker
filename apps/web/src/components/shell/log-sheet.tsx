@@ -1,13 +1,13 @@
 "use client";
 
-import { useCallback, useRef, useState, type ComponentType, type CSSProperties } from "react";
+import { useCallback, useRef, useState, type ComponentType } from "react";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@intake/ui/sheet";
 import { useToast } from "@intake/ui/use-toast";
 import { useIntake } from "@/hooks/use-intake-queries";
 import { useSettingsStore } from "@/stores/settings-store";
 import { reportSaveError } from "@/lib/db-recovery";
 import { formatAmount } from "@/lib/utils";
-import { DOMAIN_CLASSES, domainColor, type Domain } from "@/lib/domain-colors";
+import { DOMAIN_CLASSES, type Domain } from "@/lib/domain-colors";
 import type { ShellIconName } from "@/lib/nav-routes";
 import { ShellIcon } from "@/components/shell/shell-icon";
 import { LogFormScope } from "@/components/log-form-scope";
@@ -70,7 +70,7 @@ function WaterRow({ onLogged }: { onLogged: () => void }) {
   return (
     <div
       className="grid h-12 grid-cols-[1fr_44px_84px_44px_76px] border border-line bg-chrome"
-      style={{ "--c": domainColor("water") } as CSSProperties}
+      data-domain="water"
     >
       <span className="flex items-center gap-2 px-2.5 text-sm font-medium">
         <ShellIcon name="drop" size={20} className="text-water" />
@@ -99,7 +99,7 @@ function WaterRow({ onLogged }: { onLogged: () => void }) {
       </button>
       <button
         type="button"
-        className={`${cell} bg-foreground text-sm font-semibold text-background`}
+        className={`${cell} bg-primary text-sm font-semibold text-primary-foreground hover:bg-(--primary-hover)`}
         aria-label={`Add ${ml} ml water`}
         onClick={() => void add()}
       >
@@ -179,8 +179,9 @@ export function LogSheet({ open, onOpenChange }: LogSheetProps) {
                     key={k}
                     type="button"
                     aria-label={`Log ${t.label.toLowerCase()}`}
+                    data-domain={t.domain}
                     onClick={() => setForm(k)}
-                    className="flex min-h-14 flex-col items-center justify-center gap-[5px] whitespace-nowrap border border-line bg-chrome px-1 text-foreground hover:border-muted-foreground active:bg-foreground/15"
+                    className="flex min-h-14 flex-col items-center justify-center gap-[5px] whitespace-nowrap border border-line bg-chrome px-1 text-foreground hover:border-muted-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring active:bg-foreground/15"
                   >
                     <ShellIcon name={t.icon} size={20} className={DOMAIN_CLASSES[t.domain].text} />
                     <span className="text-[0.8125rem] font-medium">{t.label}</span>
