@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { DebugPanel } from "@/components/debug-panel";
 import { ReportBugDialog } from "@/components/report-bug-dialog";
 import { useSettingsSheetStore, type SettingsGroupId } from "@/stores/settings-sheet-store";
+import { openSettingsPage } from "@/hooks/use-window-history";
 import { SetGroup, Rule } from "@/components/settings/settings-kit";
 import { TrackingSettingsSection } from "@/components/settings/tracking-settings-section";
 import { AppearanceSection } from "@/components/settings/appearance-section";
@@ -42,10 +43,9 @@ const GROUPS: ReadonlyArray<{ id: SettingsGroupId; title: string }> = [
 ];
 
 function GroupBody({ id }: { id: SettingsGroupId }) {
-  const setPage = useSettingsSheetStore((s) => s.setPage);
   switch (id) {
     case "tracking":
-      return <TrackingSettingsSection onOpenPresets={() => setPage("presets")} />;
+      return <TrackingSettingsSection onOpenPresets={() => openSettingsPage("presets")} />;
     case "appearance":
       return <AppearanceSection />;
     case "meds":

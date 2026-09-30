@@ -12,9 +12,11 @@ vi.mock("next/navigation", () => ({
 import {
   __resetWindowHistoryForTests,
   closeSettings,
+  closeSettingsPage,
   closeWindow,
   goHome,
   openSettings,
+  openSettingsPage,
   openWindow,
   useWindowHistory,
 } from "@/hooks/use-window-history";
@@ -232,6 +234,56 @@ describe("useWindowHistory", () => {
       pathname = "/help";
       rerender(<Sync />);
       await waitFor(() => expect(sheetOpen()).toBe(false));
+    });
+
+    describe("Drink presets sub-page", () => {
+      const page = () => useSettingsSheetStore.getState().page;
+
+      it("Back returns to the settings groups, then Back again closes the sheet", async () => {
+        render(<Sync />);
+        openSettings();
+        openSettingsPage("presets");
+        expect(page()).toBe("presets");
+        expect(window.location.pathname).toBe("/settings");
+
+        await back();
+        expect(sheetOpen()).toBe(true);
+        expect(page()).toBe("main");
+        expect(window.location.pathname).toBe("/settings");
+
+        await back();
+        expect(sheetOpen()).toBe(false);
+        expect(window.location.pathname).toBe("/");
+      });
+
+      it("the on-screen Back button steps back over the sub-page's entry", async () => {
+        render(<Sync />);
+        openSettings();
+        openSettingsPage("presets");
+        const popped = new Promise((r) => window.addEventListener("popstate", r, { once: true }));
+        closeSettingsPage();
+        await popped;
+        expect(sheetOpen()).toBe(true);
+        expect(page()).toBe("main");
+
+        // One Back now closes the sheet: no dead sub-page entry is left.
+        await back();
+        expect(sheetOpen()).toBe(false);
+        expect(window.location.pathname).toBe("/");
+      });
+
+      it("closing the sheet from the sub-page steps back over both entries", async () => {
+        render(<Sync />);
+        openWindow("meds");
+        openSettings();
+        openSettingsPage("presets");
+        const popped = new Promise((r) => window.addEventListener("popstate", r, { once: true }));
+        closeSettings();
+        await popped;
+        expect(sheetOpen()).toBe(false);
+        expect(apps()).toEqual(["meds"]);
+        expect(window.location.pathname).toBe("/medications");
+      });
     });
   });
 });

@@ -4,7 +4,12 @@ import { useEffect } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useWindowStore, type OpenResult } from "@/stores/window-store";
 import { isWindowRoute, windowForRoute, windowHref, type ShellAppId, type WindowState } from "@/lib/nav-routes";
-import { isSettingsGroup, useSettingsSheetStore, type SettingsGroupId } from "@/stores/settings-sheet-store";
+import {
+  isSettingsGroup,
+  useSettingsSheetStore,
+  type SettingsGroupId,
+  type SettingsPage,
+} from "@/stores/settings-sheet-store";
 
 /**
  * Browser history for Ward Console windows.
@@ -26,6 +31,8 @@ interface WardHistoryState {
   wardWin?: string;
   /** This entry opened the Settings sheet (`/settings`). */
   wardSettings?: boolean;
+  /** This entry opened a sub-page of the Settings sheet (Drink presets). */
+  wardSettingsPage?: boolean;
   /**
    * Not a window's entry: the Settings sheet, or a route outside the shell
    * (Help, /auth). Back from it returns to the window underneath.
@@ -47,6 +54,8 @@ let currentSeq = 0;
 /** `wardWin` / `wardOff` of the entry we are on, so Back knows what it leaves. */
 let currentWin: string | undefined;
 let currentOff = false;
+/** The entry we are on is a Settings sub-page's. */
+let currentSettingsPage = false;
 /** The first route sync after a page load pushes a Home entry under a deep link. */
 let firstSync = true;
 
@@ -60,6 +69,7 @@ function nextSeq(): number {
 function tag(extra: Omit<WardHistoryState, "wardSeq">): WardHistoryState {
   currentWin = extra.wardWin;
   currentOff = extra.wardOff === true;
+  currentSettingsPage = extra.wardSettingsPage === true;
   return { wardSeq: nextSeq(), ...extra };
 }
 
@@ -67,6 +77,7 @@ function track(state: WardHistoryState | null): void {
   currentSeq = seqOf(state);
   currentWin = state?.wardWin;
   currentOff = state?.wardOff === true;
+  currentSettingsPage = state?.wardSettingsPage === true;
 }
 
 function wardState(): WardHistoryState | null {
@@ -125,7 +136,35 @@ export function openSettings(group?: SettingsGroupId): void {
  */
 export function closeSettings(): void {
   useSettingsSheetStore.getState().hide();
-  if (wardState()?.wardSettings) {
+  const state = wardState();
+  if (state?.wardSettings) {
+    skipPops += 1;
+    // A sub-page's entry sits on top of the sheet's: step over both.
+    if (state.wardSettingsPage) window.history.go(-2);
+    else window.history.back();
+  }
+}
+
+/**
+ * Open a sub-page of the Settings sheet (Drink presets). It gets its own Back
+ * entry, so the phone or browser Back button returns to the settings groups
+ * instead of closing the whole sheet.
+ */
+export function openSettingsPage(page: Exclude<SettingsPage, "main">): void {
+  const store = useSettingsSheetStore.getState();
+  const wasOn = store.page;
+  store.setPage(page);
+  if (wasOn === page || typeof window === "undefined" || !wardState()?.wardSettings) return;
+  window.history.pushState(tag({ ...SETTINGS_ENTRY, wardSettingsPage: true }), "", SETTINGS_PATH);
+}
+
+/**
+ * Return from a Settings sub-page to the groups (the on-screen Back button),
+ * stepping back over the sub-page's entry if we are on it.
+ */
+export function closeSettingsPage(): void {
+  useSettingsSheetStore.getState().setPage("main");
+  if (wardState()?.wardSettingsPage) {
     skipPops += 1;
     window.history.back();
   }
@@ -156,6 +195,7 @@ function onPopState(event: PopStateEvent): void {
   const prev = currentSeq;
   const leftWin = currentWin;
   const leftOff = currentOff;
+  const leftSettingsPage = currentSettingsPage;
   track(state);
   lastSeq = Math.max(lastSeq, currentSeq);
   if (skipPops > 0) {
@@ -167,7 +207,9 @@ function onPopState(event: PopStateEvent): void {
   // The Settings sheet sits over everything: Back closes it first.
   const sheet = useSettingsSheetStore.getState();
   if (sheet.open) {
-    sheet.hide();
+    // Back from a sub-page (Drink presets) returns to the groups.
+    if (leftSettingsPage && state?.wardSettings) sheet.setPage("main");
+    else sheet.hide();
     return;
   }
 
@@ -272,5 +314,6 @@ export function __resetWindowHistoryForTests(): void {
   currentSeq = 0;
   currentWin = undefined;
   currentOff = false;
+  currentSettingsPage = false;
   firstSync = true;
 }

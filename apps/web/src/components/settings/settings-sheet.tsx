@@ -2,7 +2,7 @@
 
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@intake/ui/sheet";
 import { useSettingsSheetStore } from "@/stores/settings-sheet-store";
-import { closeSettings } from "@/hooks/use-window-history";
+import { closeSettings, closeSettingsPage } from "@/hooks/use-window-history";
 import { ShellIcon } from "@/components/shell/shell-icon";
 import { SettingsBody } from "@/components/settings/settings-panel";
 
@@ -17,7 +17,6 @@ const titleClass = "flex-1 text-[0.8125rem] font-semibold uppercase leading-[1.1
 export function SettingsSheet() {
   const open = useSettingsSheetStore((s) => s.open);
   const page = useSettingsSheetStore((s) => s.page);
-  const setPage = useSettingsSheetStore((s) => s.setPage);
 
   return (
     <Sheet
@@ -49,7 +48,7 @@ export function SettingsSheet() {
           <div className="flex h-12 shrink-0 items-center gap-1 border-b border-line bg-chrome pr-12">
             <button
               type="button"
-              onClick={() => setPage("main")}
+              onClick={() => closeSettingsPage()}
               aria-label="Back to settings"
               className="flex h-12 shrink-0 items-center gap-1.5 border-r border-line pl-2 pr-3 text-sm focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
             >
