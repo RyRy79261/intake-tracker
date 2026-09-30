@@ -54,7 +54,7 @@ export function AppChrome({ children }: { children: ReactNode }) {
   const onShell = pathname === "/" || pathname === SETTINGS_PATH || isWindowRoute(pathname);
   const chrome = isClient && (onShell || isChromeRoute(pathname));
   const wide = useIsWide();
-  const desktop = useIsDesktop() && wide;
+  const desktop = useIsDesktop();
   // On a phone the window on screen covers Home; on a tiled screen the
   // windows fill the area, and Home would only show through the gutters.
   // Either way, take Home out of view, the tab order and the accessibility

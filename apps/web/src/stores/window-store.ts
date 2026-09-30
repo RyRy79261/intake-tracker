@@ -397,7 +397,9 @@ export const useWindowStore = create<WindowStoreState>()(
         const pool = vis.length > 0 ? vis : state.wins;
         if (pool.length === 0) return null;
         const at = pool.findIndex((w) => w.id === state.focus);
-        const next = pool[(at + dir + pool.length) % pool.length] as Win;
+        // Nothing focused: forward starts at the first window, back at the last.
+        const idx = at < 0 ? (dir === 1 ? 0 : pool.length - 1) : (at + dir + pool.length) % pool.length;
+        const next = pool[idx] as Win;
         get().switchTo(next.id);
         return next.id;
       },

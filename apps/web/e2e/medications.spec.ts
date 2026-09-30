@@ -342,7 +342,7 @@ test.describe('Medications', () => {
     await card.getByRole('button', { name: /Bisoprolol/, expanded: false }).click();
     await expect(card).toHaveAttribute('data-expanded', 'true');
     await expect(card).toHaveClass(/col-span-2/);
-    await expect(card.getByText('Medicines')).toBeVisible();
+    await expect(card.getByText('Medicines', { exact: true })).toBeVisible();
     await expect(card.getByText(/5mg daily/)).toBeVisible();
     await expect(card.getByRole('button', { name: 'Prescription Details' })).toBeVisible();
 

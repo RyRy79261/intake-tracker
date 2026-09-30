@@ -31,10 +31,13 @@ export function useIsWide(): boolean {
 
 /**
  * True in desktop mode: free, resizable windows, the task strip in the
- * sys-bar, Home laid out as a grid, and no bottom bar.
+ * sys-bar, Home laid out as a grid, and no bottom bar. It implies wide, so
+ * every caller (the chrome, the window layer, the task strip) agrees even if
+ * one query changes.
  */
 export function useIsDesktop(): boolean {
-  return useMediaQuery(DESKTOP_QUERY);
+  const wide = useIsWide();
+  return useMediaQuery(DESKTOP_QUERY) && wide;
 }
 
 /** Put keyboard focus on a window's title bar (next frame, once it is shown). */

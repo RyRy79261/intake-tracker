@@ -107,6 +107,16 @@ describe("window store", () => {
     expect(toast).not.toHaveBeenCalled();
   });
 
+  it("cycle with nothing focused goes to the first window forward and the last back", () => {
+    const a = store().open("meds")!.win;
+    store().open("metrics");
+    const c = store().open("profile")!.win;
+    useWindowStore.setState({ focus: null });
+    expect(store().cycle(-1)).toBe(c.id);
+    useWindowStore.setState({ focus: null });
+    expect(store().cycle(1)).toBe(a.id);
+  });
+
   it("focuses the top remaining window after closing the focused one", () => {
     const a = store().open("meds")!.win;
     const b = store().open("metrics")!.win;

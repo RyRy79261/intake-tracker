@@ -58,7 +58,9 @@ export function cycleAll(dir: 1 | -1): string | null {
   if (ring.length === 0) return null;
   const current = apps.focus ?? (mods.focus ? moduleFrameId(mods.focus) : null);
   const at = ring.findIndex((r) => r.frame === current);
-  const next = ring[(at + dir + ring.length) % ring.length]!;
+  // Nothing focused: forward starts at the first window, back at the last.
+  const idx = at < 0 ? (dir === 1 ? 0 : ring.length - 1) : (at + dir + ring.length) % ring.length;
+  const next = ring[idx]!;
   if (next.module) mods.restore(next.module);
   else if (next.app) apps.switchTo(next.app);
   return next.frame;
@@ -89,7 +91,7 @@ export function WindowLayer({ hidden = false }: { hidden?: boolean }) {
   const setDesktop = useWindowStore((s) => s.setDesktop);
   const setArea = useWindowStore((s) => s.setArea);
   const wide = useIsWide();
-  const desktop = useIsDesktop() && wide;
+  const desktop = useIsDesktop();
   const phone = !wide;
 
   const layerRef = useRef<HTMLDivElement>(null);
