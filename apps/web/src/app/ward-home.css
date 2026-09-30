@@ -288,7 +288,13 @@
     gap: 10px;
   }
   .wc-mod {
-    background: hsl(var(--panel));
+    /* A faint wash of the domain colour under the header, fading into the
+       panel, so a card reads as its domain before any control is touched. */
+    background: linear-gradient(
+      to bottom,
+      color-mix(in srgb, var(--c) 7%, hsl(var(--panel))),
+      hsl(var(--panel)) 240px
+    );
     border: 1px solid hsl(var(--line));
     box-shadow: inset 0 3px 0 var(--c);
   }
@@ -337,10 +343,10 @@
     gap: 2px;
     height: 12px;
     padding: 2px;
-    border: 1px solid hsl(var(--line));
+    border: 1px solid color-mix(in srgb, var(--c, hsl(var(--line))) 45%, hsl(var(--line)));
   }
   .wc-lbar i {
-    background: color-mix(in srgb, hsl(var(--fg)) 8%, transparent);
+    background: color-mix(in srgb, var(--c, hsl(var(--fg))) 14%, transparent);
   }
   .wc-lbar i.f {
     background: var(--c);
@@ -361,7 +367,8 @@
   }
   .wc-qchips button {
     min-height: 40px;
-    border: 1px solid hsl(var(--line));
+    border: 1px solid var(--field-line, hsl(var(--line)));
+    background: var(--field-bg, transparent);
     font-family: var(--font-plex-mono), ui-monospace, monospace;
     font-size: 0.875rem;
     display: flex;
@@ -394,7 +401,8 @@
     align-items: stretch;
   }
   .wc-lstep .rb {
-    border: 1px solid hsl(var(--line));
+    border: 1px solid var(--field-line, hsl(var(--line)));
+    background: var(--field-bg, transparent);
     font-size: 1.375rem;
     display: flex;
     align-items: center;
@@ -407,7 +415,8 @@
     opacity: 0.35;
   }
   .wc-lstep .amt {
-    border: 1px solid hsl(var(--line));
+    border: 1px solid var(--field-line, hsl(var(--line)));
+    background: var(--field-bg, transparent);
     min-height: 64px;
     display: flex;
     flex-direction: column;
@@ -439,7 +448,8 @@
   }
   .wc-pgrid > button {
     min-height: 44px;
-    border: 1px solid hsl(var(--line));
+    border: 1px solid var(--field-line, hsl(var(--line)));
+    background: var(--field-bg, transparent);
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -481,7 +491,8 @@
   }
   .wc-quick3 > button {
     min-height: 48px;
-    border: 1px solid hsl(var(--line));
+    border: 1px solid var(--field-line, hsl(var(--line)));
+    background: var(--field-bg, transparent);
     font-weight: 500;
     display: flex;
     align-items: center;
