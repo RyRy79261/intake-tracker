@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { useEffect } from "react";
+import { act, render, screen } from "@testing-library/react";
 
 let pathname = "/";
 vi.mock("next/navigation", () => ({
@@ -85,5 +86,51 @@ describe("AppChrome", () => {
     html = renderToString(<AppChrome>page</AppChrome>);
     expect(html).not.toContain("page");
     expect(html).not.toContain("sys-bar");
+  });
+
+  // /auth/native-start starts Google sign-in from a mount effect and
+  // /native-auth/bridge mints a one-time code: a remount when the shell
+  // parts arrive after hydration would run them twice.
+  it("keeps a non-shell page mounted when the shell parts arrive after hydration", async () => {
+    const { renderToString } = await import("react-dom/server");
+    const { hydrateRoot } = await import("react-dom/client");
+    let mounts = 0;
+    function Page() {
+      useEffect(() => {
+        mounts += 1;
+      }, []);
+      return <input aria-label="Email" />;
+    }
+    pathname = "/auth";
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    container.innerHTML = renderToString(
+      <AppChrome>
+        <Page />
+      </AppChrome>,
+    );
+    const input = container.querySelector("input")!;
+    input.value = "typed before hydration";
+
+    let root: ReturnType<typeof hydrateRoot>;
+    await act(async () => {
+      root = hydrateRoot(
+        container,
+        <AppChrome>
+          <Page />
+        </AppChrome>,
+      );
+    });
+
+    // The shell has switched in around the page...
+    expect(container.querySelector("[data-shell=ward]")).not.toBeNull();
+    expect(container.querySelector("[data-testid=window-layer]")).not.toBeNull();
+    // ...and the page is the same instance, with the same DOM.
+    expect(mounts).toBe(1);
+    expect(container.querySelector("input")).toBe(input);
+    expect(input.value).toBe("typed before hydration");
+
+    act(() => root.unmount());
+    container.remove();
   });
 });

@@ -190,6 +190,24 @@ export function goHome(onShell = true): void {
   useWindowStore.setState({ focus: null, showHome: true });
 }
 
+/**
+ * We are on a window's entry (Forward, or a page load) but the window it
+ * opened is gone, e.g. Back closed it. Reopen the window for the route, so
+ * the address bar never shows a window route with no window, and point the
+ * entry at the new window. The entry keeps its `wardSeq`: its place among
+ * the other entries has not changed.
+ */
+function reviveWindow(state: WardHistoryState | null): void {
+  if (!state?.wardWin) return;
+  const store = useWindowStore.getState();
+  if (store.wins.some((w) => w.id === state.wardWin)) return;
+  const target = windowForRoute(window.location.pathname, new URLSearchParams(window.location.search));
+  const res = target ? store.open(target.app, target.st) : null;
+  if (!res) return;
+  currentWin = res.win.id;
+  window.history.replaceState({ ...state, wardWin: res.win.id }, "");
+}
+
 function onPopState(event: PopStateEvent): void {
   const state = (event.state && typeof event.state === "object" ? event.state : null) as WardHistoryState | null;
   const prev = currentSeq;
@@ -202,7 +220,11 @@ function onPopState(event: PopStateEvent): void {
     skipPops -= 1;
     return;
   }
-  if (currentSeq >= prev) return; // Forward, or an entry we never tagged.
+  if (currentSeq >= prev) {
+    // Forward, or an entry we never tagged.
+    if (currentSeq > prev) reviveWindow(state);
+    return;
+  }
 
   // The Settings sheet sits over everything: Back closes it first.
   const sheet = useSettingsSheetStore.getState();
@@ -284,7 +306,12 @@ export function useWindowHistory(): void {
     // whose windows came back from sessionStorage). Don't touch
     // `currentSeq` here: on Back, Next can render the restored route (and
     // run this effect) before our popstate listener sees the event.
-    if (seqOf(state) > 0) return;
+    if (seqOf(state) > 0) {
+      // A page load on a window's entry whose window is not in
+      // sessionStorage (Back closed it, then Forward and a reload).
+      if (isFirst) reviveWindow(state);
+      return;
+    }
     const target = windowForRoute(pathname, search);
     const res = target ? useWindowStore.getState().open(target.app, target.st) : null;
     if (!res) {

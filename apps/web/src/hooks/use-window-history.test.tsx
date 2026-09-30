@@ -150,6 +150,81 @@ describe("useWindowHistory", () => {
     expect(window.location.pathname).toBe("/medications");
   });
 
+  it("Forward onto a closed window's entry reopens the window", async () => {
+    render(<Sync />);
+    openWindow("metrics", { tab: "records" });
+    const seq = window.history.state?.wardSeq;
+    await back();
+    expect(apps()).toEqual([]);
+    expect(window.location.pathname).toBe("/");
+
+    const popped = new Promise((r) => window.addEventListener("popstate", r, { once: true }));
+    window.history.forward();
+    await popped;
+    expect(window.location.pathname + window.location.search).toBe("/analytics?tab=records");
+    expect(apps()).toEqual(["metrics"]);
+    const s = useWindowStore.getState();
+    expect(s.wins[0]?.st.tab).toBe("records");
+    expect(s.showHome).toBe(false);
+    // The entry now belongs to the new window, in the same place in history.
+    expect(window.history.state?.wardWin).toBe(s.wins[0]?.id);
+    expect(window.history.state?.wardSeq).toBe(seq);
+
+    // Back closes it again, without leaving the app.
+    await back();
+    expect(apps()).toEqual([]);
+    expect(window.location.pathname).toBe("/");
+  });
+
+  it("Forward past a reopened window onto a page leaves the windows alone", async () => {
+    const { rerender } = render(<Sync />);
+    const meds = openWindow("meds");
+    window.history.pushState(null, "", "/privacy");
+    pathname = "/privacy";
+    rerender(<Sync />);
+    await waitFor(() => expect(window.history.state?.wardOff).toBe(true));
+    await back();
+    await back();
+    expect(apps()).toEqual([]);
+
+    const popped = new Promise((r) => window.addEventListener("popstate", r, { once: true }));
+    window.history.forward();
+    await popped;
+    expect(apps()).toEqual(["meds"]);
+    expect(useWindowStore.getState().wins[0]?.id).not.toBe(meds!.win.id);
+    const wins = useWindowStore.getState().wins;
+
+    // Forward again, onto /privacy: not a window's entry, nothing to reopen.
+    const again = new Promise((r) => window.addEventListener("popstate", r, { once: true }));
+    window.history.forward();
+    await again;
+    expect(useWindowStore.getState().wins).toBe(wins);
+  });
+
+  it("a reload on a window's entry whose window is gone reopens the window", async () => {
+    // What a reload restores: the entry's state, but no window in sessionStorage.
+    window.history.replaceState({ wardSeq: 5, wardWin: "w3" }, "", "/medications");
+    pathname = "/medications";
+    const len = window.history.length;
+    render(<Sync />);
+    await waitFor(() => expect(apps()).toEqual(["meds"]));
+    expect(window.history.state?.wardWin).toBe(useWindowStore.getState().wins[0]?.id);
+    expect(window.history.state?.wardSeq).toBe(5);
+    expect(window.history.length).toBe(len);
+    expect(window.location.pathname).toBe("/medications");
+  });
+
+  it("a reload on a window's entry keeps the window restored from sessionStorage", async () => {
+    const win = { id: "w3", app: "meds" as const, st: {}, z: 1, min: false, max: false };
+    useWindowStore.setState({ wins: [win], focus: "w3", showHome: false, z: 1, nextId: 4 });
+    window.history.replaceState({ wardSeq: 5, wardWin: "w3" }, "", "/medications");
+    pathname = "/medications";
+    render(<Sync />);
+    await Promise.resolve();
+    expect(useWindowStore.getState().wins).toEqual([win]);
+    expect(window.history.state?.wardWin).toBe("w3");
+  });
+
   it("/history opens Metrics on Records", async () => {
     window.history.replaceState(null, "", "/history");
     pathname = "/history";

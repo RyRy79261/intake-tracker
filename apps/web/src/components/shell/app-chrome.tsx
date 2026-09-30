@@ -32,37 +32,22 @@ function useIsClient(): boolean {
  *
  * The shell reads device-only state (open windows in sessionStorage, the
  * screen width), so the server render and hydration show a plain frame and
- * the shell swaps in right after. Non-shell pages (`/privacy`, `/auth`, ...)
- * render their content in that frame, so it is in the server HTML.
+ * the shell parts are added right after. Non-shell pages (`/privacy`,
+ * `/auth`, ...) render their content in that frame, so it is in the server
+ * HTML.
+ *
+ * Home, the window routes (`/medications`, `/analytics`, `/history`,
+ * `/profile`) and `/settings` all render Home here, with the app windows
+ * (and the Settings sheet) over it, so Home stays mounted while windows open
+ * and close and the route only decides which window a deep link opens. Other
+ * routes (`/auth`, `/privacy`, ...) render their page; the windows stay
+ * mounted behind it, hidden.
  */
 export function AppChrome({ children }: { children: ReactNode }) {
   const isClient = useIsClient();
   const pathname = usePathname();
-
-  if (!isClient) {
-    const onShell = pathname === "/" || pathname === SETTINGS_PATH || isWindowRoute(pathname);
-    return (
-      <main className="min-h-screen overflow-x-clip bg-background">
-        {!onShell && <div className="container mx-auto max-w-lg px-4 pb-6 pt-6">{children}</div>}
-      </main>
-    );
-  }
-
-  return <WardShell>{children}</WardShell>;
-}
-
-/**
- * The Ward Console frame. Home, the window routes (`/medications`,
- * `/analytics`, `/history`, `/profile`) and `/settings` all render Home
- * here, with the app windows (and the Settings sheet) over it, so Home stays
- * mounted while windows open and close and the route only decides which
- * window a deep link opens. Other routes (`/help`, ...) render their page;
- * the windows stay mounted behind it, hidden.
- */
-function WardShell({ children }: { children: ReactNode }) {
-  const pathname = usePathname();
   const onShell = pathname === "/" || pathname === SETTINGS_PATH || isWindowRoute(pathname);
-  const chrome = onShell || isChromeRoute(pathname);
+  const chrome = isClient && (onShell || isChromeRoute(pathname));
   const wide = useIsWide();
   // On a phone the window on screen covers Home; on a wide screen tiled or
   // maximised windows fill the area, and Home would only show through the
@@ -74,37 +59,46 @@ function WardShell({ children }: { children: ReactNode }) {
       : !s.showHome && s.wins.some((w) => w.id === s.focus && !w.min),
   );
 
+  // The shell parts are added around the page once on the client. The page
+  // itself must keep its place in the tree across that switch (same parents,
+  // same slot): a page that remounts after hydration runs its mount effects
+  // twice (/auth/native-start would start Google sign-in twice) and loses
+  // what was typed into it.
   return (
-    <main className="min-h-screen overflow-x-clip bg-background" data-shell="ward">
-      <Suspense fallback={null}>
-        <WindowHistorySync />
-      </Suspense>
+    <main className="min-h-screen overflow-x-clip bg-background" data-shell={isClient ? "ward" : undefined}>
+      {isClient && (
+        <Suspense fallback={null}>
+          <WindowHistorySync />
+        </Suspense>
+      )}
       {chrome && <SysBar />}
-      <div
-        className={cn(
-          chrome
-            ? "container mx-auto max-w-lg px-3 pb-[calc(56px+env(safe-area-inset-bottom,0px)+24px)] pt-3"
-            : "container mx-auto max-w-lg px-4 pb-6 pt-6",
-          onShell && homeCovered && "invisible",
-        )}
-        inert={onShell && homeCovered}
-        data-testid="home"
-      >
-        {onShell ? (
-          // Its own boundary: a Home card that crashes must not take down the
-          // shell, or the crash screen's "Report this problem" (a hard load
-          // of /settings, which renders Home) would crash again before the
-          // Settings sheet mounts.
-          <ErrorBoundary>
-            <HomePageBody />
-          </ErrorBoundary>
-        ) : (
-          children
-        )}
-      </div>
-      <WindowLayer hidden={!onShell} />
+      {(isClient || !onShell) && (
+        <div
+          className={cn(
+            chrome
+              ? "container mx-auto max-w-lg px-3 pb-[calc(56px+env(safe-area-inset-bottom,0px)+24px)] pt-3"
+              : "container mx-auto max-w-lg px-4 pb-6 pt-6",
+            onShell && homeCovered && "invisible",
+          )}
+          inert={onShell && homeCovered}
+          data-testid={isClient ? "home" : undefined}
+        >
+          {onShell ? (
+            // Its own boundary: a Home card that crashes must not take down the
+            // shell, or the crash screen's "Report this problem" (a hard load
+            // of /settings, which renders Home) would crash again before the
+            // Settings sheet mounts.
+            <ErrorBoundary>
+              <HomePageBody />
+            </ErrorBoundary>
+          ) : (
+            children
+          )}
+        </div>
+      )}
+      {isClient && <WindowLayer hidden={!onShell} />}
       {chrome && <BottomBar />}
-      <SettingsSheet />
+      {isClient && <SettingsSheet />}
     </main>
   );
 }
