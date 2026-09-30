@@ -1,5 +1,6 @@
 "use client";
 
+import type { CSSProperties } from "react";
 import { CupSoda } from "lucide-react";
 import {
   Select,
@@ -12,10 +13,11 @@ import { formatHour } from "@intake/core/settings";
 import { useSettingsStore } from "@/stores/settings-store";
 import { OPTIONAL_TRACKERS } from "@/lib/optional-trackers";
 import { DEFAULT_WEEK_STARTS_ON, weekDayOrder } from "@/lib/date-utils";
-import { domainColor } from "@/lib/domain-colors";
+import { domainColor, type Domain } from "@/lib/domain-colors";
 import {
   Seg,
   SetRow,
+  SubHead,
   Tog,
   UnitNumberField,
   flabelClass,
@@ -44,6 +46,8 @@ function dayStartHelp(hour: number): string {
 
 interface LimitRowProps {
   label: string;
+  /** The tracked domain, for the colour pip. Potassium has none. */
+  domain?: Domain;
   unit: string;
   limit: number;
   limitMin: number;
@@ -58,11 +62,18 @@ interface LimitRowProps {
   };
 }
 
-/** One `.lim` row: label, target, "+", buffer. */
-function LimitRow({ label, unit, limit, limitMin, limitMax, setLimit, readLimit, buffer }: LimitRowProps) {
+/** One `.lim` row: domain pip + label, target, "+", buffer. */
+function LimitRow({ label, domain, unit, limit, limitMin, limitMax, setLimit, readLimit, buffer }: LimitRowProps) {
   return (
-    <div className="grid grid-cols-[5.5em_minmax(0,1fr)_auto_minmax(0,1fr)] items-start gap-1.5 text-sm">
-      <span className="flex h-9 items-center">{label}</span>
+    <div className="grid grid-cols-[6.5em_minmax(0,1fr)_auto_minmax(0,1fr)] items-start gap-1.5 text-sm">
+      <span className="flex h-9 items-center gap-2 font-medium">
+        <span
+          aria-hidden="true"
+          className="h-2.5 w-2.5 shrink-0 bg-[color:var(--c,hsl(var(--muted-fg)))]"
+          style={domain ? ({ "--c": domainColor(domain) } as CSSProperties) : undefined}
+        />
+        {label}
+      </span>
       <UnitNumberField
         label={`${label} daily ${buffer ? "limit" : "target"} (${unit})`}
         unit={unit}
@@ -115,50 +126,53 @@ export function TrackingSettingsSection({ onOpenPresets }: { onOpenPresets: () =
 
   return (
     <>
+      <SubHead>Day &amp; week</SubHead>
       <div>
-        <label htmlFor="set-day-start" className={flabelClass}>
-          Day starts at
-        </label>
-        <Select value={s.dayStartHour.toString()} onValueChange={(v) => s.setDayStartHour(parseInt(v, 10))}>
-          <SelectTrigger id="set-day-start" className="h-11 border-muted-foreground font-mono text-[0.9375rem]">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {Array.from({ length: 24 }, (_, i) => (
-              <SelectItem key={i} value={i.toString()}>
-                {formatHour(i)}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <p className={`${helpClass} mt-1`}>{dayStartHelp(s.dayStartHour)}</p>
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label htmlFor="set-day-start" className={flabelClass}>
+              Day starts at
+            </label>
+            <Select value={s.dayStartHour.toString()} onValueChange={(v) => s.setDayStartHour(parseInt(v, 10))}>
+              <SelectTrigger id="set-day-start" className="h-11 border-muted-foreground font-mono text-[0.9375rem]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {Array.from({ length: 24 }, (_, i) => (
+                  <SelectItem key={i} value={i.toString()}>
+                    {formatHour(i)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <label htmlFor="set-week-start" className={flabelClass}>
+              Week starts on
+            </label>
+            <Select value={s.weekStartsOn.toString()} onValueChange={(v) => s.setWeekStartsOn(parseInt(v, 10))}>
+              <SelectTrigger id="set-week-start" className="h-11 border-muted-foreground text-[0.9375rem]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {WEEK_START_OPTIONS.map((day) => (
+                  <SelectItem key={day} value={day.toString()}>
+                    {WEEKDAY_NAMES[day]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        <p className={`${helpClass} mt-1.5`}>{dayStartHelp(s.dayStartHour)}</p>
       </div>
 
-      <div>
-        <label htmlFor="set-week-start" className={flabelClass}>
-          Week starts on
-        </label>
-        <Select value={s.weekStartsOn.toString()} onValueChange={(v) => s.setWeekStartsOn(parseInt(v, 10))}>
-          <SelectTrigger id="set-week-start" className="h-11 border-muted-foreground text-[0.9375rem]">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {WEEK_START_OPTIONS.map((day) => (
-              <SelectItem key={day} value={day.toString()}>
-                {WEEKDAY_NAMES[day]}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      <div role="group" aria-labelledby="set-limits-label">
-        <span id="set-limits-label" className={flabelClass}>
-          Limits · target + buffer
-        </span>
+      <div role="group" aria-labelledby="set-limits-label" className="flex flex-col gap-3">
+        <SubHead id="set-limits-label">Limits · target + buffer</SubHead>
         <div className="flex flex-col gap-1.5">
           <LimitRow
             label="Water"
+            domain="water"
             unit="ml"
             limit={s.waterLimit}
             limitMin={100}
@@ -169,6 +183,7 @@ export function TrackingSettingsSection({ onOpenPresets }: { onOpenPresets: () =
           />
           <LimitRow
             label="Sodium"
+            domain="sodium"
             unit="mg"
             limit={s.saltLimit}
             limitMin={100}
@@ -180,6 +195,7 @@ export function TrackingSettingsSection({ onOpenPresets }: { onOpenPresets: () =
           {s.optionalTrackers.sugar && (
             <LimitRow
               label="Sugar"
+              domain="sugar"
               unit="g"
               limit={s.sugarLimit}
               limitMin={5}
@@ -201,32 +217,33 @@ export function TrackingSettingsSection({ onOpenPresets }: { onOpenPresets: () =
             />
           )}
         </div>
-        <p className={`${helpClass} mt-1`}>
+        <p className={helpClass}>
           Past the target shows hatched; past target + buffer shows solid with ▲. A buffer of 0 turns
           the second stage off.
         </p>
       </div>
 
-      <div role="group" aria-labelledby="set-trackers-label">
-        <span id="set-trackers-label" className={flabelClass}>
-          Optional trackers
-        </span>
-        {OPTIONAL_TRACKERS.map(({ key, label }) => (
-          <Tog
-            key={key}
-            id={`optional-tracker-${key}`}
-            testId={`optional-tracker-row-${key}`}
-            label={label}
-            checked={s.optionalTrackers[key]}
-            onCheckedChange={(v) => s.setOptionalTracker(key, v)}
-          />
-        ))}
-        <p className={`${helpClass} mt-1`}>
+      <div role="group" aria-labelledby="set-trackers-label" className="flex flex-col gap-1.5">
+        <SubHead id="set-trackers-label">Optional trackers</SubHead>
+        <div>
+          {OPTIONAL_TRACKERS.map(({ key, label }) => (
+            <Tog
+              key={key}
+              id={`optional-tracker-${key}`}
+              testId={`optional-tracker-row-${key}`}
+              label={label}
+              checked={s.optionalTrackers[key]}
+              onCheckedChange={(v) => s.setOptionalTracker(key, v)}
+            />
+          ))}
+        </div>
+        <p className={helpClass}>
           Sugar logs total sugars per food entry; potassium is a rough estimate. A tracker that is
           off is hidden everywhere; what you logged is kept.
         </p>
       </div>
 
+      <SubHead>Steps</SubHead>
       <div className="grid grid-cols-2 gap-2">
         <div>
           <label htmlFor="set-water-step" className={flabelClass}>
@@ -263,6 +280,7 @@ export function TrackingSettingsSection({ onOpenPresets }: { onOpenPresets: () =
         </div>
       </div>
 
+      <SubHead>Bathroom defaults</SubHead>
       <div>
         <span className={flabelClass}>Urination default amount</span>
         <Seg
@@ -284,9 +302,9 @@ export function TrackingSettingsSection({ onOpenPresets }: { onOpenPresets: () =
         />
       </div>
 
+      <SubHead>Drinks</SubHead>
       <SetRow
         icon={CupSoda}
-        color={domainColor("caffeine")}
         title="Drink presets"
         summary={`${presets.length} preset${presets.length === 1 ? "" : "s"} · ${cats.join(", ") || "none"}`}
         onClick={onOpenPresets}

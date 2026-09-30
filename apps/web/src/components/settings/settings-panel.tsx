@@ -5,7 +5,8 @@ import { DebugPanel } from "@/components/debug-panel";
 import { ReportBugDialog } from "@/components/report-bug-dialog";
 import { useSettingsSheetStore, type SettingsGroupId } from "@/stores/settings-sheet-store";
 import { openSettingsPage } from "@/hooks/use-window-history";
-import { SetGroup, Rule } from "@/components/settings/settings-kit";
+import { SetGroup } from "@/components/settings/settings-kit";
+import { SETTINGS_GROUP_META, settingsGroupStyle } from "@/components/settings/settings-groups";
 import { TrackingSettingsSection } from "@/components/settings/tracking-settings-section";
 import { AppearanceSection } from "@/components/settings/appearance-section";
 import { MedicationPrefsSection } from "@/components/settings/medication-prefs-section";
@@ -24,23 +25,8 @@ import { LiquidPresetsSection } from "@/components/settings/liquid-presets-secti
 /** Set by the ErrorBoundary crash screen before it navigates to /settings. */
 const CRASH_REPORT_KEY = "intake-tracker:crash-report";
 
-/**
- * The settings groups, in the prototype's order. The retired swipe-navigation,
- * quick-nav and animation-timing sections keep their (synced) store keys.
- */
-const GROUPS: ReadonlyArray<{ id: SettingsGroupId; title: string }> = [
-  { id: "tracking", title: "Tracking" },
-  { id: "appearance", title: "Appearance" },
-  { id: "meds", title: "Medications" },
-  { id: "ai", title: "AI features" },
-  { id: "data", title: "Data & storage" },
-  { id: "privacy", title: "Privacy" },
-  { id: "system", title: "System" },
-  { id: "help", title: "Help & Manual" },
-  { id: "feedback", title: "Feedback" },
-  { id: "about", title: "About" },
-  { id: "debug", title: "Debug" },
-];
+/** Drink presets is a sub-page of Tracking. */
+export const PRESETS_COLOR = SETTINGS_GROUP_META.find((g) => g.id === "tracking")?.color ?? "water";
 
 function GroupBody({ id }: { id: SettingsGroupId }) {
   switch (id) {
@@ -56,7 +42,6 @@ function GroupBody({ id }: { id: SettingsGroupId }) {
       return (
         <>
           <StorageInfoSection />
-          <Rule />
           <DataManagementSection />
         </>
       );
@@ -64,9 +49,7 @@ function GroupBody({ id }: { id: SettingsGroupId }) {
       return (
         <>
           <PermissionsSection />
-          <Rule />
           <MedicalAiSection />
-          <Rule />
           <McpConnectionsSection />
         </>
       );
@@ -127,8 +110,16 @@ export function SettingsGroups() {
 
   return (
     <div className="border-b border-line [&>section:first-child]:border-t-0">
-      {GROUPS.map(({ id, title }) => (
-        <SetGroup key={id} id={id} title={title} open={!!groups[id]} onToggle={() => toggleGroup(id)}>
+      {SETTINGS_GROUP_META.map(({ id, title, icon, color }) => (
+        <SetGroup
+          key={id}
+          id={id}
+          title={title}
+          icon={icon}
+          color={color}
+          open={!!groups[id]}
+          onToggle={() => toggleGroup(id)}
+        >
           <GroupBody id={id} />
         </SetGroup>
       ))}
@@ -137,8 +128,21 @@ export function SettingsGroups() {
   );
 }
 
-/** What the Settings sheet shows: the groups, or the Drink presets page. */
+/**
+ * What the Settings sheet shows: the groups, or the Drink presets page.
+ * Drink presets belongs to Tracking, so it keeps Tracking's colour.
+ */
 export function SettingsBody() {
   const page = useSettingsSheetStore((s) => s.page);
-  return page === "presets" ? <LiquidPresetsSection /> : <SettingsGroups />;
+  if (page !== "presets") return <SettingsGroups />;
+  return (
+    <div
+      className="px-3.5 shadow-[inset_3px_0_0_var(--g)]"
+      data-testid="settings-presets-page"
+      data-settings-color={PRESETS_COLOR}
+      style={settingsGroupStyle(PRESETS_COLOR)}
+    >
+      <LiquidPresetsSection />
+    </div>
+  );
 }

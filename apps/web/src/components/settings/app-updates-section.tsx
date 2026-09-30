@@ -1,6 +1,5 @@
 "use client";
 
-import type { CSSProperties } from "react";
 import { Button } from "@intake/ui/button";
 import { Smartphone, RefreshCw } from "lucide-react";
 import { Spinner } from "@intake/ui/spinner";
@@ -8,7 +7,6 @@ import { useVersionCheck } from "@/hooks/use-version-check";
 import { useToast } from "@intake/ui/use-toast";
 import { isCapacitorMode } from "@/lib/api-fetch";
 import { SubHead, btnClass, helpClass } from "@/components/settings/settings-kit";
-import { domainColor } from "@/lib/domain-colors";
 
 export function AppUpdatesSection() {
   const { toast } = useToast();
@@ -28,13 +26,10 @@ export function AppUpdatesSection() {
       <SubHead icon={Smartphone}>{capacitor ? "App Version" : "App Updates"}</SubHead>
       <div className="flex flex-col gap-2.5">
         {isUpdateAvailable ? (
-          <div
-            className="border border-water bg-background p-2.5"
-            style={{ "--c": domainColor("water") } as CSSProperties}
-          >
+          <div className="border border-steel bg-background p-2.5">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="text-sm font-semibold text-water">
+                <p className="text-sm font-semibold text-steel">
                   Update available
                 </p>
                 <p className={`${helpClass} mt-0.5`}>
@@ -44,10 +39,7 @@ export function AppUpdatesSection() {
                 </p>
               </div>
               {!capacitor && (
-                <Button
-                  className="shrink-0 bg-water text-on-domain hover:bg-water/90"
-                  onClick={applyUpdate}
-                >
+                <Button className="shrink-0" onClick={applyUpdate}>
                   <RefreshCw className="h-4 w-4" />
                   Update
                 </Button>

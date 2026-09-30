@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useSettingsStore } from "@/stores/settings-store";
 import { kvClass } from "@/components/profile/profile-sec";
 import { ResetSettingsButton } from "@/components/settings/reset-settings-button";
-import { Rule, helpClass } from "@/components/settings/settings-kit";
+import { SubHead, helpClass } from "@/components/settings/settings-kit";
 
 const appVersion = process.env.NEXT_PUBLIC_APP_VERSION || "0.0.0";
 const gitSha = process.env.NEXT_PUBLIC_GIT_SHA || "local";
@@ -26,6 +26,7 @@ export function AboutSection() {
 
   return (
     <>
+      <SubHead>This app</SubHead>
       <dl className={kvClass}>
         <dt>App</dt>
         <dd>Intake Tracker</dd>
@@ -51,7 +52,7 @@ export function AboutSection() {
       >
         Privacy Policy &amp; Disclaimer
       </Link>
-      <Rule />
+      <SubHead>Reset</SubHead>
       <ResetSettingsButton />
     </>
   );

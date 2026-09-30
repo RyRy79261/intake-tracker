@@ -7,7 +7,6 @@ import { Label } from "@intake/ui/label";
 import { NumericInput } from "@intake/ui/numeric-input";
 import { ReportBugDialog } from "@/components/report-bug-dialog";
 import { SubHead, Tog, helpClass } from "@/components/settings/settings-kit";
-import { domainColor } from "@/lib/domain-colors";
 import { cn } from "@/lib/utils";
 import { useSettings } from "@/hooks/use-settings";
 import { useToast } from "@intake/ui/use-toast";
@@ -56,9 +55,7 @@ export function ReportBugSection() {
 
   return (
     <>
-      <SubHead icon={Bug} color={domainColor("bp")}>
-        Report a bug
-      </SubHead>
+      <SubHead icon={Bug}>Report a bug</SubHead>
       <p className={helpClass}>
         Found a problem, or have an idea? File it on GitHub directly from the
         app. Environment info and recent error logs are attached

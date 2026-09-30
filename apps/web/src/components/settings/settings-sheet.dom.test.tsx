@@ -24,6 +24,7 @@ import { SettingsSheet } from "@/components/settings/settings-sheet";
 import { renderWithFixtures } from "@/__tests__/react-test-utils";
 import { useSettingsSheetStore } from "@/stores/settings-sheet-store";
 import { __resetWindowHistoryForTests } from "@/hooks/use-window-history";
+import { SETTINGS_GROUP_META, settingsColor } from "@/components/settings/settings-groups";
 
 function Harness() {
   return (
@@ -71,6 +72,75 @@ describe("SettingsSheet", () => {
     // Tracking starts open; the retired sections are gone.
     expect(within(sheet).getByRole("button", { name: "Tracking" })).toHaveAttribute("aria-expanded", "true");
     expect(within(sheet).queryByText(/swipe navigation|quick nav|animation timing/i)).not.toBeInTheDocument();
+  });
+
+  it("gives every group its own colour and icon, and no two neighbours the same colour", async () => {
+    const user = userEvent.setup();
+    await renderWithFixtures(<Harness />);
+    await user.click(screen.getByRole("button", { name: "Settings" }));
+    const sheet = await screen.findByRole("dialog", { name: "Settings" });
+
+    const sections = Array.from(sheet.querySelectorAll<HTMLElement>("[data-testid^='settings-group-']")).filter(
+      (el) => el.tagName === "SECTION",
+    );
+    expect(sections).toHaveLength(SETTINGS_GROUP_META.length);
+
+    const colors = sections.map((el) => el.dataset.settingsColor);
+    sections.forEach((section, i) => {
+      const meta = SETTINGS_GROUP_META[i];
+      expect(meta).toBeDefined();
+      if (!meta) return;
+      expect(colors[i]).toBe(meta.color);
+      // The colour itself, as the CSS variable the header icon and stripe read.
+      expect(section.style.getPropertyValue("--g")).toBe(settingsColor(meta.color));
+      // Its header carries an icon before the title.
+      const header = within(section).getByRole("button", { name: meta.title });
+      expect(header.querySelector("svg")).not.toBeNull();
+      if (i > 0) expect(colors[i], `${meta.title} vs the group above`).not.toBe(colors[i - 1]);
+    });
+  });
+
+  it("stripes the open group and colours its sub-headings with the group colour", async () => {
+    const user = userEvent.setup();
+    await renderWithFixtures(<Harness />);
+    await user.click(screen.getByRole("button", { name: "Settings" }));
+    const sheet = await screen.findByRole("dialog", { name: "Settings" });
+
+    const tracking = within(sheet).getByTestId("settings-group-tracking");
+    const meds = within(sheet).getByTestId("settings-group-meds");
+    expect(tracking.className).toContain("inset_3px_0_0_var(--g)");
+    expect(meds.className).not.toContain("inset_3px_0_0_var(--g)");
+
+    const heads = within(tracking).getAllByRole("heading", { level: 3 });
+    expect(heads.map((h) => h.textContent)).toEqual([
+      "Day & week",
+      "Limits · target + buffer",
+      "Optional trackers",
+      "Steps",
+      "Bathroom defaults",
+      "Drinks",
+    ]);
+    for (const h of heads) expect(h.className).toContain("var(--g");
+
+    // The selected segment and the switch take the group colour through
+    // `--primary`, which the group re-points at its own colour.
+    expect(tracking.style.getPropertyValue("--primary")).toBe("var(--water)");
+    const selected = within(tracking).getAllByRole("radio", { checked: true });
+    expect(selected.length).toBeGreaterThan(0);
+    for (const radio of selected) expect(radio.className).toContain("bg-primary");
+  });
+
+  it("keeps the Tracking colour on the Drink presets page", async () => {
+    const user = userEvent.setup();
+    await renderWithFixtures(<Harness />);
+    await user.click(screen.getByRole("button", { name: "Settings" }));
+    const sheet = await screen.findByRole("dialog", { name: "Settings" });
+    const trackingColor = within(sheet).getByTestId("settings-group-tracking").dataset.settingsColor;
+
+    await user.click(within(sheet).getByRole("button", { name: /drink presets/i }));
+
+    const presets = await screen.findByRole("dialog", { name: "Drink presets" });
+    expect(within(presets).getByTestId("settings-presets-page").dataset.settingsColor).toBe(trackingColor);
   });
 
   it("expands and collapses a group", async () => {
