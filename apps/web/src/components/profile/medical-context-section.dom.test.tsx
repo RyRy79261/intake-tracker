@@ -4,6 +4,7 @@ import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { MedicalContextSection } from "@/components/profile/medical-context-section";
+import { AiInsightsConsentToggle } from "@/components/profile/ai-insights-consent-toggle";
 import { renderWithFixtures } from "@/__tests__/react-test-utils";
 import {
   makePrescription,
@@ -82,5 +83,59 @@ describe("MedicalContextSection Health list", () => {
 
     await renderWithFixtures(<MedicalContextSection />);
     expect(screen.queryByText(/Sign in to use AI features/)).not.toBeInTheDocument();
+  });
+
+  it("gives the chip Remove and AI info buttons a 44px tap target", async () => {
+    await renderWithFixtures(<MedicalContextSection />, {
+      seed: { userProfile: [makeUserProfile({ conditions: ["HFrEF"] })] },
+    });
+
+    const remove = await screen.findByRole("button", { name: "Remove HFrEF" });
+    expect(remove).toHaveClass("h-11", "w-11");
+    const infos = screen.getAllByRole("button", { name: "About AI insights" });
+    expect(infos).toHaveLength(2);
+    for (const info of infos) {
+      expect(info).toHaveClass("h-11", "w-11");
+    }
+  });
+});
+
+/**
+ * The Profile window stays mounted (hidden or minimised) while Settings →
+ * Privacy renders the same two toggles in its sheet, so the label/switch ids
+ * must be per instance.
+ */
+describe("AiInsightsConsentToggle mounted twice", () => {
+  it("keeps every label bound to its own switch", async () => {
+    await renderWithFixtures(
+      <>
+        <div data-testid="profile-copy">
+          <MedicalContextSection />
+        </div>
+        <div data-testid="settings-copy">
+          <AiInsightsConsentToggle
+            field="shareConditionsWithAI"
+            label="Share conditions with AI insights"
+            noun="conditions"
+          />
+        </div>
+      </>,
+    );
+
+    const switches = screen.getAllByRole("switch");
+    expect(switches).toHaveLength(3);
+    expect(new Set(switches.map((s) => s.id)).size).toBe(3);
+
+    // The second copy's switch gets its accessible name from its own label,
+    // and that label points at it rather than at the first copy's switch.
+    const settingsCopy = screen.getByTestId("settings-copy");
+    const settingsSwitch = within(settingsCopy).getByRole("switch", {
+      name: "Share conditions with AI insights",
+    });
+    const label = within(settingsCopy).getByText(
+      "Share conditions with AI insights",
+    );
+    expect(label).toHaveAttribute("for", settingsSwitch.id);
+    expect(document.getElementById(settingsSwitch.id)).toBe(settingsSwitch);
   });
 });

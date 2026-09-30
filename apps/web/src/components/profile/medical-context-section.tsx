@@ -68,7 +68,7 @@ export function MedicalContextSection({
           <dt>Conditions</dt>
           <dd>
             {conditions.length > 0 ? (
-              <ul className="flex flex-wrap gap-1.5">
+              <ul className="flex flex-wrap gap-x-1.5 gap-y-2">
                 {conditions.map((c) => (
                   <li
                     key={c}
@@ -79,7 +79,7 @@ export function MedicalContextSection({
                       type="button"
                       aria-label={`Remove ${c}`}
                       onClick={() => removeCondition(c)}
-                      className="flex h-9 w-8 shrink-0 items-center justify-center text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring"
+                      className="-my-1 flex h-11 w-11 shrink-0 items-center justify-center text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring"
                     >
                       <X className="h-3.5 w-3.5" />
                     </button>

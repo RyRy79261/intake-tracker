@@ -11,8 +11,11 @@ import { useSettingsStore } from "@/stores/settings-store";
 import { DeleteAccountDialog } from "@/components/settings/delete-account-dialog";
 import { kvClass } from "@/components/profile/profile-sec";
 
-/** Outlined Ward Console secondary button (the prototype's `.btn`). */
-const actBtn = "h-10 gap-1.5 border-muted-foreground px-3";
+/**
+ * Outlined Ward Console secondary button (the prototype's `.btn`). No height
+ * override: the Button default is the 44px tap target.
+ */
+const actBtn = "gap-1.5 border-muted-foreground px-3";
 
 /**
  * Account state: signed-in status, cloud sync, Sign Out and (optionally)

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import { Info } from "lucide-react";
 import { Button } from "@intake/ui/button";
 import { Label } from "@intake/ui/label";
@@ -79,7 +79,9 @@ export function AiInsightsConsentToggle({ field, label, noun }: Props) {
   // Nullish check: both null and a missing (undefined) field mean "not yet
   // consented" — `!== null` alone would let an undefined value bypass the gate.
   const hasConsented = profile.aiInsightsConsentAt != null;
-  const inputId = `toggle-${field}`;
+  // Per-instance id: the Profile window stays mounted behind the Settings
+  // sheet, so a fixed id would point both labels at the first switch.
+  const inputId = `${useId()}-toggle-${field}`;
 
   const handleToggle = (next: boolean) => {
     // First enable ever → the dialog is the consent gate; don't save yet.
@@ -110,7 +112,7 @@ export function AiInsightsConsentToggle({ field, label, noun }: Props) {
               type="button"
               aria-label="About AI insights"
               onClick={() => setDialog("info")}
-              className="-my-2 flex h-8 w-8 shrink-0 items-center justify-center text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring"
+              className="-my-3 flex h-11 w-11 shrink-0 items-center justify-center text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring"
             >
               <Info className="h-3.5 w-3.5" />
             </button>
