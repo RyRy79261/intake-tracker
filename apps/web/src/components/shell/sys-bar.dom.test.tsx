@@ -117,7 +117,8 @@ describe("SysBar", () => {
 
     // History is Metrics on Records: the same window, not a new one.
     fireEvent.click(history);
-    expect(useWindowStore.getState().wins.map((w) => w.app)).toEqual(["meds", "metrics"]);
+    // A phone keeps one window: Metrics replaced Medications.
+    expect(useWindowStore.getState().wins.map((w) => w.app)).toEqual(["metrics"]);
     expect(history).toHaveAttribute("aria-pressed", "true");
     expect(metrics).toHaveAttribute("aria-pressed", "false");
 

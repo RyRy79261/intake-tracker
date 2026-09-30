@@ -47,7 +47,9 @@ test.describe("Windows on a phone", () => {
     await expect(meds).toBeVisible();
     await expect(page).toHaveURL(/\/medications$/);
     await expect(meds.getByRole("heading", { name: "Medications" })).toBeFocused();
-    await expect(windowsButton(page)).toHaveAccessibleName("Windows, 1 open");
+    // One window at a time on a phone: no Windows switcher, no Log.
+    await expect(windowsButton(page)).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Log", exact: true })).toHaveCount(0);
     // Full screen under the sys-bar: as wide as the viewport.
     const box = await meds.boundingBox();
     expect(box?.width).toBe(390);
@@ -63,15 +65,12 @@ test.describe("Windows on a phone", () => {
     await expect(page).toHaveURL(/\/$/);
     await expect(page.getByRole("button", { name: "Home", exact: true })).toHaveAttribute("aria-pressed", "true");
 
-    // Two windows: each Back closes the one on top.
+    // Opening another app closes the one on screen; Back then goes Home.
     await sysBar(page).getByRole("button", { name: /^Medications/ }).click();
     await sysBar(page).getByRole("button", { name: "Metrics" }).click();
     await expect(windowNamed(page, "Metrics")).toBeVisible();
-    await expect(page.getByLabel("Window 2 of 2")).toHaveText("2/2");
-
-    await page.goBack();
-    await expect(windowNamed(page, "Medications")).toBeVisible();
     await expect(windows(page)).toHaveCount(1);
+
     await page.goBack();
     await expect(windows(page)).toHaveCount(0);
     await expect(page).toHaveURL(/\/$/);
@@ -88,28 +87,20 @@ test.describe("Windows on a phone", () => {
     await expect(sysBar(page).getByRole("button", { name: /^Medications/ })).toBeFocused();
   });
 
-  test("the switcher shows the count and closes windows", async ({ page }) => {
+  test("the quick links jump to each card on Home", async ({ page }) => {
     await openHome(page);
+    const links = page.getByRole("navigation", { name: "Jump to" });
+    await expect(links).toBeVisible();
+    await links.getByRole("button", { name: "Weight" }).click();
+    await expect(links.getByRole("button", { name: "Weight" })).toHaveAttribute("aria-current", "true");
+    await expect
+      .poll(() => page.evaluate(() => Math.round(document.getElementById("section-weight")!.getBoundingClientRect().top)))
+      .toBeLessThan(80);
+
+    // Not over a window.
     await sysBar(page).getByRole("button", { name: /^Medications/ }).click();
-    await sysBar(page).getByRole("button", { name: "Metrics" }).click();
-    await expect(windowsButton(page)).toHaveAccessibleName("Windows, 2 open");
-
-    await windowsButton(page).click();
-    const sheet = page.getByRole("dialog");
-    await expect(sheet.getByText("Windows · 2 open")).toBeVisible();
-    await expect(sheet.getByTestId("switcher-row")).toHaveCount(2);
-
-    // Switch to Medications.
-    await sheet.getByRole("button", { name: /^Medications/ }).click();
     await expect(windowNamed(page, "Medications")).toBeVisible();
-
-    await windowsButton(page).click();
-    await page.getByRole("dialog").getByRole("button", { name: "Close Metrics" }).click();
-    await expect(page.getByRole("dialog").getByText("Windows · 1 open")).toBeVisible();
-    await expect(page.getByRole("dialog").getByTestId("switcher-row")).toHaveCount(1);
-    // The sheet is modal: close it before reading the bottom bar.
-    await page.keyboard.press("Escape");
-    await expect(windowsButton(page)).toHaveAccessibleName("Windows, 1 open");
+    await expect(links).toHaveCount(0);
   });
 
   test("the /medications deep link opens the window over Home", async ({ page }) => {
@@ -139,6 +130,63 @@ test.describe("Windows on a phone", () => {
       "active",
     );
     await expect(page).toHaveURL(/\/analytics\?tab=records$/);
+  });
+});
+
+test.describe("Swiping on a phone", () => {
+  test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+  test.beforeEach(async ({ page }) => skipAnalyticsIntro(page));
+
+  /** A sideways finger swipe across the middle of the screen. */
+  async function swipe(page: Page, dx: number) {
+    const cdp = await page.context().newCDPSession(page);
+    const x0 = dx < 0 ? 330 : 60;
+    const y = 420;
+    await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x: x0, y }] });
+    for (let i = 1; i <= 8; i++) {
+      await cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x: x0 + (dx * i) / 8, y }] });
+    }
+    await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+    await cdp.detach();
+    // Swipes are ignored until the page has slid in: wait for it to settle.
+    await page.waitForTimeout(50);
+    await expect
+      .poll(() =>
+        page.evaluate(() =>
+          ['[data-testid="home"]', '[data-testid="window-layer"]']
+            .map((sel) => document.querySelector<HTMLElement>(sel)?.style.transform ?? "")
+            .join(""),
+        ),
+      )
+      .toBe("");
+  }
+
+  test("moves between Profile, Home, Medications and Metrics, one window at a time", async ({ page }) => {
+    await openHome(page);
+    await expect(page.getByRole("navigation", { name: "Jump to" })).toBeVisible();
+
+    await swipe(page, -250);
+    await expect(windowNamed(page, "Medications")).toBeVisible();
+    await expect(page).toHaveURL(/\/medications$/);
+    await swipe(page, -250);
+    await expect(windowNamed(page, "Metrics")).toBeVisible();
+    await expect(windows(page)).toHaveCount(1);
+    // Metrics is the last page: nothing further.
+    await swipe(page, -250);
+    await expect(windowNamed(page, "Metrics")).toBeVisible();
+
+    await swipe(page, 250);
+    await expect(windowNamed(page, "Medications")).toBeVisible();
+    await swipe(page, 250);
+    await expect(windows(page)).toHaveCount(0);
+    await expect(page).toHaveURL(/\/$/);
+    await swipe(page, 250);
+    await expect(windowNamed(page, "Profile")).toBeVisible();
+
+    // Back from a swiped-to window goes Home.
+    await page.goBack();
+    await expect(windows(page)).toHaveCount(0);
+    await expect(page).toHaveURL(/\/$/);
   });
 });
 

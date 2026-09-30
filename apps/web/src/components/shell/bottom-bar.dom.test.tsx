@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, within } from "@testing-library/react";
+import type * as ShellMode from "@/hooks/use-shell-mode";
 
 const push = vi.fn();
 let pathname = "/";
@@ -19,9 +20,10 @@ vi.mock("@/components/shell/hold-to-talk", () => ({
   HoldToTalk: () => <button type="button">Hold to talk</button>,
 }));
 
-// The sheet's contents are covered by log-sheet.dom.test.
-vi.mock("@/components/shell/log-sheet", () => ({
-  LogSheet: ({ open }: { open: boolean }) => (open ? <div role="dialog" aria-label="Log sheet" /> : null),
+let wide = false;
+vi.mock("@/hooks/use-shell-mode", async (importOriginal) => ({
+  ...(await importOriginal<typeof ShellMode>()),
+  useIsWide: () => wide,
 }));
 
 // The switcher's contents are covered by windows-switcher.dom.test.
@@ -40,34 +42,65 @@ describe("BottomBar", () => {
     useWindowStore.setState({ wins: [], focus: null, showHome: true, wide: false, z: 0, nextId: 1 });
     window.history.replaceState(null, "", "/");
     mockUseAuthGate.mockReset();
+    wide = false;
   });
 
   it("hides Hold to talk when signed out", () => {
     mockUseAuthGate.mockReturnValue(false);
     render(<BottomBar />);
     expect(screen.queryByRole("button", { name: "Hold to talk" })).not.toBeInTheDocument();
-    // The other three cells are still there.
     expect(screen.getByRole("button", { name: "Home" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Windows/ })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Log" })).toBeInTheDocument();
+  });
+
+  it("has no Log cell", () => {
+    mockUseAuthGate.mockReturnValue(true);
+    render(<BottomBar />);
+    expect(screen.queryByRole("button", { name: "Log" })).not.toBeInTheDocument();
+  });
+
+  it("phone: no Windows cell, and the quick links over the bar on Home only", () => {
+    mockUseAuthGate.mockReturnValue(false);
+    const { unmount } = render(<BottomBar />);
+    expect(screen.queryByRole("button", { name: /Windows/ })).not.toBeInTheDocument();
+    const links = screen.getByRole("navigation", { name: "Jump to" });
+    for (const name of ["Liquids", "Food", "BP", "Weight", "Urine", "Bowel"]) {
+      expect(within(links).getByRole("button", { name })).toBeInTheDocument();
+    }
+    unmount();
+
+    useWindowStore.getState().open("meds");
+    pathname = "/medications";
+    render(<BottomBar />);
+    expect(screen.queryByRole("navigation", { name: "Jump to" })).not.toBeInTheDocument();
+  });
+
+  it("a quick link scrolls its card into view", () => {
+    mockUseAuthGate.mockReturnValue(false);
+    const card = document.createElement("div");
+    card.id = "section-weight";
+    card.scrollIntoView = vi.fn();
+    document.body.appendChild(card);
+    render(<BottomBar />);
+    const weight = screen.getByRole("button", { name: "Weight" });
+    fireEvent.click(weight);
+    expect(card.scrollIntoView).toHaveBeenCalledWith({ block: "start" });
+    expect(weight).toHaveAttribute("aria-current", "true");
+    card.remove();
+  });
+
+  it("Home on Home scrolls back to the top", () => {
+    mockUseAuthGate.mockReturnValue(false);
+    const scrollTo = vi.spyOn(window, "scrollTo").mockImplementation(() => {});
+    render(<BottomBar />);
+    fireEvent.click(screen.getByRole("button", { name: "Home" }));
+    expect(scrollTo).toHaveBeenCalledWith({ top: 0 });
+    scrollTo.mockRestore();
   });
 
   it("shows Hold to talk when signed in", () => {
     mockUseAuthGate.mockReturnValue(true);
     render(<BottomBar />);
     expect(screen.getByRole("button", { name: "Hold to talk" })).toBeInTheDocument();
-  });
-
-  it("opens the Log sheet from the Log cell", () => {
-    mockUseAuthGate.mockReturnValue(false);
-    render(<BottomBar />);
-    const log = screen.getByRole("button", { name: "Log" });
-    expect(log).toHaveAttribute("aria-expanded", "false");
-    fireEvent.click(log);
-    expect(log).toHaveAttribute("aria-expanded", "true");
-    expect(screen.getByRole("dialog", { name: "Log sheet" })).toBeInTheDocument();
-    // Home is not "on" while the sheet covers it.
-    expect(screen.getByRole("button", { name: "Home" })).toHaveAttribute("aria-pressed", "false");
   });
 
   it("marks Home on the home route and navigates there from elsewhere", () => {
@@ -111,6 +144,7 @@ describe("BottomBar", () => {
 
   it("Home minimises every window on a wide screen", () => {
     mockUseAuthGate.mockReturnValue(false);
+    wide = true;
     useWindowStore.setState({ wide: true });
     useWindowStore.getState().open("meds");
     useWindowStore.getState().open("metrics");
@@ -119,8 +153,10 @@ describe("BottomBar", () => {
     expect(useWindowStore.getState().wins.every((w) => w.min)).toBe(true);
   });
 
-  it("counts the open windows and opens the switcher", () => {
+  it("tiled: counts the open windows and opens the switcher", () => {
     mockUseAuthGate.mockReturnValue(false);
+    wide = true;
+    useWindowStore.setState({ wide: true });
     useWindowStore.getState().open("meds");
     useWindowStore.getState().open("profile");
     render(<BottomBar />);

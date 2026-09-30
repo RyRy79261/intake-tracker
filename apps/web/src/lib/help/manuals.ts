@@ -157,8 +157,10 @@ export const MANUALS: Manual[] = [
         heading: "Getting around",
         bullets: [
           "The bar along the top opens the apps: Medications, Metrics, History and your Profile, plus Settings. Each app opens in its own window.",
-          "On a phone a window fills the screen; Home (or Back) closes it. On a tablet windows sit side by side, and Esc closes the one in front.",
-          "On a phone or tablet the bottom bar has Home, Windows (switch between or close open windows), Hold to talk (when signed in) and Log.",
+          "On a phone a window fills the screen and only one is open at a time: opening another closes it, and Home (or Back) closes it too. On a tablet windows sit side by side, and Esc closes the one in front.",
+          "On a phone, swipe sideways to move between Profile, Home, Medications and Metrics, in that order.",
+          "On a phone the bottom bar has Home and Hold to talk (when signed in). Above it on Home, the quick links (Liquids, Food, BP, Weight, Urine, Bowel) jump to each card; the card in view is marked. Tapping Home on Home goes back to the top.",
+          "On a tablet the bottom bar also has Windows, to switch between or close the open windows.",
           "On a computer (a screen 1024 pixels wide or more, with a mouse or trackpad) everything is a window on a desk. Today, Liquids, Food, Blood Pressure, Weight, Urination and Defecation each have their own window, all open the first time, side by side. Drag a window by its title bar to move it. Drag any edge or corner to resize it. Click a window to bring it to the front.",
           "Double-click a title bar to fill the screen, and again to go back. Drag a window to the left or right edge to fill that half, or to the top edge to fill the screen. Dragging it away gives it its old size back. Windows stay where you put them until you close the tab.",
           "Minimising one of those seven windows (or closing it with ×) turns it into a square icon at the bottom left of the desk; click the icon to put the window back where it was. They are never lost, and where you leave them is remembered on this computer.",

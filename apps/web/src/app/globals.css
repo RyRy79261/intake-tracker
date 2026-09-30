@@ -24,23 +24,43 @@ body {
   }
 }
 
-/* Custom scrollbar */
+/* Scrollbars: one Ward Console style for every scroll area. Square, thin,
+   a line-coloured thumb on the chrome track, ink on hover and drag, and no
+   arrow buttons. Chrome and Safari use the ::-webkit-scrollbar parts (they
+   ignore those once scrollbar-color is set, so that is only for Firefox,
+   which has no parts to style). */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 10px;
+  height: 10px;
 }
-
-::-webkit-scrollbar-track {
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
   background: transparent;
 }
-
 ::-webkit-scrollbar-thumb {
-  background: hsl(var(--muted-foreground) / 0.3);
-  border-radius: 3px;
+  background: hsl(var(--line));
+  /* A transparent border insets the thumb, so it reads as 6px wide but
+     the grab area is the full 10px. */
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  border-radius: 0;
 }
-
 ::-webkit-scrollbar-thumb:hover {
-  background: hsl(var(--muted-foreground) / 0.5);
+  background: hsl(var(--muted-fg));
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:active {
+  background: hsl(var(--fg));
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-button {
+  display: none;
+}
+@supports not selector(::-webkit-scrollbar) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--line)) transparent;
+  }
 }
 
 /* Utility to hide scrollbar while keeping scroll functionality */

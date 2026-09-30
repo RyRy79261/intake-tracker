@@ -4,10 +4,11 @@ import { useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuthGate } from "@/components/auth-guard";
 import { HoldToTalk } from "@/components/shell/hold-to-talk";
-import { LogSheet } from "@/components/shell/log-sheet";
+import { QuickLinks } from "@/components/shell/quick-links";
 import { ShellIcon } from "@/components/shell/shell-icon";
 import { WindowsSwitcher } from "@/components/shell/windows-switcher";
 import { goHome } from "@/hooks/use-window-history";
+import { useIsWide } from "@/hooks/use-shell-mode";
 import { isWindowRoute } from "@/lib/nav-routes";
 import { useWindowStore } from "@/stores/window-store";
 
@@ -22,25 +23,30 @@ const cellBase =
   "disabled:text-muted-foreground";
 
 /**
- * Ward Console bottom bar: Home, Windows (count), Hold to talk (signed in
- * only) and Log. Home closes the window on screen (phone) or minimises every
- * window (wide); Windows opens the switcher.
+ * Ward Console bottom bar: Home, Windows (count, tiled screens only) and
+ * Hold to talk (signed in only). Home closes the window on screen (phone) or
+ * minimises every window (wide); on Home it scrolls back to the top.
+ * Windows opens the switcher. A phone shows one window at a time (the others
+ * close), so it has no Windows button; on Home it has the quick links above
+ * the bar instead.
  */
 export function BottomBar() {
   const pathname = usePathname();
   const router = useRouter();
   const showAi = useAuthGate();
-  const [logOpen, setLogOpen] = useState(false);
+  const wide = useIsWide();
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const windowCount = useWindowStore((s) => s.wins.length);
   const showHome = useWindowStore((s) => s.showHome);
 
   // Home and the window routes all show Home under the windows.
   const onShell = pathname === "/" || isWindowRoute(pathname);
-  const homeOn = onShell && (showHome || windowCount === 0) && !logOpen && !switcherOpen;
+  const onHome = onShell && (showHome || windowCount === 0);
+  const homeOn = onHome && !switcherOpen;
 
   return (
     <>
+      {!wide && onHome && <QuickLinks />}
       <nav
         aria-label="Bottom bar"
         data-testid="bottom-bar"
@@ -52,6 +58,10 @@ export function BottomBar() {
           aria-pressed={homeOn}
           aria-label="Home"
           onClick={() => {
+            if (onHome) {
+              window.scrollTo({ top: 0 });
+              return;
+            }
             goHome(onShell);
             if (!onShell) router.push("/");
           }}
@@ -59,45 +69,36 @@ export function BottomBar() {
           <ShellIcon name="home" size={20} />
           <span className="text-xs font-medium">Home</span>
         </button>
-        <button
-          type="button"
-          className={cellBase}
-          aria-label={`Windows, ${windowCount} open`}
-          aria-haspopup="dialog"
-          aria-expanded={switcherOpen}
-          onClick={() => setSwitcherOpen(true)}
-        >
-          <span className="flex items-center gap-[5px]">
-            <ShellIcon name="windows" size={20} />
-            <span className="num inline-flex h-4 min-w-[18px] items-center justify-center border border-current px-[3px] text-[0.6875rem] leading-none">
-              {windowCount}
+        {wide && (
+          <button
+            type="button"
+            className={cellBase}
+            aria-label={`Windows, ${windowCount} open`}
+            aria-haspopup="dialog"
+            aria-expanded={switcherOpen}
+            onClick={() => setSwitcherOpen(true)}
+          >
+            <span className="flex items-center gap-[5px]">
+              <ShellIcon name="windows" size={20} />
+              <span className="num inline-flex h-4 min-w-[18px] items-center justify-center border border-current px-[3px] text-[0.6875rem] leading-none">
+                {windowCount}
+              </span>
             </span>
-          </span>
-          <span className="text-xs font-medium">Windows</span>
-        </button>
+            <span className="text-xs font-medium">Windows</span>
+          </button>
+        )}
         {showAi && <HoldToTalk />}
-        <button
-          type="button"
-          className={cellBase}
-          aria-label="Log"
-          aria-haspopup="dialog"
-          aria-expanded={logOpen}
-          onClick={() => setLogOpen(true)}
-        >
-          <ShellIcon name="plus" size={20} />
-          <span className="text-xs font-medium">Log</span>
-        </button>
       </nav>
-      <LogSheet open={logOpen} onOpenChange={setLogOpen} />
-      <WindowsSwitcher
-        open={switcherOpen}
-        onOpenChange={setSwitcherOpen}
-        onSwitch={() => {
-          // Switching from another route (e.g. /settings) returns to the windows.
-          if (!onShell) router.push("/");
-        }}
-      />
+      {wide && (
+        <WindowsSwitcher
+          open={switcherOpen}
+          onOpenChange={setSwitcherOpen}
+          onSwitch={() => {
+            // Switching from another route (e.g. /settings) returns to the windows.
+            if (!onShell) router.push("/");
+          }}
+        />
+      )}
     </>
   );
 }
-

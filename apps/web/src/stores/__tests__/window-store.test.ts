@@ -117,6 +117,18 @@ describe("window store", () => {
     expect(store().cycle(1)).toBe(a.id);
   });
 
+  it("keepOnly closes every other window, and null returns to Home", () => {
+    const a = store().open("meds")!.win;
+    store().open("metrics");
+    store().keepOnly(a.id);
+    expect(store().wins.map((w) => w.app)).toEqual(["meds"]);
+    expect(store().focus).toBe(a.id);
+    store().keepOnly(null);
+    expect(store().wins).toEqual([]);
+    expect(store().focus).toBeNull();
+    expect(store().showHome).toBe(true);
+  });
+
   it("focuses the top remaining window after closing the focused one", () => {
     const a = store().open("meds")!.win;
     const b = store().open("metrics")!.win;

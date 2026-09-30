@@ -102,6 +102,16 @@ export function WindowLayer({ hidden = false }: { hidden?: boolean }) {
   const moduleFocus = useModuleWindowStore((s) => s.focus);
 
   useEffect(() => setWide(wide), [wide, setWide]);
+
+  // A phone keeps no windows out of view: once Home is back, or another
+  // window is on screen, the rest close (also windows left from a wider
+  // screen, or restored after a reload). Not while the shell is hidden
+  // (/auth, /privacy): Back returns to the window.
+  useEffect(() => {
+    if (!phone || hidden) return;
+    const onScreen = !showHome ? wins.find((w) => w.id === focus && !w.min) : undefined;
+    if (wins.some((w) => w.id !== onScreen?.id)) useWindowStore.getState().keepOnly(onScreen?.id ?? null);
+  }, [phone, hidden, wins, focus, showHome]);
   useEffect(() => setDesktop(desktop), [desktop, setDesktop]);
 
   useEffect(() => {

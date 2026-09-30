@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useWindowStore, type OpenResult } from "@/stores/window-store";
+import { WIDE_QUERY } from "@/hooks/use-shell-mode";
 import { isWindowRoute, windowForRoute, windowHref, type ShellAppId, type WindowState } from "@/lib/nav-routes";
 import {
   isSettingsGroup,
@@ -86,6 +87,14 @@ function wardState(): WardHistoryState | null {
   return s && typeof s === "object" ? (s as WardHistoryState) : null;
 }
 
+/**
+ * Read the screen, not the store's `wide`: the store learns it in an effect,
+ * after a deep link may already have opened a window.
+ */
+function isWideScreen(): boolean {
+  return typeof window.matchMedia === "function" ? window.matchMedia(WIDE_QUERY).matches : useWindowStore.getState().wide;
+}
+
 function seqOf(state: WardHistoryState | null): number {
   return typeof state?.wardSeq === "number" ? state.wardSeq : 0;
 }
@@ -95,8 +104,21 @@ function seqOf(state: WardHistoryState | null): number {
  * which also moves the address bar to the window's route.
  */
 export function openWindow(app: ShellAppId, st?: WindowState): OpenResult {
-  const res = useWindowStore.getState().open(app, st);
-  if (res?.created) {
+  const store = useWindowStore.getState();
+  const res = store.open(app, st);
+  if (!res) return res;
+  if (!isWideScreen()) {
+    // A phone shows one window: the one on screen before is closed, not
+    // kept behind. Its Back entry becomes the new window's, so Back from
+    // the new window still goes Home.
+    const replaced = useWindowStore.getState().wins.some((w) => w.id !== res.win.id);
+    useWindowStore.getState().keepOnly(res.win.id);
+    if (replaced && wardState()?.wardWin) {
+      window.history.replaceState(tag({ wardWin: res.win.id }), "", windowHref(res.win.app, res.win.st));
+      return res;
+    }
+  }
+  if (res.created) {
     const data = tag({ wardWin: res.win.id });
     window.history.pushState(data, "", windowHref(res.win.app, res.win.st));
   }

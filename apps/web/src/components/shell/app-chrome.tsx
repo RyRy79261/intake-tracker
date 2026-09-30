@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 import { SysBar } from "@/components/shell/sys-bar";
 import { BottomBar } from "@/components/shell/bottom-bar";
 import { DeskBand } from "@/components/shell/desk-band";
+import { PhoneSwipe } from "@/components/shell/phone-swipe";
 import { SettingsSheet } from "@/components/settings/settings-sheet";
 import { SETTINGS_PATH } from "@/hooks/use-window-history";
 import { ErrorBoundary } from "@/components/error-boundary";
@@ -29,8 +30,9 @@ function useIsClient(): boolean {
 
 /**
  * The app frame around every page: the Ward Console shell (the sys-bar on
- * top, the windows, and the bottom bar with Home, Windows, Hold to talk and
- * Log). Desktop mode (1024px or more with a mouse) is a desk instead of
+ * top, the windows, and the bottom bar with Home, Windows on tiled screens
+ * and Hold to talk; on a phone, the quick links over it and sideways swipes
+ * between Profile, Home, Medications and Metrics). Desktop mode (1024px or more with a mouse) is a desk instead of
  * Home: the intake modules are free windows in the window layer, the
  * sys-bar carries the task strip, and the desk band along the bottom has
  * Report a bug, the icons of minimised modules and Hold to talk.
@@ -104,7 +106,8 @@ export function AppChrome({ children }: { children: ReactNode }) {
               : desk
                 ? // Nothing to lay out: the desk's modules are windows.
                   "hidden"
-                : "container mx-auto max-w-lg px-3 pb-[calc(var(--bbh,56px)+env(safe-area-inset-bottom,0px)+24px)] pt-3",
+                : // Phone: the quick links sit over the bottom bar, 48px more.
+                  "container mx-auto max-w-lg px-3 pb-[calc(var(--bbh,56px)+env(safe-area-inset-bottom,0px)+24px)] max-md:pb-[calc(56px+48px+env(safe-area-inset-bottom,0px)+24px)] pt-3",
             onShell && !desk && homeCovered && "invisible",
           )}
           inert={onShell && !desk && homeCovered}
@@ -126,6 +129,7 @@ export function AppChrome({ children }: { children: ReactNode }) {
         </div>
       )}
       {isClient && <WindowLayer hidden={!onShell} />}
+      {isClient && onShell && !wide && <PhoneSwipe />}
       {chrome && (desktop ? <DeskBand modules={onShell} /> : <BottomBar />)}
       {isClient && <SettingsSheet />}
     </main>

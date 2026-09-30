@@ -104,6 +104,12 @@ interface WindowStoreState {
   setDesktop: (desktop: boolean) => void;
   setArea: (area: Area) => void;
   closeAll: () => void;
+  /**
+   * Phone: close every window but `id` (null closes them all and shows
+   * Home). A phone shows one window at a time, so the others are closed, not
+   * kept behind it.
+   */
+  keepOnly: (id: string | null) => void;
 
   // Desktop: free windows.
   /**
@@ -308,6 +314,13 @@ export const useWindowStore = create<WindowStoreState>()(
       },
 
       closeAll: () => set({ wins: [], focus: null, showHome: true }),
+
+      keepOnly: (id) => {
+        const state = get();
+        const wins = state.wins.filter((w) => w.id === id);
+        if (wins.length === state.wins.length) return;
+        set(wins.length > 0 ? { wins, focus: id } : { wins, focus: null, showHome: true });
+      },
 
       beginDrag: (id, px) => {
         const state = get();
