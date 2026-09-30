@@ -9,14 +9,17 @@ import { DefecationCard } from "@/components/defecation-card";
 import { LiquidsCard } from "@/components/liquids-card";
 import { FoodSaltCard } from "@/components/food-salt-card";
 import { Droplets } from "lucide-react";
+import { useIsDesktop } from "@/hooks/use-shell-mode";
 
 /**
- * Home: the Today gadget over a scroll of the module cards. The shell renders
+ * Home: the Today gadget over a scroll of the module cards; on the desktop
+ * (1024px or more with a mouse) the same cards on a grid. The shell renders
  * it under the windows on every window route, so it stays mounted while
  * windows open and close.
  */
 export function HomePageBody() {
   const [mounted, setMounted] = useState(false);
+  const desktop = useIsDesktop();
 
   useEffect(() => {
     setMounted(true);
@@ -34,8 +37,8 @@ export function HomePageBody() {
   }
 
   return (
-    <div className="flex flex-col gap-2.5 pb-3">
-      <TodayGadget />
+    <div className={desktop ? "wd-home" : "flex flex-col gap-2.5 pb-3"} data-layout={desktop ? "desktop" : "phone"}>
+      <TodayGadget wide={desktop} />
       <div className="wc-mods">
         <div id="section-water">
           <LiquidsCard />

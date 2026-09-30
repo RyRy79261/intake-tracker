@@ -25,7 +25,7 @@ export function SyncErrorBanner() {
       data-testid="sync-error-banner"
       className={cn(
         "fixed left-4 right-4 z-50 mx-auto max-w-md animate-in slide-in-from-bottom-4 duration-300",
-        overBar ? "bottom-[calc(56px+env(safe-area-inset-bottom,0px)+16px)]" : "bottom-4",
+        overBar ? "bottom-[calc(var(--bbh,56px)+env(safe-area-inset-bottom,0px)+16px)]" : "bottom-4",
       )}
     >
       <div className="flex items-start gap-3 rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive shadow-lg backdrop-blur-xs dark:border-destructive/20 dark:bg-destructive/20">

@@ -1,0 +1,160 @@
+/*
+ * Ward Console desktop mode (1024px or more with a mouse): free windows over
+ * Home, which becomes a grid of the Today gadget and the module cards.
+ * `data-shell-mode="desktop"` is set on <html> by the shell (app-chrome.tsx).
+ */
+
+/* No bottom bar on the desktop: nothing needs to sit above it. */
+html[data-shell-mode="desktop"] {
+  --bbh: 0px;
+}
+
+/* The desk: the prototype's faint 32px grid behind Home and the windows. */
+html[data-shell-mode="desktop"] main[data-shell="ward"] {
+  --desk-grid: hsl(var(--fg) / 0.05);
+  background-image:
+    linear-gradient(var(--desk-grid) 1px, transparent 1px), linear-gradient(90deg, var(--desk-grid) 1px, transparent 1px);
+  background-size: 32px 32px;
+  background-position: -1px -1px;
+}
+
+/* While a window is dragged or resized, nothing else reacts to the pointer. */
+html[data-window-gesture="true"] {
+  user-select: none;
+  -webkit-user-select: none;
+}
+html[data-window-gesture="true"] [data-testid="window-body"] {
+  pointer-events: none;
+}
+
+@layer components {
+  /*
+   * Home on the desktop: Today across two columns, then the module cards,
+   * all on one grid with equal gutters. Two columns from 1024px, three from
+   * 1200px, four from 1600px, so a card is never narrower than a phone.
+   * Cards in a row share its height.
+   */
+  .wd-home {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    /* Food is about twice as tall as the others, so it takes two rows. */
+    grid-template-areas:
+      "today   today"
+      "liquids food"
+      "bp      food"
+      "weight  wee"
+      "weight  bowel";
+    gap: 16px;
+    align-items: stretch;
+  }
+  .wd-home > .wc-today {
+    grid-area: today;
+  }
+  /* The cards sit straight on Home's grid. */
+  .wd-home > .wc-mods {
+    display: contents;
+  }
+  .wd-home > .wc-mods > * {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .wd-home > .wc-mods > * > * {
+    flex: 1 1 auto;
+  }
+  .wd-home #section-water {
+    grid-area: liquids;
+  }
+  .wd-home #section-food-salt {
+    grid-area: food;
+  }
+  .wd-home #section-bp {
+    grid-area: bp;
+  }
+  .wd-home #section-weight {
+    grid-area: weight;
+  }
+  .wd-home #section-urination {
+    grid-area: wee;
+  }
+  .wd-home #section-defecation {
+    grid-area: bowel;
+  }
+  @media (min-width: 1200px) {
+    .wd-home {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      grid-template-areas:
+        "today today liquids"
+        "food  bp    weight"
+        "food  wee   bowel";
+    }
+  }
+  @media (min-width: 1600px) {
+    .wd-home {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      grid-template-areas:
+        "today today  liquids food"
+        "bp    weight wee     food"
+        "bp    weight bowel   food";
+    }
+  }
+
+  /*
+   * Today with room to spare (the prototype's wide `.g-today`): dated day
+   * labels, each day's total under its column, bigger figures, and rows that
+   * share out the height of the grid row.
+   */
+  .wc-today-wide {
+    --lc: 92px;
+    --vc: 196px;
+    --mh: 46px;
+  }
+  .wc-today-wide .wc-ghead {
+    padding: 0 14px;
+  }
+  .wc-today-wide .wc-dl {
+    font-size: 0.75rem;
+    /* --muted-fg on --chrome is 4.2:1 in the day theme; ink passes AA. */
+    color: hsl(var(--fg));
+  }
+  .wc-today-wide .wc-tg {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    padding: 0 14px;
+  }
+  .wc-today-wide .wc-tg-row {
+    flex: 1 1 auto;
+    min-height: 60px;
+    padding: 7px 0;
+  }
+  .wc-today-wide .wc-dc > em {
+    display: block;
+    font-style: normal;
+    font-family: var(--font-plex-mono), ui-monospace, monospace;
+    font-size: 0.6875rem;
+    line-height: 1;
+    text-align: center;
+    white-space: nowrap;
+    /* --muted-fg on the panel is under 4.5:1 at this size in the day theme. */
+    color: hsl(var(--fg) / 0.78);
+  }
+  .wc-today-wide .wc-dc.t > em {
+    color: hsl(var(--fg));
+    font-weight: 600;
+  }
+  .wc-today-wide .wc-tg-v b {
+    font-size: 1.375rem;
+  }
+  .wc-today-wide .wc-tg-v .of,
+  .wc-today-wide .wc-tg-s {
+    font-size: 0.8125rem;
+  }
+  .wc-today-wide .wc-inv {
+    line-height: 18px;
+  }
+  .wc-today-wide .wc-tg-key {
+    padding: 8px 14px 9px;
+    font-size: 0.75rem;
+  }
+}

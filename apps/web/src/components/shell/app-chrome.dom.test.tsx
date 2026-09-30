@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { useEffect } from "react";
-import { act, render, screen } from "@testing-library/react";
+import { act, cleanup, render, screen } from "@testing-library/react";
 
 let pathname = "/";
 vi.mock("next/navigation", () => ({
@@ -26,6 +26,7 @@ vi.mock("@/hooks/use-window-history", () => ({ useWindowHistory: () => {}, SETTI
 vi.mock("@/components/settings/settings-sheet", () => ({ SettingsSheet: () => <div data-testid="settings-sheet" /> }));
 
 import { AppChrome } from "@/components/shell/app-chrome";
+import { useWindowStore, type Win } from "@/stores/window-store";
 
 describe("AppChrome", () => {
   beforeEach(() => {
@@ -132,5 +133,75 @@ describe("AppChrome", () => {
 
     act(() => root.unmount());
     container.remove();
+  });
+
+  describe("desktop mode (1024px or more with a mouse)", () => {
+    const win = (id: string, extra: Partial<Win> = {}): Win => ({
+      id,
+      app: "meds",
+      st: {},
+      z: 1,
+      min: false,
+      max: false,
+      x: 16,
+      y: 12,
+      w: 720,
+      h: 520,
+      ...extra,
+    });
+
+    beforeEach(() => {
+      vi.stubGlobal(
+        "matchMedia",
+        (query: string) =>
+          ({ matches: true, media: query, addEventListener: () => {}, removeEventListener: () => {} }) as unknown as MediaQueryList,
+      );
+      useWindowStore.setState({ wins: [], focus: null, showHome: true });
+    });
+    afterEach(() => {
+      cleanup();
+      vi.unstubAllGlobals();
+      useWindowStore.setState({ wins: [], focus: null, showHome: true });
+    });
+
+    it("has no bottom bar, and tells the stylesheet so", () => {
+      const { unmount } = render(<AppChrome>page</AppChrome>);
+      expect(screen.getByTestId("sys-bar")).toBeInTheDocument();
+      expect(screen.queryByTestId("bottom-bar")).not.toBeInTheDocument();
+      expect(document.documentElement.dataset.shellMode).toBe("desktop");
+      // Home takes the whole width instead of the phone column.
+      expect(screen.getByTestId("home")).not.toHaveClass("max-w-lg");
+      unmount();
+      expect(document.documentElement.dataset.shellMode).toBeUndefined();
+    });
+
+    it("keeps Home in use behind free windows", () => {
+      useWindowStore.setState({ wins: [win("w1"), win("w2", { app: "metrics", z: 2 })], focus: "w2", showHome: false });
+      render(<AppChrome>page</AppChrome>);
+      expect(screen.getByTestId("home")).not.toHaveAttribute("inert");
+      expect(screen.getByTestId("home")).not.toHaveClass("invisible");
+    });
+
+    it("takes Home out of reach under a maximised window or a snapped pair", () => {
+      useWindowStore.setState({ wins: [win("w1", { max: true })], focus: "w1", showHome: false });
+      render(<AppChrome>page</AppChrome>);
+      expect(screen.getByTestId("home")).toHaveAttribute("inert");
+      expect(screen.getByTestId("home")).toHaveClass("invisible");
+
+      // One snapped window leaves the other half of Home showing.
+      act(() => useWindowStore.setState({ wins: [win("w1", { snap: "l" })] }));
+      expect(screen.getByTestId("home")).not.toHaveAttribute("inert");
+      act(() =>
+        useWindowStore.setState({ wins: [win("w1", { snap: "l" }), win("w2", { app: "metrics", snap: "r" })] }),
+      );
+      expect(screen.getByTestId("home")).toHaveAttribute("inert");
+      // A minimised window covers nothing.
+      act(() =>
+        useWindowStore.setState({
+          wins: [win("w1", { snap: "l" }), win("w2", { app: "metrics", snap: "r", min: true })],
+        }),
+      );
+      expect(screen.getByTestId("home")).not.toHaveAttribute("inert");
+    });
   });
 });

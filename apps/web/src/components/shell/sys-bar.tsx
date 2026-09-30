@@ -17,6 +17,9 @@ import { SETTINGS_PATH, openSettings, openWindow } from "@/hooks/use-window-hist
 import { useWindowStore } from "@/stores/window-store";
 import { useSettingsSheetStore } from "@/stores/settings-sheet-store";
 import { ShellIcon, ShellLogo } from "@/components/shell/shell-icon";
+import { TaskStrip } from "@/components/shell/task-strip";
+import { HoldToTalk } from "@/components/shell/hold-to-talk";
+import { useIsDesktop } from "@/hooks/use-shell-mode";
 import { cn } from "@/lib/utils";
 
 /** Today's scheduled doses that are still open (not taken or skipped). */
@@ -50,7 +53,9 @@ const hbOn = "shadow-[inset_0_-3px_0_var(--c,currentColor)]";
  * (Medications with a due-dose pip, Metrics, History), the account avatar and
  * the Settings gear. The app buttons and the avatar open windows; History
  * opens Metrics on Records; the gear opens the global Settings sheet.
- * Sign-in is still a route.
+ * Sign-in is still a route. In desktop mode the task strip (Home, a button
+ * per open window, Tidy) and Hold to talk (signed in) sit here too, as there
+ * is no bottom bar.
  */
 export function SysBar() {
   const pathname = usePathname();
@@ -61,6 +66,7 @@ export function SysBar() {
   const focus = useWindowStore((s) => s.focus);
   const showHome = useWindowStore((s) => s.showHome);
   const settingsOn = useSettingsSheetStore((s) => s.open);
+  const desktop = useIsDesktop();
   const onShell = pathname === "/" || pathname === SETTINGS_PATH || isWindowRoute(pathname);
 
   const go = (path: string) => {
@@ -163,7 +169,9 @@ export function SysBar() {
         <ShellLogo size={24} />
         <h1 className="whitespace-nowrap text-base font-semibold">Intake Tracker</h1>
       </div>
-      <nav aria-label="Apps" className="ml-auto flex items-center gap-[2px]">
+      {desktop && <TaskStrip />}
+      {desktop && (!ready || authenticated) && <HoldToTalk variant="tray" />}
+      <nav aria-label="Apps" className="ml-auto flex shrink-0 items-center gap-[2px]">
         {SYS_BAR_APPS.map(appButton)}
         {account}
         <button

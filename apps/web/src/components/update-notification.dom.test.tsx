@@ -42,7 +42,7 @@ describe("UpdateNotification", () => {
     expect(banner).toHaveAttribute("data-testid", "update-banner");
     expect(banner).toHaveTextContent("Update available");
     expect(banner).toHaveTextContent("v1.39.0 is available — tap to refresh");
-    expect(banner.className).toContain("bottom-[calc(56px");
+    expect(banner.className).toContain("bottom-[calc(var(--bbh,56px)");
     expect(banner.className).not.toMatch(/rounded/);
   });
 

@@ -25,7 +25,7 @@ export function UpdateNotification() {
       role="status"
       aria-live="polite"
       data-testid="update-banner"
-      className="fixed inset-x-3 bottom-[calc(56px+env(safe-area-inset-bottom,0px)+10px)] z-[45] flex min-h-14 items-center gap-2.5 bg-water py-1.5 pl-2.5 pr-1 text-on-domain md:left-auto md:right-4 md:w-[420px] motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-2"
+      className="fixed inset-x-3 bottom-[calc(var(--bbh,56px)+env(safe-area-inset-bottom,0px)+10px)] z-[45] flex min-h-14 items-center gap-2.5 bg-water py-1.5 pl-2.5 pr-1 text-on-domain md:left-auto md:right-4 md:w-[420px] motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-2"
     >
       <span
         aria-hidden="true"

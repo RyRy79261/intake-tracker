@@ -5,6 +5,7 @@
 @import "./ward-home.css";
 @import "./ward-metrics.css";
 @import "./ward-settings.css";
+@import "./ward-desktop.css";
 
 /* Mobile viewport fix */
 html {

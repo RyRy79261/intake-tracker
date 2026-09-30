@@ -19,6 +19,7 @@ export type ShellIconName =
   | "gear"
   | "home"
   | "windows"
+  | "tidy"
   | "mic"
   | "plus"
   | "drop"

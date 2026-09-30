@@ -36,8 +36,8 @@ describe("WindowLayer", () => {
     );
     useWindowStore.setState({
       wins: [
-        { id: "w1", app: "meds", st: {}, z: 1, min: false, max: false },
-        { id: "w2", app: "metrics", st: {}, z: 2, min: false, max: false },
+        { id: "w1", app: "meds", st: {}, z: 1, min: false, max: false, x: 16, y: 12, w: 720, h: 520 },
+        { id: "w2", app: "metrics", st: {}, z: 2, min: false, max: false, x: 16, y: 12, w: 720, h: 520 },
       ],
       focus: "w2",
       showHome: false,

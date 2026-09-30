@@ -17,7 +17,17 @@ import {
 const store = () => useWindowStore.getState();
 
 function reset(wide = false) {
-  useWindowStore.setState({ wins: [], focus: null, showHome: true, wide, z: 0, nextId: 1 });
+  useWindowStore.setState({
+    wins: [],
+    focus: null,
+    showHome: true,
+    wide,
+    desktop: false,
+    area: { w: 928, h: 756 },
+    snapHint: null,
+    z: 0,
+    nextId: 1,
+  });
 }
 
 const win = (id: string, app: Win["app"], extra: Partial<Win> = {}): Win => ({
@@ -27,6 +37,10 @@ const win = (id: string, app: Win["app"], extra: Partial<Win> = {}): Win => ({
   z: 1,
   min: false,
   max: false,
+  x: 16,
+  y: 12,
+  w: 720,
+  h: 520,
   ...extra,
 });
 

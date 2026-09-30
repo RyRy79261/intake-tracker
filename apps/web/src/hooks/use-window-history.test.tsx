@@ -215,7 +215,7 @@ describe("useWindowHistory", () => {
   });
 
   it("a reload on a window's entry keeps the window restored from sessionStorage", async () => {
-    const win = { id: "w3", app: "meds" as const, st: {}, z: 1, min: false, max: false };
+    const win = { id: "w3", app: "meds" as const, st: {}, z: 1, min: false, max: false, x: 16, y: 12, w: 720, h: 520 };
     useWindowStore.setState({ wins: [win], focus: "w3", showHome: false, z: 1, nextId: 4 });
     window.history.replaceState({ wardSeq: 5, wardWin: "w3" }, "", "/medications");
     pathname = "/medications";

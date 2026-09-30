@@ -64,6 +64,8 @@ Each data domain has a service file in `src/lib/` (e.g., `intake-service.ts`, `m
 
 `components/shell/app-chrome.tsx` wraps every page in the Ward Console shell: the sys-bar (app buttons, profile, Settings), Home (`home-page-body.tsx`, always mounted) and the bottom bar (Home, Windows, Hold to talk, Log).
 Apps (Medications, Metrics, History, Profile, Help) open as windows over Home: `stores/window-store.ts` (Zustand, sessionStorage) holds them, `window-layer.tsx`/`window-frame.tsx` render them, and `app-registry.tsx` maps each app to its body. On a phone one window fills the screen and Back closes it; from 768px they tile, and Esc closes the focused one.
+Desktop mode (`hooks/use-shell-mode.ts`: 1024px or more with a fine pointer; touch tablets keep tiling) has free windows: each `Win` keeps `x,y,w,h,z,min,max,snap` in the store, the rules (clamp to the area, per-app minimum size, cascade, snap, tidy) are pure functions in `lib/window-geometry.ts`, and `window-frame.tsx` drags by the title bar and resizes from 8 grips with pointer capture (arrows move, Shift+arrows resize, Ctrl/Alt+` cycles).
+In desktop mode there is no bottom bar: `task-strip.tsx` in the sys-bar has Home, a button per open window and Tidy, Hold to talk moves to the sys-bar, and Home is a grid of the Today gadget and the module cards (`app/ward-desktop.css`).
 The routes above are deep links: `hooks/use-window-history.ts` opens the matching window (or the Settings sheet for `/settings`) and keeps browser Back in sync; the shell never renders those route pages' own content.
 
 ### API Routes (`src/app/api/`)
