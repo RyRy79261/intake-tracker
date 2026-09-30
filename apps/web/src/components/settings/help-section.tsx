@@ -4,7 +4,6 @@ import { useRouter } from "next/navigation";
 import { BookOpen } from "lucide-react";
 import { Button } from "@intake/ui/button";
 import { SubHead, helpClass } from "@/components/settings/settings-kit";
-import { domainColor } from "@/lib/domain-colors";
 
 /** Settings › Help & Manual: opens the user manual (`/help`). */
 export function HelpSection() {
@@ -12,9 +11,7 @@ export function HelpSection() {
 
   return (
     <>
-      <SubHead icon={BookOpen} color={domainColor("water")}>
-        User manual
-      </SubHead>
+      <SubHead icon={BookOpen}>User manual</SubHead>
       <p className={helpClass}>
         Step-by-step guides for every card, input and feature in the app —
         how to log and edit entries, set up medications, switch on the AI

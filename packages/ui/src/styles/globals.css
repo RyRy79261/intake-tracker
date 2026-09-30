@@ -71,6 +71,8 @@
   --color-bath: hsl(var(--bath));
   --color-meds: hsl(var(--meds));
   --color-ai: hsl(var(--ai));
+  /* Settings only: the System group. Not a tracked domain. */
+  --color-steel: hsl(var(--steel));
 
   /* Legacy domain names kept as aliases so existing bg-salt / ring-eating /
      text-medication classes resolve onto the Ward palette. */
@@ -163,6 +165,8 @@
     --bath: 53.2 75.2% 25.3%; /* #716610 */
     --meds: 175.2 87.5% 25.1%; /* #08786F */
     --ai: 235.1 61.3% 53.3%; /* #3F4BD1 */
+    /* Settings group colour (System) — day. See settings-groups.ts. */
+    --steel: 199.8 49.7% 33.5%; /* #2B6480 */
 
     /* shadcn channels mapped onto the Ward palette */
     --background: var(--bg);
@@ -209,6 +213,8 @@
     --bath: 52.6 48.4% 57.5%; /* #C7BA5E */
     --meds: 174.4 63.8% 50.2%; /* #2FD1C2 */
     --ai: 232.6 100% 77.8%; /* #8E9CFF */
+    /* Settings group colour (System) — night */
+    --steel: 197.5 57.8% 67.5%; /* #7CC0DC */
 
     --background: var(--bg);
     --foreground: var(--fg);

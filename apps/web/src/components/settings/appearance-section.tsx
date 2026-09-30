@@ -2,7 +2,7 @@
 
 import { useTheme } from "next-themes";
 import { useSettingsStore } from "@/stores/settings-store";
-import { Seg, Tog, flabelClass } from "@/components/settings/settings-kit";
+import { Seg, SubHead, Tog } from "@/components/settings/settings-kit";
 
 const THEMES = [
   ["light", "Light"],
@@ -29,24 +29,25 @@ export function AppearanceSection() {
 
   return (
     <>
+      <SubHead>Theme</SubHead>
+      <Seg label="Theme" value={isThemeChoice(theme) ? theme : "system"} options={THEMES} onChange={setTheme} full />
+      <SubHead>Text &amp; motion</SubHead>
       <div>
-        <span className={flabelClass}>Theme</span>
-        <Seg label="Theme" value={isThemeChoice(theme) ? theme : "system"} options={THEMES} onChange={setTheme} />
+        <Tog
+          id="set-big-text"
+          label="Bigger text"
+          description="Larger type and controls across the app."
+          checked={bigText}
+          onCheckedChange={setBigText}
+        />
+        <Tog
+          id="set-reduce-motion"
+          label="Reduce motion"
+          description="Turns off animations and sliding transitions."
+          checked={reduceMotion}
+          onCheckedChange={setReduceMotion}
+        />
       </div>
-      <Tog
-        id="set-big-text"
-        label="Bigger text"
-        description="Larger type and controls across the app."
-        checked={bigText}
-        onCheckedChange={setBigText}
-      />
-      <Tog
-        id="set-reduce-motion"
-        label="Reduce motion"
-        description="Turns off animations and sliding transitions."
-        checked={reduceMotion}
-        onCheckedChange={setReduceMotion}
-      />
     </>
   );
 }

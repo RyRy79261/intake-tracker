@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import { Button } from "@intake/ui/button";
-import { Download, Upload, AlertTriangle } from "lucide-react";
+import { ArrowDownUp, Download, Upload, AlertTriangle } from "lucide-react";
 import {
   useDownloadBackup,
   useUploadBackup,
@@ -89,7 +89,7 @@ export function DataManagementSection() {
 
   return (
     <div className="flex flex-col gap-2.5">
-      <SubHead>Data Management</SubHead>
+      <SubHead icon={ArrowDownUp}>Data Management</SubHead>
       <Button
         variant="outline"
         className={`${btnClass} w-full justify-start`}

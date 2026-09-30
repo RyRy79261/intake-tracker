@@ -27,7 +27,7 @@ import {
 } from "@intake/ui/command";
 import { Check, ChevronsUpDown } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Seg, Tog, flabelClass, helpClass } from "@/components/settings/settings-kit";
+import { Seg, SubHead, Tog, flabelClass, helpClass } from "@/components/settings/settings-kit";
 
 // ISO 3166-1 countries sorted alphabetically
 const COUNTRIES: { value: string; label: string; flag: string }[] = [
@@ -363,6 +363,7 @@ export function MedicationPrefsSection() {
 
   return (
     <>
+      <SubHead>Medicine search</SubHead>
       <div>
         <label htmlFor="set-region" className={flabelClass}>
           Region
@@ -381,6 +382,7 @@ export function MedicationPrefsSection() {
         <p className={`${helpClass} mt-1`}>A fallback for finding alternatives.</p>
       </div>
 
+      <SubHead>Time &amp; reminders</SubHead>
       <div>
         <span className={flabelClass}>Time format</span>
         <Seg label="Time format" value={timeFormat} options={TIME_FORMATS} onChange={setTimeFormat} />
@@ -449,8 +451,8 @@ export function MedicationPrefsSection() {
         <p className={helpClass}>Sign in to turn on dose reminders.</p>
       )}
 
+      <SubHead>Home timezone</SubHead>
       <div>
-        <span className={flabelClass}>Home timezone</span>
         <p className="font-mono text-[0.9375rem]" data-testid="home-timezone">
           {homeTimezone ?? (device ? `${device} (this device)` : "Same as this device")}
         </p>

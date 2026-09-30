@@ -18,7 +18,6 @@ import {
   type AiProvider,
 } from "@/hooks/use-ai-keys";
 import { SubHead, helpClass, plainboxClass } from "@/components/settings/settings-kit";
-import { domainColor } from "@/lib/domain-colors";
 
 interface ProviderMeta {
   id: AiProvider;
@@ -436,9 +435,7 @@ export function AiKeysSection() {
   if (!authenticated) {
     return (
       <div className="flex flex-col gap-2.5">
-        <SubHead icon={Sparkles} color={domainColor("ai")}>
-          AI features
-        </SubHead>
+        <SubHead icon={KeyRound}>Provider keys</SubHead>
         <div className={plainboxClass}>
           <p className="text-sm font-medium">Sign in to manage AI keys</p>
           <p className="text-xs text-muted-foreground mt-1">
@@ -452,9 +449,7 @@ export function AiKeysSection() {
 
   return (
     <div className="flex flex-col gap-3">
-      <SubHead icon={Sparkles} color={domainColor("ai")}>
-        AI features
-      </SubHead>
+      <SubHead icon={KeyRound}>Provider keys</SubHead>
 
       <p className={helpClass}>
         AI features run through your own provider keys, billed directly by
@@ -468,12 +463,12 @@ export function AiKeysSection() {
         ))}
       </div>
 
-      <div className="space-y-2 border-t border-line pt-2.5">
+      <div className="flex flex-col gap-2.5">
         <SubHead icon={Share2}>Share your key</SubHead>
         <ShareControls />
       </div>
 
-      <div className="space-y-2 border-t border-line pt-2.5">
+      <div className="flex flex-col gap-2.5">
         <SubHead icon={Activity}>Usage (last 30 days)</SubHead>
         <UsageSummary />
       </div>

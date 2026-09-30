@@ -37,7 +37,6 @@ import { MigrationWizard } from "@/components/migration/migration-wizard";
 import { DeleteDataControls } from "@/components/settings/delete-data-controls";
 import { DeleteMedicationDataControl } from "@/components/settings/delete-medication-data-control";
 import {
-  Rule,
   SubHead,
   btnClass,
   helpClass,
@@ -119,9 +118,7 @@ export function StorageInfoSection() {
 
   return (
     <div className="flex flex-col gap-3">
-      <SubHead icon={HardDrive} color={domainColor("sodium")}>
-        Storage
-      </SubHead>
+      <SubHead icon={HardDrive}>Storage</SubHead>
 
       <div className="flex min-h-6 flex-wrap items-center gap-2 text-sm">
         <Cloud className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
@@ -230,21 +227,21 @@ export function StorageInfoSection() {
       )}
 
       <div>
-        <p className="text-sm font-medium">Estimated usage</p>
-        <p className="font-mono text-sm text-muted-foreground">
+        <p className="text-[0.8125rem] text-muted-foreground">Estimated usage</p>
+        <p className="font-mono text-[0.9375rem]">
           {storageUsage
             ? `${storageUsage}${storageQuota ? ` of ${storageQuota}` : ""}`
             : "Storage info unavailable"}
         </p>
         {totalRecords !== null && (
-          <p className="text-sm text-muted-foreground">{totalRecords.toLocaleString()} records</p>
+          <p className="font-mono text-[0.8125rem] text-muted-foreground">
+            {totalRecords.toLocaleString()} records
+          </p>
         )}
       </div>
 
-      <Rule />
       <DeleteDataControls />
 
-      <Rule />
       <DeleteMedicationDataControl />
 
       <MigrationWizard

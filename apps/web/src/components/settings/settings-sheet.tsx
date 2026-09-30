@@ -4,7 +4,9 @@ import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@intake/ui/sh
 import { useSettingsSheetStore } from "@/stores/settings-sheet-store";
 import { closeSettings, closeSettingsPage } from "@/hooks/use-window-history";
 import { ShellIcon } from "@/components/shell/shell-icon";
-import { SettingsBody } from "@/components/settings/settings-panel";
+import { CupSoda } from "lucide-react";
+import { PRESETS_COLOR, SettingsBody } from "@/components/settings/settings-panel";
+import { settingsColor } from "@/components/settings/settings-groups";
 
 const titleClass = "flex-1 text-[0.8125rem] font-semibold uppercase leading-[1.15] tracking-[0.06em]";
 
@@ -55,7 +57,12 @@ export function SettingsSheet() {
               <ShellIcon name="back" size={20} />
               <span>Settings</span>
             </button>
-            <SheetTitle className={`${titleClass} pl-2`}>Drink presets</SheetTitle>
+            <CupSoda
+              aria-hidden="true"
+              className="ml-2 h-[18px] w-[18px] shrink-0"
+              style={{ color: settingsColor(PRESETS_COLOR) }}
+            />
+            <SheetTitle className={`${titleClass} pl-1`}>Drink presets</SheetTitle>
           </div>
         ) : (
           <div className="flex h-12 shrink-0 items-center gap-2 border-b border-line bg-chrome pl-3.5 pr-12">
@@ -70,7 +77,7 @@ export function SettingsSheet() {
         </SheetDescription>
         <div
           key={page}
-          className="min-h-0 flex-1 overflow-y-auto px-3.5 pb-[calc(18px+env(safe-area-inset-bottom,0px))]"
+          className="min-h-0 flex-1 overflow-y-auto pb-[calc(18px+env(safe-area-inset-bottom,0px))]"
           data-testid="settings-sheet-body"
         >
           <SettingsBody />
