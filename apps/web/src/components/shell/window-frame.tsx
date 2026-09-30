@@ -215,11 +215,12 @@ export function WindowFrame({
             </button>
           </span>
         )}
+        {/* -ml-2 cancels the title bar's gap-2 so Minimise, Maximise and Close sit evenly. */}
         <button
           type="button"
           className={cn(
             "flex shrink-0 items-center justify-center focus-visible:outline-offset-[-4px]",
-            phone ? "h-12 w-12" : "mr-px h-[30px] w-[30px]",
+            phone ? "h-12 w-12" : "-ml-2 mr-px h-[30px] w-[30px]",
           )}
           aria-label={`Close ${title}`}
           onClick={onClose}

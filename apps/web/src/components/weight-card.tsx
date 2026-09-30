@@ -204,8 +204,10 @@ export function WeightCard() {
             </Button>
 
             {/* Center Display — tap to type (D-01, D-02) */}
-            <div className="flex flex-1 items-center justify-center border border-input bg-background">
+            <div className="flex flex-1 border border-input bg-background focus-within:ring-2 focus-within:ring-ring">
               <InlineEdit
+                // The label is the tap target: it must fill the whole box.
+                className="h-full w-full items-center justify-center"
                 value={pendingWeight}
                 onValueChange={setPendingWeight}
                 formatDisplay={(v) => v?.toFixed(2) ?? "--"}
