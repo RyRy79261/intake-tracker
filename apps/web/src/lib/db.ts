@@ -888,11 +888,18 @@ realDb.version(25).stores({
       const amount = Math.round(volume);
       if (typeof water.amount !== "number" || water.amount >= amount) continue;
 
-      // `updatedAt` is bumped so the pushed repair wins last-write-wins.
-      await intakeTable.update(water.id, { amount, updatedAt: now });
+      // Queue first, then write. A caught failure does not abort a Dexie
+      // transaction, so with the write first a failed enqueue would commit
+      // the corrected amount with no sync entry, and the next pull would put
+      // the reduced amount back. This order fails safe: a failed enqueue
+      // skips the write, and a failed write leaves only a harmless push of
+      // the unchanged row. `updatedAt` is bumped so the pushed repair wins
+      // last-write-wins.
       await enqueueRepair("intakeRecords", water.id as string);
+      await intakeTable.update(water.id, { amount, updatedAt: now });
     } catch {
-      // Skip this group; the rest of the repair still applies.
+      // Skip this group; the rest of the repair still applies. Rethrowing
+      // would abort the version change and leave the database unopenable.
     }
   }
 });
