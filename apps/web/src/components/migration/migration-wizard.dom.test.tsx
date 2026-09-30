@@ -150,6 +150,24 @@ describe("MigrationWizard", () => {
     await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
   });
 
+  it.each([
+    [
+      "the close button",
+      (user: ReturnType<typeof userEvent.setup>) =>
+        user.click(screen.getByRole("button", { name: "Close" })),
+    ],
+    ["Escape", (user: ReturnType<typeof userEvent.setup>) => user.keyboard("{Escape}")],
+  ])("finishes a completed migration when closed with %s", async (_label, closeWizard) => {
+    const user = userEvent.setup();
+    const onOpenChange = renderWizard();
+    act(() => useMigrationStore.getState().setPhase("complete"));
+    expect(screen.getByRole("heading", { name: "Migration Complete" })).toBeInTheDocument();
+
+    await closeWizard(user);
+    expect(service.completeMigration).toHaveBeenCalledOnce();
+    await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
+  });
+
   it("shows the error and closes on Close", async () => {
     const user = userEvent.setup();
     const onOpenChange = renderWizard();

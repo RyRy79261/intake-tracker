@@ -102,6 +102,14 @@ export function MigrationWizard({
         open={open}
         onOpenChange={(v) => {
           if (!v && isBlocking) return;
+          // Closing a finished migration (X, Escape, outside tap) finishes it
+          // the way Done does. Otherwise the data is on the server while the
+          // device stays in local mode, and the wizard reopens in resume mode
+          // on the next load.
+          if (!v && phase === "complete") {
+            void handleComplete();
+            return;
+          }
           onOpenChange(v);
         }}
       >

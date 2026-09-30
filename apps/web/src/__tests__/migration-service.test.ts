@@ -242,6 +242,47 @@ describe("migration-service", () => {
       await expect(resumeMigration()).resolves.toBeUndefined();
       expect(useMigrationStore.getState().phase).toBe("complete");
     });
+
+    it.each([
+      ["a null entry", { intakeRecords: null }],
+      ["a non-object entry", { intakeRecords: "done" }],
+      ["an entry without counters", { intakeRecords: { total: 5 } }],
+      ["non-numeric counters", { intakeRecords: { uploaded: "5", lastBatchIndex: null } }],
+    ])("ignores stored progress with %s instead of crashing", async (_label, tableProgress) => {
+      const { resumeMigration, checkInterruptedMigration } = await import(
+        "@/lib/migration-service"
+      );
+      await db.intakeRecords.add(makeIntakeRecord("ir-bad-entry"));
+      localStorage.setItem(
+        PROGRESS_KEY,
+        JSON.stringify({ tableProgress, currentTableIndex: 0 }),
+      );
+
+      // Not resumable, so the guard never opens the wizard in resume mode.
+      expect(checkInterruptedMigration()).toBe(false);
+      await expect(resumeMigration()).resolves.toBeUndefined();
+      expect(useMigrationStore.getState().phase).toBe("complete");
+    });
+
+    it("reports a failure while restoring progress instead of leaving the upload stuck", async () => {
+      const { resumeMigration } = await import("@/lib/migration-service");
+      localStorage.setItem(
+        PROGRESS_KEY,
+        JSON.stringify({
+          tableProgress: { intakeRecords: { total: 5, uploaded: 5, lastBatchIndex: 0 } },
+          currentTableIndex: 0,
+        }),
+      );
+      vi.spyOn(db, "table").mockImplementation(() => {
+        throw new Error("database unavailable");
+      });
+
+      // The run settles (so Cancel's `await activeRun` cannot throw) and the
+      // wizard leaves the blocking "uploading" phase.
+      await expect(resumeMigration()).resolves.toBeUndefined();
+      expect(useMigrationStore.getState().phase).toBe("error");
+      expect(useMigrationStore.getState().error).toBe("database unavailable");
+    });
   });
 
   describe("cancel", () => {
