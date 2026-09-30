@@ -9,6 +9,7 @@ import { PillIcon } from "@/components/medications/pill-icon";
 import { Bdg } from "@/components/medications/ward-bits";
 import {
   formatDoseAmount,
+  describeBrandDose,
   getEffectivePhase,
   getActiveTitrationPhase,
   getPendingTitrationPhase,
@@ -77,7 +78,11 @@ export function PrescriptionCard({ prescription, expanded: controlledExpanded, o
   const { toast } = useToast();
   // Ticking day key, so a card left open overnight logs against the new day.
   const todayDateStr = useTodayKey();
-  const prnLogs = usePrnDoseLogs(prescription.id, daysBefore(todayDateStr, PRN_LIST_DAYS - 1));
+  // Every as-needed log, not only the recent window: the "last dose" line
+  // must still name a dose from before the recent-doses list begins.
+  const prnLogs = usePrnDoseLogs(prescription.id, "");
+  const prnListSince = daysBefore(todayDateStr, PRN_LIST_DAYS - 1);
+  const recentPrnLogs = prnLogs.filter((l) => l.scheduledDate >= prnListSince);
   const phases = usePhasesForPrescription(prescription.id);
   const phasesLoaded = usePhasesLoaded(prescription.id);
   const inventoryItems = useInventoryForPrescription(prescription.id);
@@ -96,10 +101,6 @@ export function PrescriptionCard({ prescription, expanded: controlledExpanded, o
   const firstSlot = prescriptionSlots.length > 0 ? prescriptionSlots[0] : undefined;
   const dosageMg = firstSlot?.dosageMg;
   const unit = effectivePhase?.unit ?? "mg";
-  // Dose chip — per-compound amounts from the active combo brand's tablets,
-  // plain summed mg otherwise.
-  const dosageChip =
-    dosageMg === undefined ? undefined : formatComboDose(dosageMg, unit, firstSlot?.inventory);
 
   const pendingSlots = prescriptionSlots.filter((s) => s.status === "pending");
   const allHandled = prescriptionSlots.length > 0 && pendingSlots.length === 0;
@@ -165,8 +166,6 @@ export function PrescriptionCard({ prescription, expanded: controlledExpanded, o
     nextDoseLabel = "No doses today";
   }
 
-  const chip = isAsNeeded ? (brandStrength ?? "—") : (dosageChip ?? "—");
-
   // Shared with the inventory drawer and the refill notifier (pill OR days
   // threshold, over the phase that drives today's doses).
   const refillPhase = selectEffectivePhase(phases);
@@ -179,6 +178,21 @@ export function PrescriptionCard({ prescription, expanded: controlledExpanded, o
   // Scheduled but nothing to deduct from: doses stop being tracked silently.
   const hasUntrackedStock = !activeInventory && !!refillPhase && inventoryItems.length > 0;
 
+  // Dose chip — per-compound amounts from the active combo brand's tablets,
+  // plain summed mg otherwise. Today's slot when there is one; on a day with
+  // no dose (or while today's slots load) the phase's own schedule, so "—"
+  // only ever means no schedule is set up.
+  const firstSchedule = refillSchedules
+    .filter((s) => s.enabled)
+    .sort((a, b) => a.time.localeCompare(b.time))[0];
+  const dosageChip =
+    dosageMg !== undefined
+      ? formatComboDose(dosageMg, unit, firstSlot?.inventory)
+      : firstSchedule
+        ? formatComboDose(firstSchedule.dosage, unit, activeInventory)
+        : undefined;
+  const chip = isAsNeeded ? (brandStrength ?? "—") : (dosageChip ?? "—");
+
   const hasBadges = !!(activeTitration || pendingTitration || isNegativeStock || isLowStock || hasUntrackedStock);
   const food = effectivePhase?.foodInstruction && effectivePhase.foodInstruction !== "none"
     ? ` · ${effectivePhase.foodInstruction} eating`
@@ -189,7 +203,9 @@ export function PrescriptionCard({ prescription, expanded: controlledExpanded, o
     ? "1 tablet as needed"
     : firstSlot?.pillsPerDose != null && dosageMg != null
       ? `${formatDoseAmount(firstSlot)}${food}`
-      : null;
+      : !firstSlot && firstSchedule
+        ? `${describeBrandDose(firstSchedule.dosage, unit, activeInventory).label}${food}`
+        : null;
 
   return (
     <div
@@ -260,7 +276,7 @@ export function PrescriptionCard({ prescription, expanded: controlledExpanded, o
               aria-label={`Log an as-needed dose of ${prescription.genericName}`}
               onClick={() => setPrnPickerOpen(true)}
               disabled={logPrn.isPending}
-              className="inline-flex min-h-9 shrink-0 items-center border border-meds px-2 text-xs font-semibold text-meds hover:bg-meds/10 disabled:opacity-50"
+              className="inline-flex min-h-11 shrink-0 items-center border border-meds px-2 text-xs font-semibold text-meds hover:bg-meds/10 disabled:opacity-50"
             >
               Log dose
             </button>
@@ -303,13 +319,13 @@ export function PrescriptionCard({ prescription, expanded: controlledExpanded, o
         <CompoundCardExpanded prescription={prescription} {...(onOpenAbout && { onOpenAbout })}>
           {/* Recent as-needed doses, each removable (first tap arms, second
               tap confirms). Removing one also puts its pills back in stock. */}
-          {isAsNeeded && prnLogs.length > 0 && (
+          {isAsNeeded && recentPrnLogs.length > 0 && (
             <div>
               <p className="mb-1.5 text-[0.6875rem] font-semibold tracking-[0.06em] text-muted-foreground">
                 RECENT DOSES
               </p>
               <ul aria-label="Recent as-needed doses">
-                {prnLogs.slice(0, PRN_LIST_MAX).map((log) => {
+                {recentPrnLogs.slice(0, PRN_LIST_MAX).map((log) => {
                   const when = formatPrnWhen(log.actionTimestamp ?? log.createdAt, todayDateStr);
                   const armed = confirmUndoId === log.id;
                   return (
@@ -327,7 +343,7 @@ export function PrescriptionCard({ prescription, expanded: controlledExpanded, o
                           else setConfirmUndoId(log.id);
                         }}
                         className={cn(
-                          "inline-flex min-h-9 items-center border px-2.5 text-[0.8125rem] font-medium disabled:opacity-50",
+                          "inline-flex min-h-11 items-center border px-2.5 text-[0.8125rem] font-medium disabled:opacity-50",
                           armed ? "border-bp text-bp" : "border-input hover:bg-foreground/6",
                         )}
                       >
