@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   buildInteractionCheck,
   isInteractionCheckStale,
+  isStoredForOtherName,
   legacyInteractionFields,
   normalizeInteractionCheck,
   normalizeMedicineInfo,
@@ -117,5 +118,31 @@ describe("isInteractionCheckStale", () => {
   it("is stale when a medicine was added or removed", () => {
     expect(isInteractionCheckStale(check, ["Furosemide"])).toBe(true);
     expect(isInteractionCheckStale(check, ["Furosemide", "Bisoprolol", "Spironolactone"])).toBe(true);
+  });
+});
+
+describe("forName (the generic name an answer was made for)", () => {
+  const rawInfo = { fetchedAt: 5, drugClass: "Beta blocker", compounds: [] };
+  const rawCheck = { checkedAt: 9, medications: [], summary: "x", rows: [] };
+
+  it("is kept by the normalisers, trimmed; left out when absent or unusable", () => {
+    expect(normalizeMedicineInfo({ ...rawInfo, forName: " Metoprolol " })?.forName).toBe("Metoprolol");
+    expect(normalizeInteractionCheck({ ...rawCheck, forName: " Metoprolol " })?.forName).toBe("Metoprolol");
+    expect(normalizeMedicineInfo(rawInfo)).not.toHaveProperty("forName");
+    expect(normalizeMedicineInfo({ ...rawInfo, forName: null })).not.toHaveProperty("forName");
+    expect(normalizeInteractionCheck({ ...rawCheck, forName: 7 })).not.toHaveProperty("forName");
+  });
+
+  it("is stored by buildInteractionCheck when given", () => {
+    expect(buildInteractionCheck({ interactions: [] }, ["A"], 1, "Metoprolol").forName).toBe("Metoprolol");
+    expect(buildInteractionCheck({ interactions: [] }, ["A"], 1)).not.toHaveProperty("forName");
+  });
+
+  it("isStoredForOtherName: true only when a recorded name differs from the current one", () => {
+    expect(isStoredForOtherName({ forName: "Metoprolol" }, "Metformin")).toBe(true);
+    expect(isStoredForOtherName({ forName: "Metoprolol" }, " metoprolol ")).toBe(false);
+    // Stored before the name was recorded: cannot tell, so not flagged.
+    expect(isStoredForOtherName({}, "Metformin")).toBe(false);
+    expect(isStoredForOtherName(null, "Metformin")).toBe(false);
   });
 });

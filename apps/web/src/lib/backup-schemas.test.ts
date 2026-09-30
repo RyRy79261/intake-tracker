@@ -284,6 +284,7 @@ describe("backup-schemas: 2026-09 schema additions", () => {
     const rx = makePrescription();
     const info = {
       fetchedAt: 1_790_000_000_000,
+      forName: "Ramipril",
       drugClass: null,
       compounds: [{ name: "Ramipril", drugClass: null, forText: "x", howItWorks: null, sideEffects: null }],
       warnings: null,

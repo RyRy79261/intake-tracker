@@ -14,12 +14,16 @@ const { mockAuthGate, mockPrescriptions, mockInventory, apiFetchSpy, mutateAsync
 vi.mock("@/components/auth-guard", () => ({ useAuthGate: () => mockAuthGate() }));
 vi.mock("@/lib/api-fetch", () => ({ apiFetch: apiFetchSpy }));
 vi.mock("@/hooks/use-medication-queries", () => ({
-  usePrescriptions: () => mockPrescriptions(),
+  // A live query's first render: empty until it resolves. The view must take
+  // the list from its `prescriptions` prop, never from a query of its own.
+  usePrescriptions: () => [],
   useInventoryForPrescription: () => mockInventory(),
   useUpdatePrescription: () => ({ mutateAsync: mutateAsyncSpy }),
 }));
 
 import { AboutMedicineView } from "@/components/medications/about-medicine-view";
+import { resetMedicineAboutLookups } from "@/hooks/use-medicine-about";
+import { resetInteractionRefreshes } from "@/hooks/use-interaction-check";
 import { renderWithProviders } from "@/__tests__/react-test-utils";
 import { makeInventoryItem, makePrescription } from "@/__tests__/fixtures/db-fixtures";
 import type { Prescription } from "@/lib/db";
@@ -60,6 +64,9 @@ function setOnline(value: boolean) {
 }
 
 beforeEach(() => {
+  // Lookups and checks live outside the view, keyed by prescription id.
+  resetMedicineAboutLookups();
+  resetInteractionRefreshes();
   mockAuthGate.mockReturnValue(true);
   rx = makePrescription({ id: "rx-ra", genericName: "Ramipril" });
   furo = makePrescription({ id: "rx-fu", genericName: "Furosemide" });
@@ -73,7 +80,12 @@ beforeEach(() => {
 afterEach(() => setOnline(true));
 
 function renderView(p: Prescription = rx, onBack = vi.fn()) {
-  return { onBack, ...renderWithProviders(<AboutMedicineView prescription={p} onBack={onBack} />) };
+  return {
+    onBack,
+    ...renderWithProviders(
+      <AboutMedicineView prescription={p} prescriptions={mockPrescriptions()} onBack={onBack} />,
+    ),
+  };
 }
 
 describe("AboutMedicineView — empty states", () => {
@@ -100,6 +112,11 @@ describe("AboutMedicineView — empty states", () => {
     renderView();
     expect(screen.getByText("You have no other active prescriptions to check against.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Add more prescriptions to check interactions" })).toBeDisabled();
+  });
+
+  it("moves focus to the heading on open, off the now-hidden opener", () => {
+    renderView();
+    expect(screen.getByRole("heading", { name: "About this medicine" })).toHaveFocus();
   });
 
   it("Back returns to the Rx grid", async () => {
@@ -154,6 +171,25 @@ describe("AboutMedicineView — stored information", () => {
     expect(screen.getByRole("heading", { name: "Valsartan" })).toBeInTheDocument();
   });
 
+  it("a renamed prescription: says the stored answer is for the old name", () => {
+    // Looked up as Metoprolol, then corrected to Metformin in Prescription Details.
+    rx = { ...rx, genericName: "Metformin", medicineInfo: { ...info, forName: "Metoprolol" } };
+    renderView();
+    const note = screen.getByText("The name changed").closest("[role=note]");
+    expect(note).toHaveTextContent("This information is for Metoprolol, not Metformin. Refresh it.");
+  });
+
+  it("no name-changed warning when the name matches (case and spaces aside) or was never recorded", () => {
+    rx = { ...rx, genericName: " ramipril", medicineInfo: { ...info, forName: "Ramipril" } };
+    const first = renderView();
+    expect(screen.queryByText("The name changed")).toBeNull();
+    first.unmount();
+
+    rx = { ...rx, genericName: "Ramipril", medicineInfo: info };
+    renderView();
+    expect(screen.queryByText("The name changed")).toBeNull();
+  });
+
   it("signed out with a stored answer: shows it, but no Refresh", () => {
     mockAuthGate.mockReturnValue(false);
     rx = { ...rx, medicineInfo: info };
@@ -179,10 +215,42 @@ describe("AboutMedicineView — lookup", () => {
 
     await act(async () => resolve(jsonResponse({ ...info, fetchedAt: undefined })));
     await waitFor(() => expect(mutateAsyncSpy).toHaveBeenCalledTimes(1));
-    const saved = mutateAsyncSpy.mock.calls[0]![0] as { id: string; updates: { medicineInfo: { fetchedAt: number } } };
+    const saved = mutateAsyncSpy.mock.calls[0]![0] as {
+      id: string;
+      updates: { medicineInfo: { fetchedAt: number; forName?: string } };
+    };
     expect(saved.id).toBe("rx-ra");
     expect(saved.updates.medicineInfo.fetchedAt).toBeGreaterThan(0);
+    // The name it was looked up for, so a later rename shows.
+    expect(saved.updates.medicineInfo.forName).toBe("Ramipril");
     expect(screen.queryByRole("status")).toBeNull();
+  });
+
+  it("leaving the view does not stop the lookup: it is still stored, and busy on return", async () => {
+    const user = userEvent.setup();
+    let resolve!: (r: Response) => void;
+    let signal: AbortSignal | undefined;
+    apiFetchSpy.mockImplementationOnce((_url: string, init: RequestInit) => {
+      signal = init.signal ?? undefined;
+      return new Promise<Response>((r) => { resolve = r; });
+    });
+    const first = renderView();
+    await user.click(screen.getByRole("button", { name: /Look up with AI/ }));
+
+    // Back to the Rx grid while the lookup runs.
+    first.unmount();
+    expect(signal?.aborted).toBe(false);
+
+    // Opened again meanwhile: still looking up, no second request offered.
+    const second = renderView();
+    expect(screen.getByRole("status")).toHaveTextContent("Looking up Ramipril");
+    expect(screen.queryByRole("button", { name: /Look up with AI/ })).toBeNull();
+    second.unmount();
+
+    await act(async () => resolve(jsonResponse(info)));
+    await waitFor(() => expect(mutateAsyncSpy).toHaveBeenCalledTimes(1));
+    expect((mutateAsyncSpy.mock.calls[0]![0] as { id: string }).id).toBe("rx-ra");
+    expect(apiFetchSpy).toHaveBeenCalledTimes(1);
   });
 
   it("Refresh re-runs the lookup for a stored answer", async () => {
@@ -274,6 +342,59 @@ describe("AboutMedicineView — interactions", () => {
     mockPrescriptions.mockImplementation(() => [rx, furo, spiro]);
     renderView();
     expect(screen.getByText("Your medicines changed")).toBeInTheDocument();
+  });
+
+  it("first paint is not stale: the list comes from the window, not a query that starts empty", () => {
+    // usePrescriptions is mocked to [] (a live query before it resolves).
+    rx = { ...rx, interactionCheck: check };
+    renderView();
+    expect(screen.queryByText("Your medicines changed")).toBeNull();
+    expect(screen.queryByText("You have no other active prescriptions to check against.")).toBeNull();
+    expect(screen.getByText(/against your other active prescriptions: Furosemide\./)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Check interactions again" })).toBeEnabled();
+  });
+
+  it("a renamed prescription: the stored check is stale and says whose it is", () => {
+    rx = { ...rx, genericName: "Metformin", interactionCheck: { ...check, forName: "Metoprolol" } };
+    renderView();
+    const note = screen.getByText("The name changed").closest("[role=note]");
+    expect(note).toHaveTextContent("This check is for Metoprolol, not Metformin. Check again.");
+    expect(screen.queryByText("Your medicines changed")).toBeNull();
+  });
+
+  it("leaving the view does not stop a check: it is still stored", async () => {
+    const user = userEvent.setup();
+    let resolve!: (r: Response) => void;
+    let signal: AbortSignal | undefined;
+    apiFetchSpy.mockImplementationOnce((_url: string, init: RequestInit) => {
+      signal = init.signal ?? undefined;
+      return new Promise<Response>((r) => { resolve = r; });
+    });
+    const first = renderView();
+    await user.click(screen.getByRole("button", { name: "Check interactions" }));
+    first.unmount();
+    expect(signal?.aborted).toBe(false);
+
+    const second = renderView();
+    expect(screen.getByRole("status")).toHaveTextContent("Checking interactions");
+    second.unmount();
+
+    await act(async () =>
+      resolve(
+        jsonResponse({
+          interactions: [
+            { substance: "Ramipril", medication: "Furosemide", severity: "OK", description: "Fine." },
+          ],
+        }),
+      ),
+    );
+    await waitFor(() => expect(mutateAsyncSpy).toHaveBeenCalledTimes(1));
+    const saved = mutateAsyncSpy.mock.calls[0]![0] as {
+      id: string;
+      updates: { interactionCheck: { forName?: string } };
+    };
+    expect(saved.id).toBe("rx-ra");
+    expect(saved.updates.interactionCheck.forName).toBe("Ramipril");
   });
 
   it("a Not assessed row is labelled NOT ASSESSED, not CAUTION", () => {

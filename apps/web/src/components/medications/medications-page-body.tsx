@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useId } from "react";
+import { useState, useCallback, useEffect, useId, useRef } from "react";
 import { useRollingSelectedDate } from "@/hooks/use-today-key";
 import { toLocalDateKey } from "@/lib/date-utils";
 import { WeekDaySelector } from "@/components/medications/week-day-selector";
@@ -45,6 +45,28 @@ export function MedicationsPageBody() {
       : null;
   const [selectedSlot, setSelectedSlot] = useState<DoseSlot | null>(null);
 
+  // Closing About gives focus back to the card's "About this medicine"
+  // button (`data-about-opener`), which was hidden while About was open.
+  // Otherwise focus is lost with the unmounted Back button. Found by its
+  // attribute, not `document.activeElement`: Safari does not focus a button
+  // on click.
+  const tabsRef = useRef<HTMLDivElement>(null);
+  const lastAboutId = useRef<string | null>(null);
+  const openAboutId = aboutRx?.id ?? null;
+  useEffect(() => {
+    if (openAboutId) {
+      lastAboutId.current = openAboutId;
+      return;
+    }
+    const closedId = lastAboutId.current;
+    lastAboutId.current = null;
+    if (!closedId) return;
+    const openers = tabsRef.current?.querySelectorAll<HTMLElement>("[data-about-opener]") ?? [];
+    Array.from(openers)
+      .find((el) => el.dataset.aboutOpener === closedId)
+      ?.focus();
+  }, [openAboutId]);
+
   useMedicationNotifications();
 
   const selectedKey = toLocalDateKey(selectedDate);
@@ -62,9 +84,9 @@ export function MedicationsPageBody() {
 
   return (
     <>
-      {aboutRx && <AboutMedicineView prescription={aboutRx} onBack={() => setAboutId(null)} />}
+      {aboutRx && <AboutMedicineView prescription={aboutRx} prescriptions={prescriptions} onBack={() => setAboutId(null)} />}
       {/* `contents` keeps the sticky tab bar tied to the window's scroller. */}
-      <div className={aboutRx ? "hidden" : "contents"}>
+      <div ref={tabsRef} className={aboutRx ? "hidden" : "contents"}>
       <WardMedTabs activeTab={activeTab} onTabChange={setActiveTab} panelId={panelId} />
 
       <div role="tabpanel" id={panelId} aria-labelledby={wardMedTabId(panelId, activeTab)}>

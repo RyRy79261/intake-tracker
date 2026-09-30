@@ -230,6 +230,12 @@ export interface MedicineInfoWarning {
 export interface MedicineInfo {
   /** Epoch ms of the lookup. */
   fetchedAt: number;
+  /**
+   * The generic name the lookup was made for. When the prescription is
+   * renamed, the stored answer is for another medicine. Absent on an answer
+   * stored before this field existed.
+   */
+  forName?: string;
   /** The whole medicine's type; for a combination, how the parts work together. */
   drugClass: string;
   compounds: MedicineInfoCompound[];
@@ -261,6 +267,8 @@ export interface InteractionCheckRow {
 export interface InteractionCheck {
   /** Epoch ms of the check. */
   checkedAt: number;
+  /** The generic name the check was made for (see `MedicineInfo.forName`). */
+  forName?: string;
   medications: string[];
   summary: string;
   rows: InteractionCheckRow[];

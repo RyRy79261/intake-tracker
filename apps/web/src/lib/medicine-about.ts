@@ -58,8 +58,10 @@ export function normalizeMedicineInfo(raw: unknown): MedicineInfo | null {
 
   const food = str(raw.foodInstruction);
   const visualIdentification = str(raw.visualIdentification);
+  const forName = str(raw.forName);
   return {
     fetchedAt,
+    ...(forName && { forName }),
     drugClass,
     compounds,
     warnings,
@@ -91,8 +93,10 @@ export function normalizeInteractionCheck(raw: unknown): InteractionCheck | null
         },
       ];
     });
+  const forName = str(raw.forName);
   return {
     checkedAt,
+    ...(forName && { forName }),
     medications: strList(raw.medications),
     summary: str(raw.summary) || summarizeRows(rows),
     rows: sortRows(rows),
@@ -131,6 +135,7 @@ export function buildInteractionCheck(
   result: InteractionRouteResult,
   medications: string[],
   checkedAt: number,
+  forName?: string,
 ): InteractionCheck {
   const rows: InteractionCheckRow[] = result.interactions.map((i) => ({
     medication: i.medication,
@@ -140,6 +145,7 @@ export function buildInteractionCheck(
   }));
   return {
     checkedAt,
+    ...(forName?.trim() && { forName: forName.trim() }),
     medications: [...medications],
     summary: result.summary?.trim() || summarizeRows(rows),
     rows: sortRows(rows),
@@ -174,4 +180,17 @@ const nameKey = (names: string[]) =>
 /** True when the medicines the check covered differ from today's list. */
 export function isInteractionCheckStale(check: InteractionCheck, currentMedications: string[]): boolean {
   return nameKey(check.medications) !== nameKey(currentMedications);
+}
+
+/**
+ * True when a stored answer was fetched for another generic name: the
+ * prescription was renamed since, so the answer describes a different
+ * medicine. An answer with no recorded name is taken to match.
+ */
+export function isStoredForOtherName(
+  stored: { forName?: string } | null | undefined,
+  genericName: string,
+): boolean {
+  const forName = stored?.forName?.trim().toLowerCase();
+  return !!forName && forName !== genericName.trim().toLowerCase();
 }

@@ -248,7 +248,13 @@ export function CompoundCardExpanded({ prescription, children, onOpenAbout }: Co
           Prescription Details
         </Button>
         {onOpenAbout && (
-          <Button variant="outline" className="col-span-full" onClick={onOpenAbout}>
+          <Button
+            variant="outline"
+            className="col-span-full"
+            onClick={onOpenAbout}
+            // The window gives focus back to this button when About closes.
+            data-about-opener={prescription.id}
+          >
             <Info aria-hidden="true" />
             About this medicine
           </Button>

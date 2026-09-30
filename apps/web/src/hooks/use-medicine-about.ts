@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useSyncExternalStore } from "react";
 import { apiFetch } from "@/lib/api-fetch";
 import { readAiErrorMessage } from "@/lib/ai-error-message";
+import { createKeyedTaskStore } from "@/lib/keyed-task-store";
 import { normalizeMedicineInfo } from "@/lib/medicine-about";
 import { useUpdatePrescription } from "@/hooks/use-medication-queries";
 import type { MedicineInfo, Prescription } from "@/lib/db";
@@ -35,46 +36,67 @@ async function describeFailure(response: Response, name: string): Promise<string
   return MSG_FAILED;
 }
 
+interface AboutState {
+  busy: boolean;
+  error: string | null;
+}
+const IDLE: AboutState = { busy: false, error: null };
+
+/**
+ * Lookups by prescription id. Held outside the view: a lookup takes up to a
+ * minute, and going Back while it runs must not throw the answer away.
+ */
+const lookups = createKeyedTaskStore<AboutState>(IDLE);
+
+/** Stop every lookup and forget their state (tests). */
+export const resetMedicineAboutLookups = () => lookups.reset();
+
 /**
  * "About this medicine": look the prescription up with POST
  * /api/ai/medicine-about and store the answer on it (`medicineInfo`).
  * Sends only the generic name (and a combination's compound names).
- * Cancel and unmount abort the request; a cancelled lookup stores nothing.
+ *
+ * The lookup belongs to the prescription, not to the view: it keeps running
+ * when the view closes and its answer is still stored, and a view opened
+ * again meanwhile shows it as busy. Only Cancel (or the timeout) stops it; a
+ * cancelled lookup stores nothing.
  */
-export function useMedicineAbout({ timeoutMs = MEDICINE_ABOUT_TIMEOUT_MS }: { timeoutMs?: number } = {}) {
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+export function useMedicineAbout(
+  prescriptionId: string,
+  { timeoutMs = MEDICINE_ABOUT_TIMEOUT_MS }: { timeoutMs?: number } = {},
+) {
+  const { busy, error } = useSyncExternalStore(
+    lookups.subscribe,
+    () => lookups.get(prescriptionId),
+    () => IDLE,
+  );
   const updatePrescription = useUpdatePrescription();
-  const ctrl = useRef<AbortController | null>(null);
-
-  const abort = useCallback(() => {
-    ctrl.current?.abort();
-    ctrl.current = null;
-  }, []);
-
-  useEffect(() => abort, [abort]);
 
   const cancel = useCallback(() => {
-    abort();
-    setBusy(false);
-  }, [abort]);
+    lookups.controllers.get(prescriptionId)?.abort();
+    lookups.controllers.delete(prescriptionId);
+    lookups.set(prescriptionId, { busy: false });
+  }, [prescriptionId]);
 
   const lookUp = useCallback(
     async (prescription: Prescription): Promise<MedicineInfo | null> => {
-      abort();
-      setError(null);
+      const id = prescription.id;
+      const set = (patch: Partial<AboutState>) => lookups.set(id, patch);
+      lookups.controllers.get(id)?.abort();
+      lookups.controllers.delete(id);
+      set({ error: null });
       if (offline()) {
-        setError(MSG_ABOUT_OFFLINE);
+        set({ error: MSG_ABOUT_OFFLINE });
         return null;
       }
       const controller = new AbortController();
-      ctrl.current = controller;
+      lookups.controllers.set(id, controller);
       let timedOut = false;
       const timer = setTimeout(() => {
         timedOut = true;
         controller.abort();
       }, timeoutMs);
-      setBusy(true);
+      set({ busy: true });
       const name = prescription.genericName;
       const compounds = (prescription.compounds ?? []).map((c) => c.name).filter(Boolean);
 
@@ -91,46 +113,42 @@ export function useMedicineAbout({ timeoutMs = MEDICINE_ABOUT_TIMEOUT_MS }: { ti
         if (controller.signal.aborted) return null;
         if (!response) {
           // Sign-in dismissed.
-          setBusy(false);
+          set({ busy: false });
           return null;
         }
         if (!response.ok) {
           const msg = await describeFailure(response, name);
-          if (!controller.signal.aborted) {
-            setError(msg);
-            setBusy(false);
-          }
+          if (!controller.signal.aborted) set({ error: msg, busy: false });
           return null;
         }
         const raw = (await response.json()) as Record<string, unknown>;
         if (controller.signal.aborted) return null;
-        const info = normalizeMedicineInfo({ ...raw, fetchedAt: Date.now() });
+        // `forName`: the name this answer is for, so a later rename shows.
+        const info = normalizeMedicineInfo({ ...raw, fetchedAt: Date.now(), forName: name });
         if (!info) {
-          setError(`No information was found for “${name}”. Check the generic name in Prescription Details.`);
-          setBusy(false);
+          set({
+            error: `No information was found for “${name}”. Check the generic name in Prescription Details.`,
+            busy: false,
+          });
           return null;
         }
-        await updatePrescription.mutateAsync({ id: prescription.id, updates: { medicineInfo: info } });
-        setBusy(false);
+        await updatePrescription.mutateAsync({ id, updates: { medicineInfo: info } });
+        set({ busy: false });
         return info;
       } catch {
         if (controller.signal.aborted) {
-          // Cancel/unmount says nothing; the client timeout does.
-          if (timedOut) {
-            setError(MSG_TIMEOUT);
-            setBusy(false);
-          }
+          // Cancel (or a newer lookup) says nothing; the client timeout does.
+          if (timedOut) set({ error: MSG_TIMEOUT, busy: false });
           return null;
         }
-        setError(offline() ? MSG_ABOUT_OFFLINE : MSG_FAILED);
-        setBusy(false);
+        set({ error: offline() ? MSG_ABOUT_OFFLINE : MSG_FAILED, busy: false });
         return null;
       } finally {
         clearTimeout(timer);
-        if (ctrl.current === controller) ctrl.current = null;
+        if (lookups.controllers.get(id) === controller) lookups.controllers.delete(id);
       }
     },
-    [abort, timeoutMs, updatePrescription],
+    [timeoutMs, updatePrescription],
   );
 
   return { lookUp, cancel, busy, error };

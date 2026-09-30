@@ -138,6 +138,7 @@ const aiTextList = z.array(z.string()).nullable().optional();
 const medicineInfoSchema = z
   .object({
     fetchedAt: finiteNumber,
+    forName: aiText,
     drugClass: aiText,
     compounds: z
       .array(
@@ -171,6 +172,7 @@ const medicineInfoSchema = z
 const interactionCheckSchema = z
   .object({
     checkedAt: finiteNumber,
+    forName: aiText,
     medications: z.array(z.string()),
     summary: aiText,
     rows: z.array(

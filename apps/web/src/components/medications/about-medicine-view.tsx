@@ -11,9 +11,10 @@ import { PillIcon } from "@/components/medications/pill-icon";
 import { Bdg, MLabel, SecHead, WarnBox, type BdgTone } from "@/components/medications/ward-bits";
 import { useMedicineAbout } from "@/hooks/use-medicine-about";
 import { useRefreshInteractions } from "@/hooks/use-interaction-check";
-import { useInventoryForPrescription, usePrescriptions } from "@/hooks/use-medication-queries";
+import { useInventoryForPrescription } from "@/hooks/use-medication-queries";
 import {
   isInteractionCheckStale,
+  isStoredForOtherName,
   normalizeInteractionCheck,
   normalizeMedicineInfo,
 } from "@/lib/medicine-about";
@@ -72,6 +73,12 @@ function Busy({ title, sub, onCancel }: { title: string; sub: string; onCancel?:
 
 interface AboutMedicineViewProps {
   prescription: Prescription;
+  /**
+   * Every prescription, already loaded by the window. The view does not run
+   * its own query: a fresh one starts empty, which would show a stored check
+   * as stale (and the check button as disabled) until it resolved.
+   */
+  prescriptions: Prescription[];
   /** Back to the Rx grid. */
   onBack: () => void;
 }
@@ -82,20 +89,26 @@ interface AboutMedicineViewProps {
  * effects; warnings with what to do; when not to take it; food; pill
  * identification; and the stored interaction check against the user's other
  * active prescriptions, with a stale banner when that list has changed.
- * Both answers are stored on the prescription, so the page works offline.
+ * Both answers are stored on the prescription, so the page works offline;
+ * each records the name it was made for and says so when the prescription
+ * has been renamed since. A lookup or check keeps running when the view
+ * closes (only Cancel stops it).
  * Looking up and checking again are sign-in gated.
  */
-export function AboutMedicineView({ prescription, onBack }: AboutMedicineViewProps) {
+export function AboutMedicineView({ prescription, prescriptions, onBack }: AboutMedicineViewProps) {
   const signedIn = useAuthGate();
   const { toast } = useToast();
-  const about = useMedicineAbout();
-  const ix = useRefreshInteractions();
-  const prescriptions = usePrescriptions();
+  const about = useMedicineAbout(prescription.id);
+  const ix = useRefreshInteractions(prescription.id);
   const inventory = useInventoryForPrescription(prescription.id);
   const rootRef = useRef<HTMLDivElement>(null);
+  const headingRef = useRef<HTMLHeadingElement>(null);
 
   useEffect(() => {
     rootRef.current?.scrollIntoView?.({ block: "start" });
+    // The button that opened this view is now hidden: without this, keyboard
+    // and screen-reader focus falls back to the document body.
+    headingRef.current?.focus({ preventScroll: true });
   }, []);
 
   const info = normalizeMedicineInfo(prescription.medicineInfo);
@@ -103,7 +116,11 @@ export function AboutMedicineView({ prescription, onBack }: AboutMedicineViewPro
   const others = prescriptions
     .filter((p) => p.id !== prescription.id && p.isActive)
     .map((p) => p.genericName);
-  const stale = check ? isInteractionCheckStale(check, others) : false;
+  // The prescription was renamed since: the stored answers are for another
+  // medicine.
+  const infoOtherName = isStoredForOtherName(info, prescription.genericName);
+  const checkOtherName = isStoredForOtherName(check, prescription.genericName);
+  const stale = check ? checkOtherName || isInteractionCheckStale(check, others) : false;
   const brands = inventory.filter((i) => !i.isArchived);
   const multi = (info?.compounds.length ?? 0) > 1;
 
@@ -119,7 +136,6 @@ export function AboutMedicineView({ prescription, onBack }: AboutMedicineViewPro
   };
   const runCheck = () =>
     void ix.refresh(
-      prescription.id,
       prescription.genericName,
       others.map((genericName) => ({ genericName })),
     );
@@ -139,7 +155,7 @@ export function AboutMedicineView({ prescription, onBack }: AboutMedicineViewPro
           Rx
         </Button>
         <div className="min-w-0 flex-1">
-          <h3 className="text-base font-semibold">About this medicine</h3>
+          <h3 ref={headingRef} tabIndex={-1} className="text-base font-semibold">About this medicine</h3>
           <p className="truncate text-[0.8125rem] text-muted-foreground">{prescription.genericName}</p>
         </div>
       </div>
@@ -157,6 +173,12 @@ export function AboutMedicineView({ prescription, onBack }: AboutMedicineViewPro
 
         {info ? (
           <>
+            {infoOtherName && (
+              <WarnBox title="The name changed">
+                This information is for {info.forName}, not {prescription.genericName}.{" "}
+                {signedIn ? "Refresh it." : "Sign in to refresh it."}
+              </WarnBox>
+            )}
             <div className="flex min-h-[46px] items-center justify-between gap-2 border border-line bg-background pl-2.5 text-[0.8125rem] text-muted-foreground">
               <span className="inline-flex items-center gap-1.5">
                 <AiIcon className="text-ai" />
@@ -324,11 +346,17 @@ export function AboutMedicineView({ prescription, onBack }: AboutMedicineViewPro
               <b className="font-semibold">{check.summary}</b>
               <span className="text-xs text-muted-foreground">Checked {formatAboutDate(check.checkedAt)}</span>
             </div>
-            {stale && (
-              <WarnBox title="Your medicines changed">
-                This check is older than your current list. Check again.
-              </WarnBox>
-            )}
+            {stale &&
+              (checkOtherName ? (
+                <WarnBox title="The name changed">
+                  This check is for {check.forName}, not {prescription.genericName}.{" "}
+                  {signedIn ? "Check again." : "Sign in to check again."}
+                </WarnBox>
+              ) : (
+                <WarnBox title="Your medicines changed">
+                  This check is older than your current list. Check again.
+                </WarnBox>
+              ))}
             {check.rows.map((r, i) => {
               const tone: BdgTone = r.notAssessed ? "muted" : SEVERITY_TONE[r.severity];
               return (

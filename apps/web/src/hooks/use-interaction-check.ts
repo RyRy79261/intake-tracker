@@ -1,4 +1,5 @@
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useRef, useSyncExternalStore } from "react";
+import { createKeyedTaskStore } from "@/lib/keyed-task-store";
 import { apiFetch } from "@/lib/api-fetch";
 import {
   getCachedEntry,
@@ -163,40 +164,55 @@ export function useInteractionCheck() {
 const MSG_OFFLINE = "You are offline. Connect to the internet and try again.";
 const MSG_TIMEOUT = "The check took too long and stopped. Try again.";
 
+interface RefreshState {
+  isRefreshing: boolean;
+  error: string | null;
+}
+const REFRESH_IDLE: RefreshState = { isRefreshing: false, error: null };
+
+/**
+ * Checks by prescription id. Held outside the view, like the "About this
+ * medicine" lookup: leaving the view must not throw a running check away.
+ */
+const refreshes = createKeyedTaskStore<RefreshState>(REFRESH_IDLE);
+
+/** Stop every check and forget their state (tests). */
+export const resetInteractionRefreshes = () => refreshes.reset();
+
 /**
  * Check one prescription against the user's other active prescriptions and
  * store the answer on it: the structured `interactionCheck` (severity rows,
- * checked date, the medicine list it covered) plus the legacy flat
- * `contraindications` / `warnings` strings older builds still read.
+ * checked date, the medicine list it covered, the name it was made for) plus
+ * the legacy flat `contraindications` / `warnings` strings older builds
+ * still read. The check keeps running, and is still stored, when the view
+ * that started it closes; `prescriptionId` picks the state to show.
  */
-export function useRefreshInteractions() {
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+export function useRefreshInteractions(prescriptionId: string) {
+  const { isRefreshing, error } = useSyncExternalStore(
+    refreshes.subscribe,
+    () => refreshes.get(prescriptionId),
+    () => REFRESH_IDLE,
+  );
   const updatePrescription = useUpdatePrescription();
-  const abortRef = useRef<AbortController | null>(null);
-
-  useEffect(() => () => abortRef.current?.abort(), []);
 
   const refresh = useCallback(
-    async (
-      prescriptionId: string,
-      genericName: string,
-      activePrescriptions: ActivePrescription[]
-    ) => {
-      abortRef.current?.abort();
-      setError(null);
+    async (genericName: string, activePrescriptions: ActivePrescription[]) => {
+      const set = (patch: Partial<RefreshState>) => refreshes.set(prescriptionId, patch);
+      refreshes.controllers.get(prescriptionId)?.abort();
+      refreshes.controllers.delete(prescriptionId);
+      set({ error: null });
       if (typeof navigator !== "undefined" && navigator.onLine === false) {
-        setError(MSG_OFFLINE);
+        set({ error: MSG_OFFLINE });
         return null;
       }
       const controller = new AbortController();
-      abortRef.current = controller;
+      refreshes.controllers.set(prescriptionId, controller);
       let timedOut = false;
       const timeoutId = setTimeout(() => {
         timedOut = true;
         controller.abort();
       }, INTERACTION_CHECK_TIMEOUT_MS);
-      setIsRefreshing(true);
+      set({ isRefreshing: true });
 
       try {
         const response = await apiFetch("/api/ai/interaction-check", {
@@ -212,19 +228,18 @@ export function useRefreshInteractions() {
 
         if (!response) {
           // User dismissed sign-in
-          setIsRefreshing(false);
+          set({ isRefreshing: false });
           return null;
         }
         if (!response.ok) {
-          setError(
+          const msg =
             response.status === 504
               ? MSG_TIMEOUT
               : await readAiErrorMessage(
                   response,
                   `Interaction check failed (${response.status})`,
-                ),
-          );
-          setIsRefreshing(false);
+                );
+          set({ error: msg, isRefreshing: false });
           return null;
         }
 
@@ -233,6 +248,8 @@ export function useRefreshInteractions() {
           result,
           activePrescriptions.map((p) => p.genericName),
           Date.now(),
+          // The name this check is for, so a later rename shows.
+          genericName,
         );
 
         await updatePrescription.mutateAsync({
@@ -240,25 +257,32 @@ export function useRefreshInteractions() {
           updates: { interactionCheck, ...legacyInteractionFields(result) },
         });
 
-        setIsRefreshing(false);
+        set({ isRefreshing: false });
         return result;
       } catch (err) {
         if (controller.signal.aborted) {
-          // Unmounted or superseded: say nothing. A timeout says so.
-          if (timedOut) setError(MSG_TIMEOUT);
-        } else if (typeof navigator !== "undefined" && navigator.onLine === false) {
-          setError(MSG_OFFLINE);
-        } else {
-          setError(err instanceof Error ? err.message : "Interaction check failed");
+          // Superseded by a newer check: say nothing, it owns the state now.
+          // A timeout says so.
+          if (timedOut) set({ error: MSG_TIMEOUT, isRefreshing: false });
+          return null;
         }
-        setIsRefreshing(false);
+        if (typeof navigator !== "undefined" && navigator.onLine === false) {
+          set({ error: MSG_OFFLINE, isRefreshing: false });
+        } else {
+          set({
+            error: err instanceof Error ? err.message : "Interaction check failed",
+            isRefreshing: false,
+          });
+        }
         return null;
       } finally {
         clearTimeout(timeoutId);
-        if (abortRef.current === controller) abortRef.current = null;
+        if (refreshes.controllers.get(prescriptionId) === controller) {
+          refreshes.controllers.delete(prescriptionId);
+        }
       }
     },
-    [updatePrescription]
+    [prescriptionId, updatePrescription]
   );
 
   return { refresh, isRefreshing, error };

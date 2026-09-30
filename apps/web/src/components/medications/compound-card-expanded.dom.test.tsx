@@ -54,7 +54,10 @@ describe("CompoundCardExpanded", () => {
       <CompoundCardExpanded prescription={prescription} onOpenAbout={onOpenAbout} />,
       { seed: { prescriptions: [prescription] } },
     );
-    await userEvent.setup().click(await screen.findByRole("button", { name: "About this medicine" }));
+    const aboutButton = await screen.findByRole("button", { name: "About this medicine" });
+    // The window finds this button by id to give focus back when About closes.
+    expect(aboutButton).toHaveAttribute("data-about-opener", prescription.id);
+    await userEvent.setup().click(aboutButton);
     expect(onOpenAbout).toHaveBeenCalledTimes(1);
     unmount();
 
