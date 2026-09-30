@@ -36,6 +36,7 @@ import {
   waterContentPercentFromAbv,
 } from "@intake/core/alcohol";
 import { useFieldId, useOnLogged } from "@/components/log-form-scope";
+import { useInPreview } from "@/lib/help/preview-context";
 
 type PresetTabKind = "coffee" | "alcohol";
 
@@ -173,6 +174,36 @@ function sugarGrams(form: DrinkForm): number {
   return (form.volumeMl / 100) * form.sugarPer100ml;
 }
 
+/**
+ * The drink presets and their add/delete actions.
+ *
+ * Presets live in the settings store, which a manual's live preview does not
+ * swap out: it is the user's real, synced settings. Inside a preview the demo
+ * therefore starts from the user's presets but adds to and deletes from its
+ * own copy, so trying "Save & log" or a long-press delete under the "sample
+ * data · not saved" banner leaves the real presets alone.
+ */
+function useLiquidPresets(): {
+  allPresets: LiquidPreset[];
+  addPreset: (preset: Omit<LiquidPreset, "id">) => void;
+  deletePreset: (id: string) => void;
+} {
+  const inPreview = useInPreview();
+  const stored = useSettingsStore((s) => s.liquidPresets);
+  const addStored = useSettingsStore((s) => s.addLiquidPreset);
+  const deleteStored = useSettingsStore((s) => s.deleteLiquidPreset);
+  const [demoPresets, setDemoPresets] = useState(stored);
+  const addDemo = useCallback((preset: Omit<LiquidPreset, "id">) => {
+    setDemoPresets((list) => [...list, { ...preset, id: crypto.randomUUID() }]);
+  }, []);
+  const deleteDemo = useCallback((id: string) => {
+    setDemoPresets((list) => list.filter((p) => p.id !== id));
+  }, []);
+  return inPreview
+    ? { allPresets: demoPresets, addPreset: addDemo, deletePreset: deleteDemo }
+    : { allPresets: stored, addPreset: addStored, deletePreset: deleteStored };
+}
+
 export function PresetTab({ tab }: PresetTabProps) {
   const onLogged = useOnLogged();
   const fid = useFieldId();
@@ -196,9 +227,7 @@ export function PresetTab({ tab }: PresetTabProps) {
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const longPressTriggeredRef = useRef(false);
 
-  const allPresets = useSettingsStore((s) => s.liquidPresets);
-  const addPreset = useSettingsStore((s) => s.addLiquidPreset);
-  const deletePreset = useSettingsStore((s) => s.deleteLiquidPreset);
+  const { allPresets, addPreset, deletePreset } = useLiquidPresets();
   const logDrinkEntry = useLogDrink();
   const { toast } = useToast();
   const showAi = useAuthGate();

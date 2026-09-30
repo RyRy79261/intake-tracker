@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi } from "vitest";
+import { afterEach, describe, it, expect, vi } from "vitest";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { useLiveQuery } from "@/hooks/use-live-query";
@@ -24,6 +24,7 @@ import {
 import { db } from "@/lib/db";
 import { makeQueryClient } from "@/lib/query-client";
 import { seedLiquidsPreview } from "@/lib/help/preview-data";
+import { __resetEngineForTests, runPullCycle } from "@/lib/sync-engine";
 import { useMedicationUIStore } from "@/stores/medication-ui-store";
 import { generateId, syncFields } from "@/lib/utils";
 
@@ -223,6 +224,77 @@ describe("ComponentPreview isolation from background windows", () => {
     await waitFor(() => expect(screen.getByTestId("bg-live")).toHaveTextContent("1"));
     await waitFor(() => expect(refetched).toBe(true));
     expect(screen.getByTestId("bg-query")).toHaveTextContent("1");
+  });
+});
+
+describe("ComponentPreview and a sync cycle already in flight", () => {
+  afterEach(() => {
+    __resetEngineForTests();
+    vi.unstubAllGlobals();
+  });
+
+  it("lets the pull finish on the real database before swapping in the sample one", async () => {
+    let respond: (response: Response) => void = () => {};
+    const fetchMock = vi.fn(
+      () =>
+        new Promise<Response>((resolve) => {
+          respond = resolve;
+        }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const pull = runPullCycle();
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+
+    const { unmount } = render(
+      <ComponentPreview seed={seedLiquidsPreview}>
+        <p>demo body</p>
+      </ComponentPreview>,
+    );
+    await act(() => new Promise((r) => setTimeout(r, 100)));
+    // Still waiting for the round trip: the real database stays active.
+    expect(isPreviewDatabaseActive()).toBe(false);
+    expect(screen.queryByText("demo body")).toBeNull();
+
+    const now = Date.now();
+    respond(
+      new Response(
+        JSON.stringify({
+          result: {
+            intakeRecords: {
+              rows: [
+                {
+                  id: "pulled-from-cloud",
+                  type: "water",
+                  amount: 300,
+                  timestamp: now,
+                  source: "manual",
+                  createdAt: now,
+                  updatedAt: now,
+                  deletedAt: null,
+                  deviceId: "other-device",
+                  timezone: "UTC",
+                },
+              ],
+              hasMore: false,
+            },
+          },
+          serverTime: now,
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+    await expect(pull).resolves.toBe(true);
+
+    await screen.findByText("demo body");
+    expect(isPreviewDatabaseActive()).toBe(true);
+    // The user's pulled row is not among the three sample drinks...
+    expect(await db.intakeRecords.get("pulled-from-cloud")).toBeUndefined();
+
+    // ...it went to the real database.
+    unmount();
+    expect(isPreviewDatabaseActive()).toBe(false);
+    expect(await db.intakeRecords.get("pulled-from-cloud")).toBeDefined();
   });
 });
 

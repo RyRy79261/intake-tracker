@@ -867,14 +867,46 @@ let previewDbCounter = 0;
 const previewDbSession = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
 let stalePreviewsSwept = false;
 
-/** Delete preview databases left behind by earlier page loads. */
+/** The Web Lock a page holds for as long as its preview databases are in use. */
+const previewSessionLock = (session: string) => `${PREVIEW_DB_PREFIX}${session}`;
+
+/** The lock guarding a preview database: its name minus the `-<counter>`. */
+const previewLockOf = (databaseName: string) =>
+  databaseName.slice(0, databaseName.lastIndexOf("-"));
+
+function webLocks(): LockManager | undefined {
+  return typeof navigator === "undefined" ? undefined : navigator.locks;
+}
+
+/**
+ * Mark this page load's preview databases as in use, until the page goes
+ * away: the lock is held by a promise that never settles, and the browser
+ * releases it when the page is closed or reloaded.
+ */
+function holdPreviewSessionLock(): void {
+  void webLocks()
+    ?.request(previewSessionLock(previewDbSession), () => new Promise<never>(() => {}))
+    .catch(() => {});
+}
+
+/**
+ * Delete preview databases left behind by earlier page loads. Another open
+ * tab (or the installed app) may have a demo on screen right now; deleting
+ * its database would close it mid-use. So only a database whose page no
+ * longer holds its lock is removed, and without the Web Locks API (nothing
+ * proves a database dead) none are.
+ */
 async function sweepStalePreviewDatabases(): Promise<void> {
   if (typeof indexedDB === "undefined" || typeof indexedDB.databases !== "function") return;
+  const locks = webLocks();
+  if (!locks) return;
   try {
     const own = `${PREVIEW_DB_PREFIX}${previewDbSession}-`;
+    const inUse = new Set(((await locks.query()).held ?? []).map((l) => l.name));
     const stale = (await indexedDB.databases())
       .map((d) => d.name)
-      .filter((n): n is string => !!n?.startsWith(PREVIEW_DB_PREFIX) && !n.startsWith(own));
+      .filter((n): n is string => !!n?.startsWith(PREVIEW_DB_PREFIX) && !n.startsWith(own))
+      .filter((n) => !inUse.has(previewLockOf(n)));
     await Promise.allSettled(stale.map((n) => Dexie.delete(n)));
   } catch {
     // Best effort: a leftover preview database only costs a little storage.
@@ -889,6 +921,7 @@ async function sweepStalePreviewDatabases(): Promise<void> {
 export function createPreviewDatabase(): AppDatabase {
   if (!stalePreviewsSwept) {
     stalePreviewsSwept = true;
+    holdPreviewSessionLock();
     void sweepStalePreviewDatabases();
   }
   previewDbCounter += 1;

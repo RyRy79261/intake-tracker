@@ -12,7 +12,7 @@ import {
   setActiveDatabase,
   type AppDatabase,
 } from "@/lib/db";
-import { resumeEngine, suspendEngine } from "@/lib/sync-engine";
+import { resumeEngine, suspendEngine, waitForSyncIdle } from "@/lib/sync-engine";
 import {
   InPreviewProvider,
   PreviewSafeZone,
@@ -65,15 +65,15 @@ export function ComponentPreview({
     let cancelled = false;
     let released = false;
     let stopGuard = () => {};
+    let swapped = false;
     const preview = createPreviewDatabase();
     suspendEngine();
-    setActiveDatabase(preview);
 
     const release = () => {
       if (released) return;
       released = true;
       stopGuard();
-      resetActiveDatabase();
+      if (swapped) resetActiveDatabase();
       resumeEngine();
       // A demo toast's Undo would act on the real database from here on.
       dismissRef.current();
@@ -89,6 +89,14 @@ export function ComponentPreview({
 
     void (async () => {
       try {
+        // Suspending only stops new sync cycles. One already in flight reads
+        // `db` again after its network round trip, and would then apply the
+        // user's pulled rows and push acks to the sample database: let it
+        // finish on the real one before swapping.
+        await waitForSyncIdle();
+        if (released) return;
+        setActiveDatabase(preview);
+        swapped = true;
         await preview.open();
         await seed(preview);
         if (!cancelled) setStatus("ready");

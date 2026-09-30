@@ -9,7 +9,7 @@ import { getDeviceTimezone } from "@/lib/timezone";
 import { toLocalDateKey } from "@/lib/date-utils";
 import { getRefillStatuses, reconcileRefillNotifications } from "@/lib/refill-status";
 import { formatSupplyRemaining } from "@/lib/medication-ui-utils";
-import { isPreviewDatabaseActive } from "@/lib/db";
+import { isPreviewDatabaseActive, readRealDatabase, whenRealDatabase } from "@/lib/db";
 
 const MED_NOTIFICATION_KEY = "intake-tracker-med-notifications";
 
@@ -113,8 +113,11 @@ export async function checkDoseReminders(now: number = Date.now()): Promise<void
   saveState({ lastDoseCheck: now, notifiedDoses: cleanedDoses });
 }
 
-async function checkRefillAlerts(): Promise<void> {
+export async function checkRefillAlerts(): Promise<void> {
   if (getNotificationPermission() !== "granted") return;
+  // A manual preview's sample inventory must never raise a refill alert or
+  // replace the saved refill state: check once the real database is back.
+  await whenRealDatabase();
 
   const state = getState();
   const now = Date.now();
@@ -126,7 +129,7 @@ async function checkRefillAlerts(): Promise<void> {
   // Same decision as the cards and the inventory drawer (computeRefillStatus
   // over the effective phase). A prescription drops out of notifiedRefills once
   // it no longer needs a refill, so running low again alerts again.
-  const statuses = await getRefillStatuses();
+  const statuses = await readRealDatabase(getRefillStatuses);
   const { toNotify, notified } = reconcileRefillNotifications(state.notifiedRefills, statuses);
 
   for (const { prescriptionId, prescription, inventory, status } of statuses) {
