@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.39.0](https://github.com/RyRy79261/intake-tracker/compare/v1.38.0...v1.39.0) (2026-10-01)
+
+
+### Features
+
+* **ui:** desktop mode with free resizable windows ([#399](https://github.com/RyRy79261/intake-tracker/issues/399)) ([d55b57a](https://github.com/RyRy79261/intake-tracker/commit/d55b57af0286ab63c0e0440b2f73e306f7490254))
+* **ui:** ward console redesign ([#398](https://github.com/RyRy79261/intake-tracker/issues/398)) ([cafa9df](https://github.com/RyRy79261/intake-tracker/commit/cafa9df65df19e1530a1455badff039109630db0))
+
+
+### Bug Fixes
+
+* book drinks at full volume as fluid intake ([#401](https://github.com/RyRy79261/intake-tracker/issues/401)) ([2fe6224](https://github.com/RyRy79261/intake-tracker/commit/2fe6224a26dbc4220a2836cea1368512523b3a67))
+
 ## [1.38.0](https://github.com/RyRy79261/intake-tracker/compare/v1.37.1...v1.38.0) (2026-09-28)
 
 
