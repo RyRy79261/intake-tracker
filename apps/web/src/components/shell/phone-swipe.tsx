@@ -1,14 +1,24 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { goHome, openWindow } from "@/hooks/use-window-history";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useWindowStore } from "@/stores/window-store";
-import type { WindowAppId } from "@/lib/nav-routes";
+import { useAuthGate } from "@/components/auth-guard";
 
-/** The pages a sideways swipe moves between on a phone, left to right. */
-export const SWIPE_PAGES = ["profile", "home", "meds", "metrics"] as const;
+/**
+ * The pages a sideways swipe moves between on a phone, left to right in the
+ * order of the sys-bar: Home (the logo), then Medications, Metrics, History
+ * and Profile. Swiping left goes to the next one. Settings is a sheet, not a
+ * page, so it is not one of them.
+ */
+export const SWIPE_PAGES = ["home", "meds", "metrics", "history", "profile"] as const;
 export type SwipePage = (typeof SWIPE_PAGES)[number];
+
+/** The pages for this user: Profile only when signed in (the avatar is sign-in otherwise). */
+export function swipePages(signedIn: boolean): readonly SwipePage[] {
+  return signedIn ? SWIPE_PAGES : SWIPE_PAGES.filter((p) => p !== "profile");
+}
 
 /** Movement before the gesture picks an axis. */
 const LOCK_PX = 10;
@@ -17,22 +27,30 @@ const RESISTANCE = 0.25;
 const COMMIT_MS = 180;
 const ENTER_MS = 220;
 
-/** What is on screen: Home, or the app of the window over it. */
+/** What is on screen: Home, or the app of the window over it (History is Metrics on Records). */
 export function currentSwipePage(): SwipePage | null {
   const s = useWindowStore.getState();
   const win = !s.showHome ? s.wins.find((w) => w.id === s.focus && !w.min) : undefined;
   if (!win) return "home";
-  return (SWIPE_PAGES as readonly string[]).includes(win.app) ? (win.app as SwipePage) : null;
+  if (win.app === "metrics") return win.st.tab === "records" ? "history" : "metrics";
+  return win.app === "meds" || win.app === "profile" ? win.app : null;
 }
 
-/** The page next to `page`: -1 to the left (swipe right), 1 to the right. */
-export function neighbourPage(page: SwipePage, dir: -1 | 1): SwipePage | null {
-  return SWIPE_PAGES[SWIPE_PAGES.indexOf(page) + dir] ?? null;
+/** The page next to `page` in `pages`: -1 to the left (swipe right), 1 to the right (swipe left). */
+export function neighbourPage(
+  page: SwipePage,
+  dir: -1 | 1,
+  pages: readonly SwipePage[] = SWIPE_PAGES,
+): SwipePage | null {
+  const at = pages.indexOf(page);
+  return at < 0 ? null : (pages[at + dir] ?? null);
 }
 
 function goTo(page: SwipePage): void {
   if (page === "home") goHome();
-  else openWindow(page satisfies WindowAppId);
+  // Like the sys-bar buttons: Metrics opens on Summary, History on Records.
+  else if (page === "metrics") openWindow("metrics", { tab: "summary" });
+  else openWindow(page);
 }
 
 /** The element that shows `page`, to slide with the finger. */
@@ -89,14 +107,20 @@ function clear(el: HTMLElement | null): void {
 }
 
 /**
- * Phone only: swipe sideways to move between Profile, Home, Medications and
- * Metrics, in that order (the old swipe navigation's order). The page
+ * Phone only: swipe sideways to move between Home, Medications, Metrics,
+ * History and Profile, in the sys-bar's order (swipe left for the next). The page
  * follows the finger; past the distance or speed set in Settings it slides
  * out and the next page slides in. Swipes that start on a field, a slider, a
  * chart, or content that scrolls sideways are left to that control, and
  * nothing happens while a dialog or sheet is open.
  */
 export function PhoneSwipe() {
+  const signedIn = useAuthGate();
+  const pagesRef = useRef(swipePages(signedIn));
+  useEffect(() => {
+    pagesRef.current = swipePages(signedIn);
+  }, [signedIn]);
+
   useEffect(() => {
     let start: { x: number; y: number; t: number } | null = null;
     let last = { x: 0, t: 0 };
@@ -138,7 +162,7 @@ export function PhoneSwipe() {
       const dt = e.timeStamp - last.t;
       if (dt > 0) velocity = ((t.clientX - last.x) / dt) * 1000;
       last = { x: t.clientX, t: e.timeStamp };
-      const target = neighbourPage(page, dx > 0 ? -1 : 1);
+      const target = neighbourPage(page, dx > 0 ? -1 : 1, pagesRef.current);
       const x = target ? dx : dx * RESISTANCE;
       surface.style.transition = "";
       surface.style.transform = `translateX(${x}px)`;
@@ -155,7 +179,7 @@ export function PhoneSwipe() {
       const w = window.innerWidth || 1;
       const { swipeNavDistanceThresholdPct: pct, swipeNavVelocityThreshold: minSpeed } = useSettingsStore.getState();
       const dir: -1 | 1 = dx > 0 ? -1 : 1;
-      const target = neighbourPage(from, dir);
+      const target = neighbourPage(from, dir, pagesRef.current);
       const far = Math.abs(dx) > (w * pct) / 100;
       const fast = Math.abs(velocity) > minSpeed && Math.sign(velocity) === Math.sign(dx);
       const still = reducedMotion();

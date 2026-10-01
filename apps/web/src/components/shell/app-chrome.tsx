@@ -32,7 +32,7 @@ function useIsClient(): boolean {
  * The app frame around every page: the Ward Console shell (the sys-bar on
  * top, the windows, and the bottom bar with Home, Windows on tiled screens
  * and Hold to talk; on a phone, the quick links over it and sideways swipes
- * between Profile, Home, Medications and Metrics). Desktop mode (1024px or more with a mouse) is a desk instead of
+ * along the sys-bar: Home, Medications, Metrics, History, Profile). Desktop mode (1024px or more with a mouse) is a desk instead of
  * Home: the intake modules are free windows in the window layer, the
  * sys-bar carries the task strip, and the desk band along the bottom has
  * Report a bug, the icons of minimised modules and Hold to talk.
