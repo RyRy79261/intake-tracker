@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.39.1](https://github.com/RyRy79261/intake-tracker/compare/v1.39.0...v1.39.1) (2026-10-01)
+
+
+### Bug Fixes
+
+* **ai:** stop voice parse timing out on every log ([#407](https://github.com/RyRy79261/intake-tracker/issues/407)) ([7384daf](https://github.com/RyRy79261/intake-tracker/commit/7384dafa6fe87150eda47b2ba032ab82772c3420)), closes [#406](https://github.com/RyRy79261/intake-tracker/issues/406)
+* **shell:** swipe along the sys-bar order on a phone ([#404](https://github.com/RyRy79261/intake-tracker/issues/404)) ([ab9c80a](https://github.com/RyRy79261/intake-tracker/commit/ab9c80a333f551bf21c7d876030f014979dbcd4c))
+
 ## [1.39.0](https://github.com/RyRy79261/intake-tracker/compare/v1.38.0...v1.39.0) (2026-10-01)
 
 
