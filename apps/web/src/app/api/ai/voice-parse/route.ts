@@ -26,8 +26,10 @@ import {
  * one route-wide deadline.
  *
  * Quality tier (Claude Sonnet 5.5): no forced tool_choice and no sampling
- * parameters (each a 400). The request is `auto` with a strict tool, the
- * prompt says to always call it, and the retry turn is unforced.
+ * parameters (each a 400). The request is `auto`, the prompt says to always
+ * call the tool, and the retry turn is unforced. The tool is not strict: the
+ * API can't compile its schema (see PARSE_TOOL), so the items are checked
+ * with Zod here instead.
  */
 
 // Vercel function limit. The shared deadline stops short of it so a slow
