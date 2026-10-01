@@ -32,22 +32,3 @@ export function abvFromStandardDrinks(standardDrinks: number, volumeMl: number):
     (volumeMl * ETHANOL_DENSITY_G_PER_ML)
   ) * 100;
 }
-
-/**
- * Share of an alcoholic drink's volume that counts as water, in percent:
- * the non-ethanol fraction (a 40% spirit is 60% water). Used where no
- * measured water content is known (voice, the food parser, a hand-typed
- * drink). A missing, non-positive or out-of-range ABV gives 100.
- */
-export function waterContentPercentFromAbv(abvPercent: number | null | undefined): number {
-  if (
-    abvPercent === null ||
-    abvPercent === undefined ||
-    !Number.isFinite(abvPercent) ||
-    abvPercent <= 0 ||
-    abvPercent >= 100
-  ) {
-    return 100;
-  }
-  return 100 - abvPercent;
-}

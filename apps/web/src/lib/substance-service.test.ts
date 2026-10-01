@@ -339,18 +339,18 @@ describe("substance-service: updateSubstanceRecord keeps the group's fluid in st
     expect(after!.timestamp).toBe(before!.timestamp);
   });
 
-  it("keeps a spirit's water share when the edit re-sends the same volume", async () => {
+  it("leaves a legacy water row alone when the edit re-sends the same volume", async () => {
     // The Records-tab alcohol edit always re-sends the prefilled volume. A
-    // spirit's water row is only its non-alcohol share (27 of 45 ml), so
-    // copying the volume onto it would book the ethanol as water again.
+    // re-send is not a volume change, so it must not rewrite the water row —
+    // here a legacy row that booked only the non-alcohol share (27 of 45 ml).
     const drink = await logDrink({
       volumeMl: 45,
       description: "Spirit",
       abvPercent: 40,
-      waterContentPercent: 60,
     });
     expect(drink.success).toBe(true);
     if (!drink.success) return;
+    await db.intakeRecords.update(drink.data.waterIntakeId, { amount: 27 });
 
     await updateSubstanceRecord(drink.data.substanceIds[0]!, {
       description: "Gin",
@@ -362,21 +362,20 @@ describe("substance-service: updateSubstanceRecord keeps the group's fluid in st
     expect(water!.amount).toBe(27);
   });
 
-  it("scales a spirit's water row with a changed volume", async () => {
+  it("moves a drink's water row with a changed volume", async () => {
     const drink = await logDrink({
       volumeMl: 45,
       description: "Spirit",
       abvPercent: 40,
-      waterContentPercent: 60,
     });
     expect(drink.success).toBe(true);
     if (!drink.success) return;
 
-    // A double: 90 ml of drink is still 60% water.
+    // A double: 90 ml of drink is 90 ml of fluid.
     await updateSubstanceRecord(drink.data.substanceIds[0]!, { volumeMl: 90 });
 
     const water = await db.intakeRecords.get(drink.data.waterIntakeId);
-    expect(water!.amount).toBe(54);
+    expect(water!.amount).toBe(90);
   });
 
   it("sets the water row to the volume when the substance had none stored", async () => {

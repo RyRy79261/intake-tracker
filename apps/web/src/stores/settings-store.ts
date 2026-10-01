@@ -284,7 +284,6 @@ export function migrateSettings(
         return {
           ...rest,
           tab: oldType === "caffeine" ? "coffee" : "alcohol",
-          waterContentPercent: 100,
           ...(oldType === "caffeine" && { caffeinePer100ml: oldPer100ml }),
           ...(oldType === "alcohol" && { alcoholPer100ml: oldPer100ml }),
         };

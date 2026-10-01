@@ -146,7 +146,6 @@ describe("resetToDefaults", () => {
       name: "Oat Latte",
       tab: "coffee",
       caffeinePer100ml: 40,
-      waterContentPercent: 90,
       defaultVolumeMl: 300,
       isDefault: false,
       source: "manual",

@@ -38,7 +38,7 @@ Rules:
    - "A 500ml beer" → ONE alcohol item, volumeMl 500, abvPercent ~ 5. Never also emit a water or food item for it.
    Pick the single kind that best describes the drink: caffeinated → "caffeine", alcoholic → "alcohol", plain water → "water", anything else → "food". A drink that is both caffeinated and alcoholic is rare; prefer "alcohol".
 5. A plain "glass of water" → one water item ml: 250 (not a food item). Only emit a water item when the user drank actual water, never as a companion to another drink.
-5a. Dissolved solutes never displace fluid volume. For any drink/liquid food, waterMl is the whole liquid volume; report sugarG/sodiumMg as the masses dissolved in that same volume. "60ml ice lolly" → food item, waterMl ~60, sugarG ~10 (NOT waterMl 50). Spirits are no exception: report an alcoholic drink as an alcohol item with its full volumeMl — the app derives its water share from abvPercent.
+5a. Dissolved solutes never displace fluid volume. For any drink/liquid food, waterMl is the whole liquid volume; report sugarG/sodiumMg as the masses dissolved in that same volume. "60ml ice lolly" → food item, waterMl ~60, sugarG ~10 (NOT waterMl 50). Spirits are no exception: report an alcoholic drink as an alcohol item with its full volumeMl — the app counts the whole drink as fluid.
 6. If the user says "I just had X and Y", emit one item per distinct intake.
 7. If you cannot extract anything from the transcript, return items: [].
 8. Always call the parse_voice_log tool. Never return prose only.

@@ -52,7 +52,7 @@ describe("LiquidPresetsSection (Drink presets page)", () => {
     await renderWithFixtures(<LiquidPresetsSection />);
 
     // Default Beer preset: alcoholPer100ml 5 means 5% ABV, not 5 std drinks.
-    expect(await screen.findByText(/^5% ABV · 93% water$/)).toBeInTheDocument();
+    expect(await screen.findByText(/^5% ABV$/)).toBeInTheDocument();
     expect(screen.queryByText(/std alc/)).not.toBeInTheDocument();
   });
 
@@ -92,7 +92,6 @@ describe("LiquidPresetsSection (Drink presets page)", () => {
       id: "custom-broth",
       name: "Broth",
       tab: "beverage",
-      waterContentPercent: 95,
       defaultVolumeMl: 250,
       saltPer100ml: 350,
       isDefault: false,
@@ -137,7 +136,6 @@ describe("LiquidPresetsSection (Drink presets page)", () => {
       id: "custom-1",
       name: "Kombucha",
       tab: "beverage",
-      waterContentPercent: 95,
       defaultVolumeMl: 200,
       isDefault: false,
       source: "manual",

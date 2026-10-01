@@ -827,14 +827,12 @@ export function parseSodiumKindFromSource(source: string | undefined): SodiumKin
  *       kind.
  *     - `>0` ⇒ upsert.
  * - `waterMl` is the edited water row's amount and `previousWaterMl` what it
- *   was before the edit. The drink's volume lives on its substance records
- *   and is NOT the water amount: a spirit logged at 60% water has a 27 ml
- *   water row but a 45 ml alcohol record. So the drink volume is only scaled
- *   by `waterMl / previousWaterMl` — a time-only edit leaves it (and the
- *   derived `amountStandardDrinks`) exactly as it was. With no
- *   `previousWaterMl`, or no stored substance volume, the drink is taken to
- *   be all water (drink volume = `waterMl`), as every drink logged before
- *   water content existed was.
+ *   was before the edit. The drink's volume lives on its substance records.
+ *   Drinks are booked at full volume, so the two normally match, but the
+ *   drink volume is still only scaled by `waterMl / previousWaterMl` — a
+ *   time-only edit leaves it (and the derived `amountStandardDrinks`)
+ *   exactly as it was. With no `previousWaterMl`, or no stored substance
+ *   volume, the drink volume is taken to be `waterMl`.
  */
 export async function syncLiquidEntrySubstances(
   intakeId: string,

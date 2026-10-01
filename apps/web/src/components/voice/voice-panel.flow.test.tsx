@@ -110,8 +110,8 @@ async function dictateAndSave(items: VoiceParsedItem[]) {
 
 describe("VoicePanel commit — one drink, one fluid amount", () => {
   it("logs a 500 ml beer as one water row, not two", async () => {
-    // The repro from issue #322. The water row is the non-alcohol share of
-    // the drink (100 − 5% ABV = 95% → 475 ml), never 1000.
+    // The repro from issue #322. The water row is the drink's full volume
+    // (500 ml, ethanol included), never 1000.
     await dictateAndSave([
       { kind: "alcohol", description: "beer", abvPercent: 5, volumeMl: 500 },
     ]);
@@ -119,7 +119,7 @@ describe("VoicePanel commit — one drink, one fluid amount", () => {
     await waitFor(async () => {
       expect(await waterRows()).toHaveLength(1);
     });
-    expect(await totalWaterMl()).toBe(475);
+    expect(await totalWaterMl()).toBe(500);
 
     const alcohol = await db.substanceRecords.toArray();
     expect(alcohol).toHaveLength(1);
@@ -154,8 +154,8 @@ describe("VoicePanel commit — one drink, one fluid amount", () => {
     await waitFor(async () => {
       expect(await waterRows()).toHaveLength(2);
     });
-    // 475 ml from the beer (95% water) + the 500 ml glass.
-    expect(await totalWaterMl()).toBe(975);
+    // 500 ml from the beer + the 500 ml glass.
+    expect(await totalWaterMl()).toBe(1000);
   });
 
   it("records only the beer when the user rejects the flagged water row", async () => {
@@ -179,7 +179,7 @@ describe("VoicePanel commit — one drink, one fluid amount", () => {
       expect(await db.substanceRecords.count()).toBe(1);
     });
     expect(await waterRows()).toHaveLength(1);
-    expect(await totalWaterMl()).toBe(475);
+    expect(await totalWaterMl()).toBe(500);
   });
 
   it("collapses a latte emitted as caffeine + food (the likely #322 shape)", async () => {
@@ -225,13 +225,12 @@ describe("VoicePanel commit — one drink, one fluid amount", () => {
     await waitFor(async () => {
       expect(await waterRows()).toHaveLength(2);
     });
-    expect(await totalWaterMl()).toBe(725);
+    expect(await totalWaterMl()).toBe(750);
   });
 
-  // ai-routes-models#9: a spirit is not all water. Voice has no preset water
-  // content, so it books the non-alcohol share; the alcohol dose still comes
-  // from the full measure.
-  it("books a spirit's non-alcohol share as water and keeps the full volume on the alcohol", async () => {
+  // A spirit counts as fluid at its full measure, as on a clinical
+  // intake/output chart; the alcohol dose comes from the same measure.
+  it("books a spirit's full measure as fluid and keeps it on the alcohol", async () => {
     await dictateAndSave([
       { kind: "alcohol", description: "vodka", abvPercent: 40, volumeMl: 50 },
     ]);
@@ -239,7 +238,7 @@ describe("VoicePanel commit — one drink, one fluid amount", () => {
     await waitFor(async () => {
       expect(await waterRows()).toHaveLength(1);
     });
-    expect(await totalWaterMl()).toBe(30);
+    expect(await totalWaterMl()).toBe(50);
     const [alcohol] = await db.substanceRecords.toArray();
     expect(alcohol!.volumeMl).toBe(50);
   });
@@ -488,8 +487,8 @@ describe("VoicePanel commit — timing", () => {
       expect(bagel!.timestamp).toBe(NOW.getTime());
       const water = await waterRows();
       expect(water).toHaveLength(2);
-      // The beer's own water share is booked with the beer, yesterday.
-      expect(water.find((r) => r.amount === 475)!.timestamp).toBe(local(29, 20));
+      // The beer's fluid (its full 500 ml) is booked with the beer, yesterday.
+      expect(water.find((r) => r.amount === 500)!.timestamp).toBe(local(29, 20));
       expect(water.find((r) => r.amount === 100)!.timestamp).toBe(local(30, 13));
 
       // Day buckets under the app's 2am day start: the beer is yesterday's.

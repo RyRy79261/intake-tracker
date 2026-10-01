@@ -8,7 +8,6 @@ const mokaCustom: LiquidPreset = {
   name: "Moka",
   tab: "coffee",
   caffeinePer100ml: 157,
-  waterContentPercent: 98,
   defaultVolumeMl: 200,
   isDefault: false,
   source: "manual",

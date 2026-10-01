@@ -789,12 +789,130 @@ realDb.version(24).stores({
   userSettings:            "id, updatedAt",
 });
 
+// Version 25 (2026-09): drinks count at full volume as fluid intake.
+// `logDrink` used to book only a "water content" share of a drink as fluid
+// (volume x 100-ABV% for a typed drink, 93% for the Beer preset, 60% for a
+// spirit, 98-99% for coffee). Clinical intake/output charts and fluid
+// restrictions count every drink at its whole volume, so the upgrade raises
+// each already-logged drink's water row back to the drink volume stored on
+// its caffeine/alcohol record. Stores are byte-identical to v24; the version
+// bump exists to carry the `upgrade` hook.
+//
+// Only drinks written since the water-content reduction shipped
+// (WATER_SHARE_SHIPPED_AT, commit b19f6f0) are corrected; anything logged
+// before it was already booked at full volume and is left exactly as it is.
+//
+// Only drink groups are touched: a group with a live eating record is a meal
+// (its water row is food water, not a drink volume) and is skipped, as is a
+// group with more than one live water row, where there is no single row to
+// correct. A drink logged without caffeine or alcohol stored no volume, so a
+// reduced water row there cannot be recovered and is left as it is.
+/** When `logDrink` started booking a reduced water share (2026-09-26 23:05 UTC). */
+const WATER_SHARE_SHIPPED_AT = 1_790_463_936_000;
+
+realDb.version(25).stores({
+  // --- REPEAT all v24 stores verbatim ---
+  intakeRecords:           "id, [type+timestamp], timestamp, source, groupId, updatedAt",
+  weightRecords:           "id, timestamp, updatedAt",
+  bloodPressureRecords:    "id, timestamp, position, arm, updatedAt",
+  eatingRecords:           "id, timestamp, groupId, updatedAt",
+  urinationRecords:        "id, timestamp, updatedAt",
+  defecationRecords:       "id, timestamp, updatedAt",
+  prescriptions:           "id, updatedAt, createdAt",
+  medicationPhases:        "id, prescriptionId, status, type, titrationPlanId, updatedAt",
+  phaseSchedules:          "id, phaseId, time, updatedAt",
+  inventoryItems:          "id, prescriptionId, updatedAt",
+  inventoryTransactions:   "id, [inventoryItemId+timestamp], inventoryItemId, timestamp, type, updatedAt",
+  doseLogs:                "id, [prescriptionId+scheduledDate], [scheduleId+scheduledDate], prescriptionId, phaseId, scheduleId, scheduledDate, scheduledTime, status, updatedAt",
+  dailyNotes:              "id, date, prescriptionId, doseLogId, updatedAt",
+  auditLogs:               "id, [action+timestamp], timestamp, action",
+  substanceRecords:        "id, [type+timestamp], type, timestamp, source, sourceRecordId, groupId, updatedAt",
+  titrationPlans:          "id, conditionLabel, status, updatedAt",
+  _syncQueue:              "++id, [tableName+recordId], tableName, enqueuedAt",
+  _syncMeta:               "tableName",
+  _errorLogs:              "id, timestamp, source",
+  userProfile:             "id, updatedAt",
+  insightReports:          "id, generatedAt, updatedAt",
+  userSettings:            "id, updatedAt",
+}).upgrade(async (trans) => {
+  const now = Date.now();
+  const intakeTable = trans.table("intakeRecords");
+  const substanceTable = trans.table("substanceRecords");
+  const eatingTable = trans.table("eatingRecords");
+  const queueTable = trans.table("_syncQueue");
+
+  // Same reasoning as v22: the repair has to reach the server (a later pull
+  // would otherwise overwrite it with the reduced amount), and push reads the
+  // live row at push time, so an op already queued for the record suffices.
+  const enqueueRepair = async (tableName: string, recordId: string) => {
+    const existing = await queueTable
+      .where("[tableName+recordId]")
+      .equals([tableName, recordId])
+      .first();
+    if (existing) return;
+    await queueTable.add({
+      tableName,
+      recordId,
+      op: "upsert",
+      enqueuedAt: now,
+      attempts: 0,
+    });
+  };
+
+  // Drink volume per group, from its live caffeine/alcohol records.
+  const volumeByGroup = new Map<string, number>();
+  const substances = (await substanceTable.toArray()) as Record<string, unknown>[];
+  for (const substance of substances) {
+    const groupId = substance.groupId as string | undefined;
+    const volume = substance.volumeMl as number | undefined;
+    if (!groupId || substance.deletedAt != null) continue;
+    if (typeof volume !== "number" || !Number.isFinite(volume) || volume <= 0) continue;
+    volumeByGroup.set(groupId, Math.max(volumeByGroup.get(groupId) ?? 0, volume));
+  }
+
+  for (const [groupId, volume] of volumeByGroup) {
+    // One malformed group must not abort the version change (see v22).
+    try {
+      const eatings = (await eatingTable
+        .where("groupId")
+        .equals(groupId)
+        .toArray()) as Record<string, unknown>[];
+      if (eatings.some((e) => e.deletedAt == null)) continue;
+
+      const waters = ((await intakeTable
+        .where("groupId")
+        .equals(groupId)
+        .toArray()) as Record<string, unknown>[]).filter(
+        (r) => r.type === "water" && r.deletedAt == null,
+      );
+      if (waters.length !== 1) continue;
+      const water = waters[0]!;
+      if (typeof water.createdAt !== "number" || water.createdAt < WATER_SHARE_SHIPPED_AT) continue;
+      const amount = Math.round(volume);
+      if (typeof water.amount !== "number" || water.amount >= amount) continue;
+
+      // Queue first, then write. A caught failure does not abort a Dexie
+      // transaction, so with the write first a failed enqueue would commit
+      // the corrected amount with no sync entry, and the next pull would put
+      // the reduced amount back. This order fails safe: a failed enqueue
+      // skips the write, and a failed write leaves only a harmless push of
+      // the unchanged row. `updatedAt` is bumped so the pushed repair wins
+      // last-write-wins.
+      await enqueueRepair("intakeRecords", water.id as string);
+      await intakeTable.update(water.id, { amount, updatedAt: now });
+    } catch {
+      // Skip this group; the rest of the repair still applies. Rethrowing
+      // would abort the version change and leave the database unopenable.
+    }
+  }
+});
+
 /**
  * Current Dexie schema version. Bump this constant in lockstep with each new
  * `realDb.version(N)` block above so diagnostic surfaces (Debug → Environment)
  * always reflect the real schema.
  */
-export const DB_SCHEMA_VERSION = 24;
+export const DB_SCHEMA_VERSION = 25;
 
 /**
  * True when `e` (or anything in its `cause` chain) is Dexie's
@@ -838,7 +956,7 @@ export async function recoverClosedDatabase(e: unknown): Promise<boolean> {
 }
 
 /**
- * Store definitions for a preview database — the current (v24) schema in a
+ * Store definitions for a preview database — the current (v25) schema in a
  * single version. A preview database is created empty and discarded, so it
  * needs no migration history.
  */
