@@ -163,4 +163,50 @@ describe("TodayGadget", () => {
     expect(cellFor("water", "2026-09-22").querySelector("b")).not.toBeNull();
     expect(screen.getByTestId("today-row-water")).toHaveAccessibleName(/Tue 700, Wed 550, Thu no data yet/);
   });
+
+  it("wide (Home on the desktop): dated day labels, a total under each day, and full rows for caffeine and alcohol", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 8, 23, 12, 0)); // Wed 23 Sep
+    await renderWithFixtures(<TodayGadget wide />, {
+      settings: { waterLimit: 1000, waterExtendedBuffer: 500 },
+      seed: {
+        intakeRecords: [
+          makeIntakeRecord({ type: "water", amount: 700, timestamp: at(22, 10) }),
+          makeIntakeRecord({ type: "water", amount: 550, timestamp: at(23, 9) }),
+        ],
+        substanceRecords: [makeSubstanceRecord({ type: "caffeine", amountMg: 143, timestamp: at(23, 8) })],
+      },
+    });
+
+    await waitFor(() => expect(screen.getByTestId("today-water-value")).toHaveTextContent("550"));
+    expect(screen.getByTestId("today-gadget")).toHaveClass("wc-today-wide");
+    expect(screen.getAllByTestId("today-day-label").map((l) => l.textContent)).toEqual([
+      "Mon 21",
+      "Tue 22",
+      "Wed 23",
+      "Thu 24",
+      "Fri 25",
+      "Sat 26",
+      "Sun 27",
+    ]);
+    // Each day's total sits under its column; days to come show a dash.
+    expect(cellFor("water", "2026-09-22").querySelector("em")).toHaveTextContent("700");
+    expect(todayCell("water").querySelector("em")).toHaveTextContent("550");
+    expect(cellFor("water", "2026-09-24").querySelector("em")).toHaveTextContent("—");
+    // Caffeine and alcohol are rows like the rest, with no limit.
+    const caffeine = screen.getByTestId("today-row-caffeine");
+    expect(caffeine).toHaveClass("wc-tg-row");
+    expect(within(caffeine).getByTestId("today-caffeine-value")).toHaveTextContent("143");
+    expect(screen.getByTestId("today-caffeine-status")).toHaveTextContent("no limit set");
+    expect(screen.getByTestId("today-row-alcohol")).toHaveClass("wc-tg-row");
+    expect(screen.queryByText("caffeine, alcohol: no limit")).not.toBeInTheDocument();
+  });
+
+  it("phone: no totals under the columns", async () => {
+    await renderWithFixtures(<TodayGadget />, {});
+    await waitFor(() => expect(screen.getByTestId("today-gadget")).toBeInTheDocument());
+    expect(screen.getByTestId("today-gadget")).not.toHaveClass("wc-today-wide");
+    expect(screen.getByTestId("today-gadget").querySelector("em")).toBeNull();
+    expect(screen.getByTestId("today-row-caffeine")).toHaveClass("wc-tg-half");
+  });
 });

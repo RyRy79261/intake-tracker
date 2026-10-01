@@ -8,8 +8,8 @@ import { WindowsSwitcher, windowStateLabel } from "@/components/shell/windows-sw
 import { useWindowStore, type Win } from "@/stores/window-store";
 
 const wins: Win[] = [
-  { id: "w1", app: "meds", st: {}, z: 1, min: false, max: false },
-  { id: "w2", app: "metrics", st: { tab: "records" }, z: 2, min: false, max: false },
+  { id: "w1", app: "meds", st: {}, z: 1, min: false, max: false, x: 16, y: 12, w: 720, h: 520 },
+  { id: "w2", app: "metrics", st: { tab: "records" }, z: 2, min: false, max: false, x: 16, y: 12, w: 720, h: 520 },
 ];
 
 describe("WindowsSwitcher", () => {
@@ -78,7 +78,7 @@ describe("windowStateLabel", () => {
     const meds = { tab: "prescriptions" as const, due: 0 };
     expect(windowStateLabel(wins[0]!, meds)).toBe("Rx · all handled");
     expect(windowStateLabel({ ...wins[1]!, st: {} }, meds)).toBe("Summary");
-    expect(windowStateLabel({ id: "p", app: "profile", st: {}, z: 1, min: true, max: false }, meds)).toBe(
+    expect(windowStateLabel({ id: "p", app: "profile", st: {}, z: 1, min: true, max: false, x: 16, y: 12, w: 720, h: 520 }, meds)).toBe(
       "Minimised",
     );
   });

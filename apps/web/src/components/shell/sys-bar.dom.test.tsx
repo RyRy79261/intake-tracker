@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { render, screen, fireEvent, within } from "@testing-library/react";
 
 const push = vi.fn();
 let pathname = "/";
@@ -117,7 +117,8 @@ describe("SysBar", () => {
 
     // History is Metrics on Records: the same window, not a new one.
     fireEvent.click(history);
-    expect(useWindowStore.getState().wins.map((w) => w.app)).toEqual(["meds", "metrics"]);
+    // A phone keeps one window: Metrics replaced Medications.
+    expect(useWindowStore.getState().wins.map((w) => w.app)).toEqual(["metrics"]);
     expect(history).toHaveAttribute("aria-pressed", "true");
     expect(metrics).toHaveAttribute("aria-pressed", "false");
 
@@ -186,6 +187,43 @@ describe("SysBar", () => {
     fireEvent.click(history);
     expect(useWindowStore.getState().wins.map((w) => [w.app, w.st.tab])).toEqual([["metrics", "records"]]);
     expect(history).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("phone and tablet: no task strip and no mic in the bar", () => {
+    auth = { ready: true, authenticated: true, user: { id: "u1", email: "ryan@x.com", name: "Ryan Noble" } };
+    render(<SysBar />);
+    expect(screen.queryByRole("toolbar", { name: "Open windows" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Hold to talk to the AI logger" })).not.toBeInTheDocument();
+  });
+
+  describe("desktop mode", () => {
+    beforeEach(() => {
+      vi.stubGlobal(
+        "matchMedia",
+        (query: string) =>
+          ({ matches: true, media: query, addEventListener: () => {}, removeEventListener: () => {} }) as unknown as MediaQueryList,
+      );
+    });
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    it("carries the task strip, next to the app buttons", () => {
+      useWindowStore.getState().open("meds");
+      render(<SysBar />);
+      const strip = screen.getByRole("toolbar", { name: "Open windows" });
+      expect(within(strip).getByRole("button", { name: "Medications window" })).toHaveAttribute("aria-pressed", "true");
+      expect(screen.getByRole("button", { name: "Home" })).toBeInTheDocument();
+      // The launcher keeps its own name, so the two never read the same.
+      const apps = screen.getByRole("navigation", { name: "Apps" });
+      expect(within(apps).getByRole("button", { name: "Medications" })).toHaveAttribute("aria-pressed", "true");
+    });
+
+    it("has no mic, signed in or not: Hold to talk is on the desk band", () => {
+      auth = { ready: true, authenticated: true, user: { id: "u1", email: "ryan@x.com", name: "Ryan Noble" } };
+      render(<SysBar />);
+      expect(screen.queryByRole("button", { name: /Hold to talk/ })).not.toBeInTheDocument();
+    });
   });
 });
 

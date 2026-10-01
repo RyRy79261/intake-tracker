@@ -8,6 +8,9 @@ import { defineConfig, devices } from '@playwright/test';
 //      otherwise override Next.js' own dotenv load in the child `pnpm dev`.
 loadEnvConfig(process.cwd());
 
+/** Specs for desktop mode, or that pick their own viewport per describe. */
+const DESKTOP_SPECS = [/windows\.spec\.ts$/, /a11y\.spec\.ts$/, /desktop\.spec\.ts$/];
+
 /**
  * See https://playwright.dev/docs/test-configuration.
  */
@@ -46,11 +49,31 @@ export default defineConfig({
   projects: [
     /* Signs in once and writes playwright/.auth/user.json. */
     { name: 'setup', testMatch: /.*\.setup\.ts/ },
+    /* The app has two shells, so the suite has two projects (both Chromium).
+       `phone`: the phone shell (Home as one column of cards, the bottom bar,
+       one full-screen window at a time), which the feature specs are written
+       against. `desktop`: desktop mode (1024px or more with a mouse): the
+       intake modules as free windows, the task strip and the desk band.
+       Specs that set their own viewport per describe (windows, a11y) run in
+       the desktop project. */
     {
-      name: 'chromium',
+      name: 'phone',
+      testIgnore: DESKTOP_SPECS,
       use: {
         ...devices['Desktop Chrome'],
+        viewport: { width: 390, height: 844 },
+        hasTouch: true,
         /* Reuse the authenticated session created by the setup project. */
+        storageState: 'playwright/.auth/user.json',
+      },
+      dependencies: ['setup'],
+    },
+    {
+      name: 'desktop',
+      testMatch: DESKTOP_SPECS,
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 1440, height: 900 },
         storageState: 'playwright/.auth/user.json',
       },
       dependencies: ['setup'],

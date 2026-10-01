@@ -179,4 +179,28 @@ describe("HoldToTalk", () => {
       expect.objectContaining({ title: "Microphone unavailable", description: "Microphone permission denied" }),
     );
   });
+
+  it("corner (desktop desk band): a square button named Hold to talk, with its panel above the band on the right", () => {
+    render(<HoldToTalk variant="corner" />);
+    const btn = screen.getByRole("button", { name: "Hold to talk" });
+    expect(btn).toHaveClass("h-14", "w-14");
+    expect(btn).toHaveAttribute("title", "Hold to talk");
+
+    fireEvent.pointerDown(btn, { button: 0, pointerId: 1, clientX: 1400, clientY: 870 });
+    const panel = screen.getByTestId("hold-to-talk-listening").parentElement as HTMLElement;
+    expect(panel).toHaveClass("right-1.5", "w-[400px]");
+    // 72px desk band + 8px (jsdom folds the sum).
+    expect(panel.style.bottom).toContain("80px");
+  });
+
+  it("cell (bottom bar): the panel sits just above the bar", () => {
+    render(<HoldToTalk />);
+    const btn = micButton();
+    expect(btn).toHaveClass("min-h-11", "flex-col");
+    fireEvent.pointerDown(btn, { button: 0, pointerId: 1, clientX: 100, clientY: 800 });
+    const panel = screen.getByTestId("hold-to-talk-listening").parentElement as HTMLElement;
+    expect(panel).toHaveClass("inset-x-2");
+    // 56px bottom bar + 8px.
+    expect(panel.style.bottom).toContain("64px");
+  });
 });

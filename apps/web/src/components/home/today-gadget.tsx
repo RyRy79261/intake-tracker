@@ -79,7 +79,18 @@ function scaleFor(m: Metric, visible: number[]): number {
   return m.limit ? Math.max(m.limit + m.buffer, max) * 1.08 : Math.max(max, 0.1) * 1.12;
 }
 
-function DayCells({ m, dayKeys, todayIndex }: { m: Metric; dayKeys: string[]; todayIndex: number }) {
+function DayCells({
+  m,
+  dayKeys,
+  todayIndex,
+  values = false,
+}: {
+  m: Metric;
+  dayKeys: string[];
+  todayIndex: number;
+  /** Wide: each day's total under its column. */
+  values?: boolean;
+}) {
   const visible = m.values.slice(0, todayIndex + 1);
   const sc = scaleFor(m, visible);
   const tick = m.limit ? `${((m.limit / sc) * 100).toFixed(1)}%` : null;
@@ -108,6 +119,7 @@ function DayCells({ m, dayKeys, todayIndex }: { m: Metric; dayKeys: string[]; to
               )}
               {tick && <u style={{ bottom: tick }} />}
             </i>
+            {values && <em>{future ? "—" : `${st === "lim" ? "▲" : ""}${m.fmt(v)}`}</em>}
           </span>
         );
       })}
@@ -148,8 +160,12 @@ const openRecords = (key: string) => {
  * the target and solid when over the limit) and today's total with how much
  * is left. Caffeine and alcohol have no limit and sit side by side.
  * Reads the week with one range query per source.
+ *
+ * `wide` (Home on the desktop) has room for more: the day labels carry the
+ * date, every day shows its total under its column, and caffeine and
+ * alcohol get full rows like the rest.
  */
-export function TodayGadget() {
+export function TodayGadget({ wide = false }: { wide?: boolean }) {
   const dayStartHour = useSettingsStore((s) => s.dayStartHour);
   const weekStartsOn = useSettingsStore((s) => s.weekStartsOn);
   const waterLimit = useSettingsStore((s) => s.waterLimit);
@@ -215,13 +231,19 @@ export function TodayGadget() {
   }, [intake, substances, dayKeys, dayStartHour, waterLimit, waterBuffer, saltLimit, saltBuffer, sugarLimit, sugarBuffer, potassiumLimit, sugarEnabled, potassiumEnabled]);
 
   return (
-    <section className="wc-gadget wc-today" aria-label="Today" data-testid="today-gadget">
+    <section
+      className={cn("wc-gadget wc-today", wide && "wc-today-wide")}
+      aria-label="Today"
+      data-testid="today-gadget"
+    >
       <div className="wc-ghead">
         <h2>Today</h2>
         <span className="wc-dl" aria-hidden="true">
           {dayKeys.map((key, i) => (
             <span key={key} className={cn(i === todayIndex && "t")} data-testid="today-day-label">
-              {DAY_NAMES[dayKeyWeekday(key)]!.slice(0, 1)}
+              {wide
+                ? `${DAY_NAMES[dayKeyWeekday(key)]} ${Number(key.slice(8, 10))}`
+                : DAY_NAMES[dayKeyWeekday(key)]!.slice(0, 1)}
             </span>
           ))}
         </span>
@@ -229,7 +251,7 @@ export function TodayGadget() {
       </div>
 
       <div className="wc-tg">
-        {metrics.main.map((m) => {
+        {(wide ? [...metrics.main, ...metrics.pair] : metrics.main).map((m) => {
           const v = m.values[todayIndex] ?? 0;
           const st = statusText(m, v);
           const aria = `${m.label} today ${m.fmt(v)}${m.limit ? ` of ${m.fmt(m.limit)}` : ""} ${m.unitWord}, ${st.long}. This week: ${weekAria(m, dayKeys, todayIndex)}. Open ${m.label} history`;
@@ -247,7 +269,7 @@ export function TodayGadget() {
               }}
             >
               <span className="wc-tg-l">{m.label}</span>
-              <DayCells m={m} dayKeys={dayKeys} todayIndex={todayIndex} />
+              <DayCells m={m} dayKeys={dayKeys} todayIndex={todayIndex} values={wide} />
               <span className="wc-tg-v">
                 <span>
                   <b data-testid={`today-${m.key}-value`}>{m.fmt(v)}</b>
@@ -271,40 +293,42 @@ export function TodayGadget() {
         })}
       </div>
 
-      <div className="wc-tg-pair">
-        {metrics.pair.map((m) => {
-          const v = m.values[todayIndex] ?? 0;
-          const aria = `${m.label} today ${m.fmt(v)} ${m.unitWord}, no limit set. This week: ${weekAria(m, dayKeys, todayIndex)}. Open ${m.label} history`;
-          return (
-            <button
-              key={m.key}
-              type="button"
-              className="wc-tg-half"
-              style={{ "--c": m.color } as CSSProperties}
-              aria-label={aria}
-              data-testid={`today-row-${m.key}`}
-              onClick={() => {
-                if (!inPreview) openRecords(m.key);
-              }}
-            >
-              <span className="wc-tg-l">
-                {m.label}
-                <span className="wc-tg-hv">
-                  <b data-testid={`today-${m.key}-value`}>{m.fmt(v)}</b> {m.unit}
+      {!wide && (
+        <div className="wc-tg-pair">
+          {metrics.pair.map((m) => {
+            const v = m.values[todayIndex] ?? 0;
+            const aria = `${m.label} today ${m.fmt(v)} ${m.unitWord}, no limit set. This week: ${weekAria(m, dayKeys, todayIndex)}. Open ${m.label} history`;
+            return (
+              <button
+                key={m.key}
+                type="button"
+                className="wc-tg-half"
+                style={{ "--c": m.color } as CSSProperties}
+                aria-label={aria}
+                data-testid={`today-row-${m.key}`}
+                onClick={() => {
+                  if (!inPreview) openRecords(m.key);
+                }}
+              >
+                <span className="wc-tg-l">
+                  {m.label}
+                  <span className="wc-tg-hv">
+                    <b data-testid={`today-${m.key}-value`}>{m.fmt(v)}</b> {m.unit}
+                  </span>
                 </span>
-              </span>
-              <DayCells m={m} dayKeys={dayKeys} todayIndex={todayIndex} />
-            </button>
-          );
-        })}
-      </div>
+                <DayCells m={m} dayKeys={dayKeys} todayIndex={todayIndex} />
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       <p className="wc-tg-key">
         <span><i className="k-t" />today</span>
         <span><i className="k-tl" />target</span>
         <span><i className="k-h" />over target</span>
         <span><i className="k-x" />over limit</span>
-        <span>caffeine, alcohol: no limit</span>
+        {!wide && <span>caffeine, alcohol: no limit</span>}
       </p>
     </section>
   );

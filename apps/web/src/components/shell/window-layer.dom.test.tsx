@@ -2,6 +2,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { cleanup, render, screen, within, fireEvent } from "@testing-library/react";
 
+// The intake modules are windows on the desktop too; their cards are not under test here.
+vi.mock("@/components/shell/desk-modules", () => ({ ModuleBody: ({ id }: { id: string }) => <p>{id} module</p> }));
 vi.mock("@/components/shell/app-registry", () => ({
   WINDOW_APPS: {
     meds: {
@@ -36,8 +38,8 @@ describe("WindowLayer", () => {
     );
     useWindowStore.setState({
       wins: [
-        { id: "w1", app: "meds", st: {}, z: 1, min: false, max: false },
-        { id: "w2", app: "metrics", st: {}, z: 2, min: false, max: false },
+        { id: "w1", app: "meds", st: {}, z: 1, min: false, max: false, x: 16, y: 12, w: 720, h: 520 },
+        { id: "w2", app: "metrics", st: {}, z: 2, min: false, max: false, x: 16, y: 12, w: 720, h: 520 },
       ],
       focus: "w2",
       showHome: false,

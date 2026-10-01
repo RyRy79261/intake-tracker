@@ -110,7 +110,10 @@ const windowNamed = (page: Page, name: string) => page.getByRole("region", { nam
 
 for (const vp of [
   { label: "phone", width: 390, height: 844 },
-  { label: "wide", width: 1280, height: 800 },
+  // Tiled: wide enough for side-by-side windows, too narrow for desktop mode.
+  { label: "tiled", width: 1000, height: 800 },
+  // Desktop: free, overlapping windows and the task strip in the sys-bar.
+  { label: "desktop", width: 1440, height: 900 },
 ] as const) {
   test.describe(`a11y: shell on ${vp.label} (${vp.width}x${vp.height})`, () => {
     test.use({ viewport: { width: vp.width, height: vp.height } });
@@ -138,8 +141,8 @@ for (const vp of [
         localStorage.setItem(key, JSON.stringify(parsed));
       });
       await page.goto("/");
-      if (vp.label === "wide") {
-        // Two windows tiled side by side.
+      if (vp.label !== "phone") {
+        // Two windows: side by side when tiled, overlapping on the desktop.
         await sysBar(page).getByRole("button", { name: /^Medications/ }).click();
         await expect(windowNamed(page, "Medications")).toBeVisible();
       }
@@ -157,6 +160,42 @@ for (const vp of [
       await expect(sheet).toBeVisible();
       await scan(page, `${vp.label}: settings sheet`);
     });
+
+    if (vp.label === "desktop") {
+      test("Two free windows, one minimised to the task strip", async ({ page }) => {
+        await page.goto("/");
+        const launch = page.getByRole("navigation", { name: "Apps" });
+        await launch.getByRole("button", { name: /^Medications/ }).click();
+        const meds = windowNamed(page, "Medications");
+        await expect(meds).toBeVisible();
+        await expect(meds).toHaveAttribute("data-free", "true");
+        // The /profile deep link opens a second window over the first.
+        await page.goto("/profile");
+        const profile = windowNamed(page, "Profile");
+        await expect(profile).toBeVisible();
+        await expect(meds).toBeVisible();
+        await scan(page, "desktop: two free windows");
+
+        await meds.getByRole("button", { name: "Minimise Medications" }).click();
+        const strip = page.getByRole("toolbar", { name: "Open windows" });
+        await expect(strip.getByRole("button", { name: "Medications window, minimised" })).toBeVisible();
+        await scan(page, "desktop: task strip with a minimised window");
+      });
+
+      test("The desk: seven module windows, then two minimised to icons", async ({ page }) => {
+        await page.goto("/");
+        const modules = page.getByTestId("module-window");
+        await expect(modules).toHaveCount(7);
+        await expect(page.getByRole("region", { name: "Today", exact: true }).first()).toBeVisible();
+        await scan(page, "desktop: module windows");
+
+        for (const name of ["Liquids", "Blood Pressure"]) {
+          await page.getByRole("button", { name: `Minimise ${name}` }).click();
+          await expect(page.getByRole("button", { name: `Open ${name}` })).toBeVisible();
+        }
+        await scan(page, "desktop: desk band with module icons");
+      });
+    }
   });
 }
 

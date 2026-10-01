@@ -224,7 +224,8 @@ test.describe('History / Analytics', () => {
     ).toBeVisible();
 
     // Another domain with nothing logged today shows the empty list.
-    await page.getByRole('navigation', { name: 'Bottom bar' }).getByRole('button', { name: 'Home' }).click();
+    // Home: the bottom bar on a phone, the task strip on the desktop.
+    await page.getByRole('button', { name: 'Home', exact: true }).click();
     await page.getByTestId('today-row-sodium').click();
     await expect(recordsFilter(page, 'Sodium')).toHaveAttribute('aria-pressed', 'true');
     await expect(metricsWindow(page).getByText('No records in this time range')).toBeVisible();

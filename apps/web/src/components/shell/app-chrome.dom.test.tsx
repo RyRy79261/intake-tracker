@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { useEffect } from "react";
-import { act, render, screen } from "@testing-library/react";
+import { act, cleanup, render, screen } from "@testing-library/react";
 
 let pathname = "/";
 vi.mock("next/navigation", () => ({
@@ -10,6 +10,9 @@ vi.mock("next/navigation", () => ({
 
 vi.mock("@/components/shell/sys-bar", () => ({ SysBar: () => <div data-testid="sys-bar" /> }));
 vi.mock("@/components/shell/bottom-bar", () => ({ BottomBar: () => <div data-testid="bottom-bar" /> }));
+vi.mock("@/components/shell/desk-band", () => ({
+  DeskBand: ({ modules }: { modules?: boolean }) => <div data-testid="desk-band" data-modules={String(modules)} />,
+}));
 vi.mock("@/components/shell/window-layer", () => ({
   WindowLayer: () => <div data-testid="window-layer" />,
   useIsWide: () => false,
@@ -26,6 +29,7 @@ vi.mock("@/hooks/use-window-history", () => ({ useWindowHistory: () => {}, SETTI
 vi.mock("@/components/settings/settings-sheet", () => ({ SettingsSheet: () => <div data-testid="settings-sheet" /> }));
 
 import { AppChrome } from "@/components/shell/app-chrome";
+import { useWindowStore } from "@/stores/window-store";
 
 describe("AppChrome", () => {
   beforeEach(() => {
@@ -132,5 +136,59 @@ describe("AppChrome", () => {
 
     act(() => root.unmount());
     container.remove();
+  });
+
+  it("phone and tablet: the bottom bar, no desk band", () => {
+    render(<AppChrome>page</AppChrome>);
+    expect(screen.getByTestId("bottom-bar")).toBeInTheDocument();
+    expect(screen.queryByTestId("desk-band")).not.toBeInTheDocument();
+    expect(document.documentElement.dataset.shellMode).toBeUndefined();
+  });
+
+  describe("desktop mode (1024px or more with a mouse)", () => {
+    beforeEach(() => {
+      vi.stubGlobal(
+        "matchMedia",
+        (query: string) =>
+          ({ matches: true, media: query, addEventListener: () => {}, removeEventListener: () => {} }) as unknown as MediaQueryList,
+      );
+      useWindowStore.setState({ wins: [], focus: null, showHome: true });
+    });
+    afterEach(() => {
+      cleanup();
+      vi.unstubAllGlobals();
+    });
+
+    it("has the desk band instead of the bottom bar, and tells the stylesheet so", () => {
+      const { unmount } = render(<AppChrome>page</AppChrome>);
+      expect(screen.getByTestId("sys-bar")).toBeInTheDocument();
+      expect(screen.queryByTestId("bottom-bar")).not.toBeInTheDocument();
+      expect(screen.getByTestId("desk-band")).toHaveAttribute("data-modules", "true");
+      expect(document.documentElement.dataset.shellMode).toBe("desktop");
+      unmount();
+      expect(document.documentElement.dataset.shellMode).toBeUndefined();
+    });
+
+    it("has no Home column: the modules are windows in the window layer", () => {
+      render(<AppChrome>page</AppChrome>);
+      expect(screen.queryByTestId("home-body")).not.toBeInTheDocument();
+      expect(screen.getByTestId("home")).toHaveClass("hidden");
+      expect(screen.getByTestId("window-layer")).toBeInTheDocument();
+    });
+
+    it("the same on /settings and the window routes", () => {
+      pathname = "/medications";
+      render(<AppChrome>page</AppChrome>);
+      expect(screen.queryByTestId("home-body")).not.toBeInTheDocument();
+      expect(screen.getByTestId("desk-band")).toHaveAttribute("data-modules", "true");
+      expect(screen.queryByText("page")).not.toBeInTheDocument();
+    });
+
+    it("another page keeps its content, with the band but no module icons", () => {
+      pathname = "/privacy";
+      render(<AppChrome>privacy text</AppChrome>);
+      expect(screen.getByText("privacy text")).toBeInTheDocument();
+      expect(screen.getByTestId("home")).not.toHaveClass("hidden");
+    });
   });
 });

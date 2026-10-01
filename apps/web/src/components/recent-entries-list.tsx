@@ -139,32 +139,28 @@ export function RecentEntriesList<T extends { id: string; timestamp: number }>({
           );
         }
         const day = recentDayLabel(record.timestamp, dayStartHour);
-        return (
-          <div
-            key={record.id}
-            className="wc-ri"
-            data-testid="recent-entry"
-            onClick={onEdit ? () => onEdit(record) : undefined}
-            role={onEdit ? "button" : undefined}
-            tabIndex={onEdit ? 0 : undefined}
-            onKeyDown={
-              onEdit
-                ? (e) => {
-                    if (e.target !== e.currentTarget) return;
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
-                      onEdit(record);
-                    }
-                  }
-                : undefined
-            }
-          >
+        const cells = (
+          <>
             <span className="tm">
               {day && <span>{day}</span>}
               <span>{formatTimeOnly(record.timestamp)}</span>
             </span>
             <span className="lb">{renderLabel?.(record)}</span>
             <span className="v">{renderValue?.(record)}</span>
+          </>
+        );
+        return (
+          // The row is a plain container: the edit button and the delete
+          // button sit side by side, never one inside the other (a button
+          // inside a role="button" row is invisible to screen readers).
+          <div key={record.id} className="wc-ri" data-testid="recent-entry">
+            {onEdit ? (
+              <button type="button" className="open" onClick={() => onEdit(record)}>
+                {cells}
+              </button>
+            ) : (
+              <span className="open">{cells}</span>
+            )}
             <button
               type="button"
               className="del"

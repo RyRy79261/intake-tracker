@@ -17,7 +17,17 @@ import {
 const store = () => useWindowStore.getState();
 
 function reset(wide = false) {
-  useWindowStore.setState({ wins: [], focus: null, showHome: true, wide, z: 0, nextId: 1 });
+  useWindowStore.setState({
+    wins: [],
+    focus: null,
+    showHome: true,
+    wide,
+    desktop: false,
+    area: { w: 928, h: 756 },
+    snapHint: null,
+    z: 0,
+    nextId: 1,
+  });
 }
 
 const win = (id: string, app: Win["app"], extra: Partial<Win> = {}): Win => ({
@@ -27,6 +37,10 @@ const win = (id: string, app: Win["app"], extra: Partial<Win> = {}): Win => ({
   z: 1,
   min: false,
   max: false,
+  x: 16,
+  y: 12,
+  w: 720,
+  h: 520,
   ...extra,
 });
 
@@ -91,6 +105,28 @@ describe("window store", () => {
     });
     expect(store().open("meds")?.win.id).toBe("m");
     expect(toast).not.toHaveBeenCalled();
+  });
+
+  it("cycle with nothing focused goes to the first window forward and the last back", () => {
+    const a = store().open("meds")!.win;
+    store().open("metrics");
+    const c = store().open("profile")!.win;
+    useWindowStore.setState({ focus: null });
+    expect(store().cycle(-1)).toBe(c.id);
+    useWindowStore.setState({ focus: null });
+    expect(store().cycle(1)).toBe(a.id);
+  });
+
+  it("keepOnly closes every other window, and null returns to Home", () => {
+    const a = store().open("meds")!.win;
+    store().open("metrics");
+    store().keepOnly(a.id);
+    expect(store().wins.map((w) => w.app)).toEqual(["meds"]);
+    expect(store().focus).toBe(a.id);
+    store().keepOnly(null);
+    expect(store().wins).toEqual([]);
+    expect(store().focus).toBeNull();
+    expect(store().showHome).toBe(true);
   });
 
   it("focuses the top remaining window after closing the focused one", () => {

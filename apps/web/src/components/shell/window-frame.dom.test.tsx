@@ -4,7 +4,7 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import { WindowFrame, type WindowFrameProps } from "@/components/shell/window-frame";
 import type { Win } from "@/stores/window-store";
 
-const meds: Win = { id: "w1", app: "meds", st: {}, z: 3, min: false, max: false };
+const meds: Win = { id: "w1", app: "meds", st: {}, z: 3, min: false, max: false, x: 16, y: 12, w: 720, h: 520 };
 
 function setup(props: Partial<WindowFrameProps> = {}) {
   const handlers = {

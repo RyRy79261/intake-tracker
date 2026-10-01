@@ -48,7 +48,8 @@ describe("useWindowHistory", () => {
   });
   afterEach(cleanup);
 
-  it("Back closes the window on top, one per press", async () => {
+  it("Back closes the window on top, one per press (wide: windows stack)", async () => {
+    useWindowStore.setState({ wide: true });
     render(<Sync />);
     openWindow("meds");
     openWindow("metrics");
@@ -58,6 +59,20 @@ describe("useWindowHistory", () => {
     expect(apps()).toEqual(["meds"]);
     expect(useWindowStore.getState().focus).toBe(useWindowStore.getState().wins[0]?.id);
     expect(window.location.pathname).toBe("/medications");
+
+    await back();
+    expect(apps()).toEqual([]);
+    expect(window.location.pathname).toBe("/");
+  });
+
+  it("on a phone, opening another app closes the one on screen and takes over its Back entry", async () => {
+    render(<Sync />);
+    openWindow("meds");
+    const len = window.history.length;
+    openWindow("metrics");
+    expect(apps()).toEqual(["metrics"]);
+    expect(window.history.length).toBe(len);
+    expect(window.location.pathname).toBe("/analytics");
 
     await back();
     expect(apps()).toEqual([]);
@@ -139,6 +154,7 @@ describe("useWindowHistory", () => {
   });
 
   it("Back closes the window whose entry it leaves, not the focused one", async () => {
+    useWindowStore.setState({ wide: true });
     render(<Sync />);
     const meds = openWindow("meds");
     openWindow("metrics");
@@ -215,7 +231,7 @@ describe("useWindowHistory", () => {
   });
 
   it("a reload on a window's entry keeps the window restored from sessionStorage", async () => {
-    const win = { id: "w3", app: "meds" as const, st: {}, z: 1, min: false, max: false };
+    const win = { id: "w3", app: "meds" as const, st: {}, z: 1, min: false, max: false, x: 16, y: 12, w: 720, h: 520 };
     useWindowStore.setState({ wins: [win], focus: "w3", showHome: false, z: 1, nextId: 4 });
     window.history.replaceState({ wardSeq: 5, wardWin: "w3" }, "", "/medications");
     pathname = "/medications";

@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
-import { describe, it, expect } from "vitest";
-import { render } from "@testing-library/react";
+import { describe, it, expect, vi } from "vitest";
+import { fireEvent, render, screen } from "@testing-library/react";
 
-import { InlineEditFormShell } from "@/components/recent-entries-list";
+import { InlineEditFormShell, RecentEntriesList } from "@/components/recent-entries-list";
 
 /**
  * Regression for fix 05a0a3e: two InlineEditFormShells sharing the same
@@ -76,5 +76,39 @@ describe("InlineEditFormShell id collision regression (labeled)", () => {
     expect(noteLabels[0]!.getAttribute("for")).not.toBe(
       noteLabels[1]!.getAttribute("for"),
     );
+  });
+});
+
+describe("RecentEntriesList rows", () => {
+  const records = [{ id: "r1", timestamp: Date.now() }];
+
+  it("puts the edit and delete buttons side by side, not one inside the other", () => {
+    const onEdit = vi.fn();
+    const onDelete = vi.fn();
+    render(
+      <RecentEntriesList
+        records={records}
+        renderLabel={() => "Water"}
+        renderValue={() => "250ml"}
+        onEdit={onEdit}
+        onDelete={onDelete}
+        deletingId={null}
+      />,
+    );
+    const row = screen.getByTestId("recent-entry");
+    expect(row).not.toHaveAttribute("role");
+    const del = screen.getByRole("button", { name: "Delete entry" });
+    const edit = screen.getByRole("button", { name: /Water/ });
+    expect(edit.contains(del)).toBe(false);
+    fireEvent.click(edit);
+    expect(onEdit).toHaveBeenCalledWith(records[0]);
+    fireEvent.click(del);
+    expect(onDelete).toHaveBeenCalledWith("r1");
+    expect(onEdit).toHaveBeenCalledTimes(1);
+  });
+
+  it("has no edit button when the list is read-only", () => {
+    render(<RecentEntriesList records={records} renderLabel={() => "Water"} onDelete={vi.fn()} deletingId={null} />);
+    expect(screen.getAllByRole("button")).toHaveLength(1);
   });
 });

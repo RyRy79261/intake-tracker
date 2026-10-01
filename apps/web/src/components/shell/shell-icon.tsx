@@ -95,6 +95,8 @@ const PATHS: Record<ShellIconName, ReactElement> = {
       <path d="M8.5 8V4h12v12h-5" />
     </>
   ),
+  tidy: <path d="M3.5 4h7.5v16H3.5zM13 4h7.5v7.5H13zM13 13.5h7.5V20H13z" />,
+  today: <path d="M4 5.5h16v15H4zM4 10h16M8 3.5v4M16 3.5v4M8 14h3v3H8z" />,
   plus: <path d="M12 5v14M5 12h14" />,
   back: <path d="M20 12H5M11 6l-6 6 6 6" />,
   book: (

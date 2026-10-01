@@ -13,7 +13,10 @@ const TabsList = React.forwardRef<
   <TabsPrimitive.List
     ref={ref}
     className={cn(
-      "inline-flex h-11 items-stretch justify-start overflow-x-auto rounded-none border-b border-line bg-transparent p-0 text-muted-foreground",
+      // content-box: the 44px triggers fill the list and the 1px rule sits
+      // below them. Border-box left 43px for 44px triggers, and overflow-x
+      // makes the list scroll on both axes, so it scrolled by 1px vertically.
+      "box-content inline-flex h-11 items-stretch justify-start overflow-x-auto overflow-y-hidden rounded-none border-b border-line bg-transparent p-0 text-muted-foreground",
       className
     )}
     {...props}

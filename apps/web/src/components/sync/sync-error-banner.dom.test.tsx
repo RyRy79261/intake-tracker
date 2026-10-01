@@ -9,7 +9,7 @@ vi.mock("@/components/auth-guard", () => ({ useAuth: () => ({ authenticated: tru
 import { SyncErrorBanner } from "@/components/sync/sync-error-banner";
 import { useSyncStatusStore } from "@/stores/sync-status-store";
 
-const ABOVE_BAR = "bottom-[calc(56px+env(safe-area-inset-bottom,0px)+16px)]";
+const ABOVE_BAR = "bottom-[calc(var(--bbh,56px)+env(safe-area-inset-bottom,0px)+16px)]";
 
 describe("SyncErrorBanner", () => {
   beforeEach(() => {

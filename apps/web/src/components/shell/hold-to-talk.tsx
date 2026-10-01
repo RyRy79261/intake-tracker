@@ -19,6 +19,8 @@ type Phase = "listen" | "hint" | null;
 
 /** Bottom offset that puts a panel just above the bottom bar. */
 const ABOVE_BOTTOM_BAR = "calc(56px + env(safe-area-inset-bottom, 0px) + 8px)";
+/** Bottom offset that puts a panel just above the desk band (desktop). */
+const ABOVE_DESK_BAND = "calc(72px + env(safe-area-inset-bottom, 0px) + 8px)";
 
 /**
  * "Hold to talk": the AI voice logger on a press-and-hold button.
@@ -27,8 +29,13 @@ const ABOVE_BOTTOM_BAR = "calc(56px + env(safe-area-inset-bottom, 0px) + 8px)";
  * VoicePanel for transcription, parsing and review, and sliding the finger
  * away before letting go cancels. Space/Enter work the same way from the
  * keyboard. Render only when signed in (the caller checks `useAuthGate`).
+ *
+ * `variant="cell"` is the bottom bar cell, with its panels just above the
+ * bar. `variant="corner"` is the square button at the bottom right of the
+ * desktop (the desk band), with its panels just above it on the right.
  */
-export function HoldToTalk({ className }: { className?: string }) {
+export function HoldToTalk({ className, variant = "cell" }: { className?: string; variant?: "cell" | "corner" }) {
+  const corner = variant === "corner";
   const recorder = useHoldRecorder();
   const { toast } = useToast();
 
@@ -157,7 +164,8 @@ export function HoldToTalk({ className }: { className?: string }) {
       <button
         type="button"
         data-mic
-        aria-label="Hold to talk to the AI logger"
+        aria-label={corner ? "Hold to talk" : "Hold to talk to the AI logger"}
+        title={corner ? "Hold to talk" : undefined}
         aria-pressed={listening}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
@@ -167,7 +175,8 @@ export function HoldToTalk({ className }: { className?: string }) {
         onKeyUp={onKeyUp}
         onContextMenu={(e) => e.preventDefault()}
         className={cn(
-          "relative flex min-h-11 flex-col items-center justify-center gap-1 border",
+          "relative flex items-center justify-center border",
+          corner ? "h-14 w-14 shrink-0 flex-col gap-0.5" : "min-h-11 flex-col gap-1",
           "touch-none select-none [-webkit-touch-callout:none] [-webkit-user-select:none]",
           listening
             ? "border-ai bg-ai text-on-domain"
@@ -176,13 +185,15 @@ export function HoldToTalk({ className }: { className?: string }) {
         )}
       >
         <ShellIcon name="mic" size={20} />
-        <span className="text-xs font-medium">Hold to talk</span>
+        <span className={cn("whitespace-nowrap font-medium", corner ? "text-[0.6875rem]" : "text-xs")}>
+          {corner ? "Talk" : "Hold to talk"}
+        </span>
       </button>
 
       {listening && (
         <div
-          className="pointer-events-none fixed inset-x-2 z-[65]"
-          style={{ bottom: ABOVE_BOTTOM_BAR }}
+          className={cn("pointer-events-none fixed z-[65]", corner ? "right-1.5 w-[400px]" : "inset-x-2")}
+          style={{ bottom: corner ? ABOVE_DESK_BAND : ABOVE_BOTTOM_BAR }}
         >
           <div
             role="dialog"
@@ -228,7 +239,7 @@ export function HoldToTalk({ className }: { className?: string }) {
       {phase === "hint" && (
         <div
           className="fixed inset-x-0 top-0 z-[64]"
-          style={{ bottom: "calc(56px + env(safe-area-inset-bottom, 0px))" }}
+          style={{ bottom: corner ? "calc(72px + env(safe-area-inset-bottom, 0px))" : "calc(56px + env(safe-area-inset-bottom, 0px))" }}
         >
           <button
             type="button"
@@ -239,7 +250,10 @@ export function HoldToTalk({ className }: { className?: string }) {
           <div
             role="dialog"
             aria-label="AI logger"
-            className="pointer-events-none absolute inset-x-2 bottom-2 border-2 border-ai bg-panel px-3.5 py-3"
+            className={cn(
+              "pointer-events-none absolute border-2 border-ai bg-panel px-3.5 py-3",
+              corner ? "bottom-2 right-1.5 w-[400px]" : "inset-x-2 bottom-2",
+            )}
           >
             <p>
               <span className="mr-1 inline-flex items-center gap-1 align-middle text-ai">

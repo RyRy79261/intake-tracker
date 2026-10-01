@@ -33,12 +33,12 @@ import { logDrink } from "@/lib/drink-service";
 // eslint-disable-next-line no-restricted-imports
 import { addComposableEntry } from "@/lib/composable-entry-service";
 
-/** The clickable Recent row showing this amount. */
+/** The Recent row's edit button showing this amount. */
 async function recentEntry(amount: string) {
   return waitFor(() => {
     const row = screen
       .getAllByText(amount)
-      .map((el) => el.closest('[role="button"]'))
+      .map((el) => el.closest('[data-testid="recent-entry"] button.open'))
       .find((el): el is HTMLElement => el instanceof HTMLElement);
     if (!row) throw new Error(`no recent entry row for ${amount}`);
     return row;
