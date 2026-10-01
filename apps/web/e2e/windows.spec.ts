@@ -91,11 +91,15 @@ test.describe("Windows on a phone", () => {
     await openHome(page);
     const links = page.getByRole("navigation", { name: "Jump to" });
     await expect(links).toBeVisible();
-    await links.getByRole("button", { name: "Weight" }).click();
+    // Cards above can still grow as their data loads after the jump: tap
+    // again until the page has settled.
+    await expect(async () => {
+      await links.getByRole("button", { name: "Weight" }).click();
+      await page.waitForTimeout(600);
+      const top = await page.evaluate(() => document.getElementById("section-weight")!.getBoundingClientRect().top);
+      expect(top).toBeLessThan(80);
+    }).toPass({ timeout: 15_000 });
     await expect(links.getByRole("button", { name: "Weight" })).toHaveAttribute("aria-current", "true");
-    await expect
-      .poll(() => page.evaluate(() => Math.round(document.getElementById("section-weight")!.getBoundingClientRect().top)))
-      .toBeLessThan(80);
 
     // Not over a window.
     await sysBar(page).getByRole("button", { name: /^Medications/ }).click();
@@ -161,29 +165,38 @@ test.describe("Swiping on a phone", () => {
       .toBe("");
   }
 
-  test("moves between Profile, Home, Medications and Metrics, one window at a time", async ({ page }) => {
+  test("moves along the sys-bar: Home, Medications, Metrics, History, one window at a time", async ({ page }) => {
     await openHome(page);
     await expect(page.getByRole("navigation", { name: "Jump to" })).toBeVisible();
+
+    // Home is the first page: nothing to its left.
+    await swipe(page, 250);
+    await expect(windows(page)).toHaveCount(0);
 
     await swipe(page, -250);
     await expect(windowNamed(page, "Medications")).toBeVisible();
     await expect(page).toHaveURL(/\/medications$/);
     await swipe(page, -250);
-    await expect(windowNamed(page, "Metrics")).toBeVisible();
+    const metrics = windowNamed(page, "Metrics");
+    await expect(metrics).toBeVisible();
     await expect(windows(page)).toHaveCount(1);
-    // Metrics is the last page: nothing further.
+    await expect(metrics.getByRole("tab", { name: "Summary" })).toHaveAttribute("data-state", "active");
+    // History is Metrics on Records, lit in the sys-bar.
     await swipe(page, -250);
-    await expect(windowNamed(page, "Metrics")).toBeVisible();
+    await expect(metrics.getByRole("tab", { name: "Records" })).toHaveAttribute("data-state", "active");
+    await expect(sysBar(page).getByRole("button", { name: "History" })).toHaveAttribute("aria-pressed", "true");
 
+    await swipe(page, 250);
+    await expect(metrics.getByRole("tab", { name: "Summary" })).toHaveAttribute("data-state", "active");
     await swipe(page, 250);
     await expect(windowNamed(page, "Medications")).toBeVisible();
     await swipe(page, 250);
     await expect(windows(page)).toHaveCount(0);
     await expect(page).toHaveURL(/\/$/);
-    await swipe(page, 250);
-    await expect(windowNamed(page, "Profile")).toBeVisible();
 
     // Back from a swiped-to window goes Home.
+    await swipe(page, -250);
+    await expect(windowNamed(page, "Medications")).toBeVisible();
     await page.goBack();
     await expect(windows(page)).toHaveCount(0);
     await expect(page).toHaveURL(/\/$/);

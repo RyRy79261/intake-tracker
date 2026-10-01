@@ -121,6 +121,14 @@ export function openWindow(app: ShellAppId, st?: WindowState): OpenResult {
   if (res.created) {
     const data = tag({ wardWin: res.win.id });
     window.history.pushState(data, "", windowHref(res.win.app, res.win.st));
+  } else {
+    // The window was open already, maybe now on another tab (Metrics to
+    // History): keep the address in step, on the entry it already has.
+    const state = wardState();
+    const href = windowHref(res.win.app, res.win.st);
+    if (state?.wardWin === res.win.id && window.location.pathname + window.location.search !== href) {
+      window.history.replaceState(state, "", href);
+    }
   }
   return res;
 }

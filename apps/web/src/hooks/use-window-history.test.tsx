@@ -88,6 +88,19 @@ describe("useWindowHistory", () => {
     expect(window.history.length).toBe(len);
   });
 
+  it("moving an open Metrics window to another tab updates the address on its own entry", () => {
+    render(<Sync />);
+    openWindow("metrics", { tab: "summary" });
+    const len = window.history.length;
+    const entry = window.history.state;
+    openWindow("metrics", { tab: "records" });
+    expect(window.location.pathname + window.location.search).toBe("/analytics?tab=records");
+    expect(window.history.length).toBe(len);
+    expect(window.history.state).toEqual(entry);
+    openWindow("metrics", { tab: "summary" });
+    expect(window.location.pathname + window.location.search).toBe("/analytics");
+  });
+
   it("closing from the title bar steps back over the window's entry", async () => {
     render(<Sync />);
     const res = openWindow("meds");
