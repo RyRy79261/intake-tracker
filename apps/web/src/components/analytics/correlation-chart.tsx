@@ -11,8 +11,15 @@ import {
   CartesianGrid,
 } from "recharts";
 import type { CorrelationResult, DataPoint } from "@intake/types/analytics";
-import { cn } from "@/lib/utils";
 import { toLocalDateKey } from "@/lib/date-utils";
+import {
+  AXIS_PROPS,
+  AXIS_TICK,
+  CHART_COLOR,
+  GRID_PROPS,
+  TOOLTIP_PROPS,
+  squareDot,
+} from "@/components/analytics/chart-theme";
 
 // ---------------------------------------------------------------------------
 // Props
@@ -29,12 +36,11 @@ interface CorrelationChartProps {
 // Minimum overlapping days for a Pearson coefficient to be meaningful.
 const MIN_PAIRED_DAYS = 3;
 
-const TOOLTIP_STYLE = {
-  backgroundColor: "hsl(var(--card))",
-  border: "1px solid hsl(var(--border))",
-  borderRadius: "8px",
-  fontSize: 12,
-};
+/** Y axis width for "1234mmHg"-style ticks (10px mono is ~6px a glyph), so they never wrap. */
+const axisWidth = (unit: string) => Math.round(32 + unit.trim().length * 6.5);
+
+const SERIES_DOT = squareDot(6);
+const ACTIVE_DOT = squareDot(8);
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -53,9 +59,9 @@ function coefficientColor(
   coefficient: number,
   strength: CorrelationResult["strength"],
 ): string {
-  if (strength === "none" || strength === "weak") return "text-muted-foreground";
-  if (coefficient > 0) return "text-emerald-600 dark:text-emerald-400";
-  return "text-rose-600 dark:text-rose-400";
+  if (strength === "none" || strength === "weak") return CHART_COLOR.muted;
+  if (coefficient > 0) return CHART_COLOR.weight;
+  return CHART_COLOR.bp;
 }
 
 function dayKey(ts: number): string {
@@ -118,93 +124,88 @@ export function CorrelationChart({
   }, [result.seriesA, result.seriesB]);
 
   if (result.seriesA.length === 0 || result.seriesB.length === 0) {
-    return (
-      <div className="flex items-center justify-center h-[250px] text-sm text-muted-foreground">
-        Not enough data to compare
-      </div>
-    );
+    return <div className="wm-nodata">Not enough data to compare</div>;
   }
 
   const insufficient = result.pairedDays < MIN_PAIRED_DAYS;
 
   return (
-    <div className="space-y-2">
-      <ResponsiveContainer width="100%" height={250}>
-        <ComposedChart data={merged} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-          <XAxis
-            dataKey="date"
-            tick={{ fontSize: 10 }}
-            tickLine={false}
-            axisLine={false}
-          />
-          <YAxis
-            yAxisId="left"
-            tick={{ fontSize: 10 }}
-            tickLine={false}
-            axisLine={false}
-            tickFormatter={(v: number) => `${v}${unitA}`}
-          />
-          <YAxis
-            yAxisId="right"
-            orientation="right"
-            tick={{ fontSize: 10 }}
-            tickLine={false}
-            axisLine={false}
-            tickFormatter={(v: number) => `${v}${unitB}`}
-          />
-          <Tooltip contentStyle={TOOLTIP_STYLE} />
-          <Line
-            yAxisId="left"
-            type="monotone"
-            dataKey="a"
-            name={labelA}
-            stroke="hsl(199 89% 48%)"
-            strokeWidth={2}
-            dot={{ r: 3 }}
-            connectNulls
-            isAnimationActive={false}
-          />
-          <Line
-            yAxisId="right"
-            type="monotone"
-            dataKey="b"
-            name={labelB}
-            stroke="hsl(346 77% 50%)"
-            strokeWidth={2}
-            dot={{ r: 3 }}
-            connectNulls
-            isAnimationActive={false}
-          />
-        </ComposedChart>
-      </ResponsiveContainer>
+    <>
+      <div className="wm-chart">
+        <ResponsiveContainer width="100%" height={250}>
+          <ComposedChart data={merged} margin={{ top: 8, right: 2, left: 2, bottom: 0 }}>
+            <CartesianGrid {...GRID_PROPS} />
+            <XAxis dataKey="date" {...AXIS_PROPS} padding={{ left: 12, right: 12 }} />
+            <YAxis
+              yAxisId="left"
+              {...AXIS_PROPS}
+              axisLine={false}
+              tick={{ ...AXIS_TICK, fill: CHART_COLOR.water }}
+              width={axisWidth(unitA)}
+              domain={["auto", "auto"]}
+              tickFormatter={(v: number) => `${v}${unitA.trim()}`}
+            />
+            <YAxis
+              yAxisId="right"
+              orientation="right"
+              {...AXIS_PROPS}
+              axisLine={false}
+              tick={{ ...AXIS_TICK, fill: CHART_COLOR.bp }}
+              width={axisWidth(unitB)}
+              domain={["auto", "auto"]}
+              tickFormatter={(v: number) => `${v}${unitB.trim()}`}
+            />
+            <Tooltip {...TOOLTIP_PROPS} />
+            <Line
+              yAxisId="left"
+              type="monotone"
+              dataKey="a"
+              name={labelA}
+              stroke={CHART_COLOR.water}
+              strokeWidth={2}
+              dot={SERIES_DOT}
+              activeDot={ACTIVE_DOT}
+              connectNulls
+              isAnimationActive={false}
+            />
+            <Line
+              yAxisId="right"
+              type="monotone"
+              dataKey="b"
+              name={labelB}
+              stroke={CHART_COLOR.bp}
+              strokeWidth={2}
+              dot={SERIES_DOT}
+              activeDot={ACTIVE_DOT}
+              connectNulls
+              isAnimationActive={false}
+            />
+          </ComposedChart>
+        </ResponsiveContainer>
+      </div>
 
       {/* Correlation stats */}
-      <div className="flex items-center justify-between px-1 text-xs">
+      <div className="wm-stats">
         {insufficient ? (
           <span className="text-muted-foreground">
             Not enough overlapping days to correlate ({result.pairedDays}/{MIN_PAIRED_DAYS})
           </span>
         ) : (
-          <div className="flex items-center gap-2">
+          <>
             <span
-              className={cn(
-                "font-mono font-medium",
-                coefficientColor(result.coefficient, result.strength),
-              )}
+              className="num font-semibold"
+              style={{ color: coefficientColor(result.coefficient, result.strength) }}
             >
               r = {result.coefficient.toFixed(2)}
             </span>
-            <span className="text-muted-foreground">
-              {strengthLabel(result.coefficient, result.strength)}
-            </span>
+            <span>{strengthLabel(result.coefficient, result.strength)}</span>
             <span className="text-muted-foreground">· {result.pairedDays} days</span>
-          </div>
+          </>
         )}
         {result.lagDays > 0 && (
-          <span className="text-muted-foreground">with {result.lagDays}-day lag</span>
+          <span className="lag">with {result.lagDays}-day lag</span>
         )}
       </div>
-    </div>
+    </>
   );
 }

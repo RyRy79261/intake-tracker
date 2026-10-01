@@ -18,6 +18,7 @@ import {
   Bath,
   type LucideIcon,
 } from "lucide-react";
+import type { Domain } from "@/lib/domain-colors";
 
 /**
  * Content model for the in-app user manual. Each `Manual` is a self-contained
@@ -71,7 +72,8 @@ export interface ManualDomain {
   label: string;
   blurb: string;
   icon: LucideIcon;
-  colorClass: string;
+  /** Heading and icon colour; null for the muted foreground. */
+  color: Domain | null;
 }
 
 export const MANUAL_DOMAINS: ManualDomain[] = [
@@ -80,49 +82,49 @@ export const MANUAL_DOMAINS: ManualDomain[] = [
     label: "Getting started",
     blurb: "New here? Start with the big picture.",
     icon: Compass,
-    colorClass: "text-sky-600 dark:text-sky-400",
+    color: "water",
   },
   {
     id: "intake",
     label: "Food & drink",
     blurb: "Logging what you drink and eat.",
     icon: Droplets,
-    colorClass: "text-blue-600 dark:text-blue-400",
+    color: "water",
   },
   {
     id: "health",
     label: "Health metrics",
     blurb: "Vitals and body measurements.",
     icon: HeartPulse,
-    colorClass: "text-indigo-600 dark:text-indigo-400",
+    color: "bp",
   },
   {
     id: "medications",
     label: "Medications",
     blurb: "Prescriptions, doses and titrations.",
     icon: Pill,
-    colorClass: "text-teal-600 dark:text-teal-400",
+    color: "meds",
   },
   {
     id: "voice",
     label: "Voice",
     blurb: "Hands-free logging.",
     icon: Mic,
-    colorClass: "text-violet-600 dark:text-violet-400",
+    color: "alcohol",
   },
   {
     id: "ai",
     label: "AI & privacy",
     blurb: "Optional smart helpers and your data.",
     icon: Sparkles,
-    colorClass: "text-amber-600 dark:text-amber-400",
+    color: "sodium",
   },
   {
     id: "system",
     label: "App & settings",
     blurb: "Configuring the app.",
     icon: SlidersHorizontal,
-    colorClass: "text-slate-600 dark:text-slate-400",
+    color: null,
   },
 ];
 
@@ -154,9 +156,17 @@ export const MANUALS: Manual[] = [
       {
         heading: "Getting around",
         bullets: [
-          "Five tabs sit along the top: Intake (home), Medications, Analytics, Settings and Profile.",
-          "Swipe left or right anywhere to move between those tabs.",
-          "The quick-nav bar at the bottom of the home screen jumps straight to a card.",
+          "The bar along the top opens the apps: Medications, Metrics, History and your Profile, plus Settings. Each app opens in its own window.",
+          "On a phone a window fills the screen and only one is open at a time: opening another closes it, and Home (or Back) closes it too. On a tablet windows sit side by side, and Esc closes the one in front.",
+          "On a phone, swipe sideways to move between Profile, Home, Medications and Metrics, in that order.",
+          "On a phone the bottom bar has Home and Hold to talk (when signed in). Above it on Home, the quick links (Liquids, Food, BP, Weight, Urine, Bowel) jump to each card; the card in view is marked. Tapping Home on Home goes back to the top.",
+          "On a tablet the bottom bar also has Windows, to switch between or close the open windows.",
+          "On a computer (a screen 1024 pixels wide or more, with a mouse or trackpad) everything is a window on a desk. Today, Liquids, Food, Blood Pressure, Weight, Urination and Defecation each have their own window, all open the first time, side by side. Drag a window by its title bar to move it. Drag any edge or corner to resize it. Click a window to bring it to the front.",
+          "Double-click a title bar to fill the screen, and again to go back. Drag a window to the left or right edge to fill that half, or to the top edge to fill the screen. Dragging it away gives it its old size back. Windows stay where you put them until you close the tab.",
+          "Minimising one of those seven windows (or closing it with ×) turns it into a square icon at the bottom left of the desk; click the icon to put the window back where it was. They are never lost, and where you leave them is remembered on this computer.",
+          "On a computer the top bar lists every open app window (Medications, Metrics, Profile). Click a window's button to bring it to the front, and click it again to minimise it. Home (the house) minimises the app windows, and Tidy puts the seven windows back in their starting places.",
+          "Along the bottom of the desk: the warning triangle on the left opens Report a bug, and Hold to talk (when signed in) is the microphone button on the right. Windows cannot go under this strip.",
+          "With the keyboard: Tab to a window's title, then the arrow keys move it and Shift with the arrow keys resizes it. Ctrl+` (or Alt+`) goes to the next window, with Shift to go back. Esc closes the window in front.",
           "Shaking your device opens the bug reporter — and from there you can reach this manual.",
         ],
       },
@@ -186,7 +196,7 @@ export const MANUALS: Manual[] = [
         heading: "Logging plain water",
         steps: [
           "Open the Water tab on the card.",
-          "Tap the add button to log one serving. The serving size comes from Settings → Tracking → Water.",
+          "Tap the add button to log one serving. The serving size comes from Settings → Tracking → Water step.",
           "Tap again for more — the ring-3 fills as you approach your daily limit.",
         ],
       },
@@ -201,7 +211,7 @@ export const MANUALS: Manual[] = [
       },
       {
         heading: "Saving favourites as presets",
-        body: "Drinks you log often can become presets so they are one tap away on the Preset tab. Add and edit them under Settings → Tracking → Liquid presets.",
+        body: "Drinks you log often can become presets so they are one tap away on the Preset tab. Add and edit them under Settings → Tracking → Drink presets.",
         callout: {
           tone: "tip",
           text: "The Preset tab can also use AI to recognise a drink you describe and fill in its details automatically — see the AI features manual.",
@@ -306,8 +316,8 @@ export const MANUALS: Manual[] = [
         ],
       },
       {
-        heading: "Units and target",
-        body: "Choose kilograms or pounds, and set an optional target weight, under Settings → Tracking → Weight.",
+        heading: "The +/- step",
+        body: "Set how much each +/- tap changes the weight under Settings → Tracking → Weight step.",
       },
       {
         heading: "Seeing the trend",
@@ -342,7 +352,7 @@ export const MANUALS: Manual[] = [
       },
       {
         heading: "Setting your defaults",
-        body: "The amount options and the frequency thresholds that flag an unusual day come from Settings → Tracking → Urination & bowel defaults.",
+        body: "The amount options and the frequency thresholds that flag an unusual day come from Settings → Tracking → Urination and Defecation default amount.",
         callout: {
           tone: "note",
           text: "Every entry can be corrected later from the card's recent list — see the Editing & correcting entries manual.",
@@ -391,11 +401,11 @@ export const MANUALS: Manual[] = [
     domain: "medications",
     icon: PlusCircle,
     summary: "Add a prescription with the step-by-step wizard.",
-    whereToFind: "Medications page → + button",
+    whereToFind: "Medications → Rx → Add prescription",
     sections: [
       {
         heading: "Starting the wizard",
-        body: "Tap the + button on the Medications page to open the Add medication wizard. It walks you through a few steps, one screen at a time, and you can move back to an earlier step at any point.",
+        body: "Open Medications, go to the Rx tab and tap Add prescription to open the Add medication wizard. It walks you through a few steps, one screen at a time, and you can move back to an earlier step at any point. The + button on the Schedule tab logs an extra dose instead.",
       },
       {
         heading: "The steps",
@@ -470,6 +480,7 @@ export const MANUALS: Manual[] = [
         steps: [
           "Tap the Voice log button on the home screen.",
           "Tap record and describe your readings, drinks, food or weight — all in one take.",
+          "Say when something happened if it was not just now — \"a beer yesterday at 8pm\", \"water an hour ago\". Each row shows its time, and you can change it.",
           "Stop recording. The app turns your speech into text and parses it into rows.",
           "Review each parsed row, correct anything that is wrong, then approve to save.",
         ],
@@ -535,7 +546,7 @@ export const MANUALS: Manual[] = [
     domain: "ai",
     icon: ShieldCheck,
     summary: "Where your data lives, what leaves your device, and the controls you hold.",
-    whereToFind: "Settings → Privacy & Security",
+    whereToFind: "Settings → Privacy",
     sections: [
       {
         heading: "Local first",
@@ -551,14 +562,14 @@ export const MANUALS: Manual[] = [
       },
       {
         heading: "Medical context consent",
-        body: "AI insight features that would draw on your conditions or medications stay off until you opt in. Per-item toggles under Settings → Privacy & Security — and on your Profile — control this, and a disclaimer is shown the first time you enable one.",
+        body: "AI insight features that would draw on your conditions or medications stay off until you opt in. Per-item toggles under Settings → Privacy — and on your Profile — control this, and a disclaimer is shown the first time you enable one.",
       },
       {
         heading: "Permissions",
-        body: "Motion access (for shake-to-report), the microphone (for voice) and notifications are each requested only when you turn on the feature that needs them. Review what you have granted under Settings → Privacy & Security.",
+        body: "Motion access (for shake-to-report), the microphone (for voice) and notifications are each requested only when you turn on the feature that needs them. Review what you have granted under Settings → Privacy.",
         callout: {
           tone: "tip",
-          text: "You can export a full backup of your data at any time from Settings → Data & Storage.",
+          text: "You can export a full backup of your data at any time from Settings → Data & storage.",
         },
       },
     ],
@@ -569,28 +580,30 @@ export const MANUALS: Manual[] = [
     domain: "system",
     icon: SlidersHorizontal,
     summary: "A tour of every settings group and what you can change.",
-    whereToFind: "Settings tab",
+    whereToFind: "The gear at the top right",
     sections: [
       {
         heading: "How settings are organised",
-        body: "The Settings page is a stack of collapsible groups. Tap a group to expand it. Changes take effect as you make them — there is no save button.",
+        body: "The gear at the top right opens Settings over whatever you are doing: full screen on a phone, a panel on the right on a wider screen. It is a stack of collapsible groups; tap a group to expand it. Changes take effect as you make them — there is no save button.",
       },
       {
         heading: "The groups",
         bullets: [
+          "Tracking — day and week start, each limit as a target plus a buffer, optional trackers, the +/- steps, bathroom defaults, and the Drink presets page.",
+          "Appearance — theme, Bigger text and Reduce motion.",
+          "Medications — medicine-search region, time format, dose reminders and the home timezone.",
           "AI features — API keys for the optional AI helpers.",
-          "Data & Storage — storage usage, export, import, backup and data migration.",
-          "Tracking — day-start hour, water and sodium limits, weight units, liquid presets and bathroom defaults.",
-          "Customization — theme and dark mode, the quick-nav bar, animation timing and swipe navigation.",
-          "Medication — time format and inventory and notification preferences.",
-          "Privacy & Security — app permissions and medical-AI consent.",
+          "Data & storage — sync status, storage usage, deleting data, export, import and conflicts.",
+          "Privacy — app permissions, medical-AI consent and Claude connections.",
           "System — checking for and applying app updates.",
+          "Help & Manual — this manual.",
           "Feedback — reporting a bug, and the shake-to-report sensitivity.",
+          "About — version and build, and Reset to Defaults.",
         ],
       },
       {
         heading: "Resetting",
-        body: "Reset to Defaults, at the bottom of the page, asks for confirmation and then restores your preferences to their original values. It does not delete any of your logged data, and it keeps your liquid presets, storage mode and dose reminders.",
+        body: "Reset to Defaults, under About, asks for confirmation and then restores your preferences to their original values. It does not delete any of your logged data, and it keeps your drink presets, storage mode and dose reminders.",
         callout: {
           tone: "tip",
           text: "This manual is reachable from Settings → Help & Manual, and from the \"How does this work?\" link in the shake / bug-report dialog.",

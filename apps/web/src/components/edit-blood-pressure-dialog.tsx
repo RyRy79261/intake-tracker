@@ -100,7 +100,7 @@ export function EditBloodPressureDialog({
 }: EditBloodPressureDialogProps) {
   return (
     <Dialog open={record !== null} onOpenChange={(dialogOpen) => !dialogOpen && onClose()}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md" data-domain="bp">
         <DialogHeader>
           <DialogTitle>Edit Blood Pressure Entry</DialogTitle>
           <DialogDescription>Update the blood pressure readings</DialogDescription>
@@ -243,7 +243,7 @@ export function EditBloodPressureDialog({
             <Button type="button" variant="outline" onClick={onClose}>
               Cancel
             </Button>
-            <Button type="submit" className="bg-rose-600 hover:bg-rose-700">
+            <Button type="submit">
               Save Changes
             </Button>
           </DialogFooter>

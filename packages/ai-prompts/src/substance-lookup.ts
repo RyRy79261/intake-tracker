@@ -63,6 +63,9 @@ export const SUBSTANCE_LOOKUP_TOOL = {
   name: "substance_lookup_result" as const,
   description:
     "Return beverage data. For caffeine queries: caffeine in mg per 100 ml. For alcohol queries: ABV as a percentage (vol/vol). Always include sugar (g) and sodium (mg) per 100 ml.",
+  // Schema-valid arguments are guaranteed without forcing the tool, which
+  // the quality model (Claude Sonnet 5.5) rejects.
+  strict: true,
   input_schema: {
     type: "object" as const,
     properties: {

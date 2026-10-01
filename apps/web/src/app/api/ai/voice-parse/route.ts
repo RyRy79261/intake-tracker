@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { z } from "zod";
 import { withAuth } from "@/lib/auth-middleware";
 import { sanitizeForAI } from "@/lib/security";
 import { getClaudeClientForUser, CLAUDE_MODELS } from "@/app/api/ai/_shared/claude-client";
@@ -7,8 +6,12 @@ import { parseJsonBody, zodErrorResponse } from "@/app/api/_shared/validation";
 import { createRateLimiter, rateLimitKey } from "@/app/api/_shared/rate-limit";
 import { requestToolCall } from "@/app/api/ai/_shared/claude-call";
 import { aiErrorResponse } from "@/app/api/ai/_shared/ai-error-response";
-import { SYSTEM_PROMPT } from "@intake/ai-prompts/voice-parse";
-import { PARSE_TOOL, extractVoiceItems } from "@/app/api/ai/voice-parse/schema";
+import { SYSTEM_PROMPT, buildUserMessage } from "@intake/ai-prompts/voice-parse";
+import {
+  PARSE_TOOL,
+  ParseRequestSchema,
+  extractVoiceItems,
+} from "@/app/api/ai/voice-parse/schema";
 
 /**
  * Parse a voice transcript into a heterogeneous list of health record items
@@ -21,6 +24,10 @@ import { PARSE_TOOL, extractVoiceItems } from "@/app/api/ai/voice-parse/schema";
  * `stop_reason` (a refusal is a clear 422, a max_tokens cut-off is retried
  * with a bigger budget), record usage for every upstream response, and share
  * one route-wide deadline.
+ *
+ * Quality tier (Claude Sonnet 5.5): no forced tool_choice and no sampling
+ * parameters (each a 400). The request is `auto` with a strict tool, the
+ * prompt says to always call it, and the retry turn is unforced.
  */
 
 // Vercel function limit. The shared deadline stops short of it so a slow
@@ -31,16 +38,11 @@ const DEADLINE_MS = 50_000;
 
 /**
  * Characters of transcript sent to the model — about two minutes of speech.
- * Longer transcripts are accepted (up to MAX_REQUEST_CHARS) and cut to this,
+ * Longer transcripts are accepted (up to MAX_REQUEST_CHARS in schema.ts) and cut to this,
  * with `transcriptTruncated` in the response so the review panel can say the
  * tail was not parsed, rather than silently losing it.
  */
 const MAX_TRANSCRIPT_CHARS = 2000;
-const MAX_REQUEST_CHARS = 8000;
-
-const ParseRequestSchema = z.object({
-  transcript: z.string().min(1).max(MAX_REQUEST_CHARS),
-});
 
 const rateLimiter = createRateLimiter(20);
 
@@ -81,15 +83,26 @@ export const POST = withAuth(async ({ request, auth }) => {
 
     console.log(`[AUDIT] voice-parse from user: ${auth.userId}`);
 
-    const userMessage = `Voice transcript:\n"""\n${sanitized}\n"""\n\nExtract every distinct health log item and return them via the parse_voice_log tool.`;
+    // The client's clock (local time, zone, offset) leads the user turn, so
+    // the model can date "yesterday at 8pm". It is validated to strict shapes
+    // above and is not PII; nothing else about the device is sent. An older
+    // cached client sends no clock: the message then states no time and asks
+    // for relative times only.
+    const userMessage = buildUserMessage(sanitized, parsed.data.now);
 
     const { toolUse: toolBlock } = await requestToolCall(
       client,
       {
         model: CLAUDE_MODELS.quality,
-        max_tokens: 4096, // headroom for Sonnet 5 adaptive thinking
+        // Headroom for adaptive thinking, which is always on for this model
+        // and shares the ceiling with the tool call.
+        max_tokens: 4096,
+        // The user has just spoken and is waiting: medium, not the default
+        // high.
+        output_config: { effort: "medium" },
         system: SYSTEM_PROMPT,
         tools: [PARSE_TOOL],
+        tool_choice: { type: "auto" },
         messages: [{ role: "user", content: userMessage }],
       },
       {
@@ -97,6 +110,7 @@ export const POST = withAuth(async ({ request, auth }) => {
         deadline: Date.now() + DEADLINE_MS,
         toolName: PARSE_TOOL.name,
         retryInstruction: "Return the structured items via the parse_voice_log tool now.",
+        forceOnRetry: false,
       },
     );
 
@@ -107,7 +121,9 @@ export const POST = withAuth(async ({ request, auth }) => {
       );
     }
 
-    const extracted = extractVoiceItems(toolBlock.input);
+    const extracted = extractVoiceItems(toolBlock.input, {
+      absoluteTimes: parsed.data.now !== undefined,
+    });
     if (!extracted.ok) {
       console.error(
         "[VALIDATION] voice-parse: tool output had no usable items:",

@@ -303,7 +303,41 @@ export async function syncPushSchedule(opts: { force?: boolean } = {}): Promise<
   }
 }
 
-/** Test-only: forget the last-sent hash. */
+let lastPushSettingsHash = "";
+
+/**
+ * Send the follow-up reminder count and interval (and the day-start hour) to
+ * the push server. Called by the app-wide reminder resync, so a change made
+ * in the Settings sheet reaches the server with no Medications window open.
+ * Skipped when nothing changed since the last successful send.
+ */
+export async function syncPushSettings(): Promise<void> {
+  const { useSettingsStore } = await import("@/stores/settings-store");
+  const s = useSettingsStore.getState();
+  if (!s.doseRemindersEnabled) return;
+  if (!(await hasPushSubscription())) return;
+
+  const body = JSON.stringify({
+    followUpCount: s.reminderFollowUpCount,
+    followUpIntervalMinutes: s.reminderFollowUpInterval,
+    dayStartHour: s.dayStartHour,
+  });
+  if (body === lastPushSettingsHash) return;
+
+  try {
+    const res = await apiFetch("/api/push/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body,
+    });
+    if (res.ok) lastPushSettingsHash = body;
+  } catch (error) {
+    console.warn("[push/settings] sync failed:", error);
+  }
+}
+
+/** Test-only: forget the last-sent hashes. */
 export function resetPushScheduleSyncState(): void {
   lastPushScheduleHash = "";
+  lastPushSettingsHash = "";
 }

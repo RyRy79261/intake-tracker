@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import { useLiveQuery } from "dexie-react-hooks";
+import { useLiveQuery } from "@/hooks/use-live-query";
 import { db, type ErrorLogSource } from "@/lib/db";
 import {
   clearErrorLogs,

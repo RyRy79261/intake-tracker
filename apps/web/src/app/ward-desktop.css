@@ -1,0 +1,135 @@
+/*
+ * Ward Console desktop mode (1024px or more with a mouse): a desk of free
+ * windows. The intake modules (Today and the logging cards) are windows
+ * too, and the desk band along the bottom holds what is not a window.
+ * `data-shell-mode="desktop"` is set on <html> by the shell (app-chrome.tsx).
+ */
+
+/*
+ * The desk band (desk-band.tsx) takes the bottom bar's place: windows,
+ * banners and page padding stay above it.
+ */
+html[data-shell-mode="desktop"] {
+  --bbh: 72px;
+}
+
+/* The desk: the prototype's faint 32px grid behind Home and the windows. */
+html[data-shell-mode="desktop"] main[data-shell="ward"] {
+  --desk-grid: hsl(var(--fg) / 0.05);
+  background-image:
+    linear-gradient(var(--desk-grid) 1px, transparent 1px), linear-gradient(90deg, var(--desk-grid) 1px, transparent 1px);
+  background-size: 32px 32px;
+  background-position: -1px -1px;
+}
+
+/* While a window is dragged or resized, nothing else reacts to the pointer. */
+html[data-window-gesture="true"] {
+  user-select: none;
+  -webkit-user-select: none;
+}
+html[data-window-gesture="true"] [data-testid="window-body"] {
+  pointer-events: none;
+}
+
+/* The prototype's `--shadow`: the hard offset shadow under a free window. */
+:root {
+  --win-shadow: rgba(20, 22, 31, 0.22);
+  /* Under the window in front: the same shadow, deeper. */
+  --win-shadow-front: rgba(20, 22, 31, 0.36);
+}
+.dark {
+  --win-shadow: rgba(0, 0, 0, 0.5);
+  --win-shadow-front: rgba(0, 0, 0, 0.72);
+}
+
+@layer components {
+  /*
+   * A module in its window (desk-modules.tsx): the card gives up its own
+   * frame, stripe, icon and title, which the window has. What is left of
+   * its header is the running total on the right; a header with nothing
+   * else in it goes.
+   */
+  .wd-module .wc-mod,
+  .wd-module .wc-gadget {
+    border: 0;
+    box-shadow: none;
+  }
+  .wd-module .wc-mhead > svg,
+  .wd-module .wc-mhead > .t {
+    display: none;
+  }
+  .wd-module .wc-mhead {
+    min-height: 0;
+    padding: 6px 12px;
+  }
+  .wd-module .wc-mhead:not(:has(> .r)) {
+    display: none;
+  }
+  /* Today's rows a little tighter, so it and Blood Pressure under it fit 900px. */
+  .wd-module .wc-today-wide {
+    --mh: 42px;
+  }
+  .wd-module .wc-today-wide .wc-tg-row {
+    min-height: 54px;
+    padding: 6px 0;
+  }
+
+  /*
+   * Today with room to spare (the prototype's wide `.g-today`): dated day
+   * labels, each day's total under its column, bigger figures, and rows that
+   * keep their natural height.
+   */
+  .wc-today-wide {
+    --lc: 92px;
+    --vc: 196px;
+    --mh: 46px;
+  }
+  .wc-today-wide .wc-ghead {
+    padding: 0 14px;
+  }
+  .wc-today-wide .wc-dl {
+    font-size: 0.75rem;
+    /* --muted-fg on --chrome is 4.2:1 in the day theme; ink passes AA. */
+    color: hsl(var(--fg));
+  }
+  .wc-today-wide .wc-tg {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    padding: 0 14px;
+  }
+  .wc-today-wide .wc-tg-row {
+    flex: 1 1 auto;
+    min-height: 60px;
+    padding: 7px 0;
+  }
+  .wc-today-wide .wc-dc > em {
+    display: block;
+    font-style: normal;
+    font-family: var(--font-plex-mono), ui-monospace, monospace;
+    font-size: 0.6875rem;
+    line-height: 1;
+    text-align: center;
+    white-space: nowrap;
+    /* --muted-fg on the panel is under 4.5:1 at this size in the day theme. */
+    color: hsl(var(--fg) / 0.78);
+  }
+  .wc-today-wide .wc-dc.t > em {
+    color: hsl(var(--fg));
+    font-weight: 600;
+  }
+  .wc-today-wide .wc-tg-v b {
+    font-size: 1.375rem;
+  }
+  .wc-today-wide .wc-tg-v .of,
+  .wc-today-wide .wc-tg-s {
+    font-size: 0.8125rem;
+  }
+  .wc-today-wide .wc-inv {
+    line-height: 18px;
+  }
+  .wc-today-wide .wc-tg-key {
+    padding: 8px 14px 9px;
+    font-size: 0.75rem;
+  }
+}

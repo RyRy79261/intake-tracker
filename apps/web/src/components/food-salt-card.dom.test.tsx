@@ -41,10 +41,12 @@ describe("FoodSaltCard", () => {
       },
     });
 
-    const headline = await screen.findByText(/^3200mg \/ 1500mg$/, undefined, {
-      timeout: 5000,
-    });
-    expect(headline.className).toMatch(/text-red-600/);
+    // The row reads "<b>3200mg</b> / 1500mg"; the total carries the colour.
+    await waitFor(
+      () => expect(screen.getByTestId("food-card-sodium")).toHaveTextContent("3200mg / 1500mg"),
+      { timeout: 5000 },
+    );
+    expect(screen.getByText("3200mg").className).toMatch(/text-red-600/);
     // The overshoot is spelled out even with no buffer configured.
     expect(screen.getByText(/1700mg over/)).toBeInTheDocument();
   });
@@ -59,10 +61,11 @@ describe("FoodSaltCard", () => {
       },
     });
 
-    const headline = await screen.findByText(/^1700mg \/ 1500mg$/, undefined, {
-      timeout: 5000,
-    });
-    expect(headline.className).toMatch(/text-orange-600/);
+    await waitFor(
+      () => expect(screen.getByTestId("food-card-sodium")).toHaveTextContent("1700mg / 1500mg"),
+      { timeout: 5000 },
+    );
+    expect(screen.getByText("1700mg").className).toMatch(/text-orange-600/);
     expect(screen.getByText(/200mg \/\s*500mg extra/)).toBeInTheDocument();
   });
 

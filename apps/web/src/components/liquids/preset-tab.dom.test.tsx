@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 // PresetTab gates its AI lookup input on useAuthGate; open the gate so the
@@ -16,6 +16,7 @@ vi.mock("@/lib/api-fetch", () => ({
 }));
 
 import { PresetTab } from "@/components/liquids/preset-tab";
+import { InPreviewProvider } from "@/lib/help/preview-context";
 import { renderWithFixtures } from "@/__tests__/react-test-utils";
 import { useSettingsStore, type LiquidPreset } from "@/stores/settings-store";
 import { DEFAULT_LIQUID_PRESETS } from "@/lib/constants";
@@ -448,6 +449,34 @@ describe("PresetTab", () => {
         });
       });
       expect((await intakesOfType("sugar")).map((r) => r.amount)).toEqual([35]);
+    });
+
+    it("in a manual's live preview, saving and deleting presets leaves the real presets alone", async () => {
+      const user = userEvent.setup();
+      await renderWithFixtures(
+        <InPreviewProvider value>
+          <PresetTab tab="coffee" />
+        </InPreviewProvider>,
+        { settings: { liquidPresets: [...DEFAULT_LIQUID_PRESETS] } },
+      );
+      const real = useSettingsStore.getState().liquidPresets;
+
+      lookupReturns(COLA);
+      await lookUp(user, "Coca-Cola");
+      await waitFor(() => expect(screen.getByLabelText(/sugar/i)).toHaveValue(35));
+      await user.click(screen.getByRole("button", { name: "Save as preset & log" }));
+      // The demo shows its new preset...
+      expect(await screen.findByRole("button", { name: "Coca-Cola330ml" })).toBeInTheDocument();
+
+      // ...and a long-press deletes one from the demo.
+      fireEvent.pointerDown(screen.getByRole("button", { name: ESPRESSO }));
+      await user.click(await screen.findByRole("button", { name: "Delete" }, { timeout: 2000 }));
+      await waitFor(() =>
+        expect(screen.queryByRole("button", { name: ESPRESSO })).not.toBeInTheDocument(),
+      );
+
+      // The user's own presets are untouched.
+      expect(useSettingsStore.getState().liquidPresets).toEqual(real);
     });
 
     it("does not save the preset when logging the drink fails", async () => {

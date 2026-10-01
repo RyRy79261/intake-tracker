@@ -110,6 +110,12 @@ export interface Settings {
   shakeToReportEnabled: boolean;
   shakeThreshold: number; // acceleration-magnitude jolt delta (m/s²) — lower = more sensitive
   shakeRequiredJolts: number; // jolts within the detection window required to fire
+
+  // Display preferences (Settings > Appearance). Device-only, never synced.
+  // Bigger text scales the root font size; Reduce motion turns animations
+  // and transitions off (see components/display-prefs.tsx).
+  bigText: boolean;
+  reduceMotion: boolean;
 }
 
 interface SettingsActions {
@@ -158,6 +164,9 @@ interface SettingsActions {
   setShakeToReportEnabled: (value: boolean) => void;
   setShakeThreshold: (value: number) => void;
   setShakeRequiredJolts: (value: number) => void;
+  // Display preferences (device-only)
+  setBigText: (value: boolean) => void;
+  setReduceMotion: (value: boolean) => void;
   /**
    * Restore preferences to their defaults. Leaves alone the fields that are
    * data or have their own flows (see RESET_PRESERVED_KEYS).
@@ -205,6 +214,8 @@ const defaultSettings: Settings = {
   reminderFollowUpInterval: 10,
   homeTimezone: null,
   homeTimezoneConfirmedAt: null,
+  bigText: false,
+  reduceMotion: false,
 };
 
 /**
@@ -445,6 +456,9 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
         set({ shakeThreshold: sanitizeNumericInput(value, 4, 20) }),
       setShakeRequiredJolts: (value) =>
         set({ shakeRequiredJolts: sanitizeNumericInput(value, 2, 8) }),
+
+      setBigText: (value) => set({ bigText: value }),
+      setReduceMotion: (value) => set({ reduceMotion: value }),
 
       addLiquidPreset: (preset) => {
         const id = crypto.randomUUID();

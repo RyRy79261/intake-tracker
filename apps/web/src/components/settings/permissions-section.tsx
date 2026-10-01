@@ -7,6 +7,7 @@ import { PermissionBadge } from "@/components/permission-badge";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useToast } from "@intake/ui/use-toast";
 import { useNotificationSettings } from "@/hooks/use-notification-queries";
+import { SubHead } from "@/components/settings/settings-kit";
 
 export function PermissionsSection() {
   const { permissions, requestNotifications, requestMicrophone, resetMicrophonePermission } = usePermissions();
@@ -18,14 +19,11 @@ export function PermissionsSection() {
   });
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-2 text-purple-600 dark:text-purple-400">
-        <ShieldCheck className="w-4 h-4" />
-        <h3 className="font-semibold">Permissions</h3>
-      </div>
-      <div className="space-y-3">
+    <div className="flex flex-col gap-2.5">
+      <SubHead icon={ShieldCheck}>Permissions</SubHead>
+      <div className="flex flex-col gap-1.5">
         {/* Notifications Permission */}
-        <div className="flex items-center justify-between p-3 rounded-lg border">
+        <div className="flex min-h-14 items-center justify-between gap-3 border border-line bg-background px-2.5 py-2">
           <div className="flex items-center gap-3">
             <Bell className="w-4 h-4 text-muted-foreground" />
             <div>
@@ -53,7 +51,7 @@ export function PermissionsSection() {
         </div>
 
         {/* Microphone Permission */}
-        <div className="flex items-center justify-between p-3 rounded-lg border">
+        <div className="flex min-h-14 items-center justify-between gap-3 border border-line bg-background px-2.5 py-2">
           <div className="flex items-center gap-3">
             <Mic className="w-4 h-4 text-muted-foreground" />
             <div>
@@ -94,7 +92,7 @@ export function PermissionsSection() {
 
         {/* Expiry Notifications Toggle - only show if notifications are granted */}
         {permissions.notifications === "granted" && (
-          <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/30">
+          <div className="flex min-h-14 items-center justify-between gap-3 border border-line bg-background px-2.5 py-2">
             <div>
               <p className="text-sm font-medium">Expiry Reminders</p>
               <p className="text-xs text-muted-foreground">
@@ -104,7 +102,8 @@ export function PermissionsSection() {
             <div className="flex items-center gap-2">
               <Button
                 variant={expiryNotificationsEnabled ? "default" : "outline"}
-                size="sm"
+                className="h-9 min-w-12"
+                aria-pressed={expiryNotificationsEnabled}
                 onClick={() => {
                   const newValue = !expiryNotificationsEnabled;
                   setExpiryNotificationsEnabled(newValue);
@@ -128,8 +127,8 @@ export function PermissionsSection() {
               </Button>
               {expiryNotificationsEnabled && (
                 <Button
-                  variant="ghost"
-                  size="sm"
+                  variant="outline"
+                  className="h-9"
                   onClick={async () => {
                     try {
                       const sent = await sendTest();

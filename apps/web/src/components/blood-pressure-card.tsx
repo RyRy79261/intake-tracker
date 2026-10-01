@@ -1,22 +1,23 @@
 "use client";
 
 import { useState } from "react";
-import { Card, CardContent } from "@intake/ui/card";
 import { Button } from "@intake/ui/button";
 import { Input } from "@intake/ui/input";
 import { Label } from "@intake/ui/label";
-import { Check, Loader2, ChevronDown, ChevronUp } from "lucide-react";
+import { Check } from "lucide-react";
+import { SubToggle, optOnClass as SEG_ON, unitClass } from "@/components/domain-scope";
+import { Spinner } from "@intake/ui/spinner";
 import { z } from "zod";
 import { cn } from "@/lib/utils";
+import { ModuleCard } from "@/components/home/module-card";
 import { CARD_THEMES } from "@/lib/card-themes";
 import { logAudit } from "@/lib/audit";
 
 function pulsePressureColor(pp: number) {
   // Normal pulse pressure is roughly 40 mmHg; >60 elevated, <30 narrow.
-  return pp > 60 || pp < 30
-    ? "text-red-500 dark:text-red-400"
-    : "text-muted-foreground";
+  return pp > 60 || pp < 30 ? "text-bp" : "text-muted-foreground";
 }
+
 
 import {
   BP_RANGES,
@@ -37,9 +38,9 @@ import { useBloodPressureRecords, useAddBloodPressure, useDeleteBloodPressure, u
 import {
   getCurrentDateTimeLocal,
   dateTimeLocalToTimestamp,
-  formatDateTime,
 } from "@/lib/date-utils";
 import { getBPCategory } from "@/lib/constants";
+import { useFieldId, useOnLogged } from "@/components/log-form-scope";
 
 // Format BP reading
 function formatBPReading(record: BloodPressureRecord): string {
@@ -50,6 +51,8 @@ const theme = CARD_THEMES.bp;
 const Icon = theme.icon;
 
 export function BloodPressureCard() {
+  const onLogged = useOnLogged();
+  const fid = useFieldId();
   const { toast } = useToast();
   const [systolicInput, setSystolicInput] = useState("");
   const [diastolicInput, setDiastolicInput] = useState("");
@@ -186,6 +189,7 @@ export function BloodPressureCard() {
         description: `${systolic}/${diastolic} mmHg logged successfully`,
         variant: "success",
       });
+      onLogged();
       setSystolicInput("");
       setDiastolicInput("");
       setHeartRateInput("");
@@ -209,77 +213,66 @@ export function BloodPressureCard() {
     : null;
 
   return (
-    <>
-    <Card className={cn("relative overflow-hidden transition-all duration-300 bg-linear-to-br", theme.gradient, theme.border)}>
-      <CardContent className="p-6">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <div className={cn("p-2 rounded-lg", theme.iconBg)}>
-              <Icon className={cn("w-5 h-5", theme.iconColor)} />
-            </div>
-            <span className="font-semibold text-lg uppercase tracking-wide">{theme.label}</span>
-          </div>
-          {isLoading ? (
-            <div className="animate-pulse text-right">
-              <div className={cn("h-6 w-20 rounded ml-auto", theme.loadingBg)} />
-              <div className="h-4 w-16 bg-muted rounded mt-1 ml-auto" />
-            </div>
-          ) : latestReading ? (
-            <div className="text-right">
-              <p className={cn("text-lg font-bold", theme.latestValueColor)}>
-                {formatBPReading(latestReading)} <span className="text-sm font-normal">mmHg</span>
-              </p>
-              {bpCategory && (
-                <p className={cn("text-xs font-medium", bpCategory.color)}>
-                  {bpCategory.label}
-                </p>
-              )}
-              {latestReading.heartRate && (
-                <p className="text-xs text-muted-foreground">{latestReading.heartRate} BPM</p>
-              )}
-              {pulsePressure !== null && (
-                <p className="text-xs">
-                  <span className="text-muted-foreground">Pulse pressure </span>
-                  <span className={pulsePressureColor(pulsePressure)}>{pulsePressure}</span>
-                  <span className="text-muted-foreground"> mmHg</span>
-                </p>
-              )}
-            </div>
-          ) : null}
-        </div>
-
-        {/* Input Section */}
+    <ModuleCard
+      domain={theme.domain}
+      icon={Icon}
+      title={theme.label}
+      data-testid="bp-card"
+      right={
+        isLoading ? (
+          <span className="inline-block h-8 w-24 animate-pulse bg-foreground/10" />
+        ) : latestReading ? (
+          <>
+            <b>{formatBPReading(latestReading)}</b> mmHg
+            <br />
+            {bpCategory && (
+              <span className={cn("font-sans text-xs", bpCategory.color)} data-testid="bp-category">
+                {bpCategory.label}
+              </span>
+            )}
+            {latestReading.heartRate ? ` · ${latestReading.heartRate} BPM` : ""}
+            {pulsePressure !== null && (
+              <>
+                {" · PP "}
+                <span className={pulsePressureColor(pulsePressure)} aria-label={`Pulse pressure ${pulsePressure} mmHg`}>
+                  {pulsePressure}
+                </span>
+              </>
+            )}
+          </>
+        ) : null
+      }
+    >
         <div className="space-y-3">
           {/* Primary inputs: Systolic / Diastolic (always visible) */}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
-              <Label htmlFor="systolic" className="text-xs">Systolic (top)</Label>
+              <Label htmlFor={fid("systolic")} className="text-[0.8125rem] text-muted-foreground">Systolic (top)</Label>
               <Input
-                id="systolic"
+                id={fid("systolic")}
                 type="number"
                 min={BP_RANGES.systolic.min}
                 max={BP_RANGES.systolic.max}
                 placeholder="120"
                 value={systolicInput}
                 onChange={(e) => setSystolicInput(e.target.value)}
-                className="h-12 text-lg text-center bg-white/80 dark:bg-slate-900/50"
+                className="h-12 text-lg font-semibold text-center num"
               />
               {fieldErrors.systolic && (
                 <p className="text-sm text-destructive mt-1">{fieldErrors.systolic}</p>
               )}
             </div>
             <div className="space-y-1">
-              <Label htmlFor="diastolic" className="text-xs">Diastolic (bottom)</Label>
+              <Label htmlFor={fid("diastolic")} className="text-[0.8125rem] text-muted-foreground">Diastolic (bottom)</Label>
               <Input
-                id="diastolic"
+                id={fid("diastolic")}
                 type="number"
                 min={BP_RANGES.diastolic.min}
                 max={BP_RANGES.diastolic.max}
                 placeholder="80"
                 value={diastolicInput}
                 onChange={(e) => setDiastolicInput(e.target.value)}
-                className="h-12 text-lg text-center bg-white/80 dark:bg-slate-900/50"
+                className="h-12 text-lg font-semibold text-center num"
               />
               {fieldErrors.diastolic && (
                 <p className="text-sm text-destructive mt-1">{fieldErrors.diastolic}</p>
@@ -294,19 +287,19 @@ export function BloodPressureCard() {
 
           {/* Heart Rate (optional) - promoted to primary input area */}
           <div className="space-y-1 mt-2">
-            <Label htmlFor="heartrate" className="text-xs">Heart Rate (optional)</Label>
+            <Label htmlFor={fid("heartrate")} className="text-[0.8125rem] text-muted-foreground">Heart Rate (optional)</Label>
             <div className="flex gap-2">
               <Input
-                id="heartrate"
+                id={fid("heartrate")}
                 type="number"
                 min={BP_RANGES.heartRate.min}
                 max={BP_RANGES.heartRate.max}
                 placeholder="72"
                 value={heartRateInput}
                 onChange={(e) => setHeartRateInput(e.target.value)}
-                className="h-11 text-center bg-white/80 dark:bg-slate-900/50"
+                className="text-center num"
               />
-              <div className="flex items-center px-3 text-sm font-medium text-muted-foreground bg-muted rounded-md">
+              <div className={cn("flex items-center border border-line px-3 text-sm", unitClass)}>
                 BPM
               </div>
             </div>
@@ -316,35 +309,22 @@ export function BloodPressureCard() {
           </div>
 
           {/* Expandable details section */}
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="w-full justify-between text-muted-foreground hover:text-foreground"
-            onClick={() => setShowDetails(!showDetails)}
-          >
-            <span>More options</span>
-            {showDetails ? (
-              <ChevronUp className="w-4 h-4" />
-            ) : (
-              <ChevronDown className="w-4 h-4" />
-            )}
-          </Button>
+          <SubToggle expanded={showDetails} onToggle={() => setShowDetails(!showDetails)}>
+            More options
+          </SubToggle>
 
           {showDetails && (
-            <div className="p-3 rounded-lg bg-muted/50 border space-y-3">
+            <div className="space-y-3">
               {/* Position Toggle */}
               <div className="space-y-2">
-                <Label className="text-xs">Position</Label>
+                <Label className="text-[0.8125rem] text-muted-foreground">Position</Label>
                 <div className="flex gap-2">
                   <Button
                     type="button"
                     variant="outline"
                     size="sm"
-                    className={cn(
-                      "flex-1 transition-all",
-                      position === "sitting" && theme.activeToggle
-                    )}
+                    aria-pressed={position === "sitting"}
+                    className={cn("flex-1", position === "sitting" && SEG_ON)}
                     onClick={() => setPosition("sitting")}
                   >
                     Sitting
@@ -353,10 +333,8 @@ export function BloodPressureCard() {
                     type="button"
                     variant="outline"
                     size="sm"
-                    className={cn(
-                      "flex-1 transition-all",
-                      position === "standing" && theme.activeToggle
-                    )}
+                    aria-pressed={position === "standing"}
+                    className={cn("flex-1", position === "standing" && SEG_ON)}
                     onClick={() => setPosition("standing")}
                   >
                     Standing
@@ -366,16 +344,14 @@ export function BloodPressureCard() {
 
               {/* Arm Toggle */}
               <div className="space-y-2">
-                <Label className="text-xs">Arm</Label>
+                <Label className="text-[0.8125rem] text-muted-foreground">Arm</Label>
                 <div className="flex gap-2">
                   <Button
                     type="button"
                     variant="outline"
                     size="sm"
-                    className={cn(
-                      "flex-1 transition-all",
-                      arm === "left" && theme.activeToggle
-                    )}
+                    aria-pressed={arm === "left"}
+                    className={cn("flex-1", arm === "left" && SEG_ON)}
                     onClick={() => setArm("left")}
                   >
                     Left
@@ -384,10 +360,8 @@ export function BloodPressureCard() {
                     type="button"
                     variant="outline"
                     size="sm"
-                    className={cn(
-                      "flex-1 transition-all",
-                      arm === "right" && theme.activeToggle
-                    )}
+                    aria-pressed={arm === "right"}
+                    className={cn("flex-1", arm === "right" && SEG_ON)}
                     onClick={() => setArm("right")}
                   >
                     Right
@@ -397,16 +371,14 @@ export function BloodPressureCard() {
 
               {/* Irregular Heartbeat */}
               <div className="space-y-2">
-                <Label className="text-xs">Irregular Heartbeat</Label>
+                <Label className="text-[0.8125rem] text-muted-foreground">Irregular Heartbeat</Label>
                 <div className="flex gap-2">
                   <Button
                     type="button"
                     variant="outline"
                     size="sm"
-                    className={cn(
-                      "flex-1 transition-all",
-                      !irregularHeartbeat && theme.activeToggle
-                    )}
+                    aria-pressed={!irregularHeartbeat}
+                    className={cn("flex-1", !irregularHeartbeat && SEG_ON)}
                     onClick={() => setIrregularHeartbeat(false)}
                   >
                     No
@@ -415,10 +387,8 @@ export function BloodPressureCard() {
                     type="button"
                     variant="outline"
                     size="sm"
-                    className={cn(
-                      "flex-1 transition-all",
-                      irregularHeartbeat && "bg-red-100 border-red-300 dark:bg-red-900/50 dark:border-red-700"
-                    )}
+                    aria-pressed={irregularHeartbeat}
+                    className={cn("flex-1", irregularHeartbeat && SEG_ON)}
                     onClick={() => setIrregularHeartbeat(true)}
                   >
                     Yes
@@ -428,13 +398,13 @@ export function BloodPressureCard() {
 
               {/* Note */}
               <div className="space-y-2">
-                <Label htmlFor="bp-note" className="text-xs">Note (optional)</Label>
+                <Label htmlFor={fid("bp-note")} className="text-[0.8125rem] text-muted-foreground">Note (optional)</Label>
                 <Input
-                  id="bp-note"
+                  id={fid("bp-note")}
                   aria-label="Blood pressure note"
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
-                  className="h-9 text-sm bg-background"
+                  className="text-sm"
                 />
               </div>
 
@@ -444,7 +414,7 @@ export function BloodPressureCard() {
                 onChange={setCustomTime}
                 expanded={showTimeInput}
                 onToggle={() => setShowTimeInput(!showTimeInput)}
-                id="bp-time"
+                id={fid("bp-time")}
               />
             </div>
           )}
@@ -456,11 +426,11 @@ export function BloodPressureCard() {
           <Button
             onClick={handleSubmit}
             disabled={addMutation.isPending || !systolicInput || !diastolicInput}
-            className={cn("w-full h-11", theme.buttonBg)}
+            className="w-full"
           >
             {addMutation.isPending ? (
               <>
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                <Spinner className="size-4 mr-2" />
                 Recording...
               </>
             ) : (
@@ -479,32 +449,26 @@ export function BloodPressureCard() {
           onDelete={handleDelete}
           onEdit={openEdit}
           editingId={editingRecord?.id ?? null}
-          borderColor={theme.border}
-          renderEntry={(record) => {
+          renderLabel={(record) =>
+            [
+              record.position,
+              `${record.arm} arm`,
+              record.heartRate ? `${record.heartRate} bpm` : null,
+              record.irregularHeartbeat ? "irregular" : null,
+            ]
+              .filter(Boolean)
+              .join(" · ")
+          }
+          renderValue={(record) => {
             const category = getBPCategory(record.systolic, record.diastolic);
             return (
-              <>
-                <div className="flex flex-col">
-                  <span className="text-muted-foreground text-xs">{formatDateTime(record.timestamp)}</span>
-                  <span className="text-xs text-muted-foreground/70">
-                    {record.position} · {record.arm} arm
-                    {record.heartRate && ` · ${record.heartRate} BPM`}
-                    {record.irregularHeartbeat && " · irregular"}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="text-right">
-                    <span className="font-medium">{formatBPReading(record)}</span>
-                    <span className={cn("text-xs ml-1", category.color)}>
-                      ({category.label})
-                    </span>
-                  </div>
-                </div>
-              </>
+              <span className={category.color} title={category.label}>
+                {formatBPReading(record)}
+              </span>
             );
           }}
           renderEditForm={() => (
-            <InlineEditFormShell timestamp={editTimestamp} onTimestampChange={setEditTimestamp} note={editNote} onNoteChange={setEditNote} onSave={() => handleEditSubmit()} onCancel={closeEdit} buttonClassName={theme.buttonBg}>
+            <InlineEditFormShell timestamp={editTimestamp} onTimestampChange={setEditTimestamp} note={editNote} onNoteChange={setEditNote} onSave={() => handleEditSubmit()} onCancel={closeEdit}>
               <div className="grid grid-cols-2 gap-2">
                 <Input aria-label="Systolic pressure" type="number" min={BP_RANGES.systolic.min} max={BP_RANGES.systolic.max} placeholder="Systolic" value={editSystolic} onChange={(e) => setEditSystolic(e.target.value)} className="h-8 text-sm" />
                 <Input aria-label="Diastolic pressure" type="number" min={BP_RANGES.diastolic.min} max={BP_RANGES.diastolic.max} placeholder="Diastolic" value={editDiastolic} onChange={(e) => setEditDiastolic(e.target.value)} className="h-8 text-sm" />
@@ -527,14 +491,12 @@ export function BloodPressureCard() {
                 </Select>
               </div>
               <div className="flex items-center gap-2">
-                <Checkbox id="edit-irregular-heartbeat" checked={editIrregularHeartbeat} onCheckedChange={(checked) => setEditIrregularHeartbeat(checked === true)} />
-                <Label htmlFor="edit-irregular-heartbeat" className="text-sm cursor-pointer">Irregular heartbeat</Label>
+                <Checkbox id={fid("edit-irregular-heartbeat")} checked={editIrregularHeartbeat} onCheckedChange={(checked) => setEditIrregularHeartbeat(checked === true)} />
+                <Label htmlFor={fid("edit-irregular-heartbeat")} className="text-sm cursor-pointer">Irregular heartbeat</Label>
               </div>
             </InlineEditFormShell>
           )}
         />
-      </CardContent>
-    </Card>
-    </>
+    </ModuleCard>
   );
 }

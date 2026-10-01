@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Button } from "@intake/ui/button";
 import { Cog, RefreshCw, BellRing } from "lucide-react";
+import { Spinner } from "@intake/ui/spinner";
 import { useToast } from "@intake/ui/use-toast";
 
 interface SWState {
@@ -216,9 +217,7 @@ export function ServiceWorkerDiagnostics() {
           onClick={refresh}
           disabled={busy}
         >
-          <RefreshCw
-            className={`h-3 w-3 mr-1 ${busy ? "animate-spin" : ""}`}
-          />
+          {busy ? <Spinner className="size-3 mr-1" /> : <RefreshCw className="h-3 w-3 mr-1" />}
           Refresh
         </Button>
       </div>

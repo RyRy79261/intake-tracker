@@ -1,10 +1,12 @@
 "use client";
 
 import { Button } from "@intake/ui/button";
-import { Smartphone, RefreshCw, Loader2 } from "lucide-react";
+import { Smartphone, RefreshCw } from "lucide-react";
+import { Spinner } from "@intake/ui/spinner";
 import { useVersionCheck } from "@/hooks/use-version-check";
 import { useToast } from "@intake/ui/use-toast";
 import { isCapacitorMode } from "@/lib/api-fetch";
+import { SubHead, btnClass, helpClass } from "@/components/settings/settings-kit";
 
 export function AppUpdatesSection() {
   const { toast } = useToast();
@@ -20,32 +22,25 @@ export function AppUpdatesSection() {
   const capacitor = isCapacitorMode();
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-2 text-slate-600 dark:text-slate-400">
-        <Smartphone className="w-4 h-4" />
-        <h3 className="font-semibold">{capacitor ? "App Version" : "App Updates"}</h3>
-      </div>
-      <div className="space-y-3 pl-0">
+    <div className="flex flex-col gap-2.5">
+      <SubHead icon={Smartphone}>{capacitor ? "App Version" : "App Updates"}</SubHead>
+      <div className="flex flex-col gap-2.5">
         {isUpdateAvailable ? (
-          <div className="p-3 rounded-lg bg-sky-50 dark:bg-sky-950/30 border border-sky-200 dark:border-sky-800">
-            <div className="flex items-center justify-between">
+          <div className="border border-steel bg-background p-2.5">
+            <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="text-sm font-medium text-sky-700 dark:text-sky-400">
+                <p className="text-sm font-semibold text-steel">
                   Update available
                 </p>
-                <p className="text-xs text-sky-600 dark:text-sky-500 mt-0.5">
+                <p className={`${helpClass} mt-0.5`}>
                   {capacitor
                     ? `v${serverVersion} available — update from Play Store`
                     : `v${serverVersion} available (you have v${clientVersion})`}
                 </p>
               </div>
               {!capacitor && (
-                <Button
-                  size="sm"
-                  className="bg-sky-600 hover:bg-sky-700"
-                  onClick={applyUpdate}
-                >
-                  <RefreshCw className="w-4 h-4 mr-1" />
+                <Button className="shrink-0" onClick={applyUpdate}>
+                  <RefreshCw className="h-4 w-4" />
                   Update
                 </Button>
               )}
@@ -54,7 +49,7 @@ export function AppUpdatesSection() {
         ) : (
           <Button
             variant="outline"
-            className="w-full justify-start gap-2"
+            className={`${btnClass} w-full justify-start`}
             onClick={async () => {
               try {
                 const hasUpdate = await checkForUpdates();
@@ -83,7 +78,7 @@ export function AppUpdatesSection() {
           >
             {isChecking ? (
               <>
-                <Loader2 className="w-4 h-4 animate-spin" />
+                <Spinner className="size-4" />
                 Checking...
               </>
             ) : (
@@ -94,7 +89,7 @@ export function AppUpdatesSection() {
             )}
           </Button>
         )}
-        <p className="text-xs text-muted-foreground">
+        <p className={helpClass}>
           Running v{clientVersion} · Checks automatically every 5 min
         </p>
       </div>

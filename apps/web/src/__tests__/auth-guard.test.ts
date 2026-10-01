@@ -1,5 +1,5 @@
 /**
- * Smoke tests for the rewritten auth-guard, auth-button, account-section,
+ * Smoke tests for the rewritten auth-guard, account-section,
  * and providers.tsx from plan 41-02 Task 2.
  *
  * Scope: module-level contract verification plus direct `useAuth()` hook
@@ -18,7 +18,7 @@
  *
  * Tests 1-3 cover the three useAuth branches (authenticated,
  * unauthenticated, pending). Tests 4-6 cover module-export contracts for
- * AuthButton, AccountSection, AuthGuard, and the simplified Providers
+ * AccountSection, AuthGuard, and the simplified Providers
  * stack (zero Privy / PIN imports).
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -165,11 +165,6 @@ describe("module export contracts", () => {
     expect(typeof mod.AuthGuard).toBe("function");
   });
 
-  it("auth-button exports AuthButton function component", async () => {
-    const mod = await import("@/components/auth-button");
-    expect(typeof mod.AuthButton).toBe("function");
-  });
-
   it("account-section exports AccountSection function component", async () => {
     const mod = await import("@/components/settings/account-section");
     expect(typeof mod.AccountSection).toBe("function");
@@ -196,15 +191,6 @@ describe("Privy removal guarantees (plan 41-02 success_criteria)", () => {
     const { readFile } = await import("node:fs/promises");
     const src = await readFile(
       new URL("../components/auth-guard.tsx", import.meta.url),
-      "utf8"
-    );
-    expect(src).not.toContain("@privy-io");
-  });
-
-  it("auth-button.tsx source contains zero @privy-io references", async () => {
-    const { readFile } = await import("node:fs/promises");
-    const src = await readFile(
-      new URL("../components/auth-button.tsx", import.meta.url),
       "utf8"
     );
     expect(src).not.toContain("@privy-io");

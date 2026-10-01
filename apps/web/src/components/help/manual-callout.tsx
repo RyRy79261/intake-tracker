@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import {
   AlertTriangle,
   Info,
@@ -6,38 +7,18 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { domainColor, type Domain } from "@/lib/domain-colors";
 import type { Callout, CalloutTone } from "@/lib/help/manuals";
 
-const TONE: Record<
-  CalloutTone,
-  { icon: LucideIcon; label: string; wrap: string; mark: string }
-> = {
-  tip: {
-    icon: Lightbulb,
-    label: "Tip",
-    wrap: "border-emerald-200 bg-emerald-50 dark:border-emerald-900 dark:bg-emerald-950/40",
-    mark: "text-emerald-600 dark:text-emerald-400",
-  },
-  note: {
-    icon: Info,
-    label: "Note",
-    wrap: "border-sky-200 bg-sky-50 dark:border-sky-900 dark:bg-sky-950/40",
-    mark: "text-sky-600 dark:text-sky-400",
-  },
-  warning: {
-    icon: AlertTriangle,
-    label: "Important",
-    wrap: "border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/40",
-    mark: "text-amber-600 dark:text-amber-400",
-  },
-  privacy: {
-    icon: ShieldCheck,
-    label: "Privacy",
-    wrap: "border-violet-200 bg-violet-50 dark:border-violet-900 dark:bg-violet-950/40",
-    mark: "text-violet-600 dark:text-violet-400",
-  },
+/** Label, domain colour and icon per tone, as in the prototype. */
+const TONE: Record<CalloutTone, { icon: LucideIcon; label: string; color: Domain }> = {
+  tip: { icon: Lightbulb, label: "Tip", color: "weight" },
+  note: { icon: Info, label: "Note", color: "water" },
+  warning: { icon: AlertTriangle, label: "Important", color: "sodium" },
+  privacy: { icon: ShieldCheck, label: "Privacy", color: "alcohol" },
 };
 
+/** A 1px box in the tone's colour with a faint tint of it. */
 export function ManualCallout({
   callout,
   className,
@@ -48,11 +29,18 @@ export function ManualCallout({
   const tone = TONE[callout.tone];
   const Icon = tone.icon;
   return (
-    <div className={cn("flex gap-2.5 rounded-lg border p-3", tone.wrap, className)}>
-      <Icon className={cn("h-4 w-4 shrink-0 mt-0.5", tone.mark)} />
-      <div className="space-y-0.5">
-        <p className={cn("text-xs font-semibold", tone.mark)}>{tone.label}</p>
-        <p className="text-xs leading-relaxed text-foreground/80">{callout.text}</p>
+    <div
+      data-tone={callout.tone}
+      className={cn(
+        "flex gap-2.5 border border-[color:var(--c)] bg-[color-mix(in_srgb,var(--c)_10%,transparent)] p-2.5",
+        className,
+      )}
+      style={{ "--c": domainColor(tone.color) } as CSSProperties}
+    >
+      <Icon className="mt-px h-4 w-4 shrink-0 text-[color:var(--c)]" aria-hidden="true" />
+      <div>
+        <b className="block text-xs font-semibold text-[color:var(--c)]">{tone.label}</b>
+        <p className="mt-0.5 text-[0.8125rem] leading-[1.45] text-foreground">{callout.text}</p>
       </div>
     </div>
   );

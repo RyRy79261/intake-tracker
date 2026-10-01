@@ -2,7 +2,8 @@
 
 import { Badge } from "@intake/ui/badge";
 import { Button } from "@intake/ui/button";
-import { AlertTriangle, Loader2 } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
+import { Spinner } from "@intake/ui/spinner";
 
 export type ConflictCheckState = "idle" | "checking" | "warning" | "unavailable";
 
@@ -29,8 +30,8 @@ export function ConflictCheckOverlay({
 }) {
   if (state === "checking") {
     return (
-      <div className="absolute inset-0 bg-background/95 z-10 flex flex-col items-center justify-center p-4">
-        <Loader2 className="w-8 h-8 animate-spin text-muted-foreground mb-3" />
+      <div className="absolute inset-0 bg-panel z-10 flex flex-col items-center justify-center p-4">
+        <Spinner className="size-8 text-muted-foreground mb-3" />
         <p className="text-sm text-muted-foreground">Checking for interactions...</p>
       </div>
     );
@@ -39,9 +40,9 @@ export function ConflictCheckOverlay({
   if (state !== "warning" || !data) return null;
 
   return (
-    <div className="absolute inset-0 bg-background/95 z-10 flex flex-col p-4 overflow-y-auto">
+    <div className="absolute inset-0 bg-panel z-10 flex flex-col p-4 overflow-y-auto">
       <div className="flex items-center gap-2 mb-4">
-        <AlertTriangle className="w-5 h-5 text-amber-500" />
+        <AlertTriangle className="h-5 w-5 text-sodium" aria-hidden="true" />
         <h3 className="text-sm font-semibold">Interaction Warning</h3>
       </div>
 
@@ -54,20 +55,16 @@ export function ConflictCheckOverlay({
         .map((item, idx) => (
           <div
             key={idx}
-            className={`flex items-start gap-2 p-2 rounded-md mb-2 ${
-              item.severity === "AVOID"
-                ? "bg-red-50 dark:bg-red-950/30"
-                : "bg-amber-50 dark:bg-amber-950/30"
+            className={`mb-2 flex items-start gap-2 border p-2 ${
+              item.severity === "AVOID" ? "border-bp bg-bp/8" : "border-sodium bg-sodium/8"
             }`}
           >
             <Badge
               {...(item.severity === "AVOID"
                 ? { variant: "destructive" as const }
                 : {})}
-              className={`text-[10px] shrink-0 ${
-                item.severity === "CAUTION"
-                  ? "bg-amber-500 hover:bg-amber-600 text-white"
-                  : ""
+              className={`shrink-0 text-[0.625rem] ${
+                item.severity === "CAUTION" ? "border-sodium bg-sodium text-on-domain" : "border-bp bg-bp text-on-domain"
               }`}
             >
               {item.severity}
@@ -83,7 +80,7 @@ export function ConflictCheckOverlay({
         <Button variant="outline" className="flex-1" onClick={onDismiss}>
           Go Back
         </Button>
-        <Button className="flex-1 bg-amber-600 hover:bg-amber-700" onClick={onConfirm}>
+        <Button className="flex-1" onClick={onConfirm}>
           I&apos;m Aware, Save Anyway
         </Button>
       </div>

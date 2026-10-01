@@ -1,0 +1,37 @@
+/*
+ * Ward Console display preferences (Settings > Appearance), set on <html> by
+ * components/display-prefs.tsx.
+ */
+
+/* Bigger text: 18px root (the prototype's `bigText`). Every rem-based size,
+   including Tailwind spacing, scales with it. */
+html.big-text {
+  font-size: 112.5%;
+}
+
+/* Reduce motion: no CSS animations or transitions anywhere (the prototype's
+   `.app.rm`). motion's JS animations are stopped by MotionConfig. */
+html.reduce-motion {
+  scroll-behavior: auto !important;
+}
+html.reduce-motion *,
+html.reduce-motion *::before,
+html.reduce-motion *::after {
+  animation: none !important;
+  transition: none !important;
+  scroll-behavior: auto !important;
+}
+
+/* The same for the system setting (the prototype's
+   `@media (prefers-reduced-motion:reduce)`), so the app honours the OS
+   preference even with the in-app toggle off. */
+@media (prefers-reduced-motion: reduce) {
+  html,
+  html *,
+  html *::before,
+  html *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}

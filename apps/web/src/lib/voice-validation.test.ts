@@ -66,8 +66,24 @@ describe("validateVoiceItem", () => {
     expect(validateVoiceItem({ kind: "urination" })).toMatch(/amount/i);
   });
 
-  it("rejects a malformed time", () => {
-    expect(validateVoiceItem({ kind: "water", ml: 250, time: "25:00" })).not.toBeNull();
-    expect(validateVoiceItem({ kind: "water", ml: 250, time: "08:30" })).toBeNull();
+  describe("time", () => {
+    // 2026-09-30 14:00 in Johannesburg.
+    const now = Date.UTC(2026, 8, 30, 12, 0);
+    const tz = "Africa/Johannesburg";
+    const water = (at: string) => validateVoiceItem({ kind: "water", ml: 250, at }, now, tz);
+
+    it("accepts a past date-time", () => {
+      expect(water("2026-09-29T20:00")).toBeNull();
+      expect(water("2026-09-30T13:59")).toBeNull();
+    });
+
+    it("rejects a malformed time", () => {
+      expect(water("25:00")).toMatch(/valid date and time/);
+      expect(water("2026-09-31T10:00")).toMatch(/valid date and time/);
+    });
+
+    it("rejects a time in the future", () => {
+      expect(water("2026-09-30T14:30")).toMatch(/future/);
+    });
   });
 });

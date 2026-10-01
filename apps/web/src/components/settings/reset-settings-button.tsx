@@ -41,8 +41,8 @@ export function ResetSettingsButton() {
   return (
     <AlertDialog open={open} onOpenChange={setOpen}>
       <Button
-        variant="ghost"
-        className="w-full justify-start gap-2 text-muted-foreground"
+        variant="outline"
+        className="h-11 self-start border-muted-foreground"
         onClick={() => setOpen(true)}
       >
         <RotateCcw className="w-4 h-4" />

@@ -10,10 +10,16 @@ Two run modes, depending on whether a spec needs a real login:
 - **Authenticated** — the pre-existing specs that assume a signed-in session,
   plus `signup.spec.ts`, need a Neon Auth backend.
 
-Auth is a Playwright **setup project** (`auth.setup.ts`, run before `chromium`):
+Two test projects, both Chromium: `phone` (390×844, touch) runs the feature
+specs against the phone shell; `desktop` (1440×900, mouse) runs
+`windows.spec.ts`, `a11y.spec.ts` and `desktop.spec.ts` against desktop mode
+(module windows, task strip, desk band). Run one with `--project=phone` or
+`--project=desktop`.
+
+Auth is a Playwright **setup project** (`auth.setup.ts`, run before both):
 it signs in **once** — API fast path (`POST /api/auth/sign-in/email` →
 `storageState`), falling back to a browser login — and writes
-`playwright/.auth/user.json`; the `chromium` project reuses that cookie state.
+`playwright/.auth/user.json`; both projects reuse that cookie state.
 With no creds it writes an empty session, so the offline specs still run.
 Managed Neon Auth validates every session server-side, so this real login is the
 only sound approach — you can't forge a session.

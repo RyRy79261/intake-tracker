@@ -43,11 +43,24 @@ function persistProgress(progress: PersistedProgress): void {
   localStorage.setItem(PROGRESS_KEY, JSON.stringify(progress));
 }
 
+function isTableProgressEntry(value: unknown): boolean {
+  if (!value || typeof value !== "object") return false;
+  const entry = value as Partial<TableProgress>;
+  return Number.isFinite(entry.uploaded) && Number.isFinite(entry.lastBatchIndex);
+}
+
 function loadProgress(): PersistedProgress | null {
   const raw = localStorage.getItem(PROGRESS_KEY);
   if (!raw) return null;
   try {
-    return JSON.parse(raw) as PersistedProgress;
+    const parsed = JSON.parse(raw) as Partial<PersistedProgress> | null;
+    // A value without a tableProgress map, or with an entry the resume path
+    // cannot read, is not a run we can resume: treat it as absent rather than
+    // crash the resume path on it.
+    const tp = parsed?.tableProgress;
+    if (!tp || typeof tp !== "object" || Array.isArray(tp)) return null;
+    if (!Object.values(tp).every(isTableProgressEntry)) return null;
+    return parsed as PersistedProgress;
   } catch {
     return null;
   }
@@ -337,25 +350,28 @@ async function runResumeMigration(): Promise<void> {
   store.setPhase("uploading");
   store.setError(null);
 
-  await preCountTables();
-
-  for (const [table, progress] of Object.entries(saved.tableProgress)) {
-    const current = store.tableProgress[table];
-    if (current) {
-      store.setTableProgress(table, {
-        ...current,
-        uploaded: progress.uploaded,
-        lastBatchIndex: progress.lastBatchIndex,
-        rejected: progress.rejected ?? 0,
-      });
-    }
-  }
-
-  const queueIdRef = {
-    value: Object.values(saved.tableProgress).reduce((sum, p) => sum + p.uploaded, 0),
-  };
-
+  // Restoring the saved progress runs inside the try as well: a failure there
+  // has to reach the error phase, or the dialog stays on "uploading" with no
+  // way to close it.
   try {
+    await preCountTables();
+
+    for (const [table, progress] of Object.entries(saved.tableProgress)) {
+      const current = store.tableProgress[table];
+      if (current) {
+        store.setTableProgress(table, {
+          ...current,
+          uploaded: progress.uploaded,
+          lastBatchIndex: progress.lastBatchIndex,
+          rejected: progress.rejected ?? 0,
+        });
+      }
+    }
+
+    const queueIdRef = {
+      value: Object.values(saved.tableProgress).reduce((sum, p) => sum + p.uploaded, 0),
+    };
+
     for (let i = 0; i < TABLE_PUSH_ORDER.length; i++) {
       const tableName = TABLE_PUSH_ORDER[i] as TableName;
       const existingProgress = saved.tableProgress[tableName];

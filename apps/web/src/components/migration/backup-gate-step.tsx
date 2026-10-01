@@ -1,11 +1,18 @@
 "use client";
 
 import { useState } from "react";
-import { Download, ShieldCheck } from "lucide-react";
+import { Download, Shield } from "lucide-react";
 import { Button } from "@intake/ui/button";
 import { Checkbox } from "@intake/ui/checkbox";
 // eslint-disable-next-line no-restricted-imports
 import { downloadBackup } from "@/lib/backup-service";
+import {
+  bodyClass,
+  footClass,
+  migClass,
+  migHeadingClass,
+  migTextClass,
+} from "@/components/migration/dialog-kit";
 
 interface BackupGateStepProps {
   onProceed: () => void;
@@ -29,40 +36,46 @@ export function BackupGateStep({ onProceed }: BackupGateStepProps) {
   }
 
   return (
-    <div className="flex flex-col items-center gap-6 p-6 text-center">
-      <ShieldCheck className="h-12 w-12 text-amber-500" />
-      <div className="space-y-2">
-        <h2 className="text-xl font-semibold">Back up your data</h2>
-        <p className="text-sm text-muted-foreground">
-          Before migrating to Cloud Sync, download a backup of all your local
-          data. This ensures you can restore if anything goes wrong.
-        </p>
+    <>
+      <div className={bodyClass}>
+        <div className={migClass} data-testid="migration-backup-step">
+          <Shield aria-hidden="true" className="h-8 w-8 text-sodium" />
+          <h3 className={migHeadingClass}>Back up your data</h3>
+          <p className={migTextClass}>
+            Before migrating to Cloud Sync, download a backup of all your local
+            data. This ensures you can restore if anything goes wrong.
+          </p>
+
+          <Button
+            onClick={handleDownload}
+            disabled={downloading}
+            variant="outline"
+            className="border-muted-foreground"
+          >
+            <Download aria-hidden="true" />
+            {downloading ? "Downloading…" : "Download Backup"}
+          </Button>
+
+          <label
+            htmlFor="backup-ack"
+            className="flex min-h-11 cursor-pointer items-start gap-2.5 text-left text-[0.9375rem]"
+          >
+            <Checkbox
+              id="backup-ack"
+              checked={acknowledged}
+              onCheckedChange={(v) => setAcknowledged(v === true)}
+              className="mt-px border-muted-foreground data-[state=checked]:border-foreground data-[state=checked]:bg-foreground data-[state=checked]:text-background"
+            />
+            I have downloaded and saved my backup
+          </label>
+        </div>
       </div>
 
-      <Button
-        onClick={handleDownload}
-        disabled={downloading}
-        variant="outline"
-        className="gap-2"
-      >
-        <Download className="h-4 w-4" />
-        {downloading ? "Downloading…" : "Download Backup"}
-      </Button>
-
-      <div className="flex items-center gap-2">
-        <Checkbox
-          id="backup-ack"
-          checked={acknowledged}
-          onCheckedChange={(v) => setAcknowledged(v === true)}
-        />
-        <label htmlFor="backup-ack" className="text-sm cursor-pointer">
-          I have downloaded and saved my backup
-        </label>
+      <div className={footClass}>
+        <Button onClick={onProceed} disabled={!canProceed}>
+          Proceed to Migration
+        </Button>
       </div>
-
-      <Button onClick={onProceed} disabled={!canProceed} className="w-full">
-        Proceed to Migration
-      </Button>
-    </div>
+    </>
   );
 }

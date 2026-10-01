@@ -34,3 +34,16 @@ describe("NutrientAnalysisCard personalisation label", () => {
     ).not.toBeInTheDocument();
   });
 });
+
+describe("NutrientAnalysisCard focus toggle", () => {
+  it("names the toggle without the arrow glyph and reports its state", async () => {
+    const user = userEvent.setup();
+    await renderWithFixtures(<NutrientAnalysisCard />);
+
+    const toggle = await screen.findByRole("button", { name: "Focus a nutrient" });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    await user.click(toggle);
+    expect(screen.getByRole("button", { name: "Hide focus" })).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByRole("textbox", { name: "Nutrient to focus on" })).toBeInTheDocument();
+  });
+});

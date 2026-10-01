@@ -1,0 +1,633 @@
+/*
+ * Ward Console Home: the Today gadget and the module cards.
+ * A straight port of the prototype's `.g-today`, `.tg*`, `.dc`, `.mod`,
+ * `.rec`, `.lbar`, `.qchips`, `.lstep`, `.pgrid`, `.quick3` and `.nut`
+ * rules (ward-console-4.html), prefixed `wc-`. Colours come from the theme
+ * channels (`--fg`, `--line`, ...) and each block's domain colour `--c`.
+ */
+
+/* In the components layer, so Tailwind utilities on the same elements win. */
+@layer components {
+  /* ---------------------------------------------------------------- gadget */
+  .wc-gadget {
+    background: hsl(var(--panel));
+    border: 1px solid hsl(var(--line));
+    display: flex;
+    flex-direction: column;
+  }
+  .wc-ghead {
+    height: 32px;
+    flex: none;
+    background: hsl(var(--chrome));
+    border-bottom: 1px solid hsl(var(--line));
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 4px 0 10px;
+  }
+  .wc-ghead h2 {
+    font-size: 0.75rem;
+    line-height: 1.15;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .wc-ghead .wkr {
+    font-family: var(--font-plex-mono), ui-monospace, monospace;
+    font-size: 0.75rem;
+    /* --muted-fg on --chrome is 4.2:1 in the day theme; ink passes AA. */
+    color: hsl(var(--fg));
+  }
+
+  /* Today: label | Mon-Sun mini columns (today wider) | today's value */
+  .wc-today {
+    --lc: 72px;
+    --vc: 118px;
+    --mh: 34px;
+  }
+  .wc-today .wc-ghead {
+    display: grid;
+    grid-template-columns: var(--lc) minmax(0, 1fr) var(--vc);
+    padding: 0 10px;
+  }
+  .wc-today .wc-ghead .wkr {
+    text-align: right;
+    white-space: nowrap;
+    overflow: hidden;
+  }
+  .wc-dl {
+    display: flex;
+    gap: 3px;
+    font-family: var(--font-plex-mono), ui-monospace, monospace;
+    font-size: 0.6875rem;
+    color: hsl(var(--muted-fg));
+  }
+  .wc-dl span {
+    flex: 1 1 0;
+    min-width: 0;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+  }
+  .wc-dl .t {
+    flex-grow: 1.9;
+    color: hsl(var(--fg));
+    font-weight: 600;
+  }
+  .wc-tg {
+    padding: 0 10px;
+  }
+  .wc-tg-row {
+    display: grid;
+    grid-template-columns: var(--lc) minmax(0, 1fr) var(--vc);
+    gap: 8px;
+    align-items: center;
+    width: 100%;
+    min-height: 58px;
+    padding: 6px 0;
+    text-align: left;
+  }
+  .wc-tg-row + .wc-tg-row {
+    border-top: 1px solid hsl(var(--line));
+  }
+  .wc-tg-row:hover,
+  .wc-tg-half:hover {
+    background: color-mix(in srgb, hsl(var(--fg)) 4%, transparent);
+  }
+  .wc-tg-row:focus-visible,
+  .wc-tg-half:focus-visible {
+    outline: 2px solid hsl(var(--fg));
+    outline-offset: -2px;
+  }
+  .wc-tg-l {
+    font-size: 0.875rem;
+    font-weight: 600;
+    line-height: 1.15;
+  }
+  .wc-mc {
+    display: flex;
+    gap: 3px;
+    height: var(--mh);
+  }
+  .wc-dc {
+    flex: 1 1 0;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .wc-dc.t {
+    flex-grow: 1.9;
+  }
+  .wc-dc > i {
+    flex: 1;
+    display: block;
+    position: relative;
+    background: color-mix(in srgb, hsl(var(--fg)) 8%, transparent);
+  }
+  .wc-dc.t > i {
+    box-shadow: 0 0 0 1.5px hsl(var(--fg));
+  }
+  .wc-dc > i > b {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: block;
+    background: color-mix(in srgb, var(--c) 55%, transparent);
+  }
+  .wc-dc.t > i > b {
+    background: var(--c);
+  }
+  /* over target: hatched in the domain colour */
+  .wc-dc > i > b.h,
+  .wc-dc.t > i > b.h {
+    background: repeating-linear-gradient(135deg, var(--c) 0 1.5px, transparent 1.5px 3.5px);
+    box-shadow: inset 0 0 0 1px var(--c);
+  }
+  /* over the limit: solid with an ink cap */
+  .wc-dc > i > b.x,
+  .wc-dc.t > i > b.x {
+    background: var(--c);
+    box-shadow: inset 0 3px 0 hsl(var(--fg));
+  }
+  .wc-dc.fut > i {
+    background: none;
+    box-shadow: inset 0 0 0 1px hsl(var(--line));
+  }
+  .wc-dc.fut.t > i {
+    box-shadow: 0 0 0 1.5px hsl(var(--fg));
+  }
+  /* the target tick */
+  .wc-dc > i > u {
+    position: absolute;
+    left: -2px;
+    right: -2px;
+    height: 0;
+    border-top: 1px dashed hsl(var(--fg));
+    opacity: 0.75;
+    pointer-events: none;
+  }
+  .wc-dc.t > i > u {
+    border-top: 2px solid hsl(var(--fg));
+    opacity: 1;
+    left: -3px;
+    right: -3px;
+  }
+  .wc-tg-v {
+    text-align: right;
+    font-family: var(--font-plex-mono), ui-monospace, monospace;
+    line-height: 1.15;
+    white-space: nowrap;
+    min-width: 0;
+  }
+  .wc-tg-v b {
+    font-size: 1.0625rem;
+    font-weight: 600;
+    color: var(--c);
+  }
+  .wc-tg-v .of {
+    font-size: 0.6875rem;
+    color: hsl(var(--muted-fg));
+  }
+  .wc-tg-s {
+    display: block;
+    font-family: var(--font-plex-sans), system-ui, sans-serif;
+    font-size: 0.6875rem;
+    line-height: 1.25;
+    color: hsl(var(--muted-fg));
+  }
+  .wc-tg-s.over {
+    color: hsl(var(--fg));
+    font-weight: 600;
+  }
+  .wc-inv {
+    background: var(--c);
+    color: hsl(var(--onD));
+    font-weight: 600;
+    padding: 0 4px;
+    line-height: 15px;
+    display: inline-block;
+  }
+  .wc-tg-pair {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    border-top: 1px solid hsl(var(--line));
+  }
+  .wc-tg-half {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 64px;
+    gap: 8px;
+    align-items: center;
+    padding: 6px 10px;
+    min-height: 56px;
+    text-align: left;
+  }
+  .wc-tg-half + .wc-tg-half {
+    border-left: 1px solid hsl(var(--line));
+  }
+  .wc-tg-half .wc-mc {
+    --mh: 30px;
+    gap: 2px;
+  }
+  .wc-tg-hv {
+    display: block;
+    white-space: nowrap;
+    margin-top: 2px;
+    font-family: var(--font-plex-mono), ui-monospace, monospace;
+    font-size: 0.75rem;
+    font-weight: 400;
+    color: hsl(var(--muted-fg));
+  }
+  .wc-tg-hv b {
+    color: var(--c);
+    font-weight: 600;
+    font-size: 0.9375rem;
+  }
+  .wc-tg-key {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px 12px;
+    padding: 5px 10px 6px;
+    line-height: 1.3;
+    border-top: 1px solid hsl(var(--line));
+    font-size: 0.6875rem;
+    color: hsl(var(--muted-fg));
+  }
+  .wc-tg-key span {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    white-space: nowrap;
+  }
+  .wc-tg-key i {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+  }
+  .wc-tg-key .k-t {
+    box-shadow: inset 0 0 0 1.5px hsl(var(--fg));
+  }
+  .wc-tg-key .k-tl {
+    height: 0;
+    border-top: 2px solid hsl(var(--fg));
+  }
+  .wc-tg-key .k-h {
+    background: repeating-linear-gradient(135deg, hsl(var(--fg)) 0 1.5px, transparent 1.5px 3.5px);
+    box-shadow: inset 0 0 0 1px hsl(var(--fg));
+  }
+  .wc-tg-key .k-x {
+    background: hsl(var(--muted-fg));
+    box-shadow: inset 0 3px 0 hsl(var(--fg));
+  }
+
+  /* ---------------------------------------------------------------- modules */
+  .wc-mods {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  /* A quick link scrolls a card to just under the sys-bar. */
+  .wc-mods > [id^="section-"] {
+    scroll-margin-top: calc(44px + env(safe-area-inset-top, 0px) + 8px);
+  }
+  .wc-mod {
+    /* A faint wash of the domain colour under the header, fading into the
+       panel, so a card reads as its domain before any control is touched. */
+    background: linear-gradient(
+      to bottom,
+      color-mix(in srgb, var(--c) 7%, hsl(var(--panel))),
+      hsl(var(--panel)) 240px
+    );
+    border: 1px solid hsl(var(--line));
+    box-shadow: inset 0 3px 0 var(--c);
+  }
+  .wc-mhead {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 48px;
+    padding: 6px 12px;
+    border-bottom: 1px solid hsl(var(--line));
+  }
+  .wc-mhead > svg {
+    color: var(--c);
+    width: 20px;
+    height: 20px;
+    flex: none;
+  }
+  .wc-mhead .t {
+    font-weight: 600;
+    font-size: 0.9375rem;
+  }
+  .wc-mhead .r {
+    margin-left: auto;
+    text-align: right;
+    font-family: var(--font-plex-mono), ui-monospace, monospace;
+    font-size: 0.8125rem;
+    line-height: 1.3;
+    color: hsl(var(--muted-fg));
+  }
+  .wc-mhead .r b {
+    color: hsl(var(--fg));
+    font-size: 0.9375rem;
+    font-weight: 600;
+  }
+  .wc-mbody {
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  /* 20-segment level bar */
+  .wc-lbar {
+    display: grid;
+    grid-template-columns: repeat(20, 1fr);
+    gap: 2px;
+    height: 12px;
+    padding: 2px;
+    border: 1px solid color-mix(in srgb, var(--c, hsl(var(--line))) 45%, hsl(var(--line)));
+  }
+  .wc-lbar i {
+    background: color-mix(in srgb, var(--c, hsl(var(--fg))) 14%, transparent);
+  }
+  .wc-lbar i.f {
+    background: var(--c);
+  }
+  .wc-lbar i.h {
+    background: repeating-linear-gradient(135deg, var(--c) 0 1.5px, transparent 1.5px 3.5px);
+  }
+  .wc-lbar i.x {
+    background: var(--c);
+    box-shadow: inset 0 2px 0 hsl(var(--fg));
+  }
+
+  /* quick amount chips */
+  .wc-qchips {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+  }
+  .wc-qchips button {
+    min-height: 40px;
+    border: 1px solid var(--field-line, hsl(var(--line)));
+    background: var(--field-bg, transparent);
+    font-family: var(--font-plex-mono), ui-monospace, monospace;
+    font-size: 0.875rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+  }
+  .wc-qchips button:hover {
+    background: color-mix(in srgb, hsl(var(--fg)) 6%, transparent);
+  }
+  /* Selected: the card's domain colour (ink outside a domain scope). */
+  .wc-qchips button[aria-pressed="true"] {
+    background: hsl(var(--primary));
+    color: hsl(var(--primary-foreground));
+    border-color: hsl(var(--primary));
+  }
+  .wc-qchips button:focus-visible,
+  .wc-lstep button:focus-visible,
+  .wc-pgrid > button:focus-visible,
+  .wc-quick3 > button:focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+  }
+
+  /* − amount + stepper */
+  .wc-lstep {
+    display: grid;
+    grid-template-columns: 48px 1fr 48px;
+    gap: 8px;
+    align-items: stretch;
+  }
+  .wc-lstep .rb {
+    border: 1px solid var(--field-line, hsl(var(--line)));
+    background: var(--field-bg, transparent);
+    font-size: 1.375rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .wc-lstep .rb:hover:not(:disabled) {
+    background: color-mix(in srgb, hsl(var(--fg)) 6%, transparent);
+  }
+  .wc-lstep .rb:disabled {
+    opacity: 0.35;
+  }
+  .wc-lstep .amt {
+    border: 1px solid var(--field-line, hsl(var(--line)));
+    background: var(--field-bg, transparent);
+    min-height: 64px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    padding: 0 6px;
+  }
+  .wc-lstep .amt b {
+    font-family: var(--font-plex-mono), ui-monospace, monospace;
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: var(--c);
+  }
+  .wc-lstep .amt.warn b {
+    color: hsl(var(--sodium));
+  }
+  .wc-lstep .amt small {
+    font-size: 0.75rem;
+    color: hsl(var(--muted-fg));
+    text-align: center;
+  }
+
+  /* preset grid (coffee / alcohol) */
+  .wc-pgrid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+  }
+  .wc-pgrid > button {
+    min-height: 44px;
+    border: 1px solid var(--field-line, hsl(var(--line)));
+    background: var(--field-bg, transparent);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    padding: 0 10px;
+    font-size: 0.875rem;
+    text-align: left;
+  }
+  .wc-pgrid > button:hover {
+    background: color-mix(in srgb, hsl(var(--fg)) 6%, transparent);
+  }
+  .wc-pgrid > button b {
+    font-weight: 600;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .wc-pgrid > button span {
+    font-family: var(--font-plex-mono), ui-monospace, monospace;
+    font-size: 0.8125rem;
+    color: hsl(var(--muted-fg));
+    white-space: nowrap;
+  }
+  .wc-pgrid > button[aria-pressed="true"] {
+    background: hsl(var(--primary));
+    color: hsl(var(--primary-foreground));
+    border-color: hsl(var(--primary));
+  }
+  .wc-pgrid > button[aria-pressed="true"] span {
+    color: hsl(var(--primary-foreground));
+  }
+
+  /* Small / Medium / Large */
+  .wc-quick3 {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+  }
+  .wc-quick3 > button {
+    min-height: 48px;
+    border: 1px solid var(--field-line, hsl(var(--line)));
+    background: var(--field-bg, transparent);
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 4px;
+  }
+  .wc-quick3 > button:hover:not(:disabled) {
+    background: color-mix(in srgb, hsl(var(--fg)) 6%, transparent);
+  }
+  .wc-quick3 > button:disabled {
+    opacity: 0.6;
+  }
+
+  /* nutrient total + bar */
+  .wc-nut {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 4px 10px;
+    align-items: center;
+  }
+  .wc-nut .nl {
+    font-size: 0.875rem;
+  }
+  .wc-nut .nv {
+    text-align: right;
+    font-family: var(--font-plex-mono), ui-monospace, monospace;
+    font-size: 0.8125rem;
+    color: hsl(var(--muted-fg));
+  }
+  .wc-nut .nv b {
+    color: hsl(var(--fg));
+    font-weight: 600;
+  }
+  .wc-nut .ns {
+    grid-column: 1 / -1;
+    text-align: right;
+    font-family: var(--font-plex-mono), ui-monospace, monospace;
+    font-size: 0.75rem;
+    color: hsl(var(--muted-fg));
+  }
+  .wc-nut .wc-lbar {
+    grid-column: 1 / -1;
+  }
+
+  /* Recent (3): time | label | value | delete */
+  /* The heading is a `subhead` (mono caps in the card colour); its hairline
+     replaces the rule that used to sit above the list. 7px = that rule + the
+     old padding, so the list stays where it was. */
+  .wc-rec {
+    padding-top: 7px;
+  }
+  .wc-rec h4 {
+    margin: 0 0 4px;
+  }
+  .wc-ri {
+    display: grid;
+    grid-template-columns: 44px minmax(0, 1fr) auto 40px;
+    align-items: center;
+    gap: 8px;
+    min-height: 40px;
+    font-size: 0.875rem;
+  }
+  .wc-ri + .wc-ri,
+  .wc-ri + .wc-ri-edit,
+  .wc-ri-edit + .wc-ri {
+    border-top: 1px solid color-mix(in srgb, hsl(var(--line)) 60%, transparent);
+  }
+  /* Time, label and value: a button (tap to edit) or a plain span, laid on
+     the row's first three columns. */
+  .wc-ri .open {
+    grid-column: 1 / 4;
+    display: grid;
+    grid-template-columns: subgrid;
+    align-items: center;
+    min-height: 40px;
+    text-align: left;
+    font: inherit;
+    color: inherit;
+  }
+  button.open {
+    cursor: pointer;
+  }
+  button.open:hover {
+    background: color-mix(in srgb, hsl(var(--fg)) 4%, transparent);
+  }
+  button.open:focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: -2px;
+  }
+  .wc-ri .tm {
+    font-family: var(--font-plex-mono), ui-monospace, monospace;
+    font-size: 0.8125rem;
+    line-height: 1.25;
+    color: hsl(var(--muted-fg));
+    white-space: nowrap;
+  }
+  .wc-ri .tm span {
+    display: block;
+  }
+  .wc-ri .lb {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .wc-ri .v {
+    font-family: var(--font-plex-mono), ui-monospace, monospace;
+    text-align: right;
+    white-space: nowrap;
+  }
+  .wc-ri .src {
+    font-size: 0.75rem;
+    color: hsl(var(--muted-fg));
+    margin-left: 6px;
+  }
+  .wc-ri .del {
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: hsl(var(--muted-fg));
+  }
+  .wc-ri .del:hover:not(:disabled) {
+    color: hsl(var(--bp));
+  }
+  .wc-ri-edit {
+    padding: 8px 0;
+  }
+  .wc-rec .empty {
+    font-size: 0.8125rem;
+    color: hsl(var(--muted-fg));
+    padding: 6px 0;
+  }
+}

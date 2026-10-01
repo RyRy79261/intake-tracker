@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Check, Mic, X } from "lucide-react";
 import { Button } from "@intake/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@intake/ui/card";
@@ -19,7 +19,13 @@ import type { VoiceParsedItem, VoiceParseResponse } from "@/lib/voice-types";
 import { reconcileLiquidItems } from "@/lib/voice-reconcile";
 import { applyPresetCaffeine } from "@/lib/voice-presets";
 import { validateVoiceItem } from "@/lib/voice-validation";
-import { normalizeSpokenTiming, resolveSpokenTime } from "@/lib/voice-time";
+import {
+  clientNowForParse,
+  isLongAgo,
+  normalizeSpokenTiming,
+  spokenTimestamp,
+} from "@/lib/voice-time";
+import { getDeviceTimezone } from "@/lib/timezone";
 import { useSettingsStore } from "@/stores/settings-store";
 import { recoverClosedDatabase } from "@/lib/db";
 import { apiFetch } from "@/lib/api-fetch";
@@ -68,9 +74,15 @@ function parseNotices(data: VoiceParseResponse): string[] {
 interface VoicePanelProps {
   /** Called once a save commit succeeds so the host can close the modal. */
   onCommitted?: () => void;
+  /**
+   * A clip already recorded by the host (the Ward shell's hold-to-talk
+   * button). It is transcribed and parsed once, on mount, exactly as if the
+   * panel's own recorder had produced it.
+   */
+  initialClip?: { blob: Blob; mimeType: string } | null;
 }
 
-export function VoicePanel({ onCommitted }: VoicePanelProps) {
+export function VoicePanel({ onCommitted, initialClip }: VoicePanelProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -84,7 +96,6 @@ export function VoicePanel({ onCommitted }: VoicePanelProps) {
   const addComposableEntry = useAddComposableEntry();
   const sugarEnabled = useOptionalTrackerEnabled("sugar");
   const potassiumEnabled = useOptionalTrackerEnabled("potassium");
-  const dayStartHour = useSettingsStore((s) => s.dayStartHour);
   const liquidPresets = useSettingsStore((s) => s.liquidPresets);
 
   const [transcript, setTranscript] = useState<string>("");
@@ -120,6 +131,9 @@ export function VoicePanel({ onCommitted }: VoicePanelProps) {
       setReasoning(null);
       setNotices([]);
       setStage("transcribing");
+      // The moment the user stopped speaking: "now" for everything they said.
+      const spokenAt = Date.now();
+      const timeZone = getDeviceTimezone();
 
       try {
         const ext =
@@ -151,7 +165,12 @@ export function VoicePanel({ onCommitted }: VoicePanelProps) {
         const parseRes = await apiFetch("/api/ai/voice-parse", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ transcript: text }),
+          // The device's clock goes with the transcript: the parser cannot
+          // date "yesterday at 8pm" without knowing what today is here.
+          body: JSON.stringify({
+            transcript: text,
+            now: clientNowForParse(spokenAt, timeZone),
+          }),
         });
         if (!parseRes) {
           setStage("idle");
@@ -165,9 +184,11 @@ export function VoicePanel({ onCommitted }: VoicePanelProps) {
         // Collapse a drink the parser split into two items before the review
         // list is built, so the user approves one row per drink instead of
         // having a correction applied invisibly at save time (issue #322).
-        const receivedAt = Date.now();
+        // Spoken times become each item's editable `at` here, measured from
+        // the clock the parser was given ("an hour ago" is an hour before the
+        // recording ended, not before the reply arrived).
         const reconciled = reconcileLiquidItems(
-          data.items.map((item) => normalizeSpokenTiming(item, receivedAt)),
+          data.items.map((item) => normalizeSpokenTiming(item, spokenAt, timeZone)),
         );
         // Voice caffeine follows the user's preset for a named drink, so the
         // same moka books the same caffeine whichever way it was logged.
@@ -218,16 +239,31 @@ export function VoicePanel({ onCommitted }: VoicePanelProps) {
     [toast, liquidPresets]
   );
 
+  // Process a host-recorded clip once. The ref keeps a StrictMode double
+  // effect (or a re-render) from sending the same audio twice.
+  const processedClipRef = useRef<Blob | null>(null);
+  useEffect(() => {
+    if (!initialClip || processedClipRef.current === initialClip.blob) return;
+    processedClipRef.current = initialClip.blob;
+    void handleRecorded(initialClip.blob, initialClip.mimeType);
+  }, [initialClip, handleRecorded]);
+
   const updateRow = useCallback((index: number, next: Partial<RowState>) => {
     setRows((prev) => prev.map((r, i) => (i === index ? { ...r, ...next } : r)));
   }, []);
 
-  // Skips rows that are flagged as a possible duplicate or fail validation:
-  // those need the user's attention one at a time.
+  // Skips rows that are flagged as a possible duplicate, fail validation, or
+  // are dated more than a week back: those need the user's attention one at
+  // a time.
   const approveAll = useCallback(() => {
+    const now = Date.now();
+    const timeZone = getDeviceTimezone();
     setRows((prev) =>
       prev.map((r) =>
-        r.approved === null && !r.flagged && validateVoiceItem(r.item) === null
+        r.approved === null &&
+        !r.flagged &&
+        validateVoiceItem(r.item, now, timeZone) === null &&
+        !isLongAgo(r.item.at, now, timeZone)
           ? { ...r, approved: true }
           : r,
       ),
@@ -465,9 +501,11 @@ export function VoicePanel({ onCommitted }: VoicePanelProps) {
     setStage("saving");
     // One "now" for the whole batch, so items dictated together are logged
     // together; an item with a spoken time is placed at that time instead.
+    // The record stores the instant; which day it counts toward follows from
+    // it under the day-start hour, as for every other record.
     const batchNow = Date.now();
-    const timestampFor = (item: VoiceParsedItem) =>
-      item.time !== undefined ? resolveSpokenTime(item.time, batchNow, dayStartHour) : batchNow;
+    const timeZone = getDeviceTimezone();
+    const timestampFor = (item: VoiceParsedItem) => spokenTimestamp(item, batchNow, timeZone);
     let successCount = 0;
     const failures: string[] = [];
     const savedIndices: number[] = [];
@@ -527,7 +565,7 @@ export function VoicePanel({ onCommitted }: VoicePanelProps) {
     } else {
       setStage("ready");
     }
-  }, [rows, toast, reset, queryClient, saveItem, onCommitted, dayStartHour]);
+  }, [rows, toast, reset, queryClient, saveItem, onCommitted]);
 
   const hasItems = rows.length > 0;
 

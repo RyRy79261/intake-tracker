@@ -57,6 +57,9 @@ ${plainLanguageSection(
 export const NUTRIENT_ANALYSIS_TOOL = {
   name: "report_nutrient_analysis" as const,
   description: "Report nutrient bias findings for a list of recent foods.",
+  // Schema-valid arguments are guaranteed without forcing the tool, which
+  // the quality model (Claude Sonnet 5.5) rejects.
+  strict: true,
   input_schema: {
     type: "object" as const,
     properties: {

@@ -232,9 +232,9 @@ export interface ToolCallOptions extends CallOptions {
   retryMaxTokens?: number;
   /**
    * Force the tool on the retry turn via `tool_choice` (default true).
-   * Premium routes pass false: Claude Opus 5.5 rejects a forced tool_choice,
-   * and saying so at the call site keeps them safe even if the model check
-   * below doesn't know a future premium id.
+   * Quality and premium routes pass false: Claude Sonnet 5.5 and Claude
+   * Opus 5.5 reject a forced tool_choice, and saying so at the call site
+   * keeps them safe even if the model check below doesn't know a future id.
    */
   forceOnRetry?: boolean;
 }
@@ -251,9 +251,18 @@ export interface ToolCallResult {
  * The retry carries the first reply as the assistant turn (so earlier
  * `server_tool_use` blocks stay valid — which is why the request's `tools`
  * must still declare web_search) and asks for the tool. It forces the tool
- * via `tool_choice` only where the model accepts that: Claude Opus 5.5
- * rejects a forced tool_choice with a 400, so there the retry stays on
- * `auto` and relies on the instruction plus the tool's `strict` schema.
+ * via `tool_choice` only where the model accepts that: Claude Sonnet 5.5
+ * and Claude Opus 5.5 reject a forced tool_choice with a 400, so there the
+ * retry stays on `auto` and relies on the instruction plus the tool's
+ * `strict` schema.
+ *
+ * The retry is append-only, and has to stay that way. Those models sign
+ * each thinking block over the conversation before it, so the replayed
+ * assistant turn is only valid while `system`, `tools` and the earlier
+ * messages are the ones it was produced under, and its content is passed
+ * back exactly as it arrived (thinking blocks included, empty or not).
+ * Only `max_tokens` and `tool_choice` differ, and neither is part of that
+ * history.
  */
 export async function requestToolCall(
   client: Anthropic,

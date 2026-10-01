@@ -1,16 +1,7 @@
-"use client";
-
-import { useEffect } from "react";
-import { useRouter } from "next/navigation";
-
-// History lives on /analytics now; this route only keeps old bookmarks and
-// installed-PWA shortcuts working.
+/**
+ * `/history`: kept for old bookmarks and installed-PWA shortcuts. The shell
+ * (components/shell/app-chrome.tsx) opens the Metrics window on Records.
+ */
 export default function HistoryPage() {
-  const router = useRouter();
-
-  useEffect(() => {
-    router.replace("/analytics");
-  }, [router]);
-
   return null;
 }

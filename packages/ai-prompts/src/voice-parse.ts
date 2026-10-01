@@ -20,10 +20,13 @@ Item kinds (use exactly these strings):
 - "urination": amountEstimate ("small"|"medium"|"large", optional)
 - "defecation": amountEstimate ("small"|"medium"|"large", optional)
 
-Every item kind may also carry WHEN it happened:
-- time: 24-hour "HH:mm" clock time, only when the user states one for that item ("lunch at 1pm" → "13:00", "BP at 7:30 this morning" → "07:30", "a beer at 9 last night" → "21:00").
-- minutesAgo: integer minutes before now, only when the user states a relative time ("an hour ago" → 60, "half an hour ago" → 30).
-Give at most one of the two per item. Omit both when no time is stated for that item — the app then uses the time the log is saved. Never guess a time from vague words like "earlier" or "this morning" without a clock time.
+Every item kind may also carry WHEN it happened, in its "when" field. The user message gives the current local date and time and yesterday's date — use them to work out the date.
+- A clock time, or a named part of a day → {"kind": "absolute", "localDateTime": "YYYY-MM-DDTHH:mm"}, on the user's local 24-hour clock. With the current time 2026-09-30 14:00: "lunch at 1pm" → "2026-09-30T13:00", "BP at 7:30 this morning" → "2026-09-30T07:30", "a beer yesterday evening at 8pm" → "2026-09-29T20:00".
+- A relative time → {"kind": "relative", "minutesAgo": N}: "an hour ago" → 60, "half an hour ago" → 30, "20 minutes ago" → 20, "two hours ago" → 120. Do not turn a relative time into a clock time yourself — the app does that sum.
+- "right now", "just now", "just had", or no time stated for that item → when: null. The app then uses the time the log is saved.
+Words for a part of the day, said without a clock time, mean these times: morning 08:00, lunch or midday 12:30, afternoon 15:00, evening 19:00, night 21:00. So "this morning" → today 08:00, "at lunch" → today 12:30, "yesterday evening" → yesterday 19:00, "last night" → yesterday 21:00. A stated clock time always wins over these: "yesterday evening at 8pm" → yesterday 20:00, not 19:00.
+Never return a time later than the current time. When the user names no day and the stated clock time has not happened yet today, the user means the day before: "a beer at 9pm", said at 14:00 → yesterday 21:00. When the user says today ("this morning") and that time is still ahead, use null.
+A time belongs only to the item it was said with: "a beer yesterday evening at 8pm, a bagel right now and 100ml of water an hour ago" → the beer is absolute (yesterday 20:00), the bagel is null, the water is relative (60). Never guess a time from a word like "earlier" alone — use null.
 
 Rules:
 1. Numbers spoken loosely ("about 110 over 75", "around 80") → take the central number verbatim.
@@ -45,6 +48,13 @@ export const PARSE_TOOL = {
   name: "parse_voice_log" as const,
   description:
     "Return a structured list of health log items extracted from a voice transcript.",
+  // Schema-valid arguments are guaranteed without forcing the tool, which
+  // the quality model (Claude Sonnet 5.5) rejects. Strict mode allows at
+  // most 24 optional parameters and 16 union-typed parameters per request.
+  // Every per-item field except `kind` and `when` is optional (18), so
+  // `reasoning` and `when` are required, and a new per-item field has to
+  // stay inside those limits (strict-tool-schemas.test.ts counts them).
+  strict: true,
   input_schema: {
     type: "object" as const,
     properties: {
@@ -68,9 +78,10 @@ export const PARSE_TOOL = {
                 "defecation",
               ],
             },
-            // Fields are union — Anthropic tool input schemas don't enforce
-            // discriminated unions, so we list everything and validate
-            // server-side with Zod.
+            // Fields are a union across kinds. One flat object with optional
+            // fields keeps the strict schema small; which fields belong to
+            // which kind, and their ranges, is validated server-side with
+            // Zod.
             systolic: { type: "number" },
             diastolic: { type: "number" },
             heartRate: { type: "number" },
@@ -89,18 +100,47 @@ export const PARSE_TOOL = {
             volumeMl: { type: "number" },
             amountEstimate: { type: "string", enum: ["small", "medium", "large"] },
             note: { type: "string" },
-            time: {
-              type: "string",
+            // Required, so the model states a time or says there is none
+            // (null) for every item. Each branch is a closed object with all
+            // of its fields required — a shape strict mode can express, and
+            // one union parameter of the 16 it allows.
+            when: {
               description:
-                'Clock time the user stated for this item, 24-hour "HH:mm". Omit when none was stated.',
-            },
-            minutesAgo: {
-              type: "number",
-              description:
-                "Minutes before now, when the user stated a relative time. Omit when none was stated.",
+                "When this item happened. null when the user stated no time for it (the app uses the save time).",
+              anyOf: [
+                {
+                  type: "object",
+                  description: "A clock time, or a named part of a day.",
+                  properties: {
+                    kind: { type: "string", enum: ["absolute"] },
+                    localDateTime: {
+                      type: "string",
+                      description:
+                        'Local wall-clock date and time, 24-hour "YYYY-MM-DDTHH:mm" (e.g. "2026-09-29T20:00"). No timezone suffix.',
+                    },
+                  },
+                  required: ["kind", "localDateTime"],
+                  additionalProperties: false,
+                },
+                {
+                  type: "object",
+                  description: 'A relative time ("an hour ago").',
+                  properties: {
+                    kind: { type: "string", enum: ["relative"] },
+                    minutesAgo: {
+                      type: "number",
+                      description: "Whole minutes before the current time.",
+                    },
+                  },
+                  required: ["kind", "minutesAgo"],
+                  additionalProperties: false,
+                },
+                { type: "null" },
+              ],
             },
           },
-          required: ["kind"],
+          required: ["kind", "when"],
+          additionalProperties: false,
         },
       },
       reasoning: {
@@ -108,7 +148,64 @@ export const PARSE_TOOL = {
         description: "Brief (one or two sentences) explanation of estimates and assumptions.",
       },
     },
-    required: ["items"],
+    required: ["items", "reasoning"],
     additionalProperties: false,
   },
 };
+
+/** The client's clock at the moment of the request (not PII). */
+export interface VoiceParseClientNow {
+  /** Local wall-clock "YYYY-MM-DDTHH:mm". */
+  localDateTime: string;
+  /** IANA zone, e.g. "Africa/Johannesburg". */
+  timeZone: string;
+  /** Minutes east of UTC at that moment (UTC+02:00 → 120). */
+  utcOffsetMinutes: number;
+}
+
+const WEEKDAYS = [
+  "Sunday",
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+] as const;
+
+function pad(n: number): string {
+  return String(n).padStart(2, "0");
+}
+
+/** "Wednesday 2026-09-30" for a wall-clock date held in UTC fields. */
+function weekdayAndDate(wall: Date): string {
+  return `${WEEKDAYS[wall.getUTCDay()]} ${wall.getUTCFullYear()}-${pad(wall.getUTCMonth() + 1)}-${pad(wall.getUTCDate())}`;
+}
+
+/**
+ * The line that tells the model what "now" and "yesterday" are. The date
+ * arithmetic is done here, on the wall-clock fields alone, so the model never
+ * has to subtract a day across a month end.
+ */
+export function describeCurrentTime(now: VoiceParseClientNow): string {
+  const [date = "", time = ""] = now.localDateTime.split("T");
+  const [y = 0, m = 1, d = 1] = date.split("-").map(Number);
+  const today = new Date(Date.UTC(y, m - 1, d, 12));
+  const yesterday = new Date(Date.UTC(y, m - 1, d - 1, 12));
+  const abs = Math.abs(now.utcOffsetMinutes);
+  const offset = `UTC${now.utcOffsetMinutes < 0 ? "-" : "+"}${pad(Math.floor(abs / 60))}:${pad(abs % 60)}`;
+  return `Current local time: ${weekdayAndDate(today)} ${time.slice(0, 5)} (${now.timeZone}, ${offset}). Yesterday was ${weekdayAndDate(yesterday)}.`;
+}
+
+/**
+ * What the user turn says when the client sent no clock (a cached client from
+ * before the clock was sent). It states no time, so the model cannot date
+ * anything: only relative times are allowed.
+ */
+export const NO_CLOCK_NOTE =
+  'The current local date and time are not known for this request. Return "when" only as {"kind": "relative", "minutesAgo": N} when the user states a relative time ("an hour ago"), and as null in every other case. Do not return an absolute date-time.';
+
+/** The user turn: the clock line, then the (already sanitised) transcript. */
+export function buildUserMessage(transcript: string, now?: VoiceParseClientNow): string {
+  return `${now ? describeCurrentTime(now) : NO_CLOCK_NOTE}\n\nVoice transcript:\n"""\n${transcript}\n"""\n\nExtract every distinct health log item and return them via the parse_voice_log tool.`;
+}

@@ -1,18 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import { formatDistanceToNow } from "date-fns";
 import {
   Check,
   ChevronDown,
-  ChevronRight,
-  Loader2,
   Search,
   Sparkles,
   Trash2,
   X,
 } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@intake/ui/card";
+import { Spinner } from "@intake/ui/spinner";
 import { Button } from "@intake/ui/button";
 import { Checkbox } from "@intake/ui/checkbox";
 import {
@@ -105,7 +103,6 @@ function SourceLink({ url }: { url: string }) {
       href={url}
       target="_blank"
       rel="noopener noreferrer"
-      className="text-violet-600 dark:text-violet-400 hover:underline"
       title={url}
     >
       {label}
@@ -131,32 +128,30 @@ function ReportPreview({
     <button
       type="button"
       onClick={() => onOpen(report)}
-      className="w-full text-left rounded-md border border-slate-200 dark:border-slate-800 bg-white/40 dark:bg-slate-900/40 hover:bg-slate-100/60 dark:hover:bg-slate-800/40 transition-colors px-2.5 py-2"
+      className="wm-prev"
+      style={AI_C}
     >
-      <div className="flex items-center justify-between gap-2 mb-1">
-        <div className="flex items-center gap-1.5 min-w-0">
-          <span className="text-[11px] text-muted-foreground truncate">
-            {formatDistanceToNow(report.generatedAt, { addSuffix: true })}
-          </span>
-          {report.mode === "deep" && (
-            <span
-              className="shrink-0 inline-flex items-center gap-1 rounded-full bg-violet-100 dark:bg-violet-950/50 text-violet-700 dark:text-violet-300 px-1.5 py-0.5 text-[10px] font-medium"
-              title="Deep analysis with web search"
-            >
-              <Search className="w-2.5 h-2.5" />
-              Deep
-            </span>
-          )}
-        </div>
-        <span className="shrink-0 inline-flex items-center gap-0.5 text-[11px] font-medium text-violet-600 dark:text-violet-400">
-          Read
-          <ChevronRight className="w-3 h-3" />
+      <span className="wm-pt">
+        <span className="truncate">
+          {formatDistanceToNow(report.generatedAt, { addSuffix: true })}
         </span>
-      </div>
-      <p className="text-xs text-slate-600 dark:text-slate-300 line-clamp-2">
-        {report.narrative}
-      </p>
+        {report.mode === "deep" && <DeepPill />}
+        <span className="rd">Read ›</span>
+      </span>
+      <span className="wm-clamp">{report.narrative}</span>
     </button>
+  );
+}
+
+const AI_C = { "--c": "hsl(var(--ai))" } as CSSProperties;
+
+/** Outlined "Deep" marker for web-search reports. */
+function DeepPill() {
+  return (
+    <span className="wm-pill" style={AI_C} title="Deep analysis with web search">
+      <Search aria-hidden="true" />
+      Deep
+    </span>
   );
 }
 
@@ -165,28 +160,21 @@ function ReportPreview({
  * the dialog's own scroll container handles overflow. */
 function ReportContent({ report }: { report: InsightReport }) {
   return (
-    <div className="space-y-3">
-      <p className="text-sm text-slate-700 dark:text-slate-200 whitespace-pre-line">
+    <div className="wm-dlg flex flex-col gap-3">
+      <p className="text-sm text-foreground whitespace-pre-line">
         {report.narrative}
       </p>
       {report.observations.length > 0 && (
-        <ul className="space-y-1.5 text-sm text-slate-600 dark:text-slate-300">
+        <ul className="wm-bul">
           {report.observations.map((observation, i) => (
-            <li key={i} className="flex gap-1.5">
-              <span aria-hidden className="text-violet-500 leading-5">
-                &bull;
-              </span>
-              <span>{observation}</span>
-            </li>
+            <li key={i}>{observation}</li>
           ))}
         </ul>
       )}
       {report.sources && report.sources.length > 0 && (
-        <div className="pt-2 border-t border-slate-200 dark:border-slate-800">
-          <p className="text-xs font-medium text-muted-foreground mb-1.5">
-            Sources
-          </p>
-          <ul className="flex flex-wrap gap-x-2 gap-y-1 text-xs">
+        <div>
+          <h3>Sources</h3>
+          <ul className="wm-src">
             {report.sources.map((url, i) => (
               <li key={i}>
                 <SourceLink url={url} />
@@ -202,7 +190,8 @@ function ReportContent({ report }: { report: InsightReport }) {
 /**
  * On-demand AI summary of the last 30 days of tracked data. Two flavours:
  *
- *   • Fast analysis — synchronous Sonnet summary, returns in ~10s.
+ *   • Fast analysis — synchronous Sonnet summary, returned while the user
+ *     waits.
  *   • Deep analysis — Opus + web search, submitted as an Anthropic batch.
  *     Returns minutes later; the user can close the page and come back.
  *
@@ -390,124 +379,109 @@ export function AiInsightsCard() {
   }, [deep.state.status]);
 
   return (
-    <Card className="bg-white/80 dark:bg-slate-900/50 border-slate-200 dark:border-slate-800">
-      <CardHeader className="pt-3 pb-1 px-3">
-        <CardTitle className="text-sm font-medium flex items-center gap-1.5">
-          <Sparkles className="w-3.5 h-3.5 text-violet-500" />
-          AI Insights
-          {/* Always its own rolling window, whatever range the tab shows. */}
-          <span className="ml-auto text-[11px] font-normal text-muted-foreground">
-            Last {INSIGHTS_WINDOW_DAYS} days
-          </span>
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="px-3 pb-3 space-y-3">
-        {latest ? (
-          <ReportPreview report={latest} onOpen={openReport} />
-        ) : (
-          <p className="text-sm text-muted-foreground">
-            Generate an AI summary of your last {INSIGHTS_WINDOW_DAYS} days of
-            tracked data.
-          </p>
-        )}
+    <section className="wm-card" style={AI_C} aria-label="AI Insights">
+      <h3 className="wm-ct">
+        <Sparkles className="text-ai" aria-hidden="true" />
+        AI Insights
+        {/* Always its own rolling window, whatever range the tab shows. */}
+        <span className="r">Last {INSIGHTS_WINDOW_DAYS} days</span>
+      </h3>
+      {latest ? (
+        <ReportPreview report={latest} onOpen={openReport} />
+      ) : (
+        <p className="wm-p">
+          Generate an AI summary of your last {INSIGHTS_WINDOW_DAYS} days of
+          tracked data.
+        </p>
+      )}
 
-        {pendingState && (
-          <div className="flex items-start gap-2 rounded-md border border-violet-200 dark:border-violet-900/60 bg-violet-50/70 dark:bg-violet-950/30 px-2.5 py-2 text-xs">
-            <Loader2 className="w-3.5 h-3.5 mt-0.5 shrink-0 text-violet-500 animate-spin" />
-            <div className="space-y-0.5">
-              <p className="font-medium text-violet-900 dark:text-violet-200">
-                Deep analysis in progress
-              </p>
-              <p className="text-violet-800/80 dark:text-violet-300/80">
-                Started{" "}
-                {formatDistanceToNow(pendingState.startedAt, { addSuffix: true })}.{" "}
-                {deepLongRunning
-                  ? "Taking longer than usual — still working in the background, you can keep this open or come back later."
-                  : "You can close this and come back; the report will appear here when it's ready."}
-              </p>
-            </div>
+      {pendingState && (
+        <div className="wm-deep" role="status">
+          <Spinner className="mt-0.5 shrink-0" />
+          <div>
+            <b>Deep analysis in progress</b>
+            <p>
+              Started{" "}
+              {formatDistanceToNow(pendingState.startedAt, { addSuffix: true })}.{" "}
+              {deepLongRunning
+                ? "Taking longer than usual — still working in the background, you can keep this open or come back later."
+                : "You can close this and come back; the report will appear here when it's ready."}
+            </p>
           </div>
-        )}
-
-        <div className="grid grid-cols-2 gap-2">
-          <Button
-            variant={latest ? "outline" : "default"}
-            size="sm"
-            onClick={() => openConfirm("fast")}
-            disabled={fastPending || deep.state.status === "submitting"}
-          >
-            {fastPending ? "Analysing…" : "Fast analysis"}
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => openConfirm("deep")}
-            disabled={deepBusy || fastPending}
-            className="gap-1.5"
-          >
-            {deep.state.status === "submitting" ? (
-              <>
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                Submitting…
-              </>
-            ) : pendingState ? (
-              <>
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                In progress
-              </>
-            ) : (
-              <>
-                <Search className="w-3.5 h-3.5" />
-                Deep analysis
-              </>
-            )}
-          </Button>
         </div>
+      )}
 
-        {personalised && (
-          <p className="text-[11px] text-muted-foreground">
-            Personalised with your medical profile.
-          </p>
-        )}
+      <div className="wm-g2">
+        <Button
+          variant={latest ? "outline" : "default"}
+          onClick={() => openConfirm("fast")}
+          disabled={fastPending || deep.state.status === "submitting"}
+        >
+          {fastPending ? (
+            <>
+              <Spinner />
+              Analysing…
+            </>
+          ) : (
+            "Fast analysis"
+          )}
+        </Button>
+        <Button
+          variant="outline"
+          onClick={() => openConfirm("deep")}
+          disabled={deepBusy || fastPending}
+        >
+          {deep.state.status === "submitting" ? (
+            <>
+              <Spinner />
+              Submitting…
+            </>
+          ) : pendingState ? (
+            <>
+              <Spinner />
+              In progress
+            </>
+          ) : (
+            <>
+              <Search />
+              Deep analysis
+            </>
+          )}
+        </Button>
+      </div>
 
-        {history.length > 0 && (
-          <Collapsible open={historyOpen} onOpenChange={setHistoryOpen}>
-            <CollapsibleTrigger asChild>
-              <button
-                type="button"
-                className="flex w-full items-center justify-between text-xs font-medium text-muted-foreground hover:text-foreground"
-              >
-                <span>
-                  Previous summaries ({history.length})
-                </span>
-                <ChevronDown
-                  className={`w-3.5 h-3.5 transition-transform ${
-                    historyOpen ? "rotate-180" : ""
-                  }`}
-                />
-              </button>
-            </CollapsibleTrigger>
-            <CollapsibleContent className="space-y-2 pt-2">
-              {history.map((report) => (
-                <ReportPreview
-                  key={report.id}
-                  report={report}
-                  onOpen={openReport}
-                />
-              ))}
-            </CollapsibleContent>
-          </Collapsible>
-        )}
-      </CardContent>
+      {personalised && (
+        <p className="wm-note">Personalised with your medical profile.</p>
+      )}
+
+      {history.length > 0 && (
+        <Collapsible open={historyOpen} onOpenChange={setHistoryOpen} className="wm-hist">
+          <CollapsibleTrigger asChild>
+            <button type="button">
+              Previous summaries ({history.length})
+              <ChevronDown aria-hidden="true" />
+            </button>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            {history.map((report) => (
+              <ReportPreview
+                key={report.id}
+                report={report}
+                onOpen={openReport}
+              />
+            ))}
+          </CollapsibleContent>
+        </Collapsible>
+      )}
 
       <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-1.5">
+        <DialogContent className="wm-dialog wm-dlg w-[calc(100%-24px)] border-line max-w-sm" style={AI_C}>
+          <DialogHeader className="pr-8 text-left">
+            <DialogTitle className="wm-dh">
               {dialogMode === "deep" ? (
-                <Search className="w-4 h-4 text-violet-500" />
+                <Search className="text-ai" aria-hidden="true" />
               ) : (
-                <Sparkles className="w-4 h-4 text-violet-500" />
+                <Sparkles className="text-ai" aria-hidden="true" />
               )}
               {dialogMode === "deep"
                 ? "Deep analysis with web research"
@@ -521,51 +495,41 @@ export function AiInsightsCard() {
           </DialogHeader>
 
           {dialogMode === "deep" && (
-            <div className="rounded-md border border-amber-200 dark:border-amber-900/60 bg-amber-50 dark:bg-amber-950/30 px-2.5 py-2 text-xs text-amber-900 dark:text-amber-200 space-y-1">
-              <p className="font-medium">Deep analysis is a costly request</p>
-              <p>
-                It runs a more powerful model with web search against current
-                clinical references — typically 3-10 minutes and roughly
-                10-20× the cost of a fast summary. You can close this and come
-                back; the report will appear here when it&apos;s ready.
-              </p>
+            <div className="wm-warn">
+              <b>Deep analysis is a costly request</b>
+              It runs a more powerful model with web search against current
+              clinical references — typically 3-10 minutes and roughly
+              10-20× the cost of a fast summary. You can close this and come
+              back; the report will appear here when it&apos;s ready.
             </div>
           )}
 
-          <div className="space-y-3 text-sm">
-            <div className="space-y-1.5">
-              <p className="font-medium text-slate-700 dark:text-slate-200">
-                Tracked data (last {INSIGHTS_WINDOW_DAYS} days)
-              </p>
-              <ul className="space-y-1 text-slate-600 dark:text-slate-300">
+          <div className="flex flex-col gap-3 text-sm">
+            <div>
+              <h3>Tracked data (last {INSIGHTS_WINDOW_DAYS} days)</h3>
+              <ul className="wm-ul">
                 {trackedData.map((item) => (
-                  <li key={item} className="flex gap-1.5">
-                    <Check className="w-3.5 h-3.5 mt-0.5 shrink-0 text-emerald-500" />
+                  <li key={item} className="wm-li ok">
+                    <Check aria-hidden="true" />
                     <span>{item}</span>
                   </li>
                 ))}
               </ul>
-              <p className="text-xs text-muted-foreground">
+              <p className="wm-note">
                 Each is included only when the window holds enough data for it.
               </p>
             </div>
 
-            <div className="space-y-1.5">
-              <p className="font-medium text-slate-700 dark:text-slate-200">
-                Your medical profile
-              </p>
-              <ul className="space-y-1 text-slate-600 dark:text-slate-300">
-                <li className="flex gap-1.5">
-                  {shareConditions ? (
-                    <Check className="w-3.5 h-3.5 mt-0.5 shrink-0 text-emerald-500" />
-                  ) : (
-                    <X className="w-3.5 h-3.5 mt-0.5 shrink-0 text-slate-400" />
-                  )}
+            <div>
+              <h3>Your medical profile</h3>
+              <ul className="wm-ul">
+                <li className={shareConditions ? "wm-li ok" : "wm-li no"}>
+                  {shareConditions ? <Check aria-hidden="true" /> : <X aria-hidden="true" />}
                   <span>
                     {shareConditions ? (
                       <>
                         Conditions included:{" "}
-                        <span className="text-slate-700 dark:text-slate-200">
+                        <span className="text-foreground">
                           {profile.conditions.join(", ")}
                         </span>
                       </>
@@ -574,11 +538,15 @@ export function AiInsightsCard() {
                     )}
                   </span>
                 </li>
-                <li className="flex gap-1.5">
+                <li
+                  className={
+                    shareMedications && sharedMedicationCount !== 0 ? "wm-li ok" : "wm-li no"
+                  }
+                >
                   {shareMedications && sharedMedicationCount !== 0 ? (
-                    <Check className="w-3.5 h-3.5 mt-0.5 shrink-0 text-emerald-500" />
+                    <Check aria-hidden="true" />
                   ) : (
-                    <X className="w-3.5 h-3.5 mt-0.5 shrink-0 text-slate-400" />
+                    <X aria-hidden="true" />
                   )}
                   <span>
                     {!shareMedications
@@ -592,11 +560,9 @@ export function AiInsightsCard() {
             </div>
 
             {hasPrevious && (
-              <div className="space-y-1.5">
-                <p className="font-medium text-slate-700 dark:text-slate-200">
-                  Compare with history
-                </p>
-                <label className="flex gap-2 text-slate-600 dark:text-slate-300">
+              <div>
+                <h3>Compare with history</h3>
+                <label className="mt-1.5 flex min-h-11 gap-2 text-[0.8125rem] text-muted-foreground">
                   <Checkbox
                     className="mt-0.5"
                     checked={includePrevious}
@@ -612,7 +578,7 @@ export function AiInsightsCard() {
               </div>
             )}
 
-            <p className="text-xs text-muted-foreground">
+            <p className="wm-note mt-0">
               Only aggregated numbers are sent — individual entries, notes, and
               timestamps never leave your device.
               {includePrevious && hasPrevious
@@ -622,15 +588,10 @@ export function AiInsightsCard() {
           </div>
 
           <DialogFooter className="gap-2 sm:gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setConfirmOpen(false)}
-            >
+            <Button variant="outline" onClick={() => setConfirmOpen(false)}>
               Cancel
             </Button>
             <Button
-              size="sm"
               onClick={generate}
               disabled={
                 dialogMode === "deep"
@@ -654,20 +615,15 @@ export function AiInsightsCard() {
           if (!open) openReport(null);
         }}
       >
-        <DialogContent className="max-w-lg max-h-[85vh] flex flex-col">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-1.5">
-              <Sparkles className="w-4 h-4 text-violet-500" />
+        <DialogContent
+          className="wm-dialog w-[calc(100%-24px)] border-line max-w-lg max-h-[85vh] flex flex-col"
+          style={AI_C}
+        >
+          <DialogHeader className="pr-8 text-left">
+            <DialogTitle className="wm-dh">
+              <Sparkles className="text-ai" aria-hidden="true" />
               AI insights report
-              {readingReport?.mode === "deep" && (
-                <span
-                  className="ml-1 inline-flex items-center gap-1 rounded-full bg-violet-100 dark:bg-violet-950/50 text-violet-700 dark:text-violet-300 px-1.5 py-0.5 text-[10px] font-medium"
-                  title="Deep analysis with web search"
-                >
-                  <Search className="w-2.5 h-2.5" />
-                  Deep
-                </span>
-              )}
+              {readingReport?.mode === "deep" && <DeepPill />}
             </DialogTitle>
             {readingReport && (
               <DialogDescription>
@@ -687,17 +643,15 @@ export function AiInsightsCard() {
           <DialogFooter className="gap-2 sm:gap-2">
             <Button
               variant={deleteArmed ? "destructive" : "outline"}
-              size="sm"
               onClick={deleteReadingReport}
               disabled={deleteReport.isPending}
-              className="gap-1.5"
             >
-              <Trash2 className="w-3.5 h-3.5" />
+              <Trash2 />
               {deleteArmed ? "Tap again to delete" : "Delete report"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </Card>
+    </section>
   );
 }

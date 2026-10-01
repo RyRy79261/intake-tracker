@@ -26,7 +26,7 @@ export function EditUrinationDialog({ record, ...rest }: EditUrinationDialogProp
       amountOptions={URINATION_AMOUNT_OPTIONS}
       allowNoEstimate
       notePlaceholder="e.g. colour, urgency"
-      accentClassName="bg-violet-600 hover:bg-violet-700"
+      domain="bath"
       idPrefix="edit-urination"
       {...rest}
     />

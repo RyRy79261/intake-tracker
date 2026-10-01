@@ -38,8 +38,11 @@ describe("CorrelationsTab", () => {
     expect(screen.getByText("Weight vs Sugar Intake")).toBeInTheDocument();
     expect(screen.getByText("Caffeine vs Blood Pressure")).toBeInTheDocument();
     expect(screen.getByText("Alcohol vs Blood Pressure")).toBeInTheDocument();
-    // "Custom Comparison" renders twice — a section heading and the card title.
-    expect(screen.getAllByText("Custom Comparison")).toHaveLength(2);
+    // "Custom Comparison" is the section heading over the comparison card.
+    expect(screen.getByRole("heading", { name: "Custom Comparison" })).toBeInTheDocument();
+    expect(screen.getByTestId("custom-comparison")).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "First measure" })).toHaveValue("salt");
+    expect(screen.getByRole("combobox", { name: "Second measure" })).toHaveValue("weight");
   });
 
   it("shows the fluid-balance empty state when no fluid data exists", async () => {
@@ -84,7 +87,7 @@ describe("CorrelationsTab", () => {
     const compareButton = await screen.findByRole("button", {
       name: "Compare",
     });
-    const customCard = compareButton.closest("div.rounded-xl") as HTMLElement;
+    const customCard = screen.getByTestId("custom-comparison");
     expect(customCard).not.toBeNull();
 
     // Before clicking Compare the custom card renders no correlation output.

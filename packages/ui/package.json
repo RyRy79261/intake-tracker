@@ -30,6 +30,7 @@
     "./select": "./src/components/select.tsx",
     "./sheet": "./src/components/sheet.tsx",
     "./skeleton": "./src/components/skeleton.tsx",
+    "./spinner": "./src/components/spinner.tsx",
     "./switch": "./src/components/switch.tsx",
     "./tabs": "./src/components/tabs.tsx",
     "./textarea": "./src/components/textarea.tsx",
