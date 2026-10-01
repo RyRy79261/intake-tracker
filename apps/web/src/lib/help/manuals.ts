@@ -158,7 +158,7 @@ export const MANUALS: Manual[] = [
         bullets: [
           "The bar along the top opens the apps: Medications, Metrics, History and your Profile, plus Settings. Each app opens in its own window.",
           "On a phone a window fills the screen and only one is open at a time: opening another closes it, and Home (or Back) closes it too. On a tablet windows sit side by side, and Esc closes the one in front.",
-          "On a phone, swipe sideways to move between Profile, Home, Medications and Metrics, in that order.",
+          "On a phone, swipe left to move along the top bar: Home, Medications, Metrics, History, then Profile (when signed in). Swipe right to go back the other way.",
           "On a phone the bottom bar has Home and Hold to talk (when signed in). Above it on Home, the quick links (Liquids, Food, BP, Weight, Urine, Bowel) jump to each card; the card in view is marked. Tapping Home on Home goes back to the top.",
           "On a tablet the bottom bar also has Windows, to switch between or close the open windows.",
           "On a computer (a screen 1024 pixels wide or more, with a mouse or trackpad) everything is a window on a desk. Today, Liquids, Food, Blood Pressure, Weight, Urination and Defecation each have their own window, all open the first time, side by side. Drag a window by its title bar to move it. Drag any edge or corner to resize it. Click a window to bring it to the front.",
