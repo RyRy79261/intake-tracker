@@ -48,6 +48,13 @@ export const PARSE_TOOL = {
   name: "parse_voice_log" as const,
   description:
     "Return a structured list of health log items extracted from a voice transcript.",
+  // Schema-valid arguments are guaranteed without forcing the tool, which
+  // the quality model (Claude Sonnet 5.5) rejects. Strict mode allows at
+  // most 24 optional parameters and 16 union-typed parameters per request.
+  // Every per-item field except `kind` and `when` is optional (18), so
+  // `reasoning` and `when` are required, and a new per-item field has to
+  // stay inside those limits (strict-tool-schemas.test.ts counts them).
+  strict: true,
   input_schema: {
     type: "object" as const,
     properties: {
@@ -71,9 +78,10 @@ export const PARSE_TOOL = {
                 "defecation",
               ],
             },
-            // Fields are union — Anthropic tool input schemas don't enforce
-            // discriminated unions, so we list everything and validate
-            // server-side with Zod.
+            // Fields are a union across kinds. One flat object with optional
+            // fields keeps the strict schema small; which fields belong to
+            // which kind, and their ranges, is validated server-side with
+            // Zod.
             systolic: { type: "number" },
             diastolic: { type: "number" },
             heartRate: { type: "number" },
@@ -92,26 +100,47 @@ export const PARSE_TOOL = {
             volumeMl: { type: "number" },
             amountEstimate: { type: "string", enum: ["small", "medium", "large"] },
             note: { type: "string" },
+            // Required, so the model states a time or says there is none
+            // (null) for every item. Each branch is a closed object with all
+            // of its fields required — a shape strict mode can express, and
+            // one union parameter of the 16 it allows.
             when: {
-              type: ["object", "null"],
               description:
-                'When this item happened. null when the user stated no time for it (the app uses the save time). kind "absolute" needs localDateTime; kind "relative" needs minutesAgo.',
-              properties: {
-                kind: { type: "string", enum: ["absolute", "relative"] },
-                localDateTime: {
-                  type: "string",
-                  description:
-                    'Local wall-clock date and time, 24-hour "YYYY-MM-DDTHH:mm" (e.g. "2026-09-29T20:00"). No timezone suffix.',
+                "When this item happened. null when the user stated no time for it (the app uses the save time).",
+              anyOf: [
+                {
+                  type: "object",
+                  description: "A clock time, or a named part of a day.",
+                  properties: {
+                    kind: { type: "string", enum: ["absolute"] },
+                    localDateTime: {
+                      type: "string",
+                      description:
+                        'Local wall-clock date and time, 24-hour "YYYY-MM-DDTHH:mm" (e.g. "2026-09-29T20:00"). No timezone suffix.',
+                    },
+                  },
+                  required: ["kind", "localDateTime"],
+                  additionalProperties: false,
                 },
-                minutesAgo: {
-                  type: "number",
-                  description: "Whole minutes before the current time.",
+                {
+                  type: "object",
+                  description: 'A relative time ("an hour ago").',
+                  properties: {
+                    kind: { type: "string", enum: ["relative"] },
+                    minutesAgo: {
+                      type: "number",
+                      description: "Whole minutes before the current time.",
+                    },
+                  },
+                  required: ["kind", "minutesAgo"],
+                  additionalProperties: false,
                 },
-              },
-              required: ["kind"],
+                { type: "null" },
+              ],
             },
           },
-          required: ["kind"],
+          required: ["kind", "when"],
+          additionalProperties: false,
         },
       },
       reasoning: {
@@ -119,7 +148,7 @@ export const PARSE_TOOL = {
         description: "Brief (one or two sentences) explanation of estimates and assumptions.",
       },
     },
-    required: ["items"],
+    required: ["items", "reasoning"],
     additionalProperties: false,
   },
 };

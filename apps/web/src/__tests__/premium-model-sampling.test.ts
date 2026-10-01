@@ -1,12 +1,12 @@
 /**
  * Request-parameter guard for every `CLAUDE_MODELS.*` request.
  *
- * Claude Opus 4.7 and later, and Claude Sonnet 5, removed `temperature` /
+ * Claude Opus 4.7 and later, and Claude Sonnet 5 and later, removed `temperature` /
  * `top_p` / `top_k`: setting any of them to a non-default value returns a
  * **400**, so the request fails outright instead of being nudged toward
  * determinism. Note `temperature: 0` is a non-default value — "deterministic"
  * is exactly the setting that breaks. The premium (Opus 5.5) and quality
- * (Sonnet 5) tiers are both on that request surface now, so the scan covers
+ * (Sonnet 5.5) tiers are both on that request surface now, so the scan covers
  * every tier. The fast tier (Haiku 4.5) still accepts sampling parameters,
  * but nothing depends on them there and one rule is easier to keep than a
  * per-tier exception that goes stale on the next id bump.
@@ -17,12 +17,15 @@
  * time (issue #331); medicine-search, interaction-check and
  * titration-warnings each sent `temperature: 0` and 400'd the same way. The
  * Sonnet-backed routes were untouched then, which is why only the Opus
- * features looked broken — and why they are covered now that Sonnet 5 has
- * the same rule.
+ * features looked broken — and why they are covered now that the Sonnet
+ * tier has the same rule.
  *
- * Claude Opus 5.5 also rejects a forced `tool_choice` (`{type: "tool"}` or
- * `{type: "any"}`) with a 400. Premium requests use `auto` with `strict`
- * tools and a retry when no call comes back (see `_shared/claude-call.ts`).
+ * Claude Opus 5.5 and Claude Sonnet 5.5 also reject a forced `tool_choice`
+ * (`{type: "tool"}` or `{type: "any"}`) with a 400. Premium and quality
+ * requests use `auto` with `strict` tools and a retry when no call comes
+ * back (see `_shared/claude-call.ts`). Effort is recalibrated on both and
+ * the defaults differ (Opus 5.5 `medium`, Sonnet 5.5 `high`), so every
+ * request on those tiers sets `output_config.effort` itself.
  *
  * A source scan rather than a per-route runtime test: the failure mode is
  * "someone adds `temperature` back to a request", and that is a property of
@@ -34,14 +37,14 @@ import { describe, it, expect } from "vitest";
 import * as fs from "fs";
 import * as path from "path";
 import ts from "typescript";
-import { CLAUDE_MODELS } from "@intake/ai-prompts/models";
+import { CLAUDE_MODELS, rejectsForcedToolChoice } from "@intake/ai-prompts/models";
 
 const SRC = path.resolve(process.cwd(), "src");
 
 /** Parameters the current Opus and Sonnet models reject outright. */
 const REJECTED_PARAMS = ["temperature", "top_p", "top_k"];
 
-/** `tool_choice` types Claude Opus 5.5 rejects. */
+/** `tool_choice` types Claude Opus 5.5 and Claude Sonnet 5.5 reject. */
 const FORCED_TOOL_CHOICE_TYPES = ["tool", "any"];
 
 /** Smallest `max_tokens` that leaves room for default adaptive thinking. */
@@ -159,7 +162,7 @@ describe("Claude requests only pass parameters the pinned models accept", () => 
   it("pins the current model ids", () => {
     expect(CLAUDE_MODELS).toEqual({
       fast: "claude-haiku-4-5-20251001",
-      quality: "claude-sonnet-5",
+      quality: "claude-sonnet-5-5",
       premium: "claude-opus-5-5",
     });
   });
@@ -174,6 +177,27 @@ describe("Claude requests only pass parameters the pinned models accept", () => 
     expect(files).toContain(path.join("app", "api", "ai", "medicine-about", "route.ts"));
     expect(all.filter((r) => r.tier === "premium").length).toBeGreaterThanOrEqual(5);
     expect(all.filter((r) => r.tier === "quality").length).toBeGreaterThanOrEqual(4);
+    const qualityFiles = parsed
+      .filter(({ source }) => requestLiterals(source).some((r) => r.tier === "quality"))
+      .map(({ file }) => path.relative(SRC, file))
+      .sort();
+    // Every quality-tier route, by name: a new one has to be added here, and
+    // a moved one can't drop out of the scans below unnoticed.
+    expect(qualityFiles).toEqual(
+      [
+        path.join("app", "api", "ai", "nutrient-analysis", "route.ts"),
+        path.join("app", "api", "ai", "parse", "route.ts"),
+        path.join("app", "api", "ai", "substance-lookup", "route.ts"),
+        path.join("app", "api", "ai", "voice-parse", "route.ts"),
+        path.join("app", "api", "analytics", "insights", "route.ts"),
+      ].sort(),
+    );
+  });
+
+  it("marks the quality and premium models as rejecting a forced tool_choice", () => {
+    expect(rejectsForcedToolChoice(CLAUDE_MODELS.quality)).toBe(true);
+    expect(rejectsForcedToolChoice(CLAUDE_MODELS.premium)).toBe(true);
+    expect(rejectsForcedToolChoice(CLAUDE_MODELS.fast)).toBe(false);
   });
 
   it("never passes temperature, top_p or top_k to any Claude request", () => {
@@ -205,19 +229,19 @@ describe("Claude requests only pass parameters the pinned models accept", () => 
     expect(violations).toEqual([]);
   });
 
-  it("never forces tool_choice on a premium-model request", () => {
+  it("never forces tool_choice on a quality- or premium-model request", () => {
     const violations: string[] = [];
 
     for (const { file, source } of parsed) {
       for (const { literal, tier } of requestLiterals(source)) {
-        if (tier !== "premium") continue;
+        if (tier !== "quality" && tier !== "premium") continue;
         for (const prop of literal.properties) {
           if (propertyName(prop) !== "tool_choice") continue;
           const type = toolChoiceType(prop);
           if (type === null) continue;
           if (type === "<dynamic>" || FORCED_TOOL_CHOICE_TYPES.includes(type)) {
             violations.push(
-              `${path.relative(SRC, file)} passes tool_choice ${type} to a premium-model request`,
+              `${path.relative(SRC, file)} passes tool_choice ${type} to a ${tier}-model request`,
             );
           }
         }
@@ -227,9 +251,49 @@ describe("Claude requests only pass parameters the pinned models accept", () => 
     expect(violations).toEqual([]);
   });
 
-  // Sonnet 5 and Opus 5.5 run adaptive thinking when `thinking` is omitted,
-  // and those tokens share `max_tokens` with the answer. A budget sized for
-  // Sonnet 4.6 — thinking-off by default — can cut a forced tool call off
+  // `auto` is also what the API does when `tool_choice` is left out, but a
+  // request that says so can't be mistaken for one nobody has looked at, and
+  // effort has no safe default to lean on: it differs per model and was
+  // recalibrated on both.
+  it("states tool_choice auto and an effort level on every quality- and premium-model request", () => {
+    const violations: string[] = [];
+
+    for (const { file, source } of parsed) {
+      for (const { literal, tier } of requestLiterals(source)) {
+        if (tier !== "quality" && tier !== "premium") continue;
+        const line = source.getLineAndCharacterOfPosition(literal.getStart()).line + 1;
+        const where = `${path.relative(SRC, file)}:${line}`;
+
+        const toolChoice = literal.properties.find((p) => propertyName(p) === "tool_choice");
+        if (!toolChoice || toolChoiceType(toolChoice) !== "auto") {
+          violations.push(`${where} does not set tool_choice { type: "auto" } on a ${tier}-model request`);
+        }
+
+        const outputConfig = literal.properties.find((p) => propertyName(p) === "output_config");
+        const effort =
+          outputConfig &&
+          ts.isPropertyAssignment(outputConfig) &&
+          ts.isObjectLiteralExpression(outputConfig.initializer)
+            ? outputConfig.initializer.properties.find((p) => propertyName(p) === "effort")
+            : undefined;
+        if (!effort) {
+          violations.push(`${where} does not set output_config.effort on a ${tier}-model request`);
+        }
+
+        // Thinking can't be turned off on either model, and `budget_tokens`
+        // is gone: no route sets `thinking`, so none can set it wrongly.
+        if (literal.properties.some((p) => propertyName(p) === "thinking")) {
+          violations.push(`${where} sets thinking on a ${tier}-model request`);
+        }
+      }
+    }
+
+    expect(violations).toEqual([]);
+  });
+
+  // Sonnet 5.5 and Opus 5.5 run adaptive thinking when `thinking` is
+  // omitted, and those tokens share `max_tokens` with the answer. A budget
+  // sized for Sonnet 4.6 — thinking-off by default — can cut a tool call off
   // mid-JSON, and a route calling `messages.create` directly (rather than
   // `_shared/claude-call.ts`, which retries a truncation with a bigger
   // budget) then fails the whole request.

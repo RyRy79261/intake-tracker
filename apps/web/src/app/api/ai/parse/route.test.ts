@@ -255,7 +255,14 @@ describe("POST /api/ai/parse", () => {
       { timeout: number; maxRetries: number },
     ];
     expect(params).not.toHaveProperty("temperature");
+    expect(params).not.toHaveProperty("top_p");
+    expect(params).not.toHaveProperty("top_k");
+    expect(params).not.toHaveProperty("thinking");
     expect(params.output_config).toEqual({ effort: "medium" });
+    // Claude Sonnet 5.5 rejects a forced tool_choice: `auto` + a strict tool.
+    expect(params.tool_choice).toEqual({ type: "auto" });
+    const tools = params.tools as Array<{ name: string; strict?: boolean }>;
+    expect(tools.find((t) => t.name === "parse_food_result")?.strict).toBe(true);
     expect(options.timeout).toBeGreaterThan(0);
     expect(options.timeout).toBeLessThanOrEqual(60_000);
   });
@@ -291,5 +298,23 @@ describe("POST /api/ai/parse", () => {
     const body = (await res.json()) as { water: number };
     expect(body.water).toBe(100);
     expect(messagesCreate).toHaveBeenCalledTimes(2);
+
+    // The follow-up turn is unforced and append-only: same system and tools,
+    // the first reply passed back as it arrived, one user turn added.
+    const first = messagesCreate.mock.calls[0]![0] as Record<string, unknown>;
+    const retry = messagesCreate.mock.calls[1]![0] as Record<string, unknown> & {
+      messages: Array<{ role: string; content: unknown }>;
+    };
+    expect(retry.tool_choice).toEqual({ type: "auto" });
+    expect(retry.output_config).toEqual({ effort: "medium" });
+    expect(retry.system).toBe(first.system);
+    expect(retry.tools).toBe(first.tools);
+    expect(retry.messages).toHaveLength(3);
+    expect(retry.messages[0]).toBe((first.messages as unknown[])[0]);
+    expect(retry.messages[1]).toEqual({
+      role: "assistant",
+      content: [{ type: "text", text: "here is some prose, no tool" }],
+    });
+    expect(retry.messages[2]!.role).toBe("user");
   });
 });

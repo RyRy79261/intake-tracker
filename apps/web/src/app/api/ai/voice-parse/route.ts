@@ -24,6 +24,10 @@ import {
  * `stop_reason` (a refusal is a clear 422, a max_tokens cut-off is retried
  * with a bigger budget), record usage for every upstream response, and share
  * one route-wide deadline.
+ *
+ * Quality tier (Claude Sonnet 5.5): no forced tool_choice and no sampling
+ * parameters (each a 400). The request is `auto` with a strict tool, the
+ * prompt says to always call it, and the retry turn is unforced.
  */
 
 // Vercel function limit. The shared deadline stops short of it so a slow
@@ -90,9 +94,15 @@ export const POST = withAuth(async ({ request, auth }) => {
       client,
       {
         model: CLAUDE_MODELS.quality,
-        max_tokens: 4096, // headroom for Sonnet 5 adaptive thinking
+        // Headroom for adaptive thinking, which is always on for this model
+        // and shares the ceiling with the tool call.
+        max_tokens: 4096,
+        // The user has just spoken and is waiting: medium, not the default
+        // high.
+        output_config: { effort: "medium" },
         system: SYSTEM_PROMPT,
         tools: [PARSE_TOOL],
+        tool_choice: { type: "auto" },
         messages: [{ role: "user", content: userMessage }],
       },
       {
@@ -100,6 +110,7 @@ export const POST = withAuth(async ({ request, auth }) => {
         deadline: Date.now() + DEADLINE_MS,
         toolName: PARSE_TOOL.name,
         retryInstruction: "Return the structured items via the parse_voice_log tool now.",
+        forceOnRetry: false,
       },
     );
 

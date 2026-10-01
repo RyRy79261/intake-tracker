@@ -280,6 +280,29 @@ export const INSIGHT_TOOL = {
   },
 };
 
+/**
+ * The fast route's tool: the same call as {@link INSIGHT_TOOL} without
+ * `sources` (fast mode never searches), marked `strict`. The quality model
+ * (Claude Sonnet 5.5) rejects a forced `tool_choice`, so the route sends
+ * `auto` and relies on `strict` for schema-valid arguments. It is a separate
+ * definition because strict mode has no `maxItems`, and because the deep
+ * route must keep declaring exactly the tool its paused turns started with.
+ */
+export const FAST_INSIGHT_TOOL = {
+  name: INSIGHT_TOOL.name,
+  description: INSIGHT_TOOL.description,
+  strict: true,
+  input_schema: {
+    type: "object" as const,
+    properties: {
+      summary: INSIGHT_TOOL.input_schema.properties.summary,
+      observations: INSIGHT_TOOL.input_schema.properties.observations,
+    },
+    required: ["summary", "observations"],
+    additionalProperties: false,
+  },
+};
+
 export const INSIGHTS_SYSTEM_PROMPT = `You summarise personal health-tracking metrics for a self-tracking app.
 
 Rules:

@@ -188,14 +188,55 @@ describe("PARSE_TOOL", () => {
   });
 
   it("offers a nullable per-item `when` to the model", () => {
-    const props = PARSE_TOOL.input_schema.properties.items.items.properties;
-    expect(props.when.type).toEqual(["object", "null"]);
-    expect(props.when.properties.kind.enum).toEqual(["absolute", "relative"]);
-    expect(props.when.properties).toHaveProperty("localDateTime");
-    expect(props.when.properties).toHaveProperty("minutesAgo");
+    const item = PARSE_TOOL.input_schema.properties.items.items;
+    const props = item.properties;
+    // Strict mode: the key is always present, so "no time" is null.
+    expect(item.required).toContain("when");
+    const [absolute, relative, none] = props.when.anyOf as {
+      type: string;
+      properties?: Record<string, { enum?: string[] }>;
+      required?: string[];
+      additionalProperties?: boolean;
+    }[];
+    expect(absolute?.properties?.kind?.enum).toEqual(["absolute"]);
+    expect(absolute?.required).toEqual(["kind", "localDateTime"]);
+    expect(relative?.properties?.kind?.enum).toEqual(["relative"]);
+    expect(relative?.required).toEqual(["kind", "minutesAgo"]);
+    expect(none).toEqual({ type: "null" });
     // The old bare clock fields are gone: a time with no date cannot say "yesterday".
     expect(props).not.toHaveProperty("time");
     expect(props).not.toHaveProperty("minutesAgo");
+  });
+
+  // Strict mode makes the model send `when` on every item, so each shape the
+  // tool can emit has to survive the server-side validation.
+  it.each([
+    ["null", null, undefined],
+    [
+      "absolute",
+      { kind: "absolute", localDateTime: "2026-09-29T20:00" },
+      { kind: "absolute", localDateTime: "2026-09-29T20:00" },
+    ],
+    ["relative", { kind: "relative", minutesAgo: 60 }, { kind: "relative", minutesAgo: 60 }],
+  ])("accepts the strict tool's %s `when` on every item kind", (_name, when, expected) => {
+    const items = [
+      { kind: "blood_pressure", when, systolic: 120, diastolic: 80 },
+      { kind: "weight", when, weightKg: 80 },
+      { kind: "water", when, ml: 250 },
+      { kind: "salt", when, sodiumMg: 400 },
+      { kind: "food", when, description: "bagel" },
+      { kind: "caffeine", when, description: "latte", caffeineMg: 80 },
+      { kind: "alcohol", when, description: "beer", abvPercent: 5, volumeMl: 500 },
+      { kind: "urination", when },
+      { kind: "defecation", when },
+    ];
+    const result = extractVoiceItems({ items, reasoning: "ok" });
+    expect(result.ok && result.dropped).toBe(0);
+    expect(result.ok && result.items).toHaveLength(items.length);
+    for (const item of result.ok ? result.items : []) {
+      expect(item.when).toEqual(expected);
+      expect("when" in item).toBe(expected !== undefined);
+    }
   });
 });
 

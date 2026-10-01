@@ -215,7 +215,9 @@ describe("POST /api/ai/nutrient-analysis", () => {
     expect(messagesCreate).not.toHaveBeenCalled();
   });
 
-  it("request: no sampling parameters (Sonnet 5 400s on temperature) and an explicit effort", async () => {
+  // Claude Sonnet 5.5 rejects a forced tool_choice, a sampling parameter and
+  // a disabled-thinking setting with a 400.
+  it("request: tool_choice auto, a strict tool, explicit high effort, no sampling", async () => {
     messagesCreate.mockResolvedValueOnce(toolResponse(validResult));
 
     const { POST } = await import("@/app/api/ai/nutrient-analysis/route");
@@ -223,7 +225,47 @@ describe("POST /api/ai/nutrient-analysis", () => {
 
     const params = messagesCreate.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(params).not.toHaveProperty("temperature");
-    expect(params.output_config).toEqual({ effort: "medium" });
+    expect(params).not.toHaveProperty("top_p");
+    expect(params).not.toHaveProperty("top_k");
+    expect(params).not.toHaveProperty("thinking");
+    expect(params.output_config).toEqual({ effort: "high" });
+    expect(params.tool_choice).toEqual({ type: "auto" });
+    // High effort thinks more, and thinking shares max_tokens with the answer.
+    expect(params.max_tokens as number).toBeGreaterThanOrEqual(8192);
+    const tools = params.tools as Array<{ name: string; strict?: boolean }>;
+    expect(tools.find((t) => t.name === "report_nutrient_analysis")?.strict).toBe(true);
+  });
+
+  it("asks again on an unforced, append-only turn when the reply is prose", async () => {
+    const prose = [
+      { type: "thinking", thinking: "", signature: "sig" },
+      { type: "text", text: "Your diet leans on potassium." },
+    ];
+    messagesCreate
+      .mockResolvedValueOnce({
+        content: prose,
+        stop_reason: "end_turn",
+        usage: { input_tokens: 10, output_tokens: 5 },
+      })
+      .mockResolvedValueOnce(toolResponse(validResult));
+
+    const { POST } = await import("@/app/api/ai/nutrient-analysis/route");
+    const res = await POST(makeRequest(baseBody));
+
+    expect(res.status).toBe(200);
+    const first = messagesCreate.mock.calls[0]![0] as Record<string, unknown>;
+    const retry = messagesCreate.mock.calls[1]![0] as Record<string, unknown> & {
+      messages: Array<{ role: string; content: unknown }>;
+    };
+    expect(retry.tool_choice).toEqual({ type: "auto" });
+    expect(retry.output_config).toEqual({ effort: "high" });
+    expect(retry.system).toBe(first.system);
+    expect(retry.tools).toBe(first.tools);
+    expect(retry.messages).toHaveLength(3);
+    expect(retry.messages[0]).toBe((first.messages as unknown[])[0]);
+    expect(retry.messages[1]!.role).toBe("assistant");
+    expect(retry.messages[1]!.content).toBe(prose);
+    expect(retry.messages[2]!.role).toBe("user");
   });
 
   it("refusal: stop_reason refusal → 422 AI_REFUSED, not 'didn't return a structured response'", async () => {
@@ -238,8 +280,10 @@ describe("POST /api/ai/nutrient-analysis", () => {
     const res = await POST(makeRequest(baseBody));
 
     expect(res.status).toBe(422);
-    const body = (await res.json()) as { code: string };
+    const body = (await res.json()) as { code: string; error: string };
     expect(body.code).toBe("AI_REFUSED");
+    // An analysis has nothing to "enter manually": its own wording.
+    expect(body.error).toBe("The AI declined to analyze this food log.");
     expect(messagesCreate).toHaveBeenCalledTimes(1);
   });
 

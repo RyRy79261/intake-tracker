@@ -20,6 +20,8 @@ import Anthropic from "@anthropic-ai/sdk";
 // ── Controllable stubs ───────────────────────────────────────────────────
 
 let aiContent: unknown[] = [];
+/** Replies for successive calls; once it runs out, `aiContent` is used. */
+let aiReplies: Array<{ content: unknown[]; stop_reason: string; stop_details?: unknown }> = [];
 let aiStopReason: string = "tool_use";
 let aiThrows: Error | null = null;
 let claudeClientThrows: Error | null = null;
@@ -27,6 +29,7 @@ const messagesCreateCalls: unknown[] = [];
 
 function resetState() {
   aiContent = [];
+  aiReplies = [];
   aiStopReason = "tool_use";
   aiThrows = null;
   claudeClientThrows = null;
@@ -61,9 +64,11 @@ vi.mock("@/app/api/ai/_shared/claude-client", () => ({
           create: async (params: unknown) => {
             messagesCreateCalls.push(params);
             if (aiThrows) throw aiThrows;
+            const next = aiReplies.shift();
             return {
-              content: aiContent,
-              stop_reason: aiStopReason,
+              content: next ? next.content : aiContent,
+              stop_reason: next ? next.stop_reason : aiStopReason,
+              stop_details: next?.stop_details ?? null,
               usage: { input_tokens: 20, output_tokens: 10 },
             };
           },
@@ -209,8 +214,9 @@ describe("POST /api/analytics/insights", () => {
     expect(body.code).toBe("INVALID_KEY");
   });
 
-  it("returns 502 when the model does not call the insight tool", async () => {
+  it("returns 502 when the model does not call the insight tool on either turn", async () => {
     aiContent = [{ type: "text", text: "Here is a plain prose reply." }];
+    aiStopReason = "end_turn";
 
     const { POST } = await import("@/app/api/analytics/insights/route");
     const res = await POST(makeRequest(validBody()));
@@ -218,6 +224,83 @@ describe("POST /api/analytics/insights", () => {
     expect(res.status).toBe(502);
     const body = (await res.json()) as { error: string };
     expect(body.error).toBe("AI response format invalid");
+    // One unforced retry, then give up.
+    expect(messagesCreateCalls).toHaveLength(2);
+  });
+
+  // Claude Sonnet 5.5 rejects a forced tool_choice (this route used to send
+  // one), a sampling parameter and a disabled-thinking setting with a 400.
+  it("request: tool_choice auto, a strict tool, explicit high effort, no sampling", async () => {
+    aiContent = [insightToolBlock({ summary: "ok", observations: ["ok"] })];
+
+    const { POST } = await import("@/app/api/analytics/insights/route");
+    await POST(makeRequest(validBody()));
+
+    const params = messagesCreateCalls[0] as Record<string, unknown>;
+    expect(params.tool_choice).toEqual({ type: "auto" });
+    expect(params.output_config).toEqual({ effort: "high" });
+    expect(params).not.toHaveProperty("temperature");
+    expect(params).not.toHaveProperty("top_p");
+    expect(params).not.toHaveProperty("top_k");
+    expect(params).not.toHaveProperty("thinking");
+    const tools = params.tools as Array<{
+      name: string;
+      strict?: boolean;
+      input_schema: { properties: Record<string, unknown>; additionalProperties: unknown };
+    }>;
+    expect(tools).toHaveLength(1);
+    expect(tools[0]!.name).toBe("analytics_insight");
+    expect(tools[0]!.strict).toBe(true);
+    expect(tools[0]!.input_schema.additionalProperties).toBe(false);
+    // Strict mode has no `maxItems`, which the deep tool's `sources` carries.
+    expect(Object.keys(tools[0]!.input_schema.properties)).toEqual(["summary", "observations"]);
+  });
+
+  it("asks again on an unforced, append-only turn when the reply is prose", async () => {
+    const prose = [
+      { type: "thinking", thinking: "", signature: "sig" },
+      { type: "text", text: "Water averaged 1800 ml." },
+    ];
+    aiReplies = [{ content: prose, stop_reason: "end_turn" }];
+    aiContent = [insightToolBlock({ summary: "ok", observations: ["ok"] })];
+
+    const { POST } = await import("@/app/api/analytics/insights/route");
+    const res = await POST(makeRequest(validBody()));
+
+    expect(res.status).toBe(200);
+    expect(messagesCreateCalls).toHaveLength(2);
+    const first = messagesCreateCalls[0] as Record<string, unknown>;
+    const retry = messagesCreateCalls[1] as Record<string, unknown> & {
+      messages: Array<{ role: string; content: unknown }>;
+    };
+    expect(retry.tool_choice).toEqual({ type: "auto" });
+    expect(retry.output_config).toEqual({ effort: "high" });
+    expect(retry.system).toBe(first.system);
+    expect(retry.tools).toBe(first.tools);
+    expect(retry.messages).toHaveLength(3);
+    expect(retry.messages[0]).toBe((first.messages as unknown[])[0]);
+    expect(retry.messages[1]!.role).toBe("assistant");
+    expect(retry.messages[1]!.content).toBe(prose);
+    expect(retry.messages[2]!.role).toBe("user");
+  });
+
+  it("returns a clean 422 / AI_REFUSED when the model declines, without retrying", async () => {
+    aiReplies = [
+      {
+        content: [],
+        stop_reason: "refusal",
+        stop_details: { type: "refusal", category: "general_harms", explanation: null },
+      },
+    ];
+
+    const { POST } = await import("@/app/api/analytics/insights/route");
+    const res = await POST(makeRequest(validBody()));
+
+    expect(res.status).toBe(422);
+    const body = (await res.json()) as { error: string; code: string };
+    expect(body.code).toBe("AI_REFUSED");
+    expect(body.error).toBe("The AI declined to summarise this data.");
+    expect(messagesCreateCalls).toHaveLength(1);
   });
 
   it("returns 502 when the tool output fails response-schema validation", async () => {
@@ -251,6 +334,11 @@ describe("POST /api/analytics/insights", () => {
     const body = (await res.json()) as { error: string; code?: string };
     expect(body.code).toBe("RESPONSE_TRUNCATED");
     expect(body.error).toMatch(/cut off/i);
+    expect(body.error).toMatch(/previous summary/i);
+    // The shared call retried once with a larger budget before giving up.
+    expect(messagesCreateCalls).toHaveLength(2);
+    const [first, second] = messagesCreateCalls as Array<{ max_tokens: number }>;
+    expect(second!.max_tokens).toBeGreaterThan(first!.max_tokens);
   });
 
   it("requests enough tokens to fit a comparison summary", async () => {

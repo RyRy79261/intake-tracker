@@ -226,6 +226,59 @@ describe("voice-parse route handler", () => {
     expect(body.code).toBe("AI_TIMEOUT");
   });
 
+  // Claude Sonnet 5.5 rejects a forced tool_choice, a sampling parameter and
+  // a disabled-thinking setting with a 400, and its effort default is high.
+  it("request: tool_choice auto, a strict tool, explicit medium effort, no sampling", async () => {
+    messagesCreate.mockResolvedValueOnce(toolUseResponse({ items: [{ kind: "water", ml: 250 }] }));
+
+    const { POST } = await import("@/app/api/ai/voice-parse/route");
+    await POST(makeRequest({ transcript: "had some water" }));
+
+    const params = messagesCreate.mock.calls[0]![0] as Record<string, unknown>;
+    expect(params.tool_choice).toEqual({ type: "auto" });
+    expect(params.output_config).toEqual({ effort: "medium" });
+    expect(params).not.toHaveProperty("temperature");
+    expect(params).not.toHaveProperty("top_p");
+    expect(params).not.toHaveProperty("top_k");
+    expect(params).not.toHaveProperty("thinking");
+    const tools = params.tools as Array<{ name: string; strict?: boolean }>;
+    expect(tools).toHaveLength(1);
+    expect(tools[0]!.name).toBe("parse_voice_log");
+    expect(tools[0]!.strict).toBe(true);
+  });
+
+  it("asks again on an unforced, append-only turn when the reply is prose", async () => {
+    const prose = [
+      { type: "thinking", thinking: "", signature: "sig" },
+      { type: "text", text: "You had some water." },
+    ];
+    messagesCreate
+      .mockResolvedValueOnce({
+        content: prose,
+        stop_reason: "end_turn",
+        usage: { input_tokens: 10, output_tokens: 5 },
+      })
+      .mockResolvedValueOnce(toolUseResponse({ items: [{ kind: "water", ml: 250 }] }));
+
+    const { POST } = await import("@/app/api/ai/voice-parse/route");
+    const res = await POST(makeRequest({ transcript: "had some water" }));
+
+    expect(res.status).toBe(200);
+    const first = messagesCreate.mock.calls[0]![0] as Record<string, unknown>;
+    const retry = messagesCreate.mock.calls[1]![0] as Record<string, unknown> & {
+      messages: Array<{ role: string; content: unknown }>;
+    };
+    expect(retry.tool_choice).toEqual({ type: "auto" });
+    expect(retry.output_config).toEqual({ effort: "medium" });
+    expect(retry.system).toBe(first.system);
+    expect(retry.tools).toBe(first.tools);
+    expect(retry.messages).toHaveLength(3);
+    expect(retry.messages[0]).toBe((first.messages as unknown[])[0]);
+    expect(retry.messages[1]!.role).toBe("assistant");
+    expect(retry.messages[1]!.content).toBe(prose);
+    expect(retry.messages[2]!.role).toBe("user");
+  });
+
   // ai-routes-models#19: the route branches on stop_reason via the shared
   // claude-call helpers instead of treating every non-tool reply as bad format.
   it("maps a refusal to 422 AI_REFUSED without retrying", async () => {
@@ -333,8 +386,8 @@ describe("voice-parse spoken times", () => {
     // The prompt carries the defaults for vague words and the null rule.
     expect(sent.system).toContain("evening 19:00");
     expect(sent.system).toContain("when: null");
-    // Claude Sonnet 5.5 rejects a forced tool_choice: the first turn never forces.
-    expect(sent.tool_choice).toBeUndefined();
+    // Claude Sonnet 5.5 rejects a forced tool_choice: the first turn is `auto`, never forced.
+    expect(sent.tool_choice).toEqual({ type: "auto" });
   });
 
   it("works out yesterday across a month end, and a zone west of UTC", async () => {
@@ -464,7 +517,7 @@ describe("voice-parse spoken times", () => {
       expect(content).toContain('Return "when" only as {"kind": "relative", "minutesAgo": N}');
       expect(content).toContain("Do not return an absolute date-time.");
       expect(content).toContain("water an hour ago");
-      expect(sent.tool_choice).toBeUndefined();
+      expect(sent.tool_choice).toEqual({ type: "auto" });
     });
 
     it("strips an absolute time the model returned anyway, and keeps a relative one", async () => {
