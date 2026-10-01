@@ -208,8 +208,8 @@ describe("PARSE_TOOL", () => {
     expect(props).not.toHaveProperty("minutesAgo");
   });
 
-  // Strict mode makes the model send `when` on every item, so each shape the
-  // tool can emit has to survive the server-side validation.
+  // The tool requires `when` on every item, so each shape it can emit has to
+  // survive the server-side validation.
   it.each([
     ["null", null, undefined],
     [
@@ -218,7 +218,7 @@ describe("PARSE_TOOL", () => {
       { kind: "absolute", localDateTime: "2026-09-29T20:00" },
     ],
     ["relative", { kind: "relative", minutesAgo: 60 }, { kind: "relative", minutesAgo: 60 }],
-  ])("accepts the strict tool's %s `when` on every item kind", (_name, when, expected) => {
+  ])("accepts the tool's %s `when` on every item kind", (_name, when, expected) => {
     const items = [
       { kind: "blood_pressure", when, systolic: 120, diastolic: 80 },
       { kind: "weight", when, weightKg: 80 },

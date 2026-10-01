@@ -228,7 +228,7 @@ describe("voice-parse route handler", () => {
 
   // Claude Sonnet 5.5 rejects a forced tool_choice, a sampling parameter and
   // a disabled-thinking setting with a 400, and its effort default is high.
-  it("request: tool_choice auto, a strict tool, explicit medium effort, no sampling", async () => {
+  it("request: tool_choice auto, a non-strict tool, explicit medium effort, no sampling", async () => {
     messagesCreate.mockResolvedValueOnce(toolUseResponse({ items: [{ kind: "water", ml: 250 }] }));
 
     const { POST } = await import("@/app/api/ai/voice-parse/route");
@@ -244,7 +244,8 @@ describe("voice-parse route handler", () => {
     const tools = params.tools as Array<{ name: string; strict?: boolean }>;
     expect(tools).toHaveLength(1);
     expect(tools[0]!.name).toBe("parse_voice_log");
-    expect(tools[0]!.strict).toBe(true);
+    // Strict can't compile this schema: a hang, then a 400 (issue #406).
+    expect(tools[0]!.strict).toBeUndefined();
   });
 
   it("asks again on an unforced, append-only turn when the reply is prose", async () => {

@@ -48,13 +48,13 @@ export const PARSE_TOOL = {
   name: "parse_voice_log" as const,
   description:
     "Return a structured list of health log items extracted from a voice transcript.",
-  // Schema-valid arguments are guaranteed without forcing the tool, which
-  // the quality model (Claude Sonnet 5.5) rejects. Strict mode allows at
-  // most 24 optional parameters and 16 union-typed parameters per request.
-  // Every per-item field except `kind` and `when` is optional (18), so
-  // `reasoning` and `when` are required, and a new per-item field has to
-  // stay inside those limits (strict-tool-schemas.test.ts counts them).
-  strict: true,
+  // NOT strict, unlike the other result tools. This schema is inside strict
+  // mode's documented limits, but the API still can't compile it: 18
+  // optional fields in one array item is too many. The first request hangs
+  // past the route's deadline (every voice log was a 504, issue #406), and
+  // later ones fail with a 400 "Schema is too complex". Without strict the
+  // call answers in a few seconds. Each item is checked with Zod on the
+  // server (extractVoiceItems), so a malformed item is dropped, not saved.
   input_schema: {
     type: "object" as const,
     properties: {
@@ -79,7 +79,7 @@ export const PARSE_TOOL = {
               ],
             },
             // Fields are a union across kinds. One flat object with optional
-            // fields keeps the strict schema small; which fields belong to
+            // fields keeps the schema small; which fields belong to
             // which kind, and their ranges, is validated server-side with
             // Zod.
             systolic: { type: "number" },
@@ -102,8 +102,7 @@ export const PARSE_TOOL = {
             note: { type: "string" },
             // Required, so the model states a time or says there is none
             // (null) for every item. Each branch is a closed object with all
-            // of its fields required — a shape strict mode can express, and
-            // one union parameter of the 16 it allows.
+            // of its fields required.
             when: {
               description:
                 "When this item happened. null when the user stated no time for it (the app uses the save time).",
