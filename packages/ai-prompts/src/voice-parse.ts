@@ -204,6 +204,16 @@ export function describeCurrentTime(now: VoiceParseClientNow): string {
 export const NO_CLOCK_NOTE =
   'The current local date and time are not known for this request. Return "when" only as {"kind": "relative", "minutesAgo": N} when the user states a relative time ("an hour ago"), and as null in every other case. Do not return an absolute date-time.';
 
+/**
+ * The user turn for a review row's refresh. The first parse got this item
+ * wrong — usually a misheard name, so its values were looked up for the wrong
+ * thing. The model must not trust them, and must check the corrected item on
+ * the web. The row keeps its own time, so no "when" is wanted.
+ */
+export function buildRefreshMessage(description: string, kind: string): string {
+  return `The user is correcting one ${kind} item from an earlier recording. The values given for it before were WRONG — most likely the speech-to-text misheard the name, so they were looked up for the wrong thing. Do not reuse or trust them. The corrected description is:\n"""\n${description}\n"""\n\nUse web_search first to look up authoritative values for exactly this item (the manufacturer, a retailer listing, or a national food database), then return exactly one item of kind "${kind}" via the parse_voice_log tool. Keep any amount stated in the description. Return "when" as null.`;
+}
+
 /** The user turn: the clock line, then the (already sanitised) transcript. */
 export function buildUserMessage(transcript: string, now?: VoiceParseClientNow): string {
   return `${now ? describeCurrentTime(now) : NO_CLOCK_NOTE}\n\nVoice transcript:\n"""\n${transcript}\n"""\n\nExtract every distinct health log item and return them via the parse_voice_log tool.`;

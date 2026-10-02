@@ -289,4 +289,52 @@ describe("ParsedItemRow", () => {
     );
     expect(screen.getByText("may be the same drink")).toBeInTheDocument();
   });
+
+  it("shows a refresh button for a food item and fires onRefresh", async () => {
+    const user = userEvent.setup();
+    const onRefresh = vi.fn();
+    render(
+      <ParsedItemRow
+        item={{ kind: "food", description: "bagel", grams: 100 }}
+        index={0}
+        onChange={() => {}}
+        onApprove={() => {}}
+        onReject={() => {}}
+        onRefresh={onRefresh}
+        approved={null}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: "Refresh Food with AI" }));
+    expect(onRefresh).toHaveBeenCalledTimes(1);
+  });
+
+  it("disables refresh when the description is empty", () => {
+    render(
+      <ParsedItemRow
+        item={{ kind: "food", description: "  " }}
+        index={0}
+        onChange={() => {}}
+        onApprove={() => {}}
+        onReject={() => {}}
+        onRefresh={() => {}}
+        approved={null}
+      />,
+    );
+    expect(screen.getByRole("button", { name: "Refresh Food with AI" })).toBeDisabled();
+  });
+
+  it("hides refresh once the row is approved", () => {
+    render(
+      <ParsedItemRow
+        item={{ kind: "food", description: "bagel" }}
+        index={0}
+        onChange={() => {}}
+        onApprove={() => {}}
+        onReject={() => {}}
+        onRefresh={() => {}}
+        approved={true}
+      />,
+    );
+    expect(screen.queryByRole("button", { name: /Refresh/ })).not.toBeInTheDocument();
+  });
 });

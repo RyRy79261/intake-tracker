@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { BP_RANGES, WEIGHT_RANGE_KG } from "@intake/core/record-schemas";
+import { REFRESHABLE_KINDS } from "@/lib/voice-types";
 
 /**
  * Schema + tool definition for /api/ai/voice-parse, kept separate from the
@@ -60,6 +61,8 @@ export const ParseRequestSchema = z.object({
   // asked for relative times only (see `extractVoiceItems`). A clock that is
   // present but malformed is still a 400.
   now: ClientNowSchema.optional(),
+  /** Set by a review row's refresh: re-look-up one item of this kind. */
+  kind: z.enum(REFRESHABLE_KINDS).optional(),
 });
 
 /** A relative time further back than this is not a slip of the tongue. */

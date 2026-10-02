@@ -15,7 +15,12 @@ import { useAddSubstance } from "@/hooks/use-substance-queries";
 import { useLogDrink } from "@/hooks/use-drink-log";
 import { useAddComposableEntry, type ComposableEntryInput } from "@/hooks/use-composable-entry";
 import { useOptionalTrackerEnabled } from "@/lib/optional-trackers";
-import type { VoiceParsedItem, VoiceParseResponse } from "@/lib/voice-types";
+import {
+  isRefreshable,
+  type RefreshableItem,
+  type VoiceParsedItem,
+  type VoiceParseResponse,
+} from "@/lib/voice-types";
 import { reconcileLiquidItems } from "@/lib/voice-reconcile";
 import { applyPresetCaffeine } from "@/lib/voice-presets";
 import { validateVoiceItem } from "@/lib/voice-validation";
@@ -32,6 +37,8 @@ import { apiFetch } from "@/lib/api-fetch";
 import { useQueryClient } from "@tanstack/react-query";
 
 type RowState = {
+  /** Stable across list changes, so an async refresh finds its row again. */
+  id: number;
   item: VoiceParsedItem;
   approved: boolean | null;
   /**
@@ -48,7 +55,21 @@ type RowState = {
    * the user resolves the pair one row at a time.
    */
   flagged: boolean;
+  /** An AI re-look-up of this one row is in flight. */
+  refreshing: boolean;
 };
+
+/**
+ * What a row's refresh sends to the parser: the edited description, plus the
+ * amount the user already has, so a corrected name keeps its portion.
+ */
+function refreshText(item: RefreshableItem): string {
+  const description = item.description.trim();
+  if (item.kind === "food") {
+    return item.grams !== undefined ? `${description} (${item.grams} g)` : description;
+  }
+  return item.volumeMl !== undefined ? `${description} (${item.volumeMl} ml)` : description;
+}
 
 /** Plain-language notices about what the parse left out. */
 function parseNotices(data: VoiceParseResponse): string[] {
@@ -106,6 +127,7 @@ export function VoicePanel({ onCommitted, initialClip }: VoicePanelProps) {
   const [error, setError] = useState<string | null>(null);
   const [reasoning, setReasoning] = useState<string | null>(null);
   const [notices, setNotices] = useState<string[]>([]);
+  const nextRowId = useRef(0);
 
   const pendingCount = useMemo(
     () => rows.filter((r) => r.approved === null).length,
@@ -118,6 +140,9 @@ export function VoicePanel({ onCommitted, initialClip }: VoicePanelProps) {
     [rows]
   );
   const savedCount = useMemo(() => rows.filter((r) => r.saved).length, [rows]);
+  // Save waits for every refresh: a row mid-refresh still holds the values
+  // the user asked to replace.
+  const anyRefreshing = rows.some((r) => r.refreshing);
 
   const handleRecorded = useCallback(
     async (blob: Blob, mimeType: string) => {
@@ -194,11 +219,13 @@ export function VoicePanel({ onCommitted, initialClip }: VoicePanelProps) {
         // same moka books the same caffeine whichever way it was logged.
         const priced = applyPresetCaffeine(reconciled.items, liquidPresets);
         const newRows: RowState[] = priced.items.map((item) => ({
+          id: nextRowId.current++,
           item,
           approved: null,
           saved: false,
           notes: [],
           flagged: false,
+          refreshing: false,
         }));
         for (const note of [...reconciled.merges, ...priced.notes]) {
           for (const index of note.itemIndices) {
@@ -252,9 +279,63 @@ export function VoicePanel({ onCommitted, initialClip }: VoicePanelProps) {
     setRows((prev) => prev.map((r, i) => (i === index ? { ...r, ...next } : r)));
   }, []);
 
-  // Skips rows that are flagged as a possible duplicate, fail validation, or
-  // are dated more than a week back: those need the user's attention one at
-  // a time.
+  const patchRowById = useCallback((id: number, next: Partial<RowState>) => {
+    setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...next } : r)));
+  }, []);
+
+  /**
+   * Re-look-up one row with AI after the user fixed its description (a
+   * misheard drink name, say). Only that row changes; its time is kept.
+   */
+  const refreshRow = useCallback(
+    async (row: RowState) => {
+      const { item } = row;
+      if (!isRefreshable(item) || item.description.trim() === "") return;
+      patchRowById(row.id, { refreshing: true });
+      try {
+        const res = await apiFetch("/api/ai/voice-parse", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ transcript: refreshText(item), kind: item.kind }),
+        });
+        if (!res) {
+          patchRowById(row.id, { refreshing: false });
+          return;
+        }
+        if (!res.ok) {
+          const j = await res.json().catch(() => ({}));
+          throw new Error(j.error || `Refresh failed (${res.status})`);
+        }
+        const data = (await res.json()) as VoiceParseResponse;
+        const found = data.items.find((i) => i.kind === item.kind);
+        if (!found) throw new Error("The AI found no matching item. Check the description.");
+        // The row keeps the time it already has — a refresh fixes what the
+        // item is, not when it happened.
+        const { when: _when, at: _at, ...fresh } = found;
+        const timed = (item.at !== undefined ? { ...fresh, at: item.at } : fresh) as VoiceParsedItem;
+        const priced = applyPresetCaffeine([timed], liquidPresets);
+        // Notes about the old values (merges, presets) no longer apply.
+        // Possible-duplicate warnings still do.
+        const notes: ParsedItemNote[] = [
+          ...row.notes.filter((n) => n.tone === "warning"),
+          ...priced.notes.map((n) => ({ tone: "info" as const, message: n.message })),
+        ];
+        patchRowById(row.id, { item: priced.items[0]!, notes, refreshing: false });
+      } catch (e) {
+        patchRowById(row.id, { refreshing: false });
+        toast({
+          title: "Refresh failed",
+          description: e instanceof Error ? e.message : "Unknown error",
+          variant: "destructive",
+        });
+      }
+    },
+    [patchRowById, liquidPresets, toast],
+  );
+
+  // Skips rows that are flagged as a possible duplicate, fail validation, are
+  // dated more than a week back, or are mid-refresh: those need the user's
+  // attention one at a time.
   const approveAll = useCallback(() => {
     const now = Date.now();
     const timeZone = getDeviceTimezone();
@@ -262,6 +343,7 @@ export function VoicePanel({ onCommitted, initialClip }: VoicePanelProps) {
       prev.map((r) =>
         r.approved === null &&
         !r.flagged &&
+        !r.refreshing &&
         validateVoiceItem(r.item, now, timeZone) === null &&
         !isLongAgo(r.item.at, now, timeZone)
           ? { ...r, approved: true }
@@ -495,7 +577,7 @@ export function VoicePanel({ onCommitted, initialClip }: VoicePanelProps) {
     // re-tapping Save after a failure retries only what actually failed.
     const pending = rows
       .map((row, index) => ({ row, index }))
-      .filter(({ row }) => row.approved === true && !row.saved);
+      .filter(({ row }) => row.approved === true && !row.saved && !row.refreshing);
     if (pending.length === 0) return;
 
     setStage("saving");
@@ -647,7 +729,7 @@ export function VoicePanel({ onCommitted, initialClip }: VoicePanelProps) {
               <CardContent className="space-y-3">
                 {rows.map((row, i) => (
                   <ParsedItemRow
-                    key={i}
+                    key={row.id}
                     index={i}
                     item={row.item}
                     approved={row.approved}
@@ -656,7 +738,11 @@ export function VoicePanel({ onCommitted, initialClip }: VoicePanelProps) {
                     // locked: leaving it interactive made it a dead end, since
                     // toggling or editing it could no longer change what was
                     // saved.
-                    disabled={stage === "saving" || row.saved}
+                    disabled={stage === "saving" || row.saved || row.refreshing}
+                    refreshing={row.refreshing}
+                    {...(isRefreshable(row.item) && {
+                      onRefresh: () => void refreshRow(row),
+                    })}
                     onChange={(next) => updateRow(i, { item: next })}
                     onApprove={() =>
                       updateRow(i, {
@@ -710,7 +796,7 @@ export function VoicePanel({ onCommitted, initialClip }: VoicePanelProps) {
           <Button
             size="lg"
             className="mt-3 w-full gap-2"
-            disabled={stage === "saving" || approvedCount === 0}
+            disabled={stage === "saving" || anyRefreshing || approvedCount === 0}
             onClick={commit}
           >
             <Check className="h-5 w-5" />

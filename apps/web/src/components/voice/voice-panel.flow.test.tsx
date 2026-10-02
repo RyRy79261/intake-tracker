@@ -18,7 +18,7 @@ import {
   afterEach,
   beforeEach,
 } from "vitest";
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
@@ -632,5 +632,90 @@ describe("VoicePanel — clip recorded by the host (hold to talk)", () => {
     await screen.findByText(/Items \(/);
     expect(transcribeCalls).toBe(1);
     expect(screen.getByText(/dictated transcript/)).toBeInTheDocument();
+  });
+});
+
+describe("VoicePanel row refresh", () => {
+  /** Record one clip and wait for the review list. */
+  async function recordAndReview() {
+    const user = userEvent.setup();
+    await renderWithFixtures(<VoicePanel />);
+    await user.click(screen.getByRole("button", { name: "mock-record" }));
+    await screen.findByText(/Items \(/);
+    return user;
+  }
+
+  it("re-looks-up only the edited row and keeps its time", async () => {
+    parsedItems = [
+      {
+        kind: "caffeine",
+        description: "lot",
+        caffeineMg: 5,
+        volumeMl: 350,
+        when: { kind: "relative", minutesAgo: 60 },
+      },
+      { kind: "water", ml: 250 },
+    ];
+    let refreshBody: unknown;
+    const user = await recordAndReview();
+    const row = screen.getByTestId("voice-item-0");
+    const timeBefore = (within(row).getByLabelText("Time") as HTMLInputElement).value;
+    expect(timeBefore).not.toBe("");
+
+    server.use(
+      http.post("*/api/ai/voice-parse", async ({ request }) => {
+        refreshBody = await request.json();
+        return HttpResponse.json({
+          items: [{ kind: "caffeine", description: "latte", caffeineMg: 130, volumeMl: 350 }],
+        });
+      }),
+    );
+
+    const description = within(row).getByDisplayValue("lot");
+    await user.clear(description);
+    await user.type(description, "latte");
+    await user.click(within(row).getByRole("button", { name: "Refresh Caffeine with AI" }));
+
+    await waitFor(() => {
+      expect(within(row).getByDisplayValue("130")).toBeInTheDocument();
+    });
+    expect(refreshBody).toEqual({ transcript: "latte (350 ml)", kind: "caffeine" });
+    expect(within(row).getByLabelText("Time")).toHaveValue(timeBefore);
+    // The other row is untouched.
+    expect(within(screen.getByTestId("voice-item-1")).getByDisplayValue("250")).toBeInTheDocument();
+  });
+
+  it("does not approve or save a row while it is refreshing", async () => {
+    parsedItems = [
+      { kind: "caffeine", description: "lot", caffeineMg: 5, volumeMl: 350 },
+      { kind: "water", ml: 250 },
+    ];
+    let release: () => void = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const user = await recordAndReview();
+    server.use(
+      http.post("*/api/ai/voice-parse", async () => {
+        await gate;
+        return HttpResponse.json({
+          items: [{ kind: "caffeine", description: "latte", caffeineMg: 130, volumeMl: 350 }],
+        });
+      }),
+    );
+
+    const row = screen.getByTestId("voice-item-0");
+    await user.click(within(row).getByRole("button", { name: "Refresh Caffeine with AI" }));
+    await user.click(screen.getByRole("button", { name: /Approve all/i }));
+
+    // Only the water row was approved, and Save waits for the refresh.
+    expect(screen.getByText(/Items \(1 approved · 1 pending\)/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Save/ })).toBeDisabled();
+
+    release();
+    await waitFor(() => {
+      expect(within(row).getByDisplayValue("130")).toBeInTheDocument();
+    });
+    expect(screen.getByRole("button", { name: /^Save/ })).toBeEnabled();
   });
 });

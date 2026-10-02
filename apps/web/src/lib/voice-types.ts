@@ -144,6 +144,18 @@ export type VoiceParsedItem =
   | UrinationItem
   | DefecationItem;
 
+/**
+ * Kinds a review row can re-look-up on its own. The row sends its edited
+ * description with its `kind`, and the parser returns that one item again.
+ */
+export const REFRESHABLE_KINDS = ["food", "caffeine", "alcohol"] as const;
+export type RefreshableKind = (typeof REFRESHABLE_KINDS)[number];
+export type RefreshableItem = Extract<VoiceParsedItem, { kind: RefreshableKind }>;
+
+export function isRefreshable(item: VoiceParsedItem): item is RefreshableItem {
+  return (REFRESHABLE_KINDS as readonly string[]).includes(item.kind);
+}
+
 export interface VoiceParseResponse {
   items: VoiceParsedItem[];
   reasoning?: string;

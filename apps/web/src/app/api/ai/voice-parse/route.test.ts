@@ -44,6 +44,7 @@ vi.mock("@/app/api/ai/_shared/claude-client", () => ({
     quality: "claude-sonnet-test",
     premium: "claude-opus-test",
   },
+  WEB_SEARCH_TOOL: { type: "web_search_20260209", name: "web_search", max_uses: 5 },
   getClaudeClientForUser: vi.fn(async () => ({
     client: { messages: { create: messagesCreate } },
     resolved: { apiKey: "sk-test", source: "env_var", keyOwnerId: null },
@@ -68,6 +69,24 @@ function toolUseResponse(input: unknown) {
     usage: { input_tokens: 10, output_tokens: 5 },
   };
 }
+
+/** A tool_use reply that also ran a web search with results. */
+function searchedToolUseResponse(input: unknown) {
+  return {
+    content: [
+      { type: "server_tool_use", id: "srv_1", name: "web_search", input: { query: "latte" } },
+      {
+        type: "web_search_tool_result",
+        tool_use_id: "srv_1",
+        content: [{ type: "web_search_result", url: "https://example.test", title: "Latte" }],
+      },
+      { type: "tool_use", name: "parse_voice_log", input },
+    ],
+    usage: { input_tokens: 10, output_tokens: 5 },
+  };
+}
+
+const LATTE = { items: [{ kind: "caffeine", description: "latte", caffeineMg: 130, volumeMl: 350 }] };
 
 /** The client's clock every request carries: 2026-09-30 14:00 in Johannesburg. */
 const NOW = {
@@ -183,6 +202,67 @@ describe("voice-parse route handler", () => {
   it("rejects an empty transcript with 400 (min(1))", async () => {
     const { POST } = await import("@/app/api/ai/voice-parse/route");
     const res = await POST(makeRequest({ now: NOW, transcript: "" }));
+
+    expect(res.status).toBe(400);
+    expect(messagesCreate).not.toHaveBeenCalled();
+  });
+
+  it("asks for exactly one item of the given kind on a row refresh", async () => {
+    messagesCreate.mockResolvedValueOnce(searchedToolUseResponse(LATTE));
+    const { POST } = await import("@/app/api/ai/voice-parse/route");
+    const res = await POST(makeRequest({ transcript: "latte (350 ml)", kind: "caffeine" }));
+
+    expect(res.status).toBe(200);
+    const sent = messagesCreate.mock.calls[0]![0] as {
+      messages: { content: string }[];
+      tools: { name: string }[];
+    };
+    expect(sent.messages[0]!.content).toContain("latte (350 ml)");
+    expect(sent.messages[0]!.content).toContain('exactly one item of kind "caffeine"');
+    expect(sent.messages[0]!.content).toContain("WRONG");
+    expect(sent.tools.map((t) => t.name)).toEqual(["web_search", "parse_voice_log"]);
+    expect(messagesCreate).toHaveBeenCalledTimes(1);
+  });
+
+  it("retries a refresh that answered without searching, and takes the searched answer", async () => {
+    messagesCreate
+      .mockResolvedValueOnce(toolUseResponse({ items: [{ kind: "caffeine", description: "latte", caffeineMg: 1, volumeMl: 350 }] }))
+      .mockResolvedValueOnce(searchedToolUseResponse(LATTE));
+    const { POST } = await import("@/app/api/ai/voice-parse/route");
+    const res = await POST(makeRequest({ transcript: "latte (350 ml)", kind: "caffeine" }));
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { items: { caffeineMg: number }[] };
+    expect(body.items[0]!.caffeineMg).toBe(130);
+    const retry = messagesCreate.mock.calls[1]![0] as { messages: { content: string }[] };
+    // A fresh turn that insists on the search, not a continuation.
+    expect(retry.messages).toHaveLength(1);
+    expect(retry.messages[0]!.content).toContain("You must call the web_search tool");
+  });
+
+  it("refuses a refresh with 422 when no web search ever completes", async () => {
+    messagesCreate.mockResolvedValue(toolUseResponse(LATTE));
+    const { POST } = await import("@/app/api/ai/voice-parse/route");
+    const res = await POST(makeRequest({ transcript: "latte (350 ml)", kind: "caffeine" }));
+
+    expect(res.status).toBe(422);
+    const body = (await res.json()) as { code?: string };
+    expect(body.code).toBe("SEARCH_REQUIRED");
+    expect(messagesCreate).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not declare web_search for a normal transcript parse", async () => {
+    messagesCreate.mockResolvedValueOnce(toolUseResponse({ items: [{ kind: "water", ml: 250 }] }));
+    const { POST } = await import("@/app/api/ai/voice-parse/route");
+    await POST(makeRequest({ transcript: "a glass of water" }));
+
+    const sent = messagesCreate.mock.calls[0]![0] as { tools: { name: string }[] };
+    expect(sent.tools.map((t) => t.name)).toEqual(["parse_voice_log"]);
+  });
+
+  it("rejects a refresh for a kind that has no description with 400", async () => {
+    const { POST } = await import("@/app/api/ai/voice-parse/route");
+    const res = await POST(makeRequest({ transcript: "120 over 80", kind: "blood_pressure" }));
 
     expect(res.status).toBe(400);
     expect(messagesCreate).not.toHaveBeenCalled();

@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
 import { withAuth } from "@/lib/auth-middleware";
 import { sanitizeForAI } from "@/lib/security";
-import { getClaudeClientForUser, CLAUDE_MODELS } from "@/app/api/ai/_shared/claude-client";
+import { getClaudeClientForUser, CLAUDE_MODELS, WEB_SEARCH_TOOL } from "@/app/api/ai/_shared/claude-client";
 import { parseJsonBody, zodErrorResponse } from "@/app/api/_shared/validation";
 import { createRateLimiter, rateLimitKey } from "@/app/api/_shared/rate-limit";
-import { requestToolCall } from "@/app/api/ai/_shared/claude-call";
+import { hasCompletedWebSearch, requestToolCall } from "@/app/api/ai/_shared/claude-call";
 import { aiErrorResponse } from "@/app/api/ai/_shared/ai-error-response";
-import { SYSTEM_PROMPT, buildUserMessage } from "@intake/ai-prompts/voice-parse";
+import { SYSTEM_PROMPT, buildRefreshMessage, buildUserMessage } from "@intake/ai-prompts/voice-parse";
 import {
   PARSE_TOOL,
   ParseRequestSchema,
@@ -90,31 +90,71 @@ export const POST = withAuth(async ({ request, auth }) => {
     // above and is not PII; nothing else about the device is sent. An older
     // cached client sends no clock: the message then states no time and asks
     // for relative times only.
-    const userMessage = buildUserMessage(sanitized, parsed.data.now);
+    //
+    // A review row's refresh (`kind` set) is different: the first parse got
+    // that item wrong, so the model is told not to trust the old values and
+    // to check the corrected item on the web.
+    const { kind } = parsed.data;
+    const userMessage = kind
+      ? buildRefreshMessage(sanitized, kind)
+      : buildUserMessage(sanitized, parsed.data.now);
 
-    const { toolUse: toolBlock } = await requestToolCall(
-      client,
-      {
-        model: CLAUDE_MODELS.quality,
-        // Headroom for adaptive thinking, which is always on for this model
-        // and shares the ceiling with the tool call.
-        max_tokens: 4096,
-        // The user has just spoken and is waiting: medium, not the default
-        // high.
-        output_config: { effort: "medium" },
-        system: SYSTEM_PROMPT,
-        tools: [PARSE_TOOL],
-        tool_choice: { type: "auto" },
-        messages: [{ role: "user", content: userMessage }],
-      },
-      {
-        usage: { userId: auth.userId!, resolved, route: "/api/ai/voice-parse" },
-        deadline: Date.now() + DEADLINE_MS,
-        toolName: PARSE_TOOL.name,
-        retryInstruction: "Return the structured items via the parse_voice_log tool now.",
-        forceOnRetry: false,
-      },
-    );
+    const params = {
+      model: CLAUDE_MODELS.quality,
+      // Headroom for adaptive thinking, which is always on for this model
+      // and shares the ceiling with the tool call — plus the search traffic
+      // on a refresh.
+      max_tokens: kind ? 8192 : 4096,
+      // The user has just spoken and is waiting: medium, not the default
+      // high.
+      output_config: { effort: "medium" as const },
+      system: SYSTEM_PROMPT,
+      // web_search stays declared on the retry turn too, since the replayed
+      // assistant turn may hold server_tool_use blocks.
+      tools: kind ? [WEB_SEARCH_TOOL, PARSE_TOOL] : [PARSE_TOOL],
+      tool_choice: { type: "auto" as const },
+      messages: [{ role: "user" as const, content: userMessage }],
+    };
+    const callOptions = {
+      usage: { userId: auth.userId!, resolved, route: "/api/ai/voice-parse" },
+      deadline: Date.now() + DEADLINE_MS,
+      toolName: PARSE_TOOL.name,
+      retryInstruction: "Return the structured items via the parse_voice_log tool now.",
+      forceOnRetry: false,
+    };
+
+    let { toolUse: toolBlock, responses } = await requestToolCall(client, params, callOptions);
+
+    // Declaring web_search does not make the model use it. A refresh that
+    // answered from memory is just another unverified guess, so it gets one
+    // fresh try that insists on a search, and is refused if that fails too.
+    if (kind && !hasCompletedWebSearch(responses)) {
+      ({ toolUse: toolBlock, responses } = await requestToolCall(
+        client,
+        {
+          ...params,
+          // A fresh turn, not a continuation: the unsourced answer is being
+          // thrown away, so there is nothing to carry over.
+          messages: [
+            {
+              role: "user",
+              content: `${userMessage} You must call the web_search tool before answering — values from memory are not acceptable here.`,
+            },
+          ],
+        },
+        callOptions,
+      ));
+      if (!hasCompletedWebSearch(responses)) {
+        console.warn("[voice-parse] refresh rejected: no web search completed");
+        return NextResponse.json(
+          {
+            error: "Could not check this item against a web source. Try again, or enter the values yourself.",
+            code: "SEARCH_REQUIRED",
+          },
+          { status: 422 },
+        );
+      }
+    }
 
     if (!toolBlock) {
       return NextResponse.json(
