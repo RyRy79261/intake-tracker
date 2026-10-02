@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.40.0](https://github.com/RyRy79261/intake-tracker/compare/v1.39.1...v1.40.0) (2026-10-02)
+
+
+### Features
+
+* **voice:** refresh one review row with AI from its edited description ([#409](https://github.com/RyRy79261/intake-tracker/issues/409)) ([76e11ef](https://github.com/RyRy79261/intake-tracker/commit/76e11ef37686a9cfa5227aa63f081c0f8ed6c70c))
+
 ## [1.39.1](https://github.com/RyRy79261/intake-tracker/compare/v1.39.0...v1.39.1) (2026-10-01)
 
 
