@@ -1,9 +1,14 @@
 /**
  * MCP endpoint — Streamable HTTP transport.
  *
- * Reached at `/api/mcp/mcp` and `/api/mcp/sse` (the latter disabled). The
- * `[transport]` dynamic segment is required by `mcp-handler` — it derives
- * the transport name from the path.
+ * Served at `/api/mcp/mcp` only — the URL existing claude.ai connectors are
+ * configured with. mcp-handler 2 serves whatever route it is mounted on, so
+ * the `[transport]` segment is kept purely to preserve that URL, and any other
+ * segment (e.g. the retired `/api/mcp/sse`) answers 404.
+ *
+ * Protocol: mcp-handler 2 / MCP SDK v2 serve the stateless 2026-07-28
+ * protocol, with the SDK's legacy fallback answering 2025-era Streamable HTTP
+ * clients from the same handler.
  *
  * Auth: every request is wrapped by `withMcpAuth`, which expects an
  * `Authorization: Bearer <token>` header. The token is looked up in
@@ -17,7 +22,7 @@
  * loses access immediately (no need to wait for token expiry).
  */
 import { createMcpHandler, withMcpAuth } from "mcp-handler";
-import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
+import type { AuthInfo } from "@modelcontextprotocol/server";
 import { eq } from "drizzle-orm";
 import { db } from "@intake/db/client";
 import { usersSync } from "@intake/db/schema";
@@ -35,10 +40,6 @@ const baseHandler = createMcpHandler(
   },
   {
     serverInfo: { name: "intake-tracker", version: "1.0.0" },
-  },
-  {
-    basePath: "/api/mcp",
-    disableSse: true,
     verboseLogs: process.env.NODE_ENV !== "production",
   },
 );
@@ -136,7 +137,18 @@ async function checkWhitelist(
   );
 }
 
-async function handle(request: Request) {
+/** The only transport segment served; see the file header. */
+const TRANSPORT = "mcp";
+
+async function handle(
+  request: Request,
+  { params }: { params: Promise<{ transport: string }> },
+) {
+  const { transport } = await params;
+  if (transport !== TRANSPORT) {
+    return withCors(NextResponse.json({ error: "not_found" }, { status: 404 }));
+  }
+
   const denied = await checkWhitelist(request);
   if (denied) return denied;
 
