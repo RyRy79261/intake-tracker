@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
@@ -181,26 +181,98 @@ describe("ParsedItemRow", () => {
     expect(screen.getByRole("button", { name: /approve urination/i })).toBeDisabled();
   });
 
-  it("edits the spoken time, and clears it back to 'when saved'", () => {
-    const onChange = vi.fn();
-    const { container } = render(
-      <ParsedItemRow
-        item={{ kind: "water", ml: 250, time: "13:00" }}
-        index={0}
-        onChange={onChange}
-        onApprove={() => {}}
-        onReject={() => {}}
-        approved={null}
-      />,
-    );
-    const time = container.querySelector('input[type="time"]') as HTMLInputElement;
-    expect(time.value).toBe("13:00");
+  describe("time", () => {
+    // "Now" is 2026-09-30 14:00 on the device's own wall clock, whatever zone
+    // the suite runs in — the row reads the device zone, as it does in the app.
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(new Date(2026, 8, 30, 14, 0));
+    });
+    afterEach(() => {
+      vi.useRealTimers();
+    });
 
-    fireEvent.change(time, { target: { value: "08:15" } });
-    expect(onChange.mock.calls.at(-1)![0]).toMatchObject({ time: "08:15" });
+    function renderRow(item: VoiceParsedItem, approved: boolean | null = null) {
+      const onChange = vi.fn();
+      const view = render(
+        <ParsedItemRow
+          item={item}
+          index={0}
+          onChange={onChange}
+          onApprove={() => {}}
+          onReject={() => {}}
+          approved={approved}
+        />,
+      );
+      const input = view.container.querySelector(
+        'input[type="datetime-local"]',
+      ) as HTMLInputElement;
+      return { onChange, input };
+    }
 
-    fireEvent.change(time, { target: { value: "" } });
-    expect(onChange.mock.calls.at(-1)![0]).not.toHaveProperty("time");
+    it("pre-fills the parsed time and names the day when it is not now", () => {
+      const { input } = renderRow({
+        kind: "alcohol",
+        description: "beer",
+        abvPercent: 5,
+        volumeMl: 330,
+        at: "2026-09-29T20:00",
+      });
+      expect(input.value).toBe("2026-09-29T20:00");
+      expect(input).toBeEnabled();
+      expect(input.max).toBe("2026-09-30T14:00");
+      expect(screen.getByTestId("voice-item-0-when")).toHaveTextContent("Yesterday 20:00");
+      expect(screen.getByRole("button", { name: /approve alcohol/i })).toBeEnabled();
+    });
+
+    it("names an earlier time today", () => {
+      renderRow({ kind: "water", ml: 100, at: "2026-09-30T13:00" });
+      expect(screen.getByTestId("voice-item-0-when")).toHaveTextContent("Today 13:00");
+    });
+
+    it("says 'now' and leaves the input empty when no time was said", () => {
+      const { input } = renderRow({ kind: "food", description: "bagel" });
+      expect(input.value).toBe("");
+      expect(screen.getByTestId("voice-item-0-when")).toHaveTextContent("now, when saved");
+      expect(screen.queryByRole("button", { name: "Use now" })).not.toBeInTheDocument();
+    });
+
+    it("edits the time, and clears it back to now", () => {
+      const { onChange, input } = renderRow({ kind: "water", ml: 250, at: "2026-09-30T13:00" });
+
+      fireEvent.change(input, { target: { value: "2026-09-28T08:15" } });
+      expect(onChange.mock.calls.at(-1)![0]).toEqual({
+        kind: "water",
+        ml: 250,
+        at: "2026-09-28T08:15",
+      });
+
+      fireEvent.change(input, { target: { value: "" } });
+      expect(onChange.mock.calls.at(-1)![0]).toEqual({ kind: "water", ml: 250 });
+
+      fireEvent.click(screen.getByRole("button", { name: "Use now" }));
+      expect(onChange.mock.calls.at(-1)![0]).toEqual({ kind: "water", ml: 250 });
+    });
+
+    it("blocks approval of a time in the future", () => {
+      renderRow({ kind: "water", ml: 250, at: "2026-09-30T18:00" });
+      expect(screen.getByRole("alert")).toHaveTextContent(/future/i);
+      expect(screen.getByRole("button", { name: /approve water/i })).toBeDisabled();
+    });
+
+    it("asks for a second look at a time more than a week back, without blocking", () => {
+      renderRow({ kind: "water", ml: 250, at: "2026-09-20T09:00" });
+      expect(screen.getByTestId("voice-item-0-when")).toHaveTextContent("Sun 20 Sep 09:00");
+      expect(screen.getByText(/More than 7 days ago/)).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /approve water/i })).toBeEnabled();
+    });
+
+    it("locks the time once the row is approved", () => {
+      const { input } = renderRow({ kind: "water", ml: 250, at: "2026-09-29T20:00" }, true);
+      expect(input).toBeDisabled();
+      expect(screen.getByTestId("voice-item-0-when")).toHaveTextContent("Yesterday 20:00");
+      expect(screen.queryByRole("button", { name: "Use now" })).not.toBeInTheDocument();
+    });
   });
 
   it("renders notes anchored to the row", () => {

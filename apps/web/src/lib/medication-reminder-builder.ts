@@ -19,7 +19,7 @@
  *   3. `buildWeeklyPushEntries()` groups one week of occurrences into the
  *      per-weekday, device-local `HH:MM` slots the push server matches on.
  */
-import { db, type DoseLog, type InventoryItem, type MedicationPhase, type PhaseSchedule } from "@/lib/db";
+import { db, readRealDatabase, type DoseLog, type InventoryItem, type MedicationPhase, type PhaseSchedule } from "@/lib/db";
 import { isLive } from "@intake/core/lifecycle";
 import { selectEffectivePhases } from "@intake/core/effective-phase";
 import { formatComboDose } from "@intake/core/compound";
@@ -194,8 +194,17 @@ function formatDosage(
  * Tombstoned rows never count, a prescription must be active, and each
  * prescription contributes only its effective phase (a plan-linked titration
  * phase overrides maintenance), matching the Today view.
+ *
+ * Always read from the user's real database: every caller turns the result
+ * into real reminders (the push server's schedule, native alarms, in-page
+ * notifications). While a manual's live preview has its sample database
+ * swapped in, this waits for the real one (`readRealDatabase`).
  */
-export async function loadReminderDoses(): Promise<ReminderDose[]> {
+export function loadReminderDoses(): Promise<ReminderDose[]> {
+  return readRealDatabase(readReminderDoses);
+}
+
+async function readReminderDoses(): Promise<ReminderDose[]> {
   const [prescriptions, phases, schedules, inventory] = await Promise.all([
     db.prescriptions.toArray(),
     db.medicationPhases.toArray(),
@@ -283,8 +292,17 @@ export function isSlotHandled(log: Pick<DoseLog, "status" | "deletedAt"> | undef
   return log.status === "taken" || log.status === "skipped" || log.status === "rescheduled";
 }
 
-/** `scheduleId|dateKey` keys of every handled slot among `occurrences`. */
-export async function loadHandledSlots(
+/**
+ * `scheduleId|dateKey` keys of every handled slot among `occurrences`. Reads
+ * the real database only, like `loadReminderDoses`.
+ */
+export function loadHandledSlots(
+  occurrences: readonly ReminderOccurrence[],
+): Promise<Set<string>> {
+  return readRealDatabase(() => readHandledSlots(occurrences));
+}
+
+async function readHandledSlots(
   occurrences: readonly ReminderOccurrence[],
 ): Promise<Set<string>> {
   const keys = [...new Set(occurrences.map((o) => `${o.dose.scheduleId}|${o.dateKey}`))];

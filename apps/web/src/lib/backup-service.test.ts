@@ -676,6 +676,22 @@ describe("backup-service: synced settings (audit state-settings-cache#2)", () =>
     expect(queued).toBe(1);
   });
 
+  it("restores the week start, and a row from before it existed", async () => {
+    const { weekStartsOn: _drop, ...legacy } = makeUserSettings({ id: "settings-2" });
+    void _drop;
+    const body = makeBackupJson({
+      userSettings: [makeUserSettings({ id: "settings-1", weekStartsOn: 0 }), legacy],
+    });
+
+    const res = await importBackup(makeFile(body), "merge");
+
+    expect(res.success).toBe(true);
+    if (!res.success) return;
+    expect(res.data.userSettingsImported).toBe(2);
+    expect((await db.userSettings.get("settings-1"))!.weekStartsOn).toBe(0);
+    expect((await db.userSettings.get("settings-2"))!.weekStartsOn).toBeUndefined();
+  });
+
   it("restores the synced settings of an older backup that only has the settings blob", async () => {
     const body = makeBackupJson({
       settings: {
@@ -683,6 +699,7 @@ describe("backup-service: synced settings (audit state-settings-cache#2)", () =>
           waterLimit: 1600,
           saltLimit: 1900,
           dayStartHour: 4,
+          weekStartsOn: 6,
           optionalTrackers: { sugar: false, potassium: true },
           liquidPresets: [{ id: "custom-1", name: "Rooibos", tab: "beverage" }],
           // Device-only preference: not part of the synced row.
@@ -701,6 +718,7 @@ describe("backup-service: synced settings (audit state-settings-cache#2)", () =>
     expect(rows[0]!.waterLimit).toBe(1600);
     expect(rows[0]!.saltLimit).toBe(1900);
     expect(rows[0]!.dayStartHour).toBe(4);
+    expect(rows[0]!.weekStartsOn).toBe(6);
     expect(rows[0]!.optionalTrackers).toEqual({ sugar: false, potassium: true });
     expect(rows[0]!.liquidPresets.map((p) => p.name)).toEqual(["Rooibos"]);
     expect(rows[0]).not.toHaveProperty("scrollDurationMs");

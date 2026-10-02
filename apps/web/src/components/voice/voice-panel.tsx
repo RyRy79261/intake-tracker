@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Check, Mic, X } from "lucide-react";
 import { Button } from "@intake/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@intake/ui/card";
@@ -13,7 +13,6 @@ import { useAddUrination } from "@/hooks/use-urination-queries";
 import { useAddDefecation } from "@/hooks/use-defecation-queries";
 import { useAddSubstance } from "@/hooks/use-substance-queries";
 import { useLogDrink } from "@/hooks/use-drink-log";
-import { waterContentPercentFromAbv } from "@intake/core/alcohol";
 import { useAddComposableEntry, type ComposableEntryInput } from "@/hooks/use-composable-entry";
 import { useOptionalTrackerEnabled } from "@/lib/optional-trackers";
 import {
@@ -25,7 +24,13 @@ import {
 import { reconcileLiquidItems } from "@/lib/voice-reconcile";
 import { applyPresetCaffeine } from "@/lib/voice-presets";
 import { validateVoiceItem } from "@/lib/voice-validation";
-import { normalizeSpokenTiming, resolveSpokenTime } from "@/lib/voice-time";
+import {
+  clientNowForParse,
+  isLongAgo,
+  normalizeSpokenTiming,
+  spokenTimestamp,
+} from "@/lib/voice-time";
+import { getDeviceTimezone } from "@/lib/timezone";
 import { useSettingsStore } from "@/stores/settings-store";
 import { recoverClosedDatabase } from "@/lib/db";
 import { apiFetch } from "@/lib/api-fetch";
@@ -90,9 +95,15 @@ function parseNotices(data: VoiceParseResponse): string[] {
 interface VoicePanelProps {
   /** Called once a save commit succeeds so the host can close the modal. */
   onCommitted?: () => void;
+  /**
+   * A clip already recorded by the host (the Ward shell's hold-to-talk
+   * button). It is transcribed and parsed once, on mount, exactly as if the
+   * panel's own recorder had produced it.
+   */
+  initialClip?: { blob: Blob; mimeType: string } | null;
 }
 
-export function VoicePanel({ onCommitted }: VoicePanelProps) {
+export function VoicePanel({ onCommitted, initialClip }: VoicePanelProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -106,7 +117,6 @@ export function VoicePanel({ onCommitted }: VoicePanelProps) {
   const addComposableEntry = useAddComposableEntry();
   const sugarEnabled = useOptionalTrackerEnabled("sugar");
   const potassiumEnabled = useOptionalTrackerEnabled("potassium");
-  const dayStartHour = useSettingsStore((s) => s.dayStartHour);
   const liquidPresets = useSettingsStore((s) => s.liquidPresets);
 
   const [transcript, setTranscript] = useState<string>("");
@@ -130,6 +140,9 @@ export function VoicePanel({ onCommitted }: VoicePanelProps) {
     [rows]
   );
   const savedCount = useMemo(() => rows.filter((r) => r.saved).length, [rows]);
+  // Save waits for every refresh: a row mid-refresh still holds the values
+  // the user asked to replace.
+  const anyRefreshing = rows.some((r) => r.refreshing);
 
   const handleRecorded = useCallback(
     async (blob: Blob, mimeType: string) => {
@@ -143,6 +156,9 @@ export function VoicePanel({ onCommitted }: VoicePanelProps) {
       setReasoning(null);
       setNotices([]);
       setStage("transcribing");
+      // The moment the user stopped speaking: "now" for everything they said.
+      const spokenAt = Date.now();
+      const timeZone = getDeviceTimezone();
 
       try {
         const ext =
@@ -174,7 +190,12 @@ export function VoicePanel({ onCommitted }: VoicePanelProps) {
         const parseRes = await apiFetch("/api/ai/voice-parse", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ transcript: text }),
+          // The device's clock goes with the transcript: the parser cannot
+          // date "yesterday at 8pm" without knowing what today is here.
+          body: JSON.stringify({
+            transcript: text,
+            now: clientNowForParse(spokenAt, timeZone),
+          }),
         });
         if (!parseRes) {
           setStage("idle");
@@ -188,9 +209,11 @@ export function VoicePanel({ onCommitted }: VoicePanelProps) {
         // Collapse a drink the parser split into two items before the review
         // list is built, so the user approves one row per drink instead of
         // having a correction applied invisibly at save time (issue #322).
-        const receivedAt = Date.now();
+        // Spoken times become each item's editable `at` here, measured from
+        // the clock the parser was given ("an hour ago" is an hour before the
+        // recording ended, not before the reply arrived).
         const reconciled = reconcileLiquidItems(
-          data.items.map((item) => normalizeSpokenTiming(item, receivedAt)),
+          data.items.map((item) => normalizeSpokenTiming(item, spokenAt, timeZone)),
         );
         // Voice caffeine follows the user's preset for a named drink, so the
         // same moka books the same caffeine whichever way it was logged.
@@ -243,6 +266,15 @@ export function VoicePanel({ onCommitted }: VoicePanelProps) {
     [toast, liquidPresets]
   );
 
+  // Process a host-recorded clip once. The ref keeps a StrictMode double
+  // effect (or a re-render) from sending the same audio twice.
+  const processedClipRef = useRef<Blob | null>(null);
+  useEffect(() => {
+    if (!initialClip || processedClipRef.current === initialClip.blob) return;
+    processedClipRef.current = initialClip.blob;
+    void handleRecorded(initialClip.blob, initialClip.mimeType);
+  }, [initialClip, handleRecorded]);
+
   const updateRow = useCallback((index: number, next: Partial<RowState>) => {
     setRows((prev) => prev.map((r, i) => (i === index ? { ...r, ...next } : r)));
   }, []);
@@ -277,12 +309,10 @@ export function VoicePanel({ onCommitted }: VoicePanelProps) {
         const data = (await res.json()) as VoiceParseResponse;
         const found = data.items.find((i) => i.kind === item.kind);
         if (!found) throw new Error("The AI found no matching item. Check the description.");
-        const { time: _time, ...fresh } = normalizeSpokenTiming(found, Date.now());
         // The row keeps the time it already has — a refresh fixes what the
         // item is, not when it happened.
-        const timed = (
-          item.time !== undefined ? { ...fresh, time: item.time } : fresh
-        ) as VoiceParsedItem;
+        const { when: _when, at: _at, ...fresh } = found;
+        const timed = (item.at !== undefined ? { ...fresh, at: item.at } : fresh) as VoiceParsedItem;
         const priced = applyPresetCaffeine([timed], liquidPresets);
         // Notes about the old values (merges, presets) no longer apply.
         // Possible-duplicate warnings still do.
@@ -303,12 +333,19 @@ export function VoicePanel({ onCommitted }: VoicePanelProps) {
     [patchRowById, liquidPresets, toast],
   );
 
-  // Skips rows that are flagged as a possible duplicate or fail validation:
-  // those need the user's attention one at a time.
+  // Skips rows that are flagged as a possible duplicate, fail validation, are
+  // dated more than a week back, or are mid-refresh: those need the user's
+  // attention one at a time.
   const approveAll = useCallback(() => {
+    const now = Date.now();
+    const timeZone = getDeviceTimezone();
     setRows((prev) =>
       prev.map((r) =>
-        r.approved === null && !r.flagged && validateVoiceItem(r.item) === null
+        r.approved === null &&
+        !r.flagged &&
+        !r.refreshing &&
+        validateVoiceItem(r.item, now, timeZone) === null &&
+        !isLongAgo(r.item.at, now, timeZone)
           ? { ...r, approved: true }
           : r,
       ),
@@ -490,9 +527,6 @@ export function VoicePanel({ onCommitted }: VoicePanelProps) {
             volumeMl: item.volumeMl,
             description: item.description,
             abvPercent: item.abvPercent,
-            // No measured water content from voice: book the non-alcohol
-            // share as water (a 40% spirit hydrates 60% of its volume).
-            waterContentPercent: waterContentPercentFromAbv(item.abvPercent),
             ...(item.sugarG !== undefined && sugarEnabled && { sugarG: item.sugarG }),
             ...(item.sodiumMg !== undefined && { saltMg: item.sodiumMg }),
             ...(item.potassiumMg !== undefined &&
@@ -543,15 +577,17 @@ export function VoicePanel({ onCommitted }: VoicePanelProps) {
     // re-tapping Save after a failure retries only what actually failed.
     const pending = rows
       .map((row, index) => ({ row, index }))
-      .filter(({ row }) => row.approved === true && !row.saved);
+      .filter(({ row }) => row.approved === true && !row.saved && !row.refreshing);
     if (pending.length === 0) return;
 
     setStage("saving");
     // One "now" for the whole batch, so items dictated together are logged
     // together; an item with a spoken time is placed at that time instead.
+    // The record stores the instant; which day it counts toward follows from
+    // it under the day-start hour, as for every other record.
     const batchNow = Date.now();
-    const timestampFor = (item: VoiceParsedItem) =>
-      item.time !== undefined ? resolveSpokenTime(item.time, batchNow, dayStartHour) : batchNow;
+    const timeZone = getDeviceTimezone();
+    const timestampFor = (item: VoiceParsedItem) => spokenTimestamp(item, batchNow, timeZone);
     let successCount = 0;
     const failures: string[] = [];
     const savedIndices: number[] = [];
@@ -611,7 +647,7 @@ export function VoicePanel({ onCommitted }: VoicePanelProps) {
     } else {
       setStage("ready");
     }
-  }, [rows, toast, reset, queryClient, saveItem, onCommitted, dayStartHour]);
+  }, [rows, toast, reset, queryClient, saveItem, onCommitted]);
 
   const hasItems = rows.length > 0;
 
@@ -760,7 +796,7 @@ export function VoicePanel({ onCommitted }: VoicePanelProps) {
           <Button
             size="lg"
             className="mt-3 w-full gap-2"
-            disabled={stage === "saving" || approvedCount === 0}
+            disabled={stage === "saving" || anyRefreshing || approvedCount === 0}
             onClick={commit}
           >
             <Check className="h-5 w-5" />

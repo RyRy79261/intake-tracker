@@ -19,16 +19,28 @@ export type VoiceItemKind =
   | "defecation";
 
 /**
+ * When an item happened, as the parser returns it: a local wall-clock
+ * date-time the user stated ("yesterday at 8pm" → "2026-09-29T20:00"), or an
+ * offset from the moment of the request ("an hour ago" → 60).
+ */
+export type SpokenWhen =
+  | { kind: "absolute"; localDateTime: string }
+  | { kind: "relative"; minutesAgo: number };
+
+/** The client's clock, sent with a parse request so the model can date items. */
+export type { VoiceParseClientNow } from "@intake/ai-prompts/voice-parse";
+
+/**
  * When an item happened, if the user said. Absent → the save time.
  *
- * `time` is a 24-hour "HH:mm" clock time ("at 1pm" → "13:00"), resolved to the
- * most recent such time within the day-start rules (see `resolveSpokenTime`).
- * `minutesAgo` is a relative offset the parser may return instead; the panel
- * converts it to a `time` on receipt, so the review row edits one field.
+ * `when` is the wire form. The panel converts it on receipt (see
+ * `normalizeSpokenTiming`) to `at`: a local wall-clock "YYYY-MM-DDTHH:mm" in
+ * the device's zone, which is what the review row shows and edits and what the
+ * save turns into the record's timestamp.
  */
 interface SpokenTiming {
-  time?: string;
-  minutesAgo?: number;
+  when?: SpokenWhen;
+  at?: string;
 }
 
 export interface BloodPressureItem extends SpokenTiming {

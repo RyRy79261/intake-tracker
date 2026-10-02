@@ -1,6 +1,6 @@
 "use client";
 
-import { Cat } from "lucide-react";
+import { Pill, Plus } from "lucide-react";
 import { Button } from "@intake/ui/button";
 
 interface EmptyScheduleProps {
@@ -9,18 +9,12 @@ interface EmptyScheduleProps {
 
 export function EmptySchedule({ onAddMed }: EmptyScheduleProps) {
   return (
-    <div className="flex flex-col items-center justify-center py-20 px-4 text-center">
-      <Cat className="w-16 h-16 text-muted-foreground/40 mb-4" />
-      <p className="text-muted-foreground text-sm">
-        No medications scheduled for today
-      </p>
+    <div className="flex flex-col items-center gap-1.5 px-3 py-7 text-center">
+      <Pill className="h-12 w-12 opacity-50" strokeWidth={1.5} aria-hidden="true" />
+      <p className="text-lg font-semibold">No medications scheduled for today</p>
       {onAddMed && (
-        <Button
-          variant="outline"
-          size="sm"
-          className="mt-4"
-          onClick={onAddMed}
-        >
+        <Button className="mt-2" onClick={onAddMed}>
+          <Plus aria-hidden="true" />
           Add a prescription
         </Button>
       )}

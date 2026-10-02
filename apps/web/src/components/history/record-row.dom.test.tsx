@@ -71,13 +71,22 @@ describe("RecordRow", () => {
     renderRow({ type: "eating", record });
     expect(screen.getByText("—")).toBeInTheDocument();
   });
+
+  it("names the edit area with the type, measurement and time, and colours it by domain", () => {
+    renderRow({
+      type: "intake",
+      record: makeIntakeRecord({ type: "water", amount: 250, source: "manual" }),
+    });
+    const main = screen.getByRole("button", { name: /^Water 250 ml.* at .*, edit$/ });
+    expect(main).toBeInTheDocument();
+    expect(screen.getByTestId("record-row").style.getPropertyValue("--c")).toBe("hsl(var(--water))");
+  });
 });
 
 /**
- * The whole row is a keyboard-operable "edit" button (Enter/Space), and it
- * also holds real Edit/Delete buttons. Keyboard activation of those inner
- * buttons must not bubble into the row's handler, which would open the editor
- * and preventDefault the button's own activation.
+ * The row's main area is a real "edit" button (Enter/Space), with separate
+ * Edit/Delete buttons beside it (siblings, not nested). Keyboard activation of
+ * Delete must never open the editor.
  */
 function renderKeyboardRow() {
   const onEdit = vi.fn();
@@ -98,7 +107,7 @@ describe("RecordRow keyboard access", () => {
     const user = userEvent.setup();
     const { onEdit, onDelete } = renderKeyboardRow();
 
-    screen.getByText("72.5 kg").closest<HTMLElement>("[role=button]")!.focus();
+    screen.getByText("72.5 kg").closest<HTMLElement>("button")!.focus();
     await user.keyboard("{Enter}");
 
     expect(onEdit).toHaveBeenCalledTimes(1);

@@ -63,7 +63,6 @@ function resultBlock(overrides: Record<string, unknown> = {}) {
       defaultVolumeMl: 250,
       beverageName: "Pour-over coffee",
       reasoning: "USDA FoodData Central",
-      waterContentPercent: 99,
       ...overrides,
     },
   };
@@ -133,8 +132,9 @@ describe("caffeine lookups must be sourced by a completed web search", () => {
     const retry = messagesCreate.mock.calls[1]?.[0];
     expect(retry).toBeDefined();
     expect(JSON.stringify(retry.messages)).toMatch(/must call the web_search tool/i);
-    // Forcing the structured tool would prevent the search we are asking for.
-    expect(retry.tool_choice).toBeUndefined();
+    // Forcing the structured tool would prevent the search we are asking for
+    // (and Claude Sonnet 5.5 rejects a forced tool_choice outright).
+    expect(retry.tool_choice).toEqual({ type: "auto" });
   });
 
   it("sends the retry as a fresh turn, never replaying the unpaired tool_use", async () => {
@@ -179,6 +179,76 @@ describe("caffeine lookups must be sourced by a completed web search", () => {
     expect(json.substancePer100ml).toBe(55);
     expect(json.substancePer100ml).not.toBe(999);
     expect(messagesCreate).toHaveBeenCalledTimes(3);
+  });
+
+  // Claude Sonnet 5.5 signs each thinking block over the conversation before
+  // it. The follow-up replays the search-nudge turn, so it has to send that
+  // turn's own user message — the original prompt under it is an edit to
+  // earlier history, which can be a 400.
+  it("replays the turn it continues under that turn's own user message", async () => {
+    const searched = [
+      { type: "thinking", thinking: "", signature: "sig" },
+      searchResultBlock(),
+      { type: "text", text: "About 55 mg per 100 ml." },
+    ];
+    messagesCreate
+      .mockResolvedValueOnce({ content: [resultBlock({ substancePer100ml: 999 })], usage })
+      .mockResolvedValueOnce({ content: searched, usage })
+      .mockResolvedValueOnce({ content: [resultBlock()], usage });
+
+    const res = await post({ query: "pour over coffee", type: "caffeine" });
+    expect(res.status).toBe(200);
+
+    const nudge = messagesCreate.mock.calls[1]?.[0];
+    const followup = messagesCreate.mock.calls[2]?.[0];
+    expect(followup.system).toBe(nudge.system);
+    expect(followup.tools).toEqual(nudge.tools);
+    expect(followup.messages).toHaveLength(3);
+    expect(followup.messages[0]).toEqual(nudge.messages[0]);
+    expect(followup.messages[1].role).toBe("assistant");
+    expect(followup.messages[1].content).toBe(searched);
+    expect(followup.messages[2].role).toBe("user");
+  });
+
+  it("continues the first turn under the original prompt when no nudge ran", async () => {
+    const prose = [searchResultBlock(), { type: "text", text: "About 55 mg per 100 ml." }];
+    messagesCreate
+      .mockResolvedValueOnce({ content: prose, usage })
+      .mockResolvedValueOnce({ content: [resultBlock()], usage });
+
+    const res = await post({ query: "pour over coffee", type: "caffeine" });
+    expect(res.status).toBe(200);
+
+    const first = messagesCreate.mock.calls[0]?.[0];
+    const followup = messagesCreate.mock.calls[1]?.[0];
+    expect(followup.messages[0]).toEqual(first.messages[0]);
+    expect(followup.messages[1].content).toBe(prose);
+  });
+
+  // Every request the route can make: a forced tool_choice, a sampling
+  // parameter or a disabled-thinking setting is a 400 on Claude Sonnet 5.5,
+  // and its effort default is high.
+  it("sends tool_choice auto, a strict tool and medium effort on all three requests", async () => {
+    messagesCreate
+      .mockResolvedValueOnce({ content: [resultBlock()], usage })
+      .mockResolvedValueOnce({ content: [searchResultBlock()], usage })
+      .mockResolvedValueOnce({ content: [resultBlock()], usage });
+
+    await post({ query: "pour over coffee", type: "caffeine" });
+
+    expect(messagesCreate).toHaveBeenCalledTimes(3);
+    for (const [params] of messagesCreate.mock.calls) {
+      expect(params.tool_choice).toEqual({ type: "auto" });
+      expect(params.output_config).toEqual({ effort: "medium" });
+      expect(params).not.toHaveProperty("temperature");
+      expect(params).not.toHaveProperty("top_p");
+      expect(params).not.toHaveProperty("top_k");
+      expect(params).not.toHaveProperty("thinking");
+      const tool = params.tools.find(
+        (t: { name: string }) => t.name === "substance_lookup_result",
+      );
+      expect(tool.strict).toBe(true);
+    }
   });
 
   it("accepts a caffeine value when a search completed", async () => {

@@ -41,6 +41,7 @@ vi.mock("@capacitor/local-notifications", () => ({
 }));
 vi.mock("@/lib/local-notifications", () => ({
   getNativeRemindersEnabled: () => native.enabled,
+  syncMedicationNotifications: async () => undefined,
   setNativeRemindersEnabled: native.setEnabled,
 }));
 
@@ -61,6 +62,7 @@ vi.mock("@/lib/push-notification-service", async (importOriginal) => ({
 
 import { usePushScheduleSync, useDoseReminderToggle } from "@/hooks/use-push-schedule-sync";
 import { resetPushScheduleSyncState } from "@/lib/push-notification-service";
+import { installMedicationNotificationResync } from "@/lib/medication-notification-resync";
 import { decodePushMedications } from "@/lib/push-dispatch";
 
 interface SyncedEntry {
@@ -261,6 +263,70 @@ describe("usePushScheduleSync", () => {
       ),
     );
     warn.mockRestore();
+  });
+});
+
+// The follow-up controls live in the Settings sheet, which opens over Home
+// with no Medications window (and so no usePushScheduleSync) mounted. The
+// app-wide reminder resync must carry them to the push server.
+describe("app-wide reminder resync (no Medications window open)", () => {
+  const DEBOUNCE_MS = 20;
+  let dispose: (() => void) | undefined;
+
+  afterEach(() => {
+    dispose?.();
+    dispose = undefined;
+  });
+
+  function lastSettingsBody() {
+    const calls = callsTo("/api/push/settings");
+    return JSON.parse(String((calls[calls.length - 1]?.[1] as RequestInit).body));
+  }
+
+  it("posts follow-up settings changed in the Settings sheet", async () => {
+    dispose = installMedicationNotificationResync(undefined, DEBOUNCE_MS);
+    await waitFor(() => expect(callsTo("/api/push/settings")).toHaveLength(1));
+
+    act(() => {
+      useSettingsStore.setState({ reminderFollowUpCount: 0, reminderFollowUpInterval: 15 });
+    });
+
+    await waitFor(() => expect(callsTo("/api/push/settings")).toHaveLength(2));
+    expect(lastSettingsBody()).toEqual({
+      followUpCount: 0,
+      followUpIntervalMinutes: 15,
+      dayStartHour: useSettingsStore.getState().dayStartHour,
+    });
+  });
+
+  it("posts them when reminders are turned on, and not again while unchanged", async () => {
+    useSettingsStore.setState({ doseRemindersEnabled: false });
+    dispose = installMedicationNotificationResync(undefined, DEBOUNCE_MS);
+    await settle();
+    expect(callsTo("/api/push/settings")).toHaveLength(0);
+
+    act(() => {
+      useSettingsStore.setState({ doseRemindersEnabled: true });
+    });
+    await waitFor(() => expect(callsTo("/api/push/settings")).toHaveLength(1));
+
+    // A later resync (a regimen write, the app returning to the foreground)
+    // does not resend unchanged settings.
+    await seedMedication("Metoprolol", 50);
+    await waitFor(() => expect(callsTo("/api/push/sync-schedule").length).toBeGreaterThan(1));
+    expect(callsTo("/api/push/settings")).toHaveLength(1);
+  });
+
+  it("retries after a failed post", async () => {
+    apiFetch.mockImplementation(async (url: unknown) =>
+      url === "/api/push/settings" ? new Response("{}", { status: 500 }) : new Response("{}"),
+    );
+    dispose = installMedicationNotificationResync(undefined, DEBOUNCE_MS);
+    await waitFor(() => expect(callsTo("/api/push/settings")).toHaveLength(1));
+
+    apiFetch.mockImplementation(async () => new Response("{}"));
+    await seedMedication("Metoprolol", 50);
+    await waitFor(() => expect(callsTo("/api/push/settings")).toHaveLength(2));
   });
 });
 

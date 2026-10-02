@@ -96,14 +96,14 @@ describe("WaterTab", () => {
       settings: { waterLimit: 1000, waterExtendedBuffer: 0 },
     });
 
-    // 500 of 1000ml = 50% primary fill. With the buffer disabled the bar
-    // falls back to the single-segment Radix indicator (translateX).
-    const indicator = document.querySelector(
-      "[role='progressbar'] > div"
-    ) as HTMLElement;
-    await waitFor(() =>
-      expect(indicator.style.transform).toBe("translateX(-50%)")
-    );
+    // 500 of 1000ml = 50%: 10 of the 20 segments filled, none hatched.
+    await waitFor(() => {
+      const bar = screen.getByRole("progressbar", { name: /water intake today/i });
+      expect(bar).toHaveAttribute("aria-valuenow", "50");
+      expect(bar.querySelectorAll("i.f")).toHaveLength(10);
+      expect(bar.querySelectorAll("i.h, i.x")).toHaveLength(0);
+      expect(bar).toHaveAttribute("data-state", "ok");
+    });
   });
 
   it("renders the extended-buffer segment when the daily total spills past the target", async () => {
@@ -120,25 +120,33 @@ describe("WaterTab", () => {
       settings: { waterLimit: 1500, waterExtendedBuffer: 500 },
     });
 
-    // 1800ml of a 1500/2000 bar -> 1500/2000=75% primary + 300/2000=15% extended.
-    // Re-query inside waitFor: the bar starts single-segment before the live
-    // query resolves the seeded record. Exclude the aria-hidden target marker.
+    // 1800ml against a 1500 target: the bar spans the whole total and the
+    // share past the target (round(20 * 1500 / 1800) = 17 onwards) is hatched.
     await waitFor(() => {
-      const segments = document.querySelectorAll<HTMLElement>(
-        "[role='progressbar'] > div:not([aria-hidden='true'])"
-      );
-      expect(segments).toHaveLength(2);
-      expect(segments[0]!.style.width).toBe("75%");
-      expect(segments[1]!.style.width).toBe("15%");
-      expect(segments[1]!.style.left).toBe("75%");
+      const bar = screen.getByRole("progressbar", { name: /water intake today/i });
+      expect(bar).toHaveAttribute("data-state", "over-target");
+      expect(bar.querySelectorAll("i.f")).toHaveLength(17);
+      expect(bar.querySelectorAll("i.h")).toHaveLength(3);
+      expect(bar.querySelectorAll("i.x")).toHaveLength(0);
+    });
+  });
+
+  it("marks the bar over the limit once past target + buffer", async () => {
+    await renderWithFixtures(<WaterTab />, {
+      seed: {
+        intakeRecords: [
+          makeIntakeRecord({ type: "water", amount: 2500, timestamp: Date.now() }),
+        ],
+      },
+      settings: { waterLimit: 1500, waterExtendedBuffer: 500 },
     });
 
-    // The target marker sits at 75% (1500 / 2000) regardless of fill state.
-    const marker = document.querySelector<HTMLElement>(
-      "[role='progressbar'] > div[aria-hidden='true']"
-    );
-    expect(marker).not.toBeNull();
-    expect(marker!.style.left).toBe("calc(75% - 1px)");
+    await waitFor(() => {
+      const bar = screen.getByRole("progressbar", { name: /water intake today/i });
+      expect(bar).toHaveAttribute("data-state", "over-limit");
+      expect(bar.querySelectorAll("i.f")).toHaveLength(12);
+      expect(bar.querySelectorAll("i.x")).toHaveLength(8);
+    });
   });
 
   describe("save reliability", () => {

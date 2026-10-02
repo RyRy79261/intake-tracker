@@ -7,13 +7,15 @@ import { PrescriptionCard } from "@/components/medications/prescription-card";
 // The test reads the seeded IndexedDB directly to assert the PRN write. The
 // "components must use hooks, not db" rule targets component source, not tests.
 // eslint-disable-next-line no-restricted-imports
-import { db } from "@/lib/db";
+import { db, type DoseLog } from "@/lib/db";
+import { toLocalDateKey } from "@/lib/date-utils";
 import { renderWithFixtures } from "@/__tests__/react-test-utils";
 import {
   makePrescription,
   makeMedicationPhase,
   makePhaseSchedule,
   makeInventoryItem,
+  makeDoseLog,
 } from "@/__tests__/fixtures/db-fixtures";
 
 /**
@@ -37,6 +39,16 @@ describe("PrescriptionCard", () => {
       currentStock: 40,
     });
     return { prescription, phase, schedule, inventory };
+  }
+
+  /** A taken as-needed log: like the real ones, it has no phase or schedule. */
+  function makePrnLog(prescriptionId: string, overrides: Partial<DoseLog>): DoseLog {
+    const { phaseId: _phaseId, scheduleId: _scheduleId, ...rest } = makeDoseLog(prescriptionId, "", "", {
+      kind: "prn",
+      status: "taken",
+      ...overrides,
+    });
+    return rest;
   }
 
   it("renders the prescription name and indication", async () => {
@@ -202,6 +214,9 @@ describe("PrescriptionCard", () => {
       expect((await db.inventoryItems.get(inventory.id))?.currentStock).toBe(29);
     });
 
+    // The recent-dose list lives in the expanded card.
+    await user.click(screen.getByRole("button", { name: /furosemide/i, expanded: false }));
+
     // First tap arms the removal, the second confirms it.
     await user.click(await screen.findByRole("button", { name: /^undo as-needed dose/i }));
     expect((await db.inventoryItems.get(inventory.id))?.currentStock).toBe(29);
@@ -232,5 +247,106 @@ describe("PrescriptionCard", () => {
     await screen.findByRole("button", { name: "Log Dose" });
     const input = document.querySelector('input[type="time"]') as HTMLInputElement;
     expect(input.max).not.toBe("");
+  });
+
+  it("names the last as-needed dose even when it is older than the recent list", async () => {
+    const user = userEvent.setup();
+    const prescription = makePrescription({ genericName: "Furosemide" });
+    const taken = new Date();
+    taken.setDate(taken.getDate() - 10);
+    taken.setHours(14, 5, 0, 0);
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const dateKey = `${taken.getFullYear()}-${pad(taken.getMonth() + 1)}-${pad(taken.getDate())}`;
+    const log = makePrnLog(prescription.id, {
+      scheduledDate: dateKey,
+      scheduledTime: "14:05",
+      actionTimestamp: taken.getTime(),
+    });
+
+    await renderWithFixtures(<PrescriptionCard prescription={prescription} />, {
+      seed: { prescriptions: [prescription], doseLogs: [log] },
+    });
+
+    const day = taken.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    expect(await screen.findByText(`As needed · last ${day} 14:05`)).toBeInTheDocument();
+    expect(screen.queryByText(/no doses logged yet/i)).not.toBeInTheDocument();
+
+    // The expanded recent-doses list keeps its 7-day window.
+    await user.click(screen.getByRole("button", { name: /furosemide/i, expanded: false }));
+    await screen.findByText("Medicines");
+    expect(screen.queryByRole("list", { name: /recent as-needed doses/i })).not.toBeInTheDocument();
+  });
+
+  it("shows the scheduled dose on a day with no dose", async () => {
+    const prescription = makePrescription({ genericName: "Lisinopril" });
+    const phase = makeMedicationPhase(prescription.id, { unit: "mg" });
+    // A once-weekly schedule on a weekday three days from today.
+    const schedule = makePhaseSchedule(phase.id, {
+      dosage: 10,
+      time: "09:00",
+      daysOfWeek: [(new Date().getDay() + 3) % 7],
+    });
+    const inventory = makeInventoryItem(prescription.id, {
+      prescriptionId: prescription.id,
+      brandName: "Zestril",
+      strength: 10,
+      currentStock: 40,
+    });
+
+    await renderWithFixtures(<PrescriptionCard prescription={prescription} />, {
+      seed: {
+        prescriptions: [prescription],
+        medicationPhases: [phase],
+        phaseSchedules: [schedule],
+        inventoryItems: [inventory],
+      },
+    });
+
+    expect(await screen.findByText("No doses today")).toBeInTheDocument();
+    const card = screen.getByTestId("rx-card");
+    await waitFor(() => {
+      expect(card).toHaveTextContent("10mgNo doses today");
+    });
+    expect(card).not.toHaveTextContent("—");
+    expect(
+      screen.getByRole("button", { name: /zestril, active brand/i }),
+    ).toHaveTextContent("1 tablet of 10mg");
+  });
+
+  it("shows a dash only when the prescription has no schedule", async () => {
+    const prescription = makePrescription({ genericName: "Lisinopril" });
+    const phase = makeMedicationPhase(prescription.id, { unit: "mg" });
+
+    await renderWithFixtures(<PrescriptionCard prescription={prescription} />, {
+      seed: { prescriptions: [prescription], medicationPhases: [phase] },
+    });
+
+    expect(await screen.findByText("No doses today")).toBeInTheDocument();
+    expect(screen.getByTestId("rx-card")).toHaveTextContent("—No doses today");
+  });
+
+  it("gives the as-needed Log dose and Undo buttons a 44px tap target", async () => {
+    const user = userEvent.setup();
+    const prescription = makePrescription({ genericName: "Furosemide" });
+    const log = makePrnLog(prescription.id, {
+      scheduledDate: toLocalDateKey(new Date()),
+      actionTimestamp: Date.now(),
+    });
+
+    await renderWithFixtures(<PrescriptionCard prescription={prescription} />, {
+      seed: { prescriptions: [prescription], doseLogs: [log] },
+    });
+
+    expect(
+      await screen.findByRole("button", { name: /log an as-needed dose of furosemide/i }),
+    ).toHaveClass("min-h-11");
+
+    await user.click(screen.getByRole("button", { name: /furosemide/i, expanded: false }));
+    const undo = await screen.findByRole("button", { name: /^undo as-needed dose/i });
+    expect(undo).toHaveClass("min-h-11");
+    await user.click(undo);
+    expect(
+      screen.getByRole("button", { name: /confirm undo as-needed dose/i }),
+    ).toHaveClass("min-h-11");
   });
 });

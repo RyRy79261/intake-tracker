@@ -6,8 +6,8 @@
  *            so davelosert/vitest-coverage-report-action can consume
  *            coverage/coverage-summary.json in CI.
  *   BNCH-01: bench and bench:ci scripts are defined in package.json,
- *            bench files exist on disk, and the committed baseline JSON
- *            enables pnpm bench --compare to detect regressions in CI.
+ *            bench files exist on disk, and each bench has a committed
+ *            baseline JSON that CI prints next to the fresh result.
  *
  * Run with: pnpm exec vitest run src/__tests__/benchmark-coverage-config.test.ts
  */
@@ -60,8 +60,7 @@ describe("vitest.config.mts has coverage reporters required for CI (CIOP-02)", (
 
 describe("package.json has bench scripts required for CI benchmark job (BNCH-01)", () => {
   it("package.json defines a 'bench' script for local benchmark runs", () => {
-    // The CI benchmark job invokes pnpm bench --run --compare; without this
-    // script the benchmark job fails immediately with a missing-script error.
+    // Developers run benchmarks locally through this script.
     const pkgPath = path.join(ROOT, "package.json");
     expect(fs.existsSync(pkgPath), "package.json must exist").toBe(true);
     const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
@@ -76,8 +75,8 @@ describe("package.json has bench scripts required for CI benchmark job (BNCH-01)
   });
 
   it("bench script invokes vitest bench", () => {
-    // The bench script must delegate to vitest bench so vitest's --run and
-    // --compare flags are forwarded correctly by the CI benchmark job.
+    // The bench script must delegate to vitest bench so CLI flags such as
+    // --run are forwarded correctly.
     const pkgPath = path.join(ROOT, "package.json");
     const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
     expect(
@@ -87,9 +86,9 @@ describe("package.json has bench scripts required for CI benchmark job (BNCH-01)
   });
 
   it("package.json defines a 'bench:ci' script for writing updated baselines", () => {
-    // bench:ci writes a new baseline JSON to benchmarks/results.json.
-    // Even though CI uses --compare (read-only), the script must exist for
-    // developers to regenerate the baseline after intentional perf changes.
+    // bench:ci rewrites the baselines in benchmarks/ (BENCH_WRITE_BASELINE=1).
+    // CI only reads them, so the script must exist for developers to
+    // regenerate the baselines after intentional perf changes.
     const pkgPath = path.join(ROOT, "package.json");
     const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
     expect(
@@ -127,67 +126,31 @@ describe("benchmark files exist on disk for CI to execute (BNCH-01)", () => {
 });
 
 describe("benchmark baseline JSON exists for CI regression comparison (BNCH-01)", () => {
-  it("benchmarks/results.json exists as the committed baseline", () => {
-    // pnpm bench --run --compare benchmarks/results.json fails if the baseline
-    // file does not exist. Without a committed baseline the CI benchmark job
-    // cannot detect performance regressions.
-    const baselinePath = path.join(ROOT, "benchmarks/results.json");
-    expect(
-      fs.existsSync(baselinePath),
-      "benchmarks/results.json must exist"
-    ).toBe(true);
-  });
-
-  it("benchmarks/results.json is valid JSON with a files array", () => {
-    // A corrupt or empty baseline causes pnpm bench --compare to fail with
-    // a parse error, making the CI benchmark job report as broken rather
-    // than detecting a real performance regression.
-    const baselinePath = path.join(ROOT, "benchmarks/results.json");
-    const raw = fs.readFileSync(baselinePath, "utf-8");
-    let parsed: unknown;
-    expect(() => {
-      parsed = JSON.parse(raw);
-    }, "benchmarks/results.json must be valid JSON").not.toThrow();
-    expect(
-      (parsed as { files?: unknown }).files,
-      "benchmarks/results.json must have a top-level 'files' array"
-    ).toBeDefined();
-    expect(
-      Array.isArray((parsed as { files: unknown }).files),
-      "'files' must be an array"
-    ).toBe(true);
-  });
-
-  it("benchmarks/results.json filepath entries do not contain worktree paths (BNCH-01)", () => {
-    // Phase 25 regenerated the baseline from the main repo root to remove
-    // .claude/worktrees/ path references. If the file is regenerated from a
-    // worktree again, the CI --compare run will reference non-existent paths
-    // and the benchmark job will fail for wrong reasons.
-    const baselinePath = path.join(ROOT, "benchmarks/results.json");
-    const contents = fs.readFileSync(baselinePath, "utf-8");
-    expect(
-      contents,
-      "benchmarks/results.json must not contain worktree paths (.claude/worktrees)"
-    ).not.toContain(".claude/worktrees");
-    expect(
-      contents,
-      "benchmarks/results.json must not contain the string 'worktrees'"
-    ).not.toContain("worktrees");
-  });
-
-  it("benchmarks/results.json filepath entries use relative paths for CI compatibility (BNCH-01)", () => {
-    // Absolute paths like /home/ryan/... won't match in CI where the workspace
-    // is /home/runner/work/..., causing --compare to silently find no baselines.
-    // bench:ci post-processes the JSON to strip the project root.
-    const baselinePath = path.join(ROOT, "benchmarks/results.json");
-    const data = JSON.parse(fs.readFileSync(baselinePath, "utf-8"));
-    for (const file of data.files) {
+  // Each bench compares itself against benchmarks/<slug>.json through
+  // bench.from() (src/__tests__/bench/baseline.ts). A missing baseline makes
+  // the bench run without a comparison, so the regression signal is lost.
+  for (const slug of ["migration", "backup"]) {
+    it(`benchmarks/${slug}.json exists as the committed baseline`, () => {
+      const baselinePath = path.join(ROOT, `benchmarks/${slug}.json`);
       expect(
-        file.filepath,
-        `filepath "${file.filepath}" must be relative (not start with /)`
-      ).not.toMatch(/^\//);
-    }
-  });
+        fs.existsSync(baselinePath),
+        `benchmarks/${slug}.json must exist`
+      ).toBe(true);
+    });
+
+    it(`benchmarks/${slug}.json is valid baseline data with latency statistics`, () => {
+      // bench.from() reads this file as Vitest BaselineData; a corrupt file
+      // breaks the CI benchmark job instead of reporting a regression.
+      const baselinePath = path.join(ROOT, `benchmarks/${slug}.json`);
+      const parsed = JSON.parse(fs.readFileSync(baselinePath, "utf-8")) as {
+        latency?: { mean?: unknown };
+      };
+      expect(
+        typeof parsed.latency?.mean,
+        `benchmarks/${slug}.json must have latency.mean`
+      ).toBe("number");
+    });
+  }
 });
 
 describe("shared tsconfig sets a high enough target for the typecheck CI job (CIPL-01)", () => {

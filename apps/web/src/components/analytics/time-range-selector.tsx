@@ -1,8 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { Button } from "@intake/ui/button";
-import { cn } from "@/lib/utils";
 import { getDeviceTimezone } from "@/lib/timezone";
 import { useSettingsStore } from "@/stores/settings-store";
 import {
@@ -77,53 +75,46 @@ export function TimeRangeSelector({
     onCustomRangeChange({ start: Math.min(start, end), end });
   };
 
+  // A fragment: the range row and the custom dates wrap inside the Metrics
+  // top bar, ahead of the export buttons (the prototype's `.an-top`).
   return (
-    <div className="space-y-2">
-      <div className="flex flex-wrap gap-1">
+    <>
+      <div className="wm-range" role="group" aria-label="Time range">
         {SCOPE_OPTIONS.map((opt) => (
-          <Button
+          <button
             key={opt.value}
-            variant={!showCustom && scope === opt.value ? "default" : "outline"}
-            size="sm"
-            className="text-xs flex-1 min-w-12"
+            type="button"
+            aria-pressed={!showCustom && scope === opt.value}
             onClick={() => handleScopeClick(opt.value)}
           >
             {opt.label}
-          </Button>
+          </button>
         ))}
-        <Button
-          variant={showCustom ? "default" : "outline"}
-          size="sm"
-          className="text-xs flex-1 min-w-12"
-          onClick={handleCustomClick}
-        >
+        <button type="button" aria-pressed={showCustom} onClick={handleCustomClick}>
           Custom
-        </Button>
+        </button>
       </div>
 
       {showCustom && customRange && (
-        <div className="flex items-center gap-2 text-sm">
+        <div className="wm-custom">
           <input
             type="date"
+            aria-label="Start date"
             value={toDateInputValue(customRange.start)}
             onChange={(e) => handleStartChange(e.target.value)}
-            className={cn(
-              "flex-1 rounded-md border border-input bg-background px-2 py-1 text-sm",
-              "focus:outline-hidden focus:ring-2 focus:ring-ring"
-            )}
+            className="wm-field"
           />
           <span className="text-muted-foreground">to</span>
           <input
             type="date"
+            aria-label="End date"
             value={toDateInputValue(customRange.end)}
             onChange={(e) => handleEndChange(e.target.value)}
-            className={cn(
-              "flex-1 rounded-md border border-input bg-background px-2 py-1 text-sm",
-              "focus:outline-hidden focus:ring-2 focus:ring-ring"
-            )}
+            className="wm-field"
           />
         </div>
       )}
-    </div>
+    </>
   );
 }
+

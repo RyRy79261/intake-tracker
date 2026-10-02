@@ -9,7 +9,13 @@ vi.mock("@/lib/sync-engine", () => ({
   schedulePush: vi.fn(),
 }));
 
-import { db, type UserSettings } from "@/lib/db";
+import {
+  createPreviewDatabase,
+  db,
+  resetActiveDatabase,
+  setActiveDatabase,
+  type UserSettings,
+} from "@/lib/db";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useSyncStatusStore } from "@/stores/sync-status-store";
 import {
@@ -43,6 +49,7 @@ function remoteRow(overrides: Partial<UserSettings> = {}): UserSettings {
     sugarExtendedBuffer: initial.sugarExtendedBuffer,
     optionalTrackers: { ...initial.optionalTrackers },
     dayStartHour: initial.dayStartHour,
+    weekStartsOn: initial.weekStartsOn,
     liquidPresets: initial.liquidPresets as unknown as UserSettings["liquidPresets"],
     primaryRegion: initial.primaryRegion,
     secondaryRegion: initial.secondaryRegion,
@@ -205,7 +212,7 @@ describe("settings-sync (audit state-settings-cache#2)", () => {
       [
         "waterLimit", "saltLimit", "sugarLimit", "potassiumLimit",
         "waterExtendedBuffer", "saltExtendedBuffer", "sugarExtendedBuffer",
-        "optionalTrackers", "dayStartHour", "liquidPresets", "primaryRegion",
+        "optionalTrackers", "dayStartHour", "weekStartsOn", "liquidPresets", "primaryRegion",
         "secondaryRegion", "reminderFollowUpCount", "reminderFollowUpInterval",
         "homeTimezone", "homeTimezoneConfirmedAt",
       ].sort(),
@@ -260,6 +267,149 @@ describe("settings-sync (audit state-settings-cache#2)", () => {
     await settle();
 
     expect(useSettingsStore.getState().saltLimit).toBe(2300);
+  });
+
+  it("syncs the week start like the day start hour", async () => {
+    dispose = installSettingsSync();
+    await settle();
+
+    useSettingsStore.getState().setWeekStartsOn(0);
+    await settle();
+
+    const row = (await getActiveUserSettings())!;
+    expect(row.weekStartsOn).toBe(0);
+    expect(row.fieldUpdatedAt!.weekStartsOn).toBe(row.updatedAt);
+    const stamps = JSON.parse(localStorage.getItem(SETTINGS_EDITED_AT_KEY)!);
+    expect(stamps.weekStartsOn).toBeGreaterThan(0);
+  });
+
+  it("applies a week start chosen on another device", async () => {
+    dispose = installSettingsSync();
+    await settle();
+
+    await db.userSettings.put(remoteRow({ weekStartsOn: 6 }));
+    await settle();
+
+    expect(useSettingsStore.getState().weekStartsOn).toBe(6);
+    expect(await db._syncQueue.count()).toBe(0);
+  });
+
+  it("does not let an untouched week start outrank another device's choice", async () => {
+    // A row written before the setting existed; this device never chose a
+    // week start, so writing its default must not count as a new edit.
+    const earlier = Date.now() - 60_000;
+    const { weekStartsOn: _drop, ...legacy } = remoteRow({ updatedAt: earlier });
+    void _drop;
+    await db.userSettings.put(legacy as UserSettings);
+    dispose = installSettingsSync();
+    await settle();
+
+    useSettingsStore.getState().setWaterLimit(1500);
+    await settle();
+
+    const row = (await getActiveUserSettings())!;
+    expect(row.weekStartsOn).toBe(1);
+    expect(row.fieldUpdatedAt!.waterLimit).toBe(row.updatedAt);
+    expect(row.fieldUpdatedAt!.weekStartsOn).toBe(SEED_UPDATED_AT);
+  });
+
+  it("stamps a week start chosen on this device over a row without one", async () => {
+    const { weekStartsOn: _drop, ...legacy } = remoteRow({ updatedAt: Date.now() - 60_000 });
+    void _drop;
+    await db.userSettings.put(legacy as UserSettings);
+    dispose = installSettingsSync();
+    await settle();
+
+    useSettingsStore.getState().setWeekStartsOn(0);
+    await settle();
+
+    const row = (await getActiveUserSettings())!;
+    expect(row.weekStartsOn).toBe(0);
+    expect(row.fieldUpdatedAt!.weekStartsOn).toBe(row.updatedAt);
+  });
+
+  it("writes a week start chosen last session over a row without one", async () => {
+    // The app closed after this device picked Sunday but before the table
+    // write; the row still predates the setting.
+    const now = Date.now();
+    const { weekStartsOn: _drop, ...legacy } = remoteRow({ updatedAt: now - 120_000 });
+    void _drop;
+    await db.userSettings.put(legacy as UserSettings);
+    useSettingsStore.setState({ weekStartsOn: 0 });
+    localStorage.setItem(SETTINGS_EDITED_AT_KEY, JSON.stringify({ weekStartsOn: now - 60_000 }));
+
+    dispose = installSettingsSync();
+    await settle();
+
+    const row = (await getActiveUserSettings())!;
+    expect(row.weekStartsOn).toBe(0);
+    expect(row.fieldUpdatedAt!.weekStartsOn).toBeGreaterThan(SEED_UPDATED_AT);
+    expect(useSettingsStore.getState().weekStartsOn).toBe(0);
+  });
+
+  it("keeps the local week start for a row without one or with a malformed one", async () => {
+    useSettingsStore.setState({ weekStartsOn: 0 });
+    const { weekStartsOn: _drop, ...legacy } = remoteRow({ saltLimit: 2100 });
+    void _drop;
+    await db.userSettings.put(legacy as UserSettings);
+
+    dispose = installSettingsSync();
+    await settle();
+    expect(useSettingsStore.getState().saltLimit).toBe(2100);
+    expect(useSettingsStore.getState().weekStartsOn).toBe(0);
+
+    await db.userSettings.put(remoteRow({ weekStartsOn: 9, updatedAt: Date.now() + 1_000 }));
+    await settle();
+    expect(useSettingsStore.getState().weekStartsOn).toBe(0);
+  });
+
+  describe("while a manual preview's sample database is swapped in", () => {
+    it("writes an edit to the real row once the real database is back, never to the preview", async () => {
+      dispose = installSettingsSync();
+      await settle();
+      useSettingsStore.getState().setWaterLimit(1500);
+      await settle();
+
+      const preview = createPreviewDatabase();
+      await preview.open();
+      setActiveDatabase(preview);
+      try {
+        useSettingsStore.getState().setWaterLimit(1700);
+        await settle();
+        expect(await preview.userSettings.count()).toBe(0);
+        expect(await preview._syncQueue.count()).toBe(0);
+
+        resetActiveDatabase();
+        await settle();
+        const rows = await db.userSettings.toArray();
+        expect(rows).toHaveLength(1);
+        expect(rows[0]!.waterLimit).toBe(1700);
+      } finally {
+        resetActiveDatabase();
+        await preview.delete();
+      }
+    });
+
+    it("does not seed a row into the preview when the app starts with a guide open", async () => {
+      useSettingsStore.setState({ saltLimit: 1800 });
+      const preview = createPreviewDatabase();
+      await preview.open();
+      setActiveDatabase(preview);
+      try {
+        dispose = installSettingsSync();
+        await settle();
+        expect(await preview.userSettings.count()).toBe(0);
+
+        resetActiveDatabase();
+        await settle();
+        const rows = await db.userSettings.toArray();
+        expect(rows).toHaveLength(1);
+        expect(rows[0]!.saltLimit).toBe(1800);
+      } finally {
+        resetActiveDatabase();
+        await preview.delete();
+      }
+    });
   });
 
   it("ignores tombstoned rows", async () => {

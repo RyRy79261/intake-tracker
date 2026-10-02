@@ -387,6 +387,10 @@ export const prescriptions = pgTable(
     warnings: text("warnings").array(),
     // Combination-drug active ingredients (mirrors Dexie CompoundStrength[]).
     compounds: jsonb("compounds").$type<{ name: string; strength: number }[]>(),
+    // "About this medicine" and the last stored interaction check (mirror
+    // Dexie MedicineInfo / InteractionCheck). Opaque JSON to the server.
+    medicineInfo: jsonb("medicine_info").$type<Record<string, unknown>>(),
+    interactionCheck: jsonb("interaction_check").$type<Record<string, unknown>>(),
     isActive: boolean("is_active").notNull(),
     // NOTE: no timezone column — Prescription interface in @intake/types/records omits it.
     createdAt: bigint("created_at", { mode: "number" }).notNull(),
@@ -887,8 +891,8 @@ export const insightReports = pgTable(
 // ─────────────────────────────────────────────────────────────────────────
 // User settings — mirrors the UserSettings interface in @intake/types/records.
 // The settings that describe the user rather than the device (limits,
-// optional trackers, day-start hour, liquid presets, regions, reminder
-// follow-ups, home timezone). A per-user singleton by convention, stored as a
+// optional trackers, day-start hour, week start, liquid presets, regions,
+// reminder follow-ups, home timezone). A per-user singleton by convention, stored as a
 // synced table (globally-unique `id`). Conflicts resolve per setting by
 // `fieldUpdatedAt` (see apps/web/src/lib/settings-merge.ts). No
 // `timezone` column — UserSettings omits it.
@@ -912,6 +916,9 @@ export const userSettings = pgTable(
       .$type<{ sugar: boolean; potassium: boolean }>()
       .notNull(),
     dayStartHour: integer("day_start_hour").notNull(),
+    // First day of the displayed week (0-6, JS getDay; 1 = Monday). The
+    // default fills existing rows and rows pushed by older clients.
+    weekStartsOn: integer("week_starts_on").notNull().default(1),
     liquidPresets: jsonb("liquid_presets")
       .$type<Array<{ id: string; name: string } & Record<string, unknown>>>()
       .notNull(),
@@ -937,6 +944,10 @@ export const userSettings = pgTable(
     dayStartHourCheck: check(
       "user_settings_day_start_hour_check",
       sql`${t.dayStartHour} BETWEEN 0 AND 23`,
+    ),
+    weekStartsOnCheck: check(
+      "user_settings_week_starts_on_check",
+      sql`${t.weekStartsOn} BETWEEN 0 AND 6`,
     ),
     userUpdatedIdx: index("idx_user_settings_user_updated").on(
       t.userId,

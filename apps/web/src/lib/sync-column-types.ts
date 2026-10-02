@@ -97,6 +97,7 @@ export const INTEGER_SYNC_FIELDS: Record<TableName, readonly string[]> = {
     "saltExtendedBuffer",
     "sugarExtendedBuffer",
     "dayStartHour",
+    "weekStartsOn",
     "reminderFollowUpCount",
     "reminderFollowUpInterval",
     "homeTimezoneConfirmedAt",

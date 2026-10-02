@@ -10,6 +10,7 @@ import {
   DialogTitle,
 } from "@intake/ui/dialog";
 import { Button } from "@intake/ui/button";
+import type { Domain } from "@/lib/domain-colors";
 import { Input } from "@intake/ui/input";
 import { Label } from "@intake/ui/label";
 import { Textarea } from "@intake/ui/textarea";
@@ -36,8 +37,8 @@ export interface EditEstimateEntryDialogProps {
   /** When true, prepends a "No estimate" sentinel that maps to "". */
   allowNoEstimate?: boolean;
   notePlaceholder?: string;
-  /** Tailwind classes for the submit button accent (e.g. "bg-violet-600 hover:bg-violet-700"). */
-  accentClassName: string;
+  /** The entry's domain: the dialog's stripe, Save button and focus rings take its colour. */
+  domain: Domain;
   /** Prefix for the field element ids (e.g. "edit-urination"). */
   idPrefix: string;
   onClose: () => void;
@@ -62,7 +63,7 @@ export function EditEstimateEntryDialog({
   amountOptions,
   allowNoEstimate = false,
   notePlaceholder,
-  accentClassName,
+  domain,
   idPrefix,
   onClose,
   onSubmit,
@@ -76,7 +77,7 @@ export function EditEstimateEntryDialog({
 }: EditEstimateEntryDialogProps) {
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md" data-domain={domain}>
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>Update the time, amount estimate, or note</DialogDescription>
@@ -128,7 +129,7 @@ export function EditEstimateEntryDialog({
             <Button type="button" variant="outline" onClick={onClose}>
               Cancel
             </Button>
-            <Button type="submit" className={accentClassName}>
+            <Button type="submit">
               Save Changes
             </Button>
           </DialogFooter>

@@ -10,6 +10,7 @@ import {
 import { Button } from "@intake/ui/button";
 import { Input } from "@intake/ui/input";
 import { cn } from "@/lib/utils";
+import { bottomSheetClass } from "@/components/medications/sheet-classes";
 
 const PRESET_REASONS = [
   "Forgot",
@@ -48,20 +49,20 @@ export function SkipReasonPicker({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-sm">
-        <DialogHeader>
-          <DialogTitle>Why are you skipping?</DialogTitle>
+      <DialogContent data-domain="meds" className={bottomSheetClass} aria-describedby={undefined}>
+        <DialogHeader className="text-left">
+          <DialogTitle className="text-base font-semibold">Why are you skipping?</DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-2">
+        <div className="grid grid-cols-2 gap-2">
           {PRESET_REASONS.map((reason) => (
             <Button
               key={reason}
               variant="outline"
               className={cn(
-                "w-full justify-start text-left",
+                "h-auto min-h-11 whitespace-normal border-line px-2 text-center font-normal",
                 suggestRanOut && reason === "Ran out" &&
-                  "ring-2 ring-amber-400 dark:ring-amber-500"
+                  "border-sodium shadow-[inset_0_0_0_1px_hsl(var(--sodium))]"
               )}
               onClick={() => handleSelect(reason)}
             >
@@ -70,23 +71,29 @@ export function SkipReasonPicker({
           ))}
         </div>
 
-        <div className="flex gap-2 mt-2">
+        <div className="flex gap-2">
           <Input
             placeholder="Other reason..."
+            aria-label="Other reason"
             value={customReason}
+            className="h-11 bg-background"
             onChange={(e) => setCustomReason(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter") handleCustomSubmit();
             }}
           />
           <Button
-            size="sm"
+            className="flex-none"
             disabled={!customReason.trim()}
             onClick={handleCustomSubmit}
           >
             Submit
           </Button>
         </div>
+
+        <Button variant="outline" onClick={() => onOpenChange(false)}>
+          Cancel
+        </Button>
       </DialogContent>
     </Dialog>
   );

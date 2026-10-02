@@ -13,9 +13,11 @@ import { SYSTEM_PROMPT, PARSE_RESULT_TOOL } from "@intake/ai-prompts/parse";
  * Server-side AI parsing for food / drink descriptions.
  *
  * Always returns sodium in mg (no salt/sodium ambiguity). Uses the quality
- * tier (Sonnet) + web_search for branded or regional items. No sampling
- * parameters: Sonnet 5 rejects a non-default `temperature` with a 400, so
+ * tier (Claude Sonnet 5.5) + web_search for branded or regional items. No
+ * sampling parameters (a non-default `temperature` is a 400), so
  * consistency comes from the prompt's reference values and the tool schema.
+ * No forced tool_choice either (also a 400): the request is `auto` with a
+ * strict result tool, and the prompt says to finish by calling it.
  */
 
 // Vercel function limit. The shared deadline below stops short of it so a
@@ -80,20 +82,23 @@ export const POST = withAuth(async ({ request, auth }) => {
     const userMessage = `Estimate water (ml), sodium (mg), total sugar (g) and potassium (mg) for: "${sanitizedInput}". Use web_search for branded or regional items, then call parse_food_result.`;
 
     // If the model finishes with text instead of calling the structured
-    // tool, requestToolCall runs one more turn that asks for it, with the
-    // prior context. WEB_SEARCH_TOOL stays declared on that turn because the
-    // replayed assistant turn may contain server_tool_use blocks.
+    // tool, requestToolCall runs one more (unforced, append-only) turn that
+    // asks for it, with the prior context. WEB_SEARCH_TOOL stays declared on
+    // that turn because the replayed assistant turn may contain
+    // server_tool_use blocks.
     const { toolUse: toolBlock } = await requestToolCall(
       client,
       {
         model: CLAUDE_MODELS.quality,
-        // Headroom for adaptive thinking (on by default on Sonnet 5) and the
+        // Headroom for adaptive thinking (always on for this model) and the
         // search traffic as well as the tool call itself.
         max_tokens: 8192,
-        // A lookup, not an open-ended analysis: medium keeps it quick.
+        // The user is waiting on a lookup, not an open-ended analysis:
+        // medium keeps it quick. Set explicitly — the default is high.
         output_config: { effort: "medium" },
         system: SYSTEM_PROMPT,
         tools: [WEB_SEARCH_TOOL, PARSE_RESULT_TOOL],
+        tool_choice: { type: "auto" },
         messages: [{ role: "user", content: userMessage }],
       },
       {
@@ -102,6 +107,7 @@ export const POST = withAuth(async ({ request, auth }) => {
         toolName: PARSE_RESULT_TOOL.name,
         retryInstruction: "Now return the final estimate via the parse_food_result tool.",
         retryMaxTokens: 4096,
+        forceOnRetry: false,
       },
     );
 

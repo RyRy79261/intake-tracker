@@ -1,0 +1,2 @@
+ALTER TABLE "user_settings" ADD COLUMN "week_starts_on" integer DEFAULT 1 NOT NULL;--> statement-breakpoint
+ALTER TABLE "user_settings" ADD CONSTRAINT "user_settings_week_starts_on_check" CHECK ("user_settings"."week_starts_on" BETWEEN 0 AND 6);

@@ -9,7 +9,6 @@ export const SubstanceLookupResponseSchema = z.object({
   defaultVolumeMl: z.number().min(1).max(5000),
   beverageName: z.string(),
   reasoning: z.string(),
-  waterContentPercent: z.number().min(0).max(100),
   // Dissolved solutes, per 100 ml. Optional so a model reply that omits them
   // still validates; the client reads a missing value as none, and clears any
   // value left over from the previous drink.

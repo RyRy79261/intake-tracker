@@ -22,27 +22,29 @@ let ctx: TestDbContext;
 let PUSH: (req: NextRequest) => Promise<Response>;
 let PULL: (req: NextRequest) => Promise<Response>;
 
+// Top-level (Vitest 5 rejects nested vi.mock). The factories read `ctx`
+// lazily: they run on the first import of the mocked module, which is the
+// dynamic import inside beforeAll, after setupTestDb() has assigned it.
+vi.mock("@/lib/auth-middleware", () => ({
+  withAuth: (
+    handler: (ctx: {
+      request: NextRequest;
+      auth: { success: true; userId: string };
+    }) => Promise<Response>,
+  ) => {
+    return async (request: NextRequest) =>
+      handler({
+        request,
+        auth: { success: true, userId: "test-user-integration" },
+      });
+  },
+}));
+vi.mock("@intake/db/client", () => ({
+  db: ctx.db,
+}));
+
 beforeAll(async () => {
   ctx = await setupTestDb();
-
-  vi.mock("@/lib/auth-middleware", () => ({
-    withAuth: (
-      handler: (ctx: {
-        request: NextRequest;
-        auth: { success: true; userId: string };
-      }) => Promise<Response>,
-    ) => {
-      return async (request: NextRequest) =>
-        handler({
-          request,
-          auth: { success: true, userId: "test-user-integration" },
-        });
-    },
-  }));
-
-  vi.mock("@intake/db/client", () => ({
-    db: ctx.db,
-  }));
 
   PUSH = (await import("@/app/api/sync/push/route")).POST;
   PULL = (await import("@/app/api/sync/pull/route")).POST;

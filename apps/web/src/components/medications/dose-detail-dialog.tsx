@@ -11,7 +11,7 @@ import { PillIcon } from "@/components/medications/pill-icon";
 import { useTakeDose, useUntakeDose, useSkipDose, useRescheduleDose } from "@/hooks/use-medication-queries";
 import { hapticTake, hapticSkip, formatDoseAmount } from "@/lib/medication-ui-utils";
 import { isCombo, formatComboDose, formatCompoundFull } from "@intake/core/compound";
-import { Info, X, RotateCcw, Clock, Calendar } from "lucide-react";
+import { Info, X, RotateCcw, Clock, Calendar, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "@intake/ui/use-toast";
 import { RetroactiveTimePicker } from "@/components/medications/retroactive-time-picker";
@@ -145,27 +145,29 @@ export function DoseDetailDialog({
   return (
     <>
       <Drawer open={open} onOpenChange={onOpenChange}>
-        <DrawerContent className="max-h-[85vh]" aria-describedby={undefined}>
-          <div className="p-6">
+        <DrawerContent data-domain="meds" className="max-h-[85vh] bg-panel" aria-describedby={undefined}>
+          <div className="px-4 pb-[calc(20px+env(safe-area-inset-bottom,0px))] pt-3">
             {/* Header with pill icon */}
-            <div className="flex flex-col items-center text-center mb-6">
+            <div className="mb-4 grid grid-cols-[48px_minmax(0,1fr)] items-center gap-3 border-b border-line pb-3">
               <PillIcon shape={inventory?.pillShape || "round"} color={inventory?.pillColor || "#ccc"} size={48} />
-              <DrawerTitle className="text-lg font-bold mt-3">
-                {inventory?.brandName || prescription.genericName} {headerStrength} ({prescription.genericName})
-              </DrawerTitle>
-              {actionTime && (
-                <p className={cn(
-                  "text-sm font-medium mt-1",
-                  status === "taken" && "text-emerald-600 dark:text-emerald-400",
-                  status === "skipped" && "text-muted-foreground",
-                )}>
-                  {status === "taken" ? `Taken at ${actionTime}` : `Skipped at ${actionTime}`}
-                </p>
-              )}
+              <div className="min-w-0">
+                <DrawerTitle className="text-base font-semibold leading-snug">
+                  {inventory?.brandName || prescription.genericName} {headerStrength} ({prescription.genericName})
+                </DrawerTitle>
+                {actionTime && (
+                  <p className={cn(
+                    "mt-0.5 text-[0.8125rem] font-semibold",
+                    status === "taken" && "text-meds",
+                    status === "skipped" && "text-muted-foreground",
+                  )}>
+                    {status === "taken" ? `Taken at ${actionTime}` : `Skipped at ${actionTime}`}
+                  </p>
+                )}
+              </div>
             </div>
 
             {/* Info section */}
-            <div className="space-y-2 mb-6 text-sm text-muted-foreground">
+            <div className="mb-4 space-y-2 text-sm text-muted-foreground [&_svg]:shrink-0">
               <div className="flex items-center gap-2">
                 <Calendar className="w-4 h-4" />
                 <span>Scheduled for {slot.localTime}, {dateLabel}</span>
@@ -204,47 +206,34 @@ export function DoseDetailDialog({
 
             {/* Action buttons */}
             {!showReschedule && (
-              <div className="flex justify-center gap-6">
+              <div className="grid grid-cols-[repeat(auto-fit,minmax(96px,1fr))] gap-2">
                 {/* Future days get the same guard as the schedule row: no
                     Take/Skip yet. UNTAKE stays so a dose already logged on a
                     future day can still be reversed. */}
                 {!isFuture && status !== "skipped" && (
-                  <button onClick={handleSkip} className="flex flex-col items-center gap-1.5">
-                    <div className="w-12 h-12 rounded-full border-2 border-teal-600 dark:border-teal-400 flex items-center justify-center">
-                      <X className="w-5 h-5 text-teal-600 dark:text-teal-400" />
-                    </div>
-                    <span className="text-xs font-medium text-teal-600 dark:text-teal-400">SKIP</span>
-                  </button>
+                  <Button variant="outline" onClick={handleSkip}>
+                    <X aria-hidden="true" />
+                    <span>SKIP</span>
+                  </Button>
                 )}
 
                 {status === "taken" ? (
-                  <button onClick={handleUntake} className="flex flex-col items-center gap-1.5">
-                    <div className="w-12 h-12 rounded-full border-2 border-red-500 dark:border-red-400 bg-red-500 dark:bg-red-500 flex items-center justify-center">
-                      <RotateCcw className="w-5 h-5 text-white" />
-                    </div>
-                    <span className="text-xs font-medium text-red-500 dark:text-red-400">UNTAKE</span>
-                  </button>
+                  <Button variant="outline" onClick={handleUntake} className="border-bp text-bp hover:text-bp">
+                    <RotateCcw aria-hidden="true" />
+                    <span>UNTAKE</span>
+                  </Button>
                 ) : !isFuture && (
-                  <button onClick={handleTake} className="flex flex-col items-center gap-1.5">
-                    <div className="w-12 h-12 rounded-full border-2 border-teal-600 dark:border-teal-400 bg-teal-600 dark:bg-teal-500 flex items-center justify-center">
-                      <svg width="20" height="20" viewBox="0 0 12 12" fill="none">
-                        <path d="M2 6L5 9L10 3" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
-                    </div>
-                    <span className="text-xs font-medium text-teal-600 dark:text-teal-400">TAKE</span>
-                  </button>
+                  <Button onClick={handleTake}>
+                    <Check aria-hidden="true" />
+                    <span>TAKE</span>
+                  </Button>
                 )}
 
                 {isToday && (
-                  <button
-                    onClick={() => setShowReschedule(true)}
-                    className="flex flex-col items-center gap-1.5"
-                  >
-                    <div className="w-12 h-12 rounded-full border-2 border-gray-400 flex items-center justify-center">
-                      <Clock className="w-5 h-5 text-gray-400" />
-                    </div>
-                    <span className="text-xs font-medium text-muted-foreground">RESCHEDULE</span>
-                  </button>
+                  <Button variant="outline" onClick={() => setShowReschedule(true)}>
+                    <Clock aria-hidden="true" />
+                    <span>RESCHEDULE</span>
+                  </Button>
                 )}
               </div>
             )}
@@ -256,14 +245,14 @@ export function DoseDetailDialog({
                   type="time"
                   value={rescheduleTime}
                   onChange={(e) => setRescheduleTime(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg border bg-background"
+                  aria-label="Reschedule to"
+                  className="h-12 w-full rounded-none border border-input bg-background px-3 text-center font-mono text-xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                 />
-                <div className="flex gap-2">
-                  <Button variant="outline" className="flex-1" onClick={() => setShowReschedule(false)}>
+                <div className="grid grid-cols-2 gap-2">
+                  <Button variant="outline" onClick={() => setShowReschedule(false)}>
                     Cancel
                   </Button>
                   <Button
-                    className="flex-1 bg-teal-600 hover:bg-teal-700"
                     disabled={!rescheduleTime}
                     onClick={handleReschedule}
                   >

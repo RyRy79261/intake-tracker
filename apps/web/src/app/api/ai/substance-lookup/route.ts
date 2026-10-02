@@ -14,7 +14,6 @@ import {
 } from "@/app/api/ai/_shared/claude-call";
 import { aiErrorResponse } from "@/app/api/ai/_shared/ai-error-response";
 import { buildSystemPrompt } from "@intake/ai-prompts/substance-lookup";
-import { rejectsForcedToolChoice } from "@intake/ai-prompts/models";
 
 // Vercel function limit. The shared deadline stops short of it so a slow
 // search-and-answer turn ends in a JSON 504 rather than the platform's own.
@@ -95,13 +94,20 @@ export const POST = withAuth(async ({ request, auth }) => {
       deadline: Date.now() + DEADLINE_MS,
     };
 
+    // Quality tier (Claude Sonnet 5.5): every request below is `auto` with a
+    // strict result tool — a forced tool_choice is a 400 on this model, as
+    // is a sampling parameter. Effort is set on each one (the default is
+    // high): the user is waiting on a lookup, so medium.
     const response = await createMessage(
       client,
       {
         model: CLAUDE_MODELS.quality,
+        // Headroom for adaptive thinking, which is always on for this model.
         max_tokens: 4096,
+        output_config: { effort: "medium" },
         system: systemPrompt,
         tools: [WEB_SEARCH_TOOL, SUBSTANCE_LOOKUP_TOOL],
+        tool_choice: { type: "auto" },
         messages: [{ role: "user", content: userPrompt }],
       },
       callOptions,
@@ -113,34 +119,39 @@ export const POST = withAuth(async ({ request, auth }) => {
     // legitimately know.
     const searchRequired = type === "caffeine";
     let searched = hasCompletedWebSearch([response]);
+    // The follow-up below replays one of these turns, so it needs the user
+    // message that turn actually answered, not just its content.
+    let priorUserPrompt = userPrompt;
     let priorContent = response.content;
 
     if (searchRequired && !searched) {
+      const searchPrompt = `${userPrompt} You must call the web_search tool before answering — a figure from memory is not acceptable here. Cite the source you used in reasoning.`;
       const retry = await createMessage(
         client,
         {
           model: CLAUDE_MODELS.quality,
           max_tokens: 4096,
+          output_config: { effort: "medium" },
           system: systemPrompt,
-          // Deliberately no tool_choice here: forcing the structured tool would
-          // stop it searching, which is the one thing we need it to do.
+          // `auto`, and not only because the model rejects forcing: forcing
+          // the structured tool would stop it searching, which is the one
+          // thing we need it to do.
           tools: [WEB_SEARCH_TOOL, SUBSTANCE_LOOKUP_TOOL],
+          tool_choice: { type: "auto" },
           // A fresh turn, NOT a continuation. The rejected answer is a bare
           // tool_use block, and the Messages API requires every assistant
           // tool_use to be followed by a matching tool_result — replaying it
           // without one is a malformed request. There is also nothing worth
           // carrying over: the answer is being discarded precisely because it
-          // was unsourced.
-          messages: [
-            {
-              role: "user",
-              content: `${userPrompt} You must call the web_search tool before answering — a figure from memory is not acceptable here. Cite the source you used in reasoning.`,
-            },
-          ],
+          // was unsourced. Starting over also keeps this conversation
+          // append-only: no thinking block from the first answer is
+          // replayed under a different user message.
+          messages: [{ role: "user", content: searchPrompt }],
         },
         callOptions,
       );
       searched = hasCompletedWebSearch([retry]);
+      priorUserPrompt = searchPrompt;
       priorContent = retry.content;
       // Take the result ONLY from the retry. Falling back to the first answer
       // would pair the retry's "searched" flag with the unsourced value it was
@@ -164,22 +175,25 @@ export const POST = withAuth(async ({ request, auth }) => {
     }
 
     if (!toolBlock) {
-      const model = CLAUDE_MODELS.quality;
       const followup = await createMessage(
         client,
         {
-          model,
-          max_tokens: 4096, // headroom for Sonnet 5 adaptive thinking
+          model: CLAUDE_MODELS.quality,
+          max_tokens: 4096,
+          output_config: { effort: "medium" },
+          // Append-only: the same system prompt and tools as the turn being
+          // replayed, its own user message, and its content passed back
+          // unchanged. The model signs each thinking block over the
+          // conversation before it, so replaying one under a different
+          // prefix can be rejected with a 400. WEB_SEARCH_TOOL also has to
+          // stay declared because that turn may hold server_tool_use blocks.
           system: systemPrompt,
-          // WEB_SEARCH_TOOL must stay declared because the prior assistant turn
-          // may contain server_tool_use blocks; tool_choice still forces the
-          // structured tool where the model accepts a forced choice.
           tools: [WEB_SEARCH_TOOL, SUBSTANCE_LOOKUP_TOOL],
-          tool_choice: rejectsForcedToolChoice(model)
-            ? { type: "auto" }
-            : { type: "tool", name: SUBSTANCE_LOOKUP_TOOL.name },
+          // Not forced (a 400 on this model): the instruction below and the
+          // strict schema do that job.
+          tool_choice: { type: "auto" },
           messages: [
-            { role: "user", content: userPrompt },
+            { role: "user", content: priorUserPrompt },
             ...(priorContent.length > 0
               ? [{ role: "assistant" as const, content: priorContent }]
               : []),

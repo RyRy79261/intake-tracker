@@ -1023,9 +1023,17 @@ export function suspendEngine(): void {
   pushTimer = null;
 }
 
-/** Lift the suspension applied by `suspendEngine` once a preview is closed. */
+/**
+ * Lift the suspension applied by `suspendEngine` once a preview is closed.
+ *
+ * Every push and pull asked for while suspended was dropped, not deferred
+ * (the startup flush when a reload restores an open guide, a debounced push
+ * whose timer `suspendEngine` cancelled), so catch up now.
+ */
 export function resumeEngine(): void {
+  if (!engineSuspended) return;
   engineSuspended = false;
+  void flushThenPull();
 }
 
 /**

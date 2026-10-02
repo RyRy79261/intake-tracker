@@ -1,6 +1,7 @@
 "use client";
 
-import { ArrowRight, Globe, Loader2 } from "lucide-react";
+import { ArrowRight, Globe } from "lucide-react";
+import { Spinner } from "@intake/ui/spinner";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -103,7 +104,7 @@ export function TimezoneChangeDialog({
           <AlertDialogAction onClick={onConfirm} disabled={isRecalculating}>
             {isRecalculating ? (
               <>
-                <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                <Spinner className="size-4 mr-2" />
                 Adjusting...
               </>
             ) : (

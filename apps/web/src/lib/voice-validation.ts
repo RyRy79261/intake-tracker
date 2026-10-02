@@ -1,5 +1,7 @@
 import type { VoiceParsedItem } from "@/lib/voice-types";
 import { parseBloodPressureForm, parseWeightForm } from "@intake/core/record-schemas";
+import { spokenTimeError } from "@/lib/voice-time";
+import { getDeviceTimezone } from "@/lib/timezone";
 
 /**
  * Review-row validation for voice items.
@@ -12,8 +14,6 @@ import { parseBloodPressureForm, parseWeightForm } from "@intake/core/record-sch
  * (@intake/core/record-schemas) itself, so a reading the add form refuses
  * cannot be saved by voice either.
  */
-
-const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 /** `value` is a finite number in [min, max]; `exclusiveMin` makes min open. */
 function inRange(value: number, min: number, max: number, exclusiveMin = false): boolean {
@@ -42,11 +42,17 @@ function first(...checks: (string | null)[]): string | null {
 
 /**
  * Why a voice item cannot be saved as-is, or `null` when it is valid.
+ *
+ * `now` and `timeZone` are the clock the item's time is checked against (it
+ * must be a real date-time, not in the future); they default to the device's.
  */
-export function validateVoiceItem(item: VoiceParsedItem): string | null {
-  if (item.time !== undefined && !HHMM.test(item.time)) {
-    return "Time must be a valid HH:MM.";
-  }
+export function validateVoiceItem(
+  item: VoiceParsedItem,
+  now: number = Date.now(),
+  timeZone: string = getDeviceTimezone(),
+): string | null {
+  const timeError = spokenTimeError(item.at, now, timeZone);
+  if (timeError) return timeError;
   switch (item.kind) {
     case "blood_pressure": {
       const parsed = parseBloodPressureForm({

@@ -1,18 +1,27 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown, ChevronUp, CheckCircle2, Loader2, Circle } from "lucide-react";
+import { Check, ChevronDown, Circle } from "lucide-react";
 import { Button } from "@intake/ui/button";
 import { Progress } from "@intake/ui/progress";
+import { Spinner } from "@intake/ui/spinner";
 import { useMigrationStore, type TableProgress } from "@/stores/migration-store";
 import { TABLE_PUSH_ORDER } from "@/lib/sync-topology";
+import { cn } from "@/lib/utils";
+import {
+  bodyClass,
+  footClass,
+  migClass,
+  migHeadingClass,
+  migTextClass,
+  tableLabel,
+  tlistClass,
+  tlistRowClass,
+  tlistValueClass,
+} from "@/components/migration/dialog-kit";
 
 interface UploadProgressStepProps {
   onCancel: () => void;
-}
-
-function tableLabel(name: string): string {
-  return name.replace(/([A-Z])/g, " $1").replace(/^./, (c) => c.toUpperCase());
 }
 
 function tableStatus(
@@ -44,63 +53,76 @@ export function UploadProgressStep({ onCancel }: UploadProgressStepProps) {
   const currentTable = TABLE_PUSH_ORDER[currentTableIndex];
 
   return (
-    <div className="flex flex-col gap-6 p-6">
-      <div className="space-y-2 text-center">
-        <h2 className="text-xl font-semibold">Uploading data</h2>
-        <p className="text-sm text-muted-foreground">
-          {currentTable ? `Uploading ${tableLabel(currentTable)}…` : "Counting records…"}
-        </p>
-        <p className="text-sm font-medium tabular-nums">
-          {uploadedRecords.toLocaleString()} / {totalRecords.toLocaleString()} records ({percentage}%)
-        </p>
+    <>
+      <div className={bodyClass}>
+        <div className={migClass} data-testid="migration-upload-step">
+          <h3 className={migHeadingClass}>Uploading data</h3>
+          <p className={migTextClass}>
+            {currentTable ? `Uploading ${tableLabel(currentTable)}…` : "Counting records…"}
+          </p>
+          <p className="font-mono text-sm font-semibold text-foreground">
+            {uploadedRecords.toLocaleString()} / {totalRecords.toLocaleString()} records ({percentage}%)
+          </p>
+
+          {/* `.pbar`: a 1px ruled well with a 2px inset water fill. */}
+          <div className="h-3.5 w-full border border-line bg-background p-0.5">
+            <Progress
+              value={percentage}
+              aria-label="Upload progress"
+              className="h-full bg-transparent"
+              indicatorClassName="bg-water"
+            />
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setExpanded(!expanded)}
+            aria-expanded={expanded}
+            className="flex min-h-11 w-full items-center justify-center gap-1.5 text-xs text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
+          >
+            {expanded ? "Hide details" : "Show details"}
+            <ChevronDown
+              aria-hidden="true"
+              className={cn("h-4 w-4 shrink-0", expanded && "rotate-180")}
+            />
+          </button>
+
+          {expanded && (
+            <div className={tlistClass} data-testid="migration-table-list">
+              {TABLE_PUSH_ORDER.map((name, i) => {
+                const progress = tableProgress[name];
+                const status = tableStatus(progress, i, currentTableIndex);
+                return (
+                  <div key={name} className={tlistRowClass} data-status={status}>
+                    <span
+                      className={cn(
+                        "flex items-center justify-center",
+                        status === "done" ? "text-weight" : "text-muted-foreground",
+                      )}
+                    >
+                      {status === "done" && <Check aria-label="Done" className="h-4 w-4" />}
+                      {status === "uploading" && <Spinner label="Uploading" />}
+                      {status === "pending" && <Circle aria-label="Waiting" className="h-4 w-4" />}
+                    </span>
+                    <span>{tableLabel(name)}</span>
+                    <span className={tlistValueClass}>
+                      {progress
+                        ? `${progress.uploaded.toLocaleString()} / ${progress.total.toLocaleString()}`
+                        : "—"}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </div>
 
-      <Progress value={percentage} className="h-3" />
-
-      <button
-        onClick={() => setExpanded(!expanded)}
-        className="flex items-center justify-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
-      >
-        {expanded ? "Hide details" : "Show details"}
-        {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-      </button>
-
-      {expanded && (
-        <div className="space-y-2 max-h-64 overflow-y-auto">
-          {TABLE_PUSH_ORDER.map((name, i) => {
-            const progress = tableProgress[name];
-            const status = tableStatus(progress, i, currentTableIndex);
-            return (
-              <div
-                key={name}
-                className="flex items-center justify-between text-sm px-2 py-1 rounded-md bg-muted/50"
-              >
-                <div className="flex items-center gap-2">
-                  {status === "done" && (
-                    <CheckCircle2 className="h-4 w-4 text-green-500" />
-                  )}
-                  {status === "uploading" && (
-                    <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                  )}
-                  {status === "pending" && (
-                    <Circle className="h-4 w-4 text-muted-foreground" />
-                  )}
-                  <span>{tableLabel(name)}</span>
-                </div>
-                <span className="text-muted-foreground tabular-nums">
-                  {progress
-                    ? `${progress.uploaded.toLocaleString()} / ${progress.total.toLocaleString()}`
-                    : "—"}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      <Button variant="outline" onClick={onCancel} className="mt-auto">
-        Cancel
-      </Button>
-    </div>
+      <div className={footClass}>
+        <Button variant="outline" className="border-muted-foreground" onClick={onCancel}>
+          Cancel
+        </Button>
+      </div>
+    </>
   );
 }

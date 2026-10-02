@@ -1,9 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { motion, AnimatePresence } from "motion/react";
-import { Card } from "@intake/ui/card";
-import { Badge } from "@intake/ui/badge";
 import { Button } from "@intake/ui/button";
 import {
   AlertDialog,
@@ -20,7 +17,6 @@ import {
   AlertTriangle,
   CheckCircle2,
   ChevronDown,
-  Clock,
   Pencil,
   Play,
   Trash2,
@@ -40,7 +36,10 @@ import { findActiveBrand } from "@/lib/dose-preview";
 import type { MedicationPhase, TitrationPlan } from "@/lib/db";
 import { cn } from "@/lib/utils";
 import { DAY_LABELS_LONG } from "@/components/medications/titrations/types";
+import { sortDaysForDisplay } from "@/lib/date-utils";
+import { useSettingsStore } from "@/stores/settings-store";
 import { formatComboDose } from "@intake/core/compound";
+import { Bdg, type BdgTone } from "@/components/medications/ward-bits";
 
 export function TitrationPlanCard({
   plan, onEdit,
@@ -56,14 +55,13 @@ export function TitrationPlanCard({
   const cancelMutation = useCancelTitrationPlan();
   const deleteMutation = useDeleteTitrationPlan();
 
-  const statusColor: Record<string, string> = {
-    active: "bg-emerald-500 text-white",
-    draft: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
-    completed:
-      "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400",
-    cancelled:
-      "bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400",
+  const STATUS: Record<TitrationPlan["status"], { label: string; tone: BdgTone; kind: "outline" | "fill" }> = {
+    active: { label: "Active", tone: "weight", kind: "fill" },
+    draft: { label: "Draft", tone: "water", kind: "outline" },
+    completed: { label: "Completed", tone: "muted", kind: "outline" },
+    cancelled: { label: "Cancelled", tone: "muted", kind: "outline" },
   };
+  const status = STATUS[plan.status] ?? STATUS.draft;
 
   const startDateLabel = plan.recommendedStartDate
     ? new Date(plan.recommendedStartDate).toLocaleDateString(undefined, {
@@ -73,214 +71,168 @@ export function TitrationPlanCard({
     : null;
 
   const isActive = plan.status === "active";
+  const meta = [
+    plan.conditionLabel,
+    `${phases.length} prescription${phases.length !== 1 ? "s" : ""}`,
+    startDateLabel && (plan.status === "draft" ? `Starts ${startDateLabel}` : startDateLabel),
+  ].filter(Boolean).join(" · ");
 
   return (
-    <Card
+    <div
+      data-testid="titration-plan"
       className={cn(
-        "p-3 cursor-pointer hover:bg-muted/40 transition-colors",
-        isActive && "border-emerald-400 dark:border-emerald-600 border-2",
+        "mb-2 border bg-background",
+        isActive ? "border-2 border-weight" : "border-line",
       )}
-      onClick={() => setExpanded(!expanded)}
     >
-      <div className="flex items-start gap-2">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <h4 className="text-sm font-semibold truncate">{plan.title}</h4>
-            <Badge
-              className={`text-[10px] px-1.5 py-0 shrink-0 ${statusColor[plan.status]}`}
-            >
-              {plan.status}
-            </Badge>
-          </div>
-          <div className="flex items-center gap-2 mt-0.5">
-            <span className="text-[11px] text-muted-foreground">
-              {plan.conditionLabel}
-            </span>
-            <span className="text-[11px] text-muted-foreground">
-              {phases.length} prescription{phases.length !== 1 ? "s" : ""}
-            </span>
-          </div>
-        </div>
-        <div className="flex items-center gap-1.5 shrink-0">
-          {startDateLabel && (
-            <span className="text-[10px] text-muted-foreground">
-              {startDateLabel}
-            </span>
-          )}
-          <motion.div
-            animate={{ rotate: expanded ? 180 : 0 }}
-            transition={{ duration: 0.2 }}
-          >
-            <ChevronDown className="w-4 h-4 text-muted-foreground" />
-          </motion.div>
-        </div>
-      </div>
+      <button
+        type="button"
+        aria-expanded={expanded}
+        onClick={() => setExpanded(!expanded)}
+        className="flex min-h-12 w-full flex-col gap-1 py-2.5 pl-3 pr-2 text-left hover:bg-foreground/4 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
+      >
+        <span className="flex items-center gap-2">
+          <b className="min-w-0 flex-1 font-semibold">{plan.title}</b>
+          <Bdg tone={status.tone} kind={status.kind}>{status.label}</Bdg>
+          <ChevronDown
+            aria-hidden="true"
+            className={cn("h-[18px] w-[18px] shrink-0 text-muted-foreground transition-transform", expanded && "rotate-180")}
+          />
+        </span>
+        <span className="text-[0.8125rem] text-muted-foreground">{meta}</span>
+      </button>
 
       {plan.warnings && plan.warnings.length > 0 && (isActive || expanded) && (
-        <div className="mt-2 space-y-1">
+        <div className="flex flex-col gap-1 px-3 pb-2">
           {plan.warnings.map((w, i) => (
-            <div
-              key={i}
-              className="flex items-start gap-1.5 text-[11px] text-amber-600 dark:text-amber-400"
-            >
-              <AlertTriangle className="w-3 h-3 mt-0.5 shrink-0" />
+            <p key={i} className="flex items-start gap-1.5 text-[0.8125rem] text-sodium">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
               <span>{w}</span>
-            </div>
+            </p>
           ))}
         </div>
       )}
 
-      <AnimatePresence>
-        {expanded && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="overflow-hidden"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="pt-3 mt-2 border-t space-y-2">
-              {phases.map((phase) => (
-                <PhaseEntryRow key={phase.id} phase={phase} />
-              ))}
+      {expanded && (
+        <div className="flex flex-col gap-2.5 border-t border-line px-3 pb-3 pt-2.5 text-sm">
+          {phases.map((phase) => (
+            <PhaseEntryRow key={phase.id} phase={phase} />
+          ))}
 
-              {plan.notes && (
-                <p className="text-[11px] text-muted-foreground italic pt-1">
-                  {plan.notes}
-                </p>
-              )}
+          {plan.notes && (
+            <p className="text-[0.8125rem] text-muted-foreground">{plan.notes}</p>
+          )}
 
-              <div className="flex flex-wrap gap-2 pt-2">
-                {(plan.status === "draft" || plan.status === "active") && (
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(120px,1fr))] gap-2">
+            {(plan.status === "draft" || plan.status === "active") && (
+              <Button variant="outline" onClick={onEdit}>
+                <Pencil aria-hidden="true" />
+                Edit
+              </Button>
+            )}
+            {plan.status === "draft" && (
+              <Button
+                onClick={() => activateMutation.mutate(plan.id)}
+                disabled={activateMutation.isPending}
+              >
+                <Play aria-hidden="true" />
+                Activate
+              </Button>
+            )}
+            {plan.status === "active" && (
+              <>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button disabled={completeMutation.isPending}>
+                      <CheckCircle2 aria-hidden="true" />
+                      Complete &amp; Promote
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Complete titration?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        This finishes &ldquo;{plan.title}&rdquo; and promotes its
+                        doses to become the new maintenance schedule for every
+                        prescription in the plan. This replaces the current
+                        baseline and cannot be undone.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction onClick={() => completeMutation.mutate(plan.id)}>
+                        Complete &amp; Promote
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className="border-bp text-bp hover:text-bp"
+                      disabled={cancelMutation.isPending}
+                    >
+                      <XCircle aria-hidden="true" />
+                      Cancel
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Cancel titration?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        &ldquo;{plan.title}&rdquo; will stop and every affected
+                        prescription reverts to its maintenance schedule.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Keep running</AlertDialogCancel>
+                      <AlertDialogAction
+                        className="bg-bp text-on-domain hover:bg-bp/90"
+                        onClick={() => cancelMutation.mutate(plan.id)}
+                      >
+                        Cancel titration
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </>
+            )}
+            {(plan.status === "draft" || plan.status === "cancelled") && (
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
                   <Button
                     variant="outline"
-                    size="sm"
-                    className="h-7 text-xs gap-1"
-                    onClick={onEdit}
+                    className="border-bp text-bp hover:text-bp"
+                    disabled={deleteMutation.isPending}
                   >
-                    <Pencil className="w-3 h-3" />
-                    Edit
+                    <Trash2 aria-hidden="true" />
+                    Delete
                   </Button>
-                )}
-                {plan.status === "draft" && (
-                  <Button
-                    variant="default"
-                    size="sm"
-                    className="h-7 text-xs gap-1 bg-teal-600 hover:bg-teal-700"
-                    onClick={() => activateMutation.mutate(plan.id)}
-                    disabled={activateMutation.isPending}
-                  >
-                    <Play className="w-3 h-3" />
-                    Activate
-                  </Button>
-                )}
-                {plan.status === "active" && (
-                  <>
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button
-                          variant="default"
-                          size="sm"
-                          className="h-7 text-xs gap-1 bg-emerald-600 hover:bg-emerald-700"
-                          disabled={completeMutation.isPending}
-                        >
-                          <CheckCircle2 className="w-3 h-3" />
-                          Complete &amp; Promote
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Complete titration?</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            This finishes &ldquo;{plan.title}&rdquo; and promotes its
-                            doses to become the new maintenance schedule for every
-                            prescription in the plan. This replaces the current
-                            baseline and cannot be undone.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancel</AlertDialogCancel>
-                          <AlertDialogAction
-                            className="bg-emerald-600 hover:bg-emerald-700"
-                            onClick={() => completeMutation.mutate(plan.id)}
-                          >
-                            Complete &amp; Promote
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-7 text-xs gap-1 text-red-500 hover:text-red-600"
-                          disabled={cancelMutation.isPending}
-                        >
-                          <XCircle className="w-3 h-3" />
-                          Cancel
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Cancel titration?</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            &ldquo;{plan.title}&rdquo; will stop and every affected
-                            prescription reverts to its maintenance schedule.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Keep running</AlertDialogCancel>
-                          <AlertDialogAction
-                            className="bg-red-600 hover:bg-red-700"
-                            onClick={() => cancelMutation.mutate(plan.id)}
-                          >
-                            Cancel titration
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  </>
-                )}
-                {(plan.status === "draft" || plan.status === "cancelled") && (
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 text-xs gap-1 text-red-500 hover:text-red-600"
-                        disabled={deleteMutation.isPending}
-                      >
-                        <Trash2 className="w-3 h-3" />
-                        Delete
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>Delete titration plan?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                          This will permanently delete &ldquo;{plan.title}&rdquo; and its associated phases.
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction
-                          className="bg-red-600 hover:bg-red-700"
-                          onClick={() => deleteMutation.mutate(plan.id)}
-                        >
-                          Delete
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
-                )}
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </Card>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Delete titration plan?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This will permanently delete &ldquo;{plan.title}&rdquo; and its associated phases.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                      className="bg-bp text-on-domain hover:bg-bp/90"
+                      onClick={() => deleteMutation.mutate(plan.id)}
+                    >
+                      Delete
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -289,47 +241,33 @@ function PhaseEntryRow({ phase }: { phase: MedicationPhase }) {
   const schedules = useSchedulesForPhase(phase.id);
 
   const inventoryItems = useInventoryForPrescription(phase.prescriptionId);
+  const weekStartsOn = useSettingsStore((s) => s.weekStartsOn);
 
   const rx = prescriptions.find((p) => p.id === phase.prescriptionId);
   // Combination doses are labelled from the active brand's tablets; with no
   // combo brand stocked the summed dose is shown.
   const activeBrand = findActiveBrand(inventoryItems);
 
+  const status = phase.status;
   return (
-    <div className="p-2.5 rounded-lg bg-muted/30 border border-border/40">
-      <div className="flex items-center justify-between">
-        <span className="text-xs font-medium">{rx?.genericName ?? "Unknown"}</span>
-        <Badge
-          variant="outline"
-          className={`text-[10px] px-1 py-0 ${
-            phase.status === "active"
-              ? "text-emerald-600 dark:text-emerald-400 border-emerald-500"
-              : phase.status === "pending"
-                ? "text-blue-600 dark:text-blue-400 border-blue-500"
-                : "text-muted-foreground"
-          }`}
-        >
-          {phase.status}
-        </Badge>
+    <div className="flex flex-col gap-1 border border-line bg-panel px-2.5 py-2 text-[0.8125rem]">
+      <div className="flex items-center justify-between gap-2">
+        <b className="font-semibold">{rx?.genericName ?? "Removed prescription"}</b>
+        <Bdg tone={status === "active" ? "weight" : status === "pending" ? "water" : "muted"}>
+          {status}
+        </Bdg>
       </div>
-      {schedules.length > 0 && (
-        <div className="mt-1.5 space-y-0.5">
-          {schedules.map((s) => (
-            <div key={s.id} className="flex items-center gap-2 text-[11px] text-muted-foreground">
-              <Clock className="w-3 h-3" />
-              <span>{s.time}</span>
-              <span className="font-medium text-foreground">
-                {formatComboDose(s.dosage, phase.unit, activeBrand)}
-              </span>
-              {s.daysOfWeek.length < 7 && (
-                <span className="text-[10px]">
-                  ({s.daysOfWeek.map((d) => DAY_LABELS_LONG[d]).join(", ")})
-                </span>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
+      {schedules.map((s) => (
+        <p key={s.id}>
+          <span className="font-mono text-muted-foreground">{s.time}</span>{" "}
+          <b className="font-semibold">{formatComboDose(s.dosage, phase.unit, activeBrand)}</b>
+          {s.daysOfWeek.length < 7 && (
+            <span className="text-muted-foreground">
+              {" "}({sortDaysForDisplay(s.daysOfWeek, weekStartsOn).map((d) => DAY_LABELS_LONG[d]).join(", ")})
+            </span>
+          )}
+        </p>
+      ))}
     </div>
   );
 }

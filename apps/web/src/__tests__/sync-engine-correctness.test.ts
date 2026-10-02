@@ -19,9 +19,11 @@ import {
   __resetEngineForTests,
   __startEngineForTests,
   MAX_PUSH_ATTEMPTS,
+  resumeEngine,
   runPullCycle,
   runPushCycle,
   startEngine,
+  suspendEngine,
   waitForSyncIdle,
 } from "@/lib/sync-engine";
 import { useSyncStatusStore } from "@/stores/sync-status-store";
@@ -652,6 +654,44 @@ describe("sync-engine correctness (audit 2026-09)", () => {
     expect(await db._syncQueue.count()).toBe(0);
   });
 
+  it("resumeEngine catches up on the startup push and pull dropped while suspended", async () => {
+    // A reload with a manual's live demo open: the preview suspends the
+    // engine before it starts, so the startup flush is dropped.
+    installDom();
+    await db.intakeRecords.add(makeIntake({ id: "left-over" }));
+    await enqueue("intakeRecords", "left-over", "upsert");
+
+    const order: string[] = [];
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (String(url).includes("/api/sync/push")) {
+        order.push("push");
+        const body = JSON.parse(String(init!.body)) as {
+          ops: Array<{ queueId: number }>;
+        };
+        return jsonResponse({
+          accepted: body.ops.map((o) => ({ queueId: o.queueId, serverUpdatedAt: 1 })),
+        });
+      }
+      order.push("pull");
+      return emptyPull();
+    }) as unknown as Mock;
+    vi.stubGlobal("fetch", fetchMock);
+
+    suspendEngine();
+    startEngine();
+    await flushRealAsync();
+    await waitForSyncIdle();
+    expect(order).toEqual([]);
+
+    resumeEngine();
+    await flushRealAsync();
+    await waitForSyncIdle();
+
+    expect(order[0]).toBe("push");
+    expect(order).toContain("pull");
+    expect(await db._syncQueue.count()).toBe(0);
+  });
+
   // ─── core-duplication#3 ───────────────────────────────────────────────
 
   it("pulled rows lose null optional fields and userId", async () => {
@@ -827,6 +867,32 @@ describe("sync-engine pull merges the settings row per setting", () => {
     expect(local?.updatedAt).toBeGreaterThan(5_000);
     // The local edit the server lacks is queued for push.
     expect(await db._syncQueue.where("tableName").equals("userSettings").count()).toBe(1);
+  });
+
+  it("takes a week start chosen on another device and keeps a local limit edit", async () => {
+    installDom();
+    await db.userSettings.add(
+      settings({ saltLimit: 1200, updatedAt: 2_000, fieldUpdatedAt: { ...STAMPS, saltLimit: 2_000 } }),
+    );
+    await enqueue("userSettings", "settings-1", "upsert");
+    vi.stubGlobal(
+      "fetch",
+      pullReturning(
+        settings({
+          weekStartsOn: 0,
+          updatedAt: 3_000,
+          deviceId: "other",
+          fieldUpdatedAt: { ...STAMPS, weekStartsOn: 3_000 },
+        }),
+      ),
+    );
+
+    await runPullCycle();
+
+    const local = await db.userSettings.get("settings-1");
+    expect(local?.weekStartsOn).toBe(0);
+    expect(local?.saltLimit).toBe(1200);
+    expect(local?.fieldUpdatedAt).toMatchObject({ weekStartsOn: 3_000, saltLimit: 2_000 });
   });
 
   it("leaves the local row alone when the server has nothing newer", async () => {

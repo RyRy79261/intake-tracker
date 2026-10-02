@@ -1,9 +1,10 @@
 "use client";
 
-import { memo } from "react";
-import { Button } from "@intake/ui/button";
-import { Trash2, Loader2, Pencil } from "lucide-react";
-import { CARD_THEMES } from "@/lib/card-themes";
+import { memo, type CSSProperties } from "react";
+import { Trash2, Pencil } from "lucide-react";
+import { Spinner } from "@intake/ui/spinner";
+import { CARD_THEMES, type CardTheme } from "@/lib/card-themes";
+import { domainColor } from "@/lib/domain-colors";
 import { type UnifiedRecord } from "@/lib/history-types";
 import { formatTimeOnly } from "@/lib/date-utils";
 import { getLiquidTypeLabel } from "@/lib/utils";
@@ -26,142 +27,115 @@ interface RecordRowProps {
   liquidPresets?: LiquidPreset[];
 }
 
-/** A single record row in the history list */
-function RecordRowImpl({ unified, onDelete, onEdit, isDeleting, liquidPresets }: RecordRowProps) {
-  let icon: React.ReactNode;
-  let measurement: string;
-  let iconColor: string;
-  let typeLabel: string;
-
-  if (unified.type === "intake") {
-    const record = unified.record;
-    // Each intake type has its own theme key of the same name.
-    const theme = CARD_THEMES[record.type];
-    const Icon = theme.icon;
-    icon = <Icon className="w-4 h-4" />;
-    iconColor = theme.iconColor;
-    typeLabel = theme.label;
-    const amountStr = `${record.amount} ${INTAKE_UNITS[record.type]}`;
-    // Water: the liquid it came from. Sodium: the salt/MSG it was typed as
-    // (null for sodium typed directly, and for rows with no recorded source).
-    const sourceLabel = record.type === "water"
-      ? getLiquidTypeLabel(record.source, { presets: liquidPresets, note: record.note })
-      : record.type === "salt"
-        ? describeSodiumEntry(record)
-        : null;
-    measurement = sourceLabel ? `${amountStr} · ${sourceLabel}` : amountStr;
-  } else if (unified.type === "weight") {
-    const theme = CARD_THEMES.weight;
-    const Icon = theme.icon;
-    icon = <Icon className="w-4 h-4" />;
-    iconColor = theme.iconColor;
-    typeLabel = theme.label;
-    measurement = `${unified.record.weight} kg`;
-  } else if (unified.type === "eating") {
-    const theme = CARD_THEMES.eating;
-    const Icon = theme.icon;
-    icon = <Icon className="w-4 h-4" />;
-    iconColor = theme.iconColor;
-    typeLabel = theme.label;
-    const grams = unified.record.grams != null ? `${unified.record.grams} g` : "";
-    measurement = [unified.record.note, grams].filter(Boolean).join(" · ") || "—";
-  } else if (unified.type === "urination") {
-    const theme = CARD_THEMES.urination;
-    const Icon = theme.icon;
-    icon = <Icon className="w-4 h-4" />;
-    iconColor = theme.iconColor;
-    typeLabel = theme.label;
-    const parts = [unified.record.amountEstimate, unified.record.note].filter(Boolean);
-    measurement = parts.length > 0 ? parts.join(" · ") : "—";
-  } else if (unified.type === "defecation") {
-    const theme = CARD_THEMES.defecation;
-    const Icon = theme.icon;
-    icon = <Icon className="w-4 h-4" />;
-    iconColor = theme.iconColor;
-    typeLabel = theme.label;
-    const parts = [unified.record.amountEstimate, unified.record.note].filter(Boolean);
-    measurement = parts.length > 0 ? parts.join(" · ") : "—";
-  } else if (unified.type === "caffeine") {
-    const theme = CARD_THEMES.caffeine;
-    const Icon = theme.icon;
-    icon = <Icon className="w-4 h-4" />;
-    iconColor = theme.iconColor;
-    typeLabel = theme.label;
-    const amt = unified.record.amountMg ? `${unified.record.amountMg} mg` : "";
-    measurement = [unified.record.description, amt].filter(Boolean).join(" · ") || "Caffeine";
-  } else if (unified.type === "alcohol") {
-    const theme = CARD_THEMES.alcohol;
-    const Icon = theme.icon;
-    icon = <Icon className="w-4 h-4" />;
-    iconColor = theme.iconColor;
-    typeLabel = theme.label;
-    const amt = unified.record.amountStandardDrinks
-      ? `${unified.record.amountStandardDrinks} drink${unified.record.amountStandardDrinks !== 1 ? "s" : ""}`
-      : "";
-    measurement = [unified.record.description, amt].filter(Boolean).join(" · ") || "Alcohol";
-  } else {
-    const theme = CARD_THEMES.bp;
-    const Icon = theme.icon;
-    icon = <Icon className="w-4 h-4" />;
-    iconColor = theme.iconColor;
-    typeLabel = theme.label;
-    measurement = `${unified.record.systolic}/${unified.record.diastolic} mmHg`;
+/** The theme (label, icon, colour) and the measurement text of a record. */
+function describeRecord(
+  unified: UnifiedRecord,
+  liquidPresets: LiquidPreset[] | undefined,
+): { theme: CardTheme; measurement: string } {
+  switch (unified.type) {
+    case "intake": {
+      const record = unified.record;
+      const amountStr = `${record.amount} ${INTAKE_UNITS[record.type]}`;
+      // Water: the liquid it came from. Sodium: the salt/MSG it was typed as
+      // (null for sodium typed directly, and for rows with no recorded source).
+      const sourceLabel = record.type === "water"
+        ? getLiquidTypeLabel(record.source, { presets: liquidPresets, note: record.note })
+        : record.type === "salt"
+          ? describeSodiumEntry(record)
+          : null;
+      // Each intake type has its own theme key of the same name.
+      return {
+        theme: CARD_THEMES[record.type],
+        measurement: sourceLabel ? `${amountStr} · ${sourceLabel}` : amountStr,
+      };
+    }
+    case "weight":
+      return { theme: CARD_THEMES.weight, measurement: `${unified.record.weight} kg` };
+    case "eating": {
+      const grams = unified.record.grams != null ? `${unified.record.grams} g` : "";
+      return {
+        theme: CARD_THEMES.eating,
+        measurement: [unified.record.note, grams].filter(Boolean).join(" · ") || "—",
+      };
+    }
+    case "urination":
+    case "defecation": {
+      const parts = [unified.record.amountEstimate, unified.record.note].filter(Boolean);
+      return {
+        theme: CARD_THEMES[unified.type],
+        measurement: parts.length > 0 ? parts.join(" · ") : "—",
+      };
+    }
+    case "caffeine": {
+      const amt = unified.record.amountMg ? `${unified.record.amountMg} mg` : "";
+      return {
+        theme: CARD_THEMES.caffeine,
+        measurement: [unified.record.description, amt].filter(Boolean).join(" · ") || "Caffeine",
+      };
+    }
+    case "alcohol": {
+      const drinks = unified.record.amountStandardDrinks;
+      const amt = drinks ? `${drinks} drink${drinks !== 1 ? "s" : ""}` : "";
+      return {
+        theme: CARD_THEMES.alcohol,
+        measurement: [unified.record.description, amt].filter(Boolean).join(" · ") || "Alcohol",
+      };
+    }
+    default:
+      return {
+        theme: CARD_THEMES.bp,
+        measurement: `${unified.record.systolic}/${unified.record.diastolic} mmHg`,
+      };
   }
+}
+
+/**
+ * A single record in the Metrics › Records list: the whole left side is the
+ * edit button (icon, type label, measurement, time), with Edit and Delete
+ * icon buttons beside it. Coloured by its domain.
+ */
+function RecordRowImpl({ unified, onDelete, onEdit, isDeleting, liquidPresets }: RecordRowProps) {
+  const { theme, measurement } = describeRecord(unified, liquidPresets);
+  const Icon = theme.icon;
+  // Potassium has no domain colour of its own; the prototype inks it.
+  const isPotassium = unified.type === "intake" && unified.record.type === "potassium";
+  const color = isPotassium ? "hsl(var(--fg))" : domainColor(theme.domain);
+  const time = formatTimeOnly(unified.record.timestamp);
 
   return (
-    <div
-      className="flex items-center justify-between py-2 px-3 border-b border-border/50 hover:bg-muted/30 transition-colors cursor-pointer"
-      onClick={onEdit}
-      role="button"
-      tabIndex={0}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          onEdit();
-        }
-      }}
-    >
-      <div className="flex items-center gap-3 min-w-0">
-        <span className={iconColor}>{icon}</span>
-        <div className="flex flex-col min-w-0">
-          <span className="text-[11px] uppercase tracking-wide text-muted-foreground leading-tight">
-            {typeLabel}
-          </span>
-          <span className="font-medium truncate leading-tight">{measurement}</span>
-        </div>
-        <span className="text-sm text-muted-foreground shrink-0">
-          {formatTimeOnly(unified.record.timestamp)}
-        </span>
-      </div>
-      {/* Keep the action buttons' clicks and key presses away from the row's
-          own edit handler (which would also preventDefault their activation). */}
-      <div
-        className="flex items-center gap-1 shrink-0"
-        onClick={(e) => e.stopPropagation()}
-        onKeyDown={(e) => e.stopPropagation()}
+    <div className="wm-rec" style={{ "--c": color } as CSSProperties} data-testid="record-row">
+      <button
+        type="button"
+        className="main"
+        onClick={onEdit}
+        aria-label={`${theme.label} ${measurement} at ${time}, edit`}
       >
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8 text-muted-foreground hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30"
-          onClick={onEdit}
-          aria-label="Edit entry"
-          title="Edit entry"
-        >
-          <Pencil className="w-4 h-4" />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8 text-muted-foreground hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30"
-          onClick={onDelete}
-          disabled={isDeleting}
-          aria-label="Delete entry"
-          title="Delete entry"
-        >
-          {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-        </Button>
-      </div>
+        <Icon aria-hidden="true" />
+        <span className="tx">
+          <span className="lb">{theme.label}</span>
+          <span className="ms">{measurement}</span>
+        </span>
+        <span className="tm">{time}</span>
+      </button>
+      <button
+        type="button"
+        className="wm-ibtn"
+        onClick={onEdit}
+        aria-label="Edit entry"
+        title="Edit entry"
+      >
+        <Pencil />
+      </button>
+      <button
+        type="button"
+        className="wm-ibtn"
+        onClick={onDelete}
+        disabled={isDeleting}
+        aria-label="Delete entry"
+        title="Delete entry"
+      >
+        {isDeleting ? <Spinner /> : <Trash2 />}
+      </button>
     </div>
   );
 }

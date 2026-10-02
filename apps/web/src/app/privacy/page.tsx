@@ -13,7 +13,7 @@ export const metadata: Metadata = {
 // (app-store reviewers and prospective users need the policy URL before
 // signing in). Plain server component — no client hooks — so the route can
 // export metadata and prerender. Content lives inside the layout's shared
-// max-w-lg container provided by SwipeNav.
+// max-w-lg container provided by the app shell (AppChrome).
 //
 // NOTE: this reflects the app's actual data flows as of the effective date
 // below. If you change what leaves the device (sync targets, AI providers,
@@ -135,7 +135,9 @@ export default function PrivacyPolicyPage() {
           <li>
             <strong>Voice logging.</strong> If you record a voice note, the
             short audio clip is sent to Groq for speech-to-text transcription.
-            The resulting text is then handled like anything you typed.
+            The resulting text is then handled like anything you typed, and is
+            sent with your device&apos;s current local time and time zone so
+            that &quot;an hour ago&quot; can be dated.
           </li>
           <li>
             <strong>Medical-context insights stay off by default.</strong> AI

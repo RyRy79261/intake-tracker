@@ -1,6 +1,7 @@
 "use client";
 
 import { useId, useState } from "react";
+import type { CSSProperties } from "react";
 import { Label } from "@intake/ui/label";
 import { Input } from "@intake/ui/input";
 import { Button } from "@intake/ui/button";
@@ -12,11 +13,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@intake/ui/select";
-import { Plus, Trash2, Droplets, Pencil } from "lucide-react";
+import { Plus, Trash2, Pencil } from "lucide-react";
 import { useSettingsStore, type LiquidPreset } from "@/stores/settings-store";
 import type { LiquidPresetPatch } from "@/lib/constants";
 import { useOptionalTrackerEnabled } from "@/lib/optional-trackers";
-import { ExpandableSettingsSection } from "@/components/settings/expandable-settings-section";
+import { domainColor, type Domain } from "@/lib/domain-colors";
+import { cn } from "@/lib/utils";
+import { helpClass } from "@/components/settings/settings-kit";
 
 function formatPresetSubstances(
   preset: LiquidPreset,
@@ -38,7 +41,7 @@ function formatPresetSubstances(
     parts.push(`${preset.sugarPer100ml}g sugar/100ml`);
   }
   if (parts.length === 0) {
-    return `${preset.waterContentPercent}% water`;
+    return "No caffeine or alcohol";
   }
   return parts.join(" + ");
 }
@@ -73,11 +76,13 @@ function PresetEditForm({
   onSave,
   onCancel,
   saveLabel,
+  isNew = false,
 }: {
   preset: Partial<LiquidPreset>;
   onSave: (data: PresetFormData) => void;
   onCancel: () => void;
   saveLabel: string;
+  isNew?: boolean;
 }) {
   const idPrefix = useId();
   const sugarEnabled = useOptionalTrackerEnabled("sugar");
@@ -98,9 +103,6 @@ function PresetEditForm({
   const [sugarPer100ml, setSugarPer100ml] = useState(
     preset.sugarPer100ml ?? 0
   );
-  const [waterContentPercent, setWaterContentPercent] = useState(
-    preset.waterContentPercent ?? 100
-  );
 
   const handleSave = () => {
     if (!name.trim()) return;
@@ -108,7 +110,6 @@ function PresetEditForm({
       name: name.trim(),
       tab,
       defaultVolumeMl,
-      waterContentPercent,
       caffeinePer100ml: positiveOrUndefined(caffeinePer100ml),
       alcoholPer100ml: positiveOrUndefined(alcoholPer100ml),
       saltPer100ml: positiveOrUndefined(saltPer100ml),
@@ -123,25 +124,31 @@ function PresetEditForm({
   };
 
   return (
-    <div className="space-y-3 p-3 rounded-lg bg-muted/50 border">
+    <div
+      className={cn(
+        "flex flex-col gap-2.5 bg-panel p-2.5 [&_input]:h-10 [&_label]:text-[0.8125rem] [&_label]:font-normal [&_label]:text-muted-foreground",
+        isNew ? "mt-2.5 border border-line" : "border-t border-line first:border-t-0",
+      )}
+    >
       <div className="space-y-1">
-        <Label className="text-xs">Name</Label>
+        <Label htmlFor={`${idPrefix}-name`}>Name</Label>
         <Input
+          id={`${idPrefix}-name`}
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="Beverage name"
-          className="h-9"
+          className="h-10 border-muted-foreground"
         />
       </div>
       <div className="space-y-1">
-        <Label className="text-xs">Category</Label>
+        <Label htmlFor={`${idPrefix}-category`}>Category</Label>
         <Select
           value={tab}
           onValueChange={(v) =>
             setTab(v as "coffee" | "alcohol" | "beverage")
           }
         >
-          <SelectTrigger className="h-9">
+          <SelectTrigger id={`${idPrefix}-category`} className="h-10 border-muted-foreground">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -156,34 +163,20 @@ function PresetEditForm({
           </SelectContent>
         </Select>
       </div>
-      <div className="grid grid-cols-2 gap-2">
-        <div className="space-y-1">
-          <Label className="text-xs">Volume (ml)</Label>
-          <Input
-            type="number"
-            value={defaultVolumeMl || ""}
-            onChange={(e) => setDefaultVolumeMl(Number(e.target.value) || 0)}
-            className="h-9"
-            min={0}
-          />
-        </div>
-        <div className="space-y-1">
-          <Label className="text-xs">Water %</Label>
-          <Input
-            type="number"
-            value={waterContentPercent || ""}
-            onChange={(e) =>
-              setWaterContentPercent(Number(e.target.value) || 0)
-            }
-            className="h-9"
-            min={0}
-            max={100}
-          />
-        </div>
+      <div className="space-y-1">
+        <Label htmlFor={`${idPrefix}-volume`}>Volume (ml)</Label>
+        <Input
+          id={`${idPrefix}-volume`}
+          type="number"
+          value={defaultVolumeMl || ""}
+          onChange={(e) => setDefaultVolumeMl(Number(e.target.value) || 0)}
+          className="h-10 border-muted-foreground"
+          min={0}
+        />
       </div>
       <div className="grid grid-cols-2 gap-2">
         <div className="space-y-1">
-          <Label htmlFor={`${idPrefix}-caffeine`} className="text-xs">
+          <Label htmlFor={`${idPrefix}-caffeine`}>
             Caffeine/100ml
           </Label>
           <Input
@@ -191,12 +184,12 @@ function PresetEditForm({
             type="number"
             value={caffeinePer100ml || ""}
             onChange={(e) => setCaffeinePer100ml(Number(e.target.value) || 0)}
-            className="h-9"
+            className="h-10 border-muted-foreground"
             min={0}
           />
         </div>
         <div className="space-y-1">
-          <Label htmlFor={`${idPrefix}-abv`} className="text-xs">
+          <Label htmlFor={`${idPrefix}-abv`}>
             % ABV
           </Label>
           <Input
@@ -204,13 +197,13 @@ function PresetEditForm({
             type="number"
             value={alcoholPer100ml || ""}
             onChange={(e) => setAlcoholPer100ml(Number(e.target.value) || 0)}
-            className="h-9"
+            className="h-10 border-muted-foreground"
             min={0}
             step="0.5"
           />
         </div>
         <div className="space-y-1">
-          <Label htmlFor={`${idPrefix}-sodium`} className="text-xs">
+          <Label htmlFor={`${idPrefix}-sodium`}>
             Na/100ml
           </Label>
           <Input
@@ -218,13 +211,13 @@ function PresetEditForm({
             type="number"
             value={saltPer100ml || ""}
             onChange={(e) => setSaltPer100ml(Number(e.target.value) || 0)}
-            className="h-9"
+            className="h-10 border-muted-foreground"
             min={0}
           />
         </div>
         {sugarEnabled && (
           <div className="space-y-1">
-            <Label htmlFor={`${idPrefix}-sugar`} className="text-xs">
+            <Label htmlFor={`${idPrefix}-sugar`}>
               Sugar g/100ml
             </Label>
             <Input
@@ -232,22 +225,20 @@ function PresetEditForm({
               type="number"
               value={sugarPer100ml || ""}
               onChange={(e) => setSugarPer100ml(Number(e.target.value) || 0)}
-              className="h-9"
+              className="h-10 border-muted-foreground"
               min={0}
               step="0.1"
             />
           </div>
         )}
       </div>
-      <div className="flex gap-2">
-        <Button variant="outline" size="sm" onClick={onCancel} className="flex-1">
+      <div className="grid grid-cols-2 gap-2">
+        <Button variant="outline" onClick={onCancel} className="border-muted-foreground">
           Cancel
         </Button>
         <Button
-          size="sm"
           onClick={handleSave}
           disabled={!name.trim()}
-          className="flex-1"
         >
           {saveLabel}
         </Button>
@@ -256,6 +247,17 @@ function PresetEditForm({
   );
 }
 
+const GROUPS: ReadonlyArray<{ tab: LiquidPreset["tab"]; label: string; domain: Domain }> = [
+  { tab: "coffee", label: "Coffee", domain: "caffeine" },
+  { tab: "alcohol", label: "Alcohol", domain: "alcohol" },
+  { tab: "beverage", label: "Beverage", domain: "water" },
+];
+
+/**
+ * Settings › Tracking › Drink presets: the saved drinks grouped by the
+ * Liquids tab they appear on, each with edit and (custom presets only)
+ * delete, and an Add Preset form. Rendered as its own settings page.
+ */
 export function LiquidPresetsSection() {
   const liquidPresets = useSettingsStore((s) => s.liquidPresets);
   const addLiquidPreset = useSettingsStore((s) => s.addLiquidPreset);
@@ -267,107 +269,123 @@ export function LiquidPresetsSection() {
   const [isAdding, setIsAdding] = useState(false);
   const [deletingPresetId, setDeletingPresetId] = useState<string | null>(null);
 
-  return (
-    <ExpandableSettingsSection
-      icon={Droplets}
-      label="Liquid Presets"
-      iconColorClass="text-blue-600 dark:text-blue-400"
-    >
-      <div className="space-y-0">
-        {liquidPresets.map((preset) => {
-          if (deletingPresetId === preset.id) {
-            return (
-              <div
-                key={preset.id}
-                className="flex items-center justify-between py-3 px-2 border-b border-border/50 bg-muted/30 rounded"
-              >
-                <span className="text-sm">Delete {preset.name}?</span>
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setDeletingPresetId(null)}
-                  >
-                    Keep Preset
-                  </Button>
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    onClick={() => {
-                      deleteLiquidPreset(preset.id);
-                      setDeletingPresetId(null);
-                    }}
-                  >
-                    Delete Preset
-                  </Button>
-                </div>
-              </div>
-            );
-          }
-
-          if (editingPresetId === preset.id) {
-            return (
-              <div key={preset.id} className="py-2">
-                <PresetEditForm
-                  preset={preset}
-                  onSave={(data) => {
-                    updateLiquidPreset(preset.id, data);
-                    setEditingPresetId(null);
-                  }}
-                  onCancel={() => setEditingPresetId(null)}
-                  saveLabel="Save Changes"
-                />
-              </div>
-            );
-          }
-
-          return (
-            <div
-              key={preset.id}
-              className="flex items-center justify-between py-2 border-b border-border/50"
+  const renderRow = (preset: LiquidPreset) => {
+    if (deletingPresetId === preset.id) {
+      return (
+        <div
+          key={preset.id}
+          role="alert"
+          className="flex flex-col gap-2 border-t border-line bg-bp/8 p-2.5 text-sm first:border-t-0"
+        >
+          <span>Delete {preset.name}?</span>
+          <div className="grid grid-cols-2 gap-2">
+            <Button variant="outline" className="border-muted-foreground" onClick={() => setDeletingPresetId(null)}>
+              Keep Preset
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                deleteLiquidPreset(preset.id);
+                setDeletingPresetId(null);
+              }}
             >
-              <div className="flex items-center gap-1">
-                <span className="text-sm font-medium">{preset.name}</span>
-                <span className="text-xs text-muted-foreground ml-1">
-                  {preset.defaultVolumeMl}ml
-                </span>
-                {preset.isDefault && (
-                  <Badge variant="secondary" className="ml-1 text-[10px]">
-                    Default
-                  </Badge>
-                )}
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-muted-foreground">
-                  {formatPresetSubstances(preset, sugarEnabled)}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setEditingPresetId(preset.id)}
-                  className="p-1 text-muted-foreground hover:text-foreground"
-                  aria-label={`Edit ${preset.name}`}
-                >
-                  <Pencil className="w-3.5 h-3.5" />
-                </button>
-                {!preset.isDefault && (
-                  <button
-                    type="button"
-                    onClick={() => setDeletingPresetId(preset.id)}
-                    className="p-1 text-muted-foreground hover:text-destructive"
-                    aria-label={`Delete ${preset.name}`}
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                )}
-              </div>
-            </div>
-          );
-        })}
+              Delete Preset
+            </Button>
+          </div>
+        </div>
+      );
+    }
+
+    if (editingPresetId === preset.id) {
+      return (
+        <PresetEditForm
+          key={preset.id}
+          preset={preset}
+          onSave={(data) => {
+            updateLiquidPreset(preset.id, data);
+            setEditingPresetId(null);
+          }}
+          onCancel={() => setEditingPresetId(null)}
+          saveLabel="Save Changes"
+        />
+      );
+    }
+
+    const subs = formatPresetSubstances(preset, sugarEnabled);
+    return (
+      <div
+        key={preset.id}
+        className="grid min-h-14 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-1.5 border-t border-line py-1 pl-2.5 pr-0.5 first:border-t-0"
+        data-testid="preset-row"
+      >
+        <span className="min-w-0">
+          <span className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-semibold leading-[1.3]">
+            {preset.name}
+            <span className="font-mono text-[0.8125rem] font-normal text-muted-foreground">
+              {preset.defaultVolumeMl}ml
+            </span>
+            {preset.isDefault && (
+              <Badge variant="outline" className="border-muted-foreground font-medium text-muted-foreground">
+                Default
+              </Badge>
+            )}
+          </span>
+          <span className="block text-xs leading-[1.35] text-muted-foreground">
+            {subs}
+          </span>
+        </span>
+        <span className="flex">
+          <button
+            type="button"
+            onClick={() => setEditingPresetId(preset.id)}
+            className="flex h-11 w-11 items-center justify-center text-muted-foreground hover:text-foreground"
+            aria-label={`Edit ${preset.name}`}
+          >
+            <Pencil className="h-4 w-4" />
+          </button>
+          {!preset.isDefault && (
+            <button
+              type="button"
+              onClick={() => setDeletingPresetId(preset.id)}
+              className="flex h-11 w-11 items-center justify-center text-muted-foreground hover:text-destructive"
+              aria-label={`Delete ${preset.name}`}
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          )}
+        </span>
       </div>
+    );
+  };
+
+  return (
+    <div>
+      <p className={`${helpClass} mb-1 mt-2.5`}>
+        Presets appear as one-tap buttons in the Liquids card&apos;s Coffee and Alcohol tabs. Default
+        presets can be edited but not deleted.
+      </p>
+
+      {GROUPS.map(({ tab, label, domain }) => {
+        const list = liquidPresets.filter((p) => p.tab === tab);
+        if (list.length === 0) return null;
+        return (
+          <section key={tab} aria-label={`${label} presets`}>
+            <h3
+              className="mb-1.5 mt-4 flex items-center gap-2 text-[0.8125rem] font-semibold text-muted-foreground after:h-px after:flex-1 after:bg-line after:content-['']"
+              style={{ "--c": domainColor(domain) } as CSSProperties}
+            >
+              <span aria-hidden="true" className="h-2.5 w-2.5 bg-[color:var(--c)]" />
+              {label} · {list.length}
+            </h3>
+            <div className="border border-line bg-background">{list.map(renderRow)}</div>
+          </section>
+        );
+      })}
 
       {isAdding ? (
         <PresetEditForm
           preset={{}}
+          isNew
           onSave={(data) => {
             addLiquidPreset(toNewPreset(data));
             setIsAdding(false);
@@ -378,13 +396,13 @@ export function LiquidPresetsSection() {
       ) : (
         <Button
           variant="outline"
-          className="w-full h-10"
+          className="mt-3 h-12 w-full border-dashed border-muted-foreground"
           onClick={() => setIsAdding(true)}
         >
-          <Plus className="w-4 h-4 mr-2" />
+          <Plus className="h-4 w-4" />
           Add Preset
         </Button>
       )}
-    </ExpandableSettingsSection>
+    </div>
   );
 }

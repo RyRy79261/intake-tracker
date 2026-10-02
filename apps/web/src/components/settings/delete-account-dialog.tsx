@@ -12,7 +12,8 @@ import {
 import { Button } from "@intake/ui/button";
 import { Input } from "@intake/ui/input";
 import { Label } from "@intake/ui/label";
-import { Loader2, Trash2 } from "lucide-react";
+import { Trash2 } from "lucide-react";
+import { Spinner } from "@intake/ui/spinner";
 import { useToast } from "@intake/ui/use-toast";
 import { useAccountActions } from "@/hooks/use-account-actions";
 
@@ -109,7 +110,7 @@ export function DeleteAccountDialog({
             disabled={!canDelete}
           >
             {busy ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
+              <Spinner className="size-4" />
             ) : (
               <Trash2 className="w-4 h-4" />
             )}

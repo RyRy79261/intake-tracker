@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { db } from "@/lib/db";
+import { createPreviewDatabase, db, resetActiveDatabase, setActiveDatabase } from "@/lib/db";
 import {
+  makeDoseLog,
   makePrescription,
   makeMedicationPhase,
   makePhaseSchedule,
@@ -9,6 +10,7 @@ import {
 } from "@/__tests__/fixtures/db-fixtures";
 import {
   loadReminderDoses,
+  loadHandledSlots,
   buildReminderOccurrences,
   buildWeeklyPushEntries,
   zonedTimeToEpoch,
@@ -178,5 +180,57 @@ describe("loadReminderDoses combination labels (gap-combo-drugs-pill-math#3)", (
     const [reminder] = await loadReminderDoses();
 
     expect(reminder?.dosageText).toBe("100mg");
+  });
+});
+
+describe("reminder reads while a manual preview's sample database is swapped in", () => {
+  it("wait for the real database and never return the sample regimen", async () => {
+    const rx = makePrescription({ genericName: "Metoprolol" });
+    const phase = makeMedicationPhase(rx.id);
+    const schedule = makePhaseSchedule(phase.id);
+    await db.prescriptions.add(rx);
+    await db.medicationPhases.add(phase);
+    await db.phaseSchedules.add(schedule);
+    await db.doseLogs.add(
+      makeDoseLog(rx.id, phase.id, schedule.id, { scheduledDate: "2026-09-29", status: "taken" }),
+    );
+
+    const preview = createPreviewDatabase();
+    await preview.open();
+    const sampleRx = makePrescription({ genericName: "Furosemide" });
+    const samplePhase = makeMedicationPhase(sampleRx.id);
+    await preview.prescriptions.add(sampleRx);
+    await preview.medicationPhases.add(samplePhase);
+    await preview.phaseSchedules.add(makePhaseSchedule(samplePhase.id));
+
+    setActiveDatabase(preview);
+    try {
+      let doses: ReminderDose[] | undefined;
+      const pendingDoses = loadReminderDoses().then((d) => (doses = d));
+      let handled: Set<string> | undefined;
+      const pendingHandled = loadHandledSlots([
+        {
+          dose: dose({ scheduleId: schedule.id }),
+          dateKey: "2026-09-29",
+          at: TUESDAY,
+          localTime: "08:00",
+          localWeekday: 2,
+        },
+      ]).then((h) => (handled = h));
+
+      // Held back for as long as the preview is on screen.
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(doses).toBeUndefined();
+      expect(handled).toBeUndefined();
+
+      resetActiveDatabase();
+      await pendingDoses;
+      await pendingHandled;
+      expect(doses!.map((d) => d.genericName)).toEqual(["Metoprolol"]);
+      expect([...handled!]).toEqual([`${schedule.id}|2026-09-29`]);
+    } finally {
+      resetActiveDatabase();
+      await preview.delete();
+    }
   });
 });

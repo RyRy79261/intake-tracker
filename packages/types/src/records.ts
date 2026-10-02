@@ -204,6 +204,76 @@ export interface CompoundStrength {
   strength: number;
 }
 
+/** One active ingredient in "About this medicine" (plain English). */
+export interface MedicineInfoCompound {
+  name: string;
+  /** The type of medicine, with a plain explanation in brackets. */
+  drugClass: string;
+  /** What it is for. */
+  forText: string;
+  howItWorks: string;
+  sideEffects: string[];
+}
+
+/** A warning with what to do about it. */
+export interface MedicineInfoWarning {
+  risk: string;
+  whatToDo: string;
+}
+
+/**
+ * The stored "About this medicine" answer (POST /api/ai/medicine-about).
+ * Written only by an explicit lookup or refresh. Non-indexed JSON — no Dexie
+ * version bump. Pulled rows may carry `null` inside; read it through
+ * `normalizeMedicineInfo`.
+ */
+export interface MedicineInfo {
+  /** Epoch ms of the lookup. */
+  fetchedAt: number;
+  /**
+   * The generic name the lookup was made for. When the prescription is
+   * renamed, the stored answer is for another medicine. Absent on an answer
+   * stored before this field existed.
+   */
+  forName?: string;
+  /** The whole medicine's type; for a combination, how the parts work together. */
+  drugClass: string;
+  compounds: MedicineInfoCompound[];
+  warnings: MedicineInfoWarning[];
+  /** When not to take it. */
+  contraindications: string[];
+  foodInstruction: FoodInstruction;
+  foodNote: string;
+  pillDescription: string;
+  visualIdentification?: string;
+}
+
+export type InteractionSeverity = "AVOID" | "CAUTION" | "OK";
+
+export interface InteractionCheckRow {
+  /** The other medication, as named in the request. */
+  medication: string;
+  severity: InteractionSeverity;
+  description: string;
+  /** The AI returned no result for this medication (shown as NOT ASSESSED). */
+  notAssessed?: boolean;
+}
+
+/**
+ * The last interaction check of a prescription against the user's other
+ * active prescriptions. `medications` is the list it was checked against:
+ * when the current list differs, the check is stale. Non-indexed JSON.
+ */
+export interface InteractionCheck {
+  /** Epoch ms of the check. */
+  checkedAt: number;
+  /** The generic name the check was made for (see `MedicineInfo.forName`). */
+  forName?: string;
+  medications: string[];
+  summary: string;
+  rows: InteractionCheckRow[];
+}
+
 export interface Prescription {
   id: string;
   genericName: string;
@@ -219,6 +289,10 @@ export interface Prescription {
    * label doses. Non-indexed — no Dexie version bump required.
    */
   compounds?: CompoundStrength[];
+  /** "About this medicine", from the AI lookup. Non-indexed — no Dexie bump. */
+  medicineInfo?: MedicineInfo;
+  /** The last stored interaction check. Non-indexed — no Dexie bump. */
+  interactionCheck?: InteractionCheck;
   isActive: boolean;
   createdAt: number;
   updatedAt: number;
@@ -515,10 +589,11 @@ export type SyncedLiquidPreset = { id: string; name: string } & Record<string, u
 /**
  * The user's synced settings (Dexie v24) — the settings that describe the
  * user rather than the device: daily limits and their extended buffers,
- * optional trackers, the day-start hour, liquid presets, medication regions,
- * reminder follow-up settings and the home timezone. Device-only preferences
- * (theme, animation timing, swipe and quick-nav, shake-to-report, clock
- * format, +/- increments, storage mode) stay in localStorage.
+ * optional trackers, the day-start hour, the week start, liquid presets,
+ * medication regions, reminder follow-up settings and the home timezone.
+ * Device-only preferences (theme, animation timing, swipe and quick-nav,
+ * shake-to-report, clock format, +/- increments, storage mode) stay in
+ * localStorage.
  *
  * Treated as a per-user singleton like `UserProfile`: the row id is the
  * account id when one is known, and readers take the newest live row. The
@@ -536,6 +611,9 @@ export interface UserSettings {
   sugarExtendedBuffer: number; // g
   optionalTrackers: { sugar: boolean; potassium: boolean };
   dayStartHour: number; // 0-23
+  // First day of the displayed week, 0-6 (JS getDay; 1 = Monday). Absent on
+  // rows written before the setting existed: readers keep their own value.
+  weekStartsOn?: number;
   liquidPresets: SyncedLiquidPreset[];
   primaryRegion: string; // ISO code, "" = not specified
   secondaryRegion: string;

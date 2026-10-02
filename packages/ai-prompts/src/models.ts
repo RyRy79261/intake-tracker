@@ -9,10 +9,10 @@
  *
  * Which tier a route uses is a deliberate choice:
  *   - fast (Haiku 4.5): bug-report restructuring only — cheap prose tidying.
- *   - quality (Sonnet 5): food parse, voice parse, caffeine lookup, nutrient
- *     analysis and fast insights. These are high-volume nutrition estimates
- *     backed by web_search, where Sonnet 5's accuracy is near Opus at about
- *     half the price.
+ *   - quality (Sonnet 5.5): food parse, voice parse, caffeine lookup,
+ *     nutrient analysis and fast insights. These are high-volume nutrition
+ *     estimates, most backed by web_search, where Sonnet's accuracy is near
+ *     Opus at about half the price.
  *   - premium (Opus 5.5): medicine search, interaction checks, titration
  *     warnings and deep insights — the medication-safety routes, where the
  *     answer matters more than the per-call cost.
@@ -22,14 +22,29 @@ export const CLAUDE_MODELS = {
   // Claude Haiku 4.5. Still accepts sampling parameters, forced tool_choice
   // and `budget_tokens` thinking, but NOT `output_config.effort` (a 400).
   fast: "claude-haiku-4-5-20251001" as const,
-  // Claude Sonnet 5. Two behaviours differ from the Sonnet 4.6 this
-  // replaced, and both are load-bearing for the routes below:
+  // Claude Sonnet 5.5 (same price, context and tokenizer as the Sonnet 5 it
+  // replaced). What the quality routes are built around:
+  //   - Forced `tool_choice` ({type:"tool"} / {type:"any"}) returns a 400.
+  //     Routes send `auto` + `strict: true` tools, say in the prompt when
+  //     the tool applies, and retry once when no call comes back.
+  //   - Thinking can't be turned off: `{type:"disabled"}` and
+  //     `budget_tokens` are both a 400 (`{type:"between_tools"}` is the
+  //     lowest setting). Adaptive thinking runs when `thinking` is omitted
+  //     and its tokens count against `max_tokens`, so budgets need headroom.
+  //   - Effort is recalibrated against Sonnet 5 and defaults to `high`.
+  //     Every quality request sets `output_config.effort` itself: `medium`
+  //     where the user is waiting on a quick parse, `high` for analysis.
+  //   - A thinking block is signed over the conversation before it. A retry
+  //     turn must replay the assistant content unchanged and only append —
+  //     an edited system prompt, tool list or earlier message can be a 400.
+  //   - Longer notes between tool calls come back as `thinking` blocks
+  //     (empty text by default), so read `tool_use` blocks by type and never
+  //     assume a `text` block exists.
   //   - `temperature`/`top_p`/`top_k` return a 400 when set to anything but
   //     the default — `temperature: 0` included.
-  //   - Adaptive thinking is ON when `thinking` is omitted, and those tokens
-  //     count against `max_tokens`, so budgets need headroom for it.
-  // Forced tool_choice is still accepted (on the Claude API).
-  quality: "claude-sonnet-5" as const,
+  //   - It declines in more categories (`stop_reason: "refusal"`), which
+  //     `_shared/claude-call.ts` turns into a clear 422.
+  quality: "claude-sonnet-5-5" as const,
   // Claude Opus 5.5. Differs from the Opus 5 this replaced in ways the
   // premium routes are built around:
   //   - Forced `tool_choice` ({type:"tool"} / {type:"any"}) returns a 400.
@@ -49,6 +64,7 @@ export type ClaudeModelId = (typeof CLAUDE_MODELS)[keyof typeof CLAUDE_MODELS];
  * future tier bump onto such a model degrades to `auto` instead of failing.
  */
 const REJECTS_FORCED_TOOL_CHOICE: ReadonlySet<string> = new Set([
+  "claude-sonnet-5-5",
   "claude-opus-5-5",
   "claude-fable-5-1",
   "claude-mythos-5-1",
@@ -59,8 +75,8 @@ export function rejectsForcedToolChoice(model: string): boolean {
 }
 
 /**
- * Dynamic-filtering web search. Supported on Opus 4.6+ and Sonnet 4.6+ —
- * every tier that declares it (quality and premium). It filters results in a
+ * Dynamic-filtering web search. Supported on Opus 4.6+ and Sonnet 4.6+
+ * (Sonnet 5.5 and Opus 5.5 included) — every tier that declares it (quality and premium). It filters results in a
  * server-side code-execution step before they enter the context, so the
  * response can carry extra server-tool blocks; routes that replay a prior
  * assistant turn must keep declaring this tool. An errored search comes back

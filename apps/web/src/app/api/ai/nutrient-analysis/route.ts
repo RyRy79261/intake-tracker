@@ -5,7 +5,7 @@ import { sanitizeForAI } from "@/lib/security";
 import { getClaudeClientForUser, CLAUDE_MODELS, WEB_SEARCH_TOOL } from "@/app/api/ai/_shared/claude-client";
 import { parseJsonBody, zodErrorResponse } from "@/app/api/_shared/validation";
 import { createRateLimiter, rateLimitKey } from "@/app/api/_shared/rate-limit";
-import { requestToolCall } from "@/app/api/ai/_shared/claude-call";
+import { AiRefusalError, requestToolCall } from "@/app/api/ai/_shared/claude-call";
 import { aiErrorResponse } from "@/app/api/ai/_shared/ai-error-response";
 import {
   SYSTEM_PROMPT,
@@ -151,21 +151,28 @@ export const POST = withAuth(async ({ request, auth }) => {
 
     const userMessage = `Below are the user's logged food and drink entries from the last ${windowDays} days. Some have approximate portions (in grams) shown in parentheses; many will not. Use web_search if you need to look up specific branded or regional items, then call the report_nutrient_analysis tool with your synthesis.${focusLine}${contextBlock}\n\nFoods:\n${foodListText}`;
 
-    // Claude may finish with prose if web_search satisfied it;
-    // requestToolCall then forces the structured tool on a second turn,
-    // carrying the prior context so the earlier server_tool_use blocks
-    // remain valid. No sampling parameters: Sonnet 5 rejects a non-default
-    // `temperature` with a 400.
+    // Quality tier (Claude Sonnet 5.5): no forced tool_choice and no
+    // sampling parameters (each a 400). `auto` with a strict result tool;
+    // if the model finishes with prose once web_search has satisfied it,
+    // requestToolCall asks for the tool on a second, unforced turn that
+    // appends to the prior context, so the earlier server_tool_use and
+    // thinking blocks remain valid.
     const { toolUse: toolBlock, responses } = await requestToolCall(
       client,
       {
         model: CLAUDE_MODELS.quality,
-        // Headroom for adaptive thinking (on by default on Sonnet 5), which
-        // shares this ceiling with the search traffic and the tool call.
-        max_tokens: 8192,
-        output_config: { effort: "medium" },
+        // Adaptive thinking (always on for this model) shares this ceiling
+        // with the search traffic and the tool call, and high effort thinks
+        // more. A budget that runs out costs a whole second call the
+        // deadline has no room for, so the ceiling is generous; a short
+        // answer still bills short.
+        max_tokens: 16000,
+        // A synthesis over weeks of food, not a quick lookup: high. It has
+        // the longest deadline of the quality routes to pay for it.
+        output_config: { effort: "high" },
         system: SYSTEM_PROMPT,
         tools: [WEB_SEARCH_TOOL, NUTRIENT_ANALYSIS_TOOL],
+        tool_choice: { type: "auto" },
         messages: [{ role: "user", content: userMessage }],
       },
       {
@@ -175,6 +182,7 @@ export const POST = withAuth(async ({ request, auth }) => {
         retryInstruction:
           "Now return your nutrient bias findings via the report_nutrient_analysis tool.",
         retryMaxTokens: 4096,
+        forceOnRetry: false,
       },
     );
 
@@ -203,6 +211,17 @@ export const POST = withAuth(async ({ request, auth }) => {
 
     return NextResponse.json(validated.data);
   } catch (error) {
+    // The shared refusal message tells the user to enter the value by hand,
+    // which means nothing for an analysis.
+    if (error instanceof AiRefusalError) {
+      return NextResponse.json(
+        {
+          error: "The AI declined to analyze this food log.",
+          code: "AI_REFUSED",
+        },
+        { status: 422 },
+      );
+    }
     const mapped = aiErrorResponse(error);
     if (mapped) return mapped;
     console.error("AI nutrient-analysis error:", error);

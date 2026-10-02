@@ -808,14 +808,15 @@ describe("composable-entry-service", () => {
 
   describe("syncLiquidEntrySubstances keeps the drink volume separate from the water", () => {
     async function logSpirit() {
-      // 45 ml at 60% water → a 27 ml water row; the alcohol stays at 45 ml.
+      // A legacy 45 ml spirit whose water row booked only the non-alcohol
+      // share (27 ml); the alcohol stays at 45 ml.
       const drink = await logDrink({
         volumeMl: 45,
         description: "Vodka",
         abvPercent: 40,
-        waterContentPercent: 60,
       });
       if (!drink.success) throw new Error("logDrink failed");
+      await db.intakeRecords.update(drink.data.waterIntakeId, { amount: 27 });
       return drink.data;
     }
 

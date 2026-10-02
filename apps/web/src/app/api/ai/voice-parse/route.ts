@@ -1,15 +1,17 @@
 import { NextResponse } from "next/server";
-import { z } from "zod";
 import { withAuth } from "@/lib/auth-middleware";
 import { sanitizeForAI } from "@/lib/security";
 import { getClaudeClientForUser, CLAUDE_MODELS, WEB_SEARCH_TOOL } from "@/app/api/ai/_shared/claude-client";
 import { parseJsonBody, zodErrorResponse } from "@/app/api/_shared/validation";
 import { createRateLimiter, rateLimitKey } from "@/app/api/_shared/rate-limit";
-import { requestToolCall } from "@/app/api/ai/_shared/claude-call";
+import { hasCompletedWebSearch, requestToolCall } from "@/app/api/ai/_shared/claude-call";
 import { aiErrorResponse } from "@/app/api/ai/_shared/ai-error-response";
-import { SYSTEM_PROMPT } from "@intake/ai-prompts/voice-parse";
-import { PARSE_TOOL, extractVoiceItems } from "@/app/api/ai/voice-parse/schema";
-import { REFRESHABLE_KINDS } from "@/lib/voice-types";
+import { SYSTEM_PROMPT, buildRefreshMessage, buildUserMessage } from "@intake/ai-prompts/voice-parse";
+import {
+  PARSE_TOOL,
+  ParseRequestSchema,
+  extractVoiceItems,
+} from "@/app/api/ai/voice-parse/schema";
 
 /**
  * Parse a voice transcript into a heterogeneous list of health record items
@@ -22,6 +24,12 @@ import { REFRESHABLE_KINDS } from "@/lib/voice-types";
  * `stop_reason` (a refusal is a clear 422, a max_tokens cut-off is retried
  * with a bigger budget), record usage for every upstream response, and share
  * one route-wide deadline.
+ *
+ * Quality tier (Claude Sonnet 5.5): no forced tool_choice and no sampling
+ * parameters (each a 400). The request is `auto`, the prompt says to always
+ * call the tool, and the retry turn is unforced. The tool is not strict: the
+ * API can't compile its schema (see PARSE_TOOL), so the items are checked
+ * with Zod here instead.
  */
 
 // Vercel function limit. The shared deadline stops short of it so a slow
@@ -32,18 +40,11 @@ const DEADLINE_MS = 50_000;
 
 /**
  * Characters of transcript sent to the model — about two minutes of speech.
- * Longer transcripts are accepted (up to MAX_REQUEST_CHARS) and cut to this,
+ * Longer transcripts are accepted (up to MAX_REQUEST_CHARS in schema.ts) and cut to this,
  * with `transcriptTruncated` in the response so the review panel can say the
  * tail was not parsed, rather than silently losing it.
  */
 const MAX_TRANSCRIPT_CHARS = 2000;
-const MAX_REQUEST_CHARS = 8000;
-
-const ParseRequestSchema = z.object({
-  transcript: z.string().min(1).max(MAX_REQUEST_CHARS),
-  /** Set by a review row's refresh: re-look-up one item of this kind. */
-  kind: z.enum(REFRESHABLE_KINDS).optional(),
-});
 
 const rateLimiter = createRateLimiter(20);
 
@@ -84,34 +85,76 @@ export const POST = withAuth(async ({ request, auth }) => {
 
     console.log(`[AUDIT] voice-parse from user: ${auth.userId}`);
 
-    // A row refresh means the first parse got this item wrong — usually a
-    // misheard name, so its values were looked up for the wrong thing. The
-    // model must not trust them, and searches the web for the corrected item.
+    // The client's clock (local time, zone, offset) leads the user turn, so
+    // the model can date "yesterday at 8pm". It is validated to strict shapes
+    // above and is not PII; nothing else about the device is sent. An older
+    // cached client sends no clock: the message then states no time and asks
+    // for relative times only.
+    //
+    // A review row's refresh (`kind` set) is different: the first parse got
+    // that item wrong, so the model is told not to trust the old values and
+    // to check the corrected item on the web.
     const { kind } = parsed.data;
     const userMessage = kind
-      ? `The user is correcting one ${kind} item from an earlier recording. The values given for it before were WRONG — most likely the speech-to-text misheard the name, so they were looked up for the wrong thing. Do not reuse or trust them. The corrected description is:\n"""\n${sanitized}\n"""\n\nUse web_search first to look up authoritative values for exactly this item (the manufacturer, a retailer listing, or a national food database), then return exactly one item of kind "${kind}" via the parse_voice_log tool. Keep any amount stated in the description.`
-      : `Voice transcript:\n"""\n${sanitized}\n"""\n\nExtract every distinct health log item and return them via the parse_voice_log tool.`;
+      ? buildRefreshMessage(sanitized, kind)
+      : buildUserMessage(sanitized, parsed.data.now);
 
-    const { toolUse: toolBlock } = await requestToolCall(
-      client,
-      {
-        model: CLAUDE_MODELS.quality,
-        // Headroom for Sonnet 5 adaptive thinking, plus the search traffic on
-        // a refresh.
-        max_tokens: kind ? 8192 : 4096,
-        system: SYSTEM_PROMPT,
-        // web_search stays declared on the retry turn too, since the replayed
-        // assistant turn may hold server_tool_use blocks.
-        tools: kind ? [WEB_SEARCH_TOOL, PARSE_TOOL] : [PARSE_TOOL],
-        messages: [{ role: "user", content: userMessage }],
-      },
-      {
-        usage: { userId: auth.userId!, resolved, route: "/api/ai/voice-parse" },
-        deadline: Date.now() + DEADLINE_MS,
-        toolName: PARSE_TOOL.name,
-        retryInstruction: "Return the structured items via the parse_voice_log tool now.",
-      },
-    );
+    const params = {
+      model: CLAUDE_MODELS.quality,
+      // Headroom for adaptive thinking, which is always on for this model
+      // and shares the ceiling with the tool call — plus the search traffic
+      // on a refresh.
+      max_tokens: kind ? 8192 : 4096,
+      // The user has just spoken and is waiting: medium, not the default
+      // high.
+      output_config: { effort: "medium" as const },
+      system: SYSTEM_PROMPT,
+      // web_search stays declared on the retry turn too, since the replayed
+      // assistant turn may hold server_tool_use blocks.
+      tools: kind ? [WEB_SEARCH_TOOL, PARSE_TOOL] : [PARSE_TOOL],
+      tool_choice: { type: "auto" as const },
+      messages: [{ role: "user" as const, content: userMessage }],
+    };
+    const callOptions = {
+      usage: { userId: auth.userId!, resolved, route: "/api/ai/voice-parse" },
+      deadline: Date.now() + DEADLINE_MS,
+      toolName: PARSE_TOOL.name,
+      retryInstruction: "Return the structured items via the parse_voice_log tool now.",
+      forceOnRetry: false,
+    };
+
+    let { toolUse: toolBlock, responses } = await requestToolCall(client, params, callOptions);
+
+    // Declaring web_search does not make the model use it. A refresh that
+    // answered from memory is just another unverified guess, so it gets one
+    // fresh try that insists on a search, and is refused if that fails too.
+    if (kind && !hasCompletedWebSearch(responses)) {
+      ({ toolUse: toolBlock, responses } = await requestToolCall(
+        client,
+        {
+          ...params,
+          // A fresh turn, not a continuation: the unsourced answer is being
+          // thrown away, so there is nothing to carry over.
+          messages: [
+            {
+              role: "user",
+              content: `${userMessage} You must call the web_search tool before answering — values from memory are not acceptable here.`,
+            },
+          ],
+        },
+        callOptions,
+      ));
+      if (!hasCompletedWebSearch(responses)) {
+        console.warn("[voice-parse] refresh rejected: no web search completed");
+        return NextResponse.json(
+          {
+            error: "Could not check this item against a web source. Try again, or enter the values yourself.",
+            code: "SEARCH_REQUIRED",
+          },
+          { status: 422 },
+        );
+      }
+    }
 
     if (!toolBlock) {
       return NextResponse.json(
@@ -120,7 +163,9 @@ export const POST = withAuth(async ({ request, auth }) => {
       );
     }
 
-    const extracted = extractVoiceItems(toolBlock.input);
+    const extracted = extractVoiceItems(toolBlock.input, {
+      absoluteTimes: parsed.data.now !== undefined,
+    });
     if (!extracted.ok) {
       console.error(
         "[VALIDATION] voice-parse: tool output had no usable items:",

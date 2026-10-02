@@ -11,9 +11,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@intake/ui/select";
-import { Loader2, Sparkles } from "lucide-react";
+import { Sparkles } from "lucide-react";
+import { FieldScope, Pip } from "@/components/domain-scope";
+import { Spinner } from "@intake/ui/spinner";
 import { cn } from "@/lib/utils";
-import { CARD_THEMES } from "@/lib/card-themes";
 import { RecentEntriesList, InlineEditFormShell } from "@/components/recent-entries-list";
 import { parseIntakeWithAI } from "@/lib/ai-client";
 import {
@@ -53,12 +54,10 @@ import { type EatingRecord } from "@/lib/db";
 import {
   getCurrentDateTimeLocal,
   dateTimeLocalToTimestamp,
-  formatDateTime,
 } from "@/lib/date-utils";
 import { useOptionalTrackerEnabled } from "@/lib/optional-trackers";
-import { waterContentPercentFromAbv } from "@intake/core/alcohol";
+import { useFieldId, useOnLogged } from "@/components/log-form-scope";
 
-const theme = CARD_THEMES.eating;
 
 // ─── Sodium entry ──────────────────────────────────────────────────
 // Salt is not sodium. The field takes an amount of salt, MSG or sodium in mg
@@ -130,6 +129,8 @@ function SodiumUnitSelect({
 }
 
 export function FoodSection() {
+  const onLogged = useOnLogged();
+  const fid = useFieldId();
   const { toast } = useToast();
   const showAi = useAuthGate();
   const addComposableEntry = useAddComposableEntry();
@@ -205,10 +206,7 @@ export function FoodSection() {
   // Only a drink with a volume can go through logDrink.
   const saveAsDrink = parsedDrink !== null && calculatedWaterMl > 0;
   // For a drink the field holds the drink's full volume (the parse prompt
-  // reports it that way); an alcoholic drink's ethanol is not water, so
-  // logDrink books only the non-alcohol share.
-  const drinkWaterPercent = waterContentPercentFromAbv(parsedDrink?.abvPercent);
-  const drinkWaterMl = Math.max(1, Math.round((calculatedWaterMl * drinkWaterPercent) / 100));
+  // reports it that way), and logDrink books all of it as fluid intake.
 
   // ─── Recent eating records ────────────────────────────────────────
   const recentRecords = useEatingRecords(5);
@@ -462,7 +460,6 @@ export function FoodSection() {
       if (saveAsDrink && parsedDrink) {
         await logDrink({
           volumeMl: calculatedWaterMl,
-          waterContentPercent: drinkWaterPercent,
           description: foodText.trim() || "Drink",
           ...(parsedDrink.caffeineMg !== null && parsedDrink.caffeineMg > 0 && {
             caffeineMg: parsedDrink.caffeineMg,
@@ -483,6 +480,7 @@ export function FoodSection() {
           timestamp,
         });
         toast({ title: "Logged", description: "Drink recorded", variant: "success" });
+        onLogged();
         resetForm();
         return;
       }
@@ -550,6 +548,7 @@ export function FoodSection() {
         description: note ? "Meal with details recorded" : "Eating event recorded",
         variant: "success",
       });
+      onLogged();
       resetForm();
     } catch {
       toast({
@@ -561,6 +560,7 @@ export function FoodSection() {
       setIsSubmitting(false);
     }
   }, [
+    onLogged,
     isSubmitting,
     canSave,
     saveAsDrink,
@@ -577,7 +577,6 @@ export function FoodSection() {
     sugarEnabled,
     potassiumEnabled,
     calculatedWaterMl,
-    drinkWaterPercent,
     aiPopulated,
     showTimeInput,
     customTime,
@@ -600,14 +599,14 @@ export function FoodSection() {
   return (
     <>
       {/* "What I ate" text input — doubles as AI parse input when signed in */}
-      <div className="relative mt-3">
+      <div className="relative">
         <Input
           value={foodText}
           onChange={(e) => setFoodText(e.target.value)}
           onKeyDown={showAi ? handleKeyDown : undefined}
           placeholder="What I ate..."
           aria-label={showAi ? "Describe food for AI nutritional parsing" : "Describe what you ate"}
-          className={cn("h-10", showAi && "pr-10")}
+          className={cn(showAi && "pr-10")}
           disabled={isParsing}
         />
         {showAi && (
@@ -618,12 +617,12 @@ export function FoodSection() {
             aria-label="Parse food with AI"
             className={cn(
               "absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-md transition-colors",
-              "text-muted-foreground hover:text-orange-600 dark:hover:text-orange-400",
+              "text-muted-foreground hover:text-sodium",
               "disabled:opacity-50 disabled:cursor-not-allowed"
             )}
           >
             {isParsing ? (
-              <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
+              <Spinner className="size-4" />
             ) : (
               <Sparkles className="w-4 h-4" />
             )}
@@ -632,39 +631,41 @@ export function FoodSection() {
       </div>
 
       {/* Always-visible detail fields */}
-      <div className="space-y-3 mt-3">
+      <div className="space-y-3">
         {/* Weight in grams */}
         <div className="space-y-1">
-          <Label htmlFor="eating-grams" className="text-sm">
+          <Label htmlFor={fid("eating-grams")} className="text-[0.8125rem] text-muted-foreground">
             Weight (g){" "}
-            <span className="text-muted-foreground font-normal">(optional)</span>
+            <span className="font-normal">(optional)</span>
           </Label>
           <Input
-            id="eating-grams"
+            id={fid("eating-grams")}
             type="number"
             min="1"
             max="10000"
             placeholder="e.g. 250"
             value={detailGrams}
             onChange={(e) => setDetailGrams(e.target.value)}
+            className="num"
           />
         </div>
 
         {/* Sodium section */}
         <div className="space-y-1">
-          <Label htmlFor="eating-sodium" className="text-sm">
+          <Label htmlFor={fid("eating-sodium")} className="text-[0.8125rem] text-muted-foreground">
+            <Pip />
             Sodium
           </Label>
           <div className="flex gap-2">
             <Input
-              id="eating-sodium"
+              id={fid("eating-sodium")}
               type="number"
               min="0"
               step="any"
               placeholder={sodiumUnit}
               value={sodiumMg}
               onChange={(e) => setSodiumMg(e.target.value)}
-              className="flex-1 min-w-0"
+              className="num flex-1 min-w-0"
             />
             <SodiumSourceSelect
               value={sodiumSource}
@@ -688,55 +689,61 @@ export function FoodSection() {
 
         {/* Sugar section — optional tracker */}
         {sugarEnabled && (
-          <div className="space-y-1" data-testid="eating-sugar-field">
-            <Label htmlFor="eating-sugar" className="text-sm">
+          <FieldScope domain="sugar" className="space-y-1" data-testid="eating-sugar-field">
+            <Label htmlFor={fid("eating-sugar")} className="text-[0.8125rem] text-muted-foreground">
+              <Pip />
               Sugar (g){" "}
-              <span className="text-muted-foreground font-normal">(optional)</span>
+              <span className="font-normal">(optional)</span>
             </Label>
             <Input
-              id="eating-sugar"
+              id={fid("eating-sugar")}
               type="number"
               min="0"
               placeholder="g"
               value={sugarG}
               onChange={(e) => setSugarG(e.target.value)}
+              className="num"
             />
-          </div>
+          </FieldScope>
         )}
 
         {/* Potassium section — optional tracker */}
         {potassiumEnabled && (
-          <div className="space-y-1" data-testid="eating-potassium-field">
-            <Label htmlFor="eating-potassium" className="text-sm">
+          <FieldScope domain="ink" className="space-y-1" data-testid="eating-potassium-field">
+            <Label htmlFor={fid("eating-potassium")} className="text-[0.8125rem] text-muted-foreground">
+              <Pip />
               Potassium (mg){" "}
-              <span className="text-muted-foreground font-normal">(optional)</span>
+              <span className="font-normal">(optional)</span>
             </Label>
             <Input
-              id="eating-potassium"
+              id={fid("eating-potassium")}
               type="number"
               min="0"
               placeholder="mg"
               value={potassiumMg}
               onChange={(e) => setPotassiumMg(e.target.value)}
+              className="num"
             />
-          </div>
+          </FieldScope>
         )}
 
         {/* Water content */}
-        <div className="space-y-1">
-          <Label htmlFor="eating-water" className="text-sm">
+        <FieldScope domain="water" className="space-y-1">
+          <Label htmlFor={fid("eating-water")} className="text-[0.8125rem] text-muted-foreground">
+            <Pip />
             Water content (ml){" "}
-            <span className="text-muted-foreground font-normal">(optional)</span>
+            <span className="font-normal">(optional)</span>
           </Label>
           <Input
-            id="eating-water"
+            id={fid("eating-water")}
             type="number"
             min="0"
             placeholder="ml"
             value={waterMl}
             onChange={(e) => setWaterMl(e.target.value)}
+            className="num"
           />
-        </div>
+        </FieldScope>
 
         <CollapsibleTimeInputControlled
           value={customTime}
@@ -750,10 +757,10 @@ export function FoodSection() {
         <Button
           onClick={handleDetailSubmit}
           disabled={addEatingMutation.isPending || isSubmitting || !canSave}
-          className={cn("w-full mt-2", theme.buttonBg)}
+          className="w-full"
         >
           {addEatingMutation.isPending || isSubmitting ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
+            <Spinner className="size-4" />
           ) : (
             "Record with details"
           )}
@@ -770,7 +777,7 @@ export function FoodSection() {
               ? ` with ${Math.round(parsedDrink.caffeineMg)} mg caffeine`
               : ""}
             {parsedDrink.abvPercent !== null && parsedDrink.abvPercent > 0
-              ? ` (${parsedDrink.abvPercent}% ABV, ${drinkWaterMl} ml counted as water)`
+              ? ` (${parsedDrink.abvPercent}% ABV)`
               : ""}
             .
           </p>
@@ -784,53 +791,26 @@ export function FoodSection() {
         onDelete={handleDelete}
         onEdit={openEdit}
         editingId={editingRecord?.id ?? null}
-        borderColor={theme.border}
-        renderEntry={(record) => {
-          const sodium = record.groupId ? groupSodiumMap.get(record.groupId) : undefined;
+        renderLabel={(record) => {
           const sugar = sugarEnabled && record.groupId ? groupSugarMap.get(record.groupId) : undefined;
           const potassium = potassiumEnabled && record.groupId ? groupPotassiumMap.get(record.groupId) : undefined;
-          const hasMetrics = Boolean(sodium || sugar || potassium || record.grams);
           return (
-            <div className="flex flex-col gap-1 min-w-0 w-full">
-              {/* Row 1: when + note */}
-              <div className="flex items-center gap-2 min-w-0">
-                <span className="text-muted-foreground shrink-0">
-                  {formatDateTime(record.timestamp)}
-                </span>
-                {record.note && (
-                  <span className="text-xs text-muted-foreground/70 truncate min-w-0">
-                    {record.note}
-                  </span>
-                )}
-              </div>
-              {/* Row 2: nutrition metrics */}
-              {hasMetrics && (
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 min-w-0">
-                  {sodium ? (
-                    <span className="text-xs font-medium text-orange-600 dark:text-orange-400">
-                      {sodium}mg Na
-                    </span>
-                  ) : null}
-                  {sugar ? (
-                    <span className="text-xs font-medium text-pink-600 dark:text-pink-400">
-                      {sugar}g sugar
-                    </span>
-                  ) : null}
-                  {potassium ? (
-                    <span className="text-xs font-medium text-purple-600 dark:text-purple-400">
-                      {potassium}mg K
-                    </span>
-                  ) : null}
-                  {record.grams && (
-                    <span className="text-xs font-medium">{record.grams}g</span>
-                  )}
-                </div>
-              )}
-            </div>
+            <>
+              {record.note || "Food"}
+              {sugar ? (
+                <span className="src" style={{ color: "hsl(var(--sugar))" }}>{sugar}g sugar</span>
+              ) : null}
+              {potassium ? <span className="src">{potassium}mg K</span> : null}
+              {record.grams ? <span className="src num">{record.grams}g</span> : null}
+            </>
           );
         }}
+        renderValue={(record) => {
+          const sodium = record.groupId ? groupSodiumMap.get(record.groupId) : undefined;
+          return sodium ? <span className="text-sodium">{sodium}mg Na</span> : null;
+        }}
         renderEditForm={() => (
-          <InlineEditFormShell timestamp={editTimestamp} onTimestampChange={setEditTimestamp} note={editNote} onNoteChange={setEditNote} onSave={() => handleEditSubmit()} onCancel={closeEdit} buttonClassName={theme.buttonBg}>
+          <InlineEditFormShell timestamp={editTimestamp} onTimestampChange={setEditTimestamp} note={editNote} onNoteChange={setEditNote} onSave={() => handleEditSubmit()} onCancel={closeEdit}>
             {editPrefill !== "ready" && (
               <p className="text-xs text-muted-foreground" role="status">
                 {editPrefill === "loading"
@@ -839,9 +819,9 @@ export function FoodSection() {
               </p>
             )}
             <div className="space-y-1">
-              <Label htmlFor="edit-eating-grams" className="text-xs text-muted-foreground">Weight (g)</Label>
+              <Label htmlFor={fid("edit-eating-grams")} className="text-xs text-muted-foreground">Weight (g)</Label>
               <Input
-                id="edit-eating-grams"
+                id={fid("edit-eating-grams")}
                 type="number"
                 placeholder="optional"
                 value={editGrams}
@@ -850,10 +830,10 @@ export function FoodSection() {
               />
             </div>
             <div className="space-y-1">
-              <Label htmlFor="edit-eating-sodium" className="text-xs text-muted-foreground">Sodium</Label>
+              <Label htmlFor={fid("edit-eating-sodium")} className="text-xs text-muted-foreground">Sodium</Label>
               <div className="flex gap-2">
                 <Input
-                  id="edit-eating-sodium"
+                  id={fid("edit-eating-sodium")}
                   type="number"
                   min="0"
                   step="any"
@@ -878,9 +858,9 @@ export function FoodSection() {
             </div>
             {sugarEnabled && (
               <div className="space-y-1">
-                <Label htmlFor="edit-eating-sugar" className="text-xs text-muted-foreground">Sugar (g)</Label>
+                <Label htmlFor={fid("edit-eating-sugar")} className="text-xs text-muted-foreground">Sugar (g)</Label>
                 <Input
-                  id="edit-eating-sugar"
+                  id={fid("edit-eating-sugar")}
                   type="number"
                   min="0"
                   placeholder="optional"
@@ -892,9 +872,9 @@ export function FoodSection() {
             )}
             {potassiumEnabled && (
               <div className="space-y-1">
-                <Label htmlFor="edit-eating-potassium" className="text-xs text-muted-foreground">Potassium (mg)</Label>
+                <Label htmlFor={fid("edit-eating-potassium")} className="text-xs text-muted-foreground">Potassium (mg)</Label>
                 <Input
-                  id="edit-eating-potassium"
+                  id={fid("edit-eating-potassium")}
                   type="number"
                   min="0"
                   placeholder="optional"
@@ -905,9 +885,9 @@ export function FoodSection() {
               </div>
             )}
             <div className="space-y-1">
-              <Label htmlFor="edit-eating-water" className="text-xs text-muted-foreground">Water content (ml)</Label>
+              <Label htmlFor={fid("edit-eating-water")} className="text-xs text-muted-foreground">Water content (ml)</Label>
               <Input
-                id="edit-eating-water"
+                id={fid("edit-eating-water")}
                 type="number"
                 min="0"
                 placeholder="optional"

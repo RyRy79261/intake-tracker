@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeAll } from "vitest";
-import { screen } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 
 import { SummaryTab } from "@/components/analytics/summary-tab";
 import { renderWithFixtures } from "@/__tests__/react-test-utils";
@@ -27,6 +27,12 @@ beforeAll(() => {
 const DAY_MS = 86_400_000;
 // "All" preset: start 0 makes the per-day divisor fall back to active days.
 const RANGE: TimeRange = { start: 0, end: Date.now() + DAY_MS };
+
+/** The value line of the KPI tile with this label (number + unit). */
+async function kpiValue(label: string): Promise<HTMLElement> {
+  const tile = (await screen.findByText(label)).closest<HTMLElement>('[data-testid="kpi"]')!;
+  return within(tile).getByTestId("kpi-value");
+}
 
 describe("SummaryTab", () => {
   it("shows the no-data state when nothing is logged for the period", async () => {
@@ -59,7 +65,7 @@ describe("SummaryTab", () => {
     // Average of 120 and 130 systolic / 80 and 84 diastolic = 125/82.
     expect(await screen.findByText("125/82")).toBeInTheDocument();
     // Average weight of 80 and 79 = 79.5 kg.
-    expect(await screen.findByText("79.5 kg")).toBeInTheDocument();
+    expect(await kpiValue("Avg Weight")).toHaveTextContent("79.5 kg");
   });
 
   it("aggregates intake totals into the water and sodium KPI subtitles", async () => {
@@ -105,7 +111,7 @@ describe("SummaryTab", () => {
       },
     });
 
-    expect(await screen.findByText("2000 ml")).toBeInTheDocument();
+    expect(await kpiValue("Water Intake")).toHaveTextContent("2,000 ml");
     expect(screen.queryByText(/Average daily water .* is below/)).not.toBeInTheDocument();
   });
 

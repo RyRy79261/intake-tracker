@@ -33,6 +33,8 @@ jobs:
               - 'apps/web/src/__tests__/migration/**'
               - 'apps/web/src/__tests__/integrity/**'
               - 'apps/web/src/lib/backup-service.ts'
+              - 'apps/web/src/__tests__/bench/**'
+              - 'apps/web/benchmarks/**'
 
   # Supply-chain gate. Runs *before* every job that installs or executes
   # dependency code (they all `needs: [security]`), so a known-malicious or
@@ -457,8 +459,10 @@ jobs:
           node-version: '22'
           cache: 'pnpm'
       - run: pnpm install --frozen-lockfile
+      # Each bench prints its stored baseline (benchmarks/<name>.json, refreshed
+      # with `pnpm --filter @intake/web bench:ci`) next to this run's result.
       - name: Run benchmarks
-        run: pnpm --filter @intake/web exec vitest bench --run --compare benchmarks/results.json
+        run: pnpm --filter @intake/web exec vitest bench --run --reporter=verbose
 
   ci-pass:
     if: always()

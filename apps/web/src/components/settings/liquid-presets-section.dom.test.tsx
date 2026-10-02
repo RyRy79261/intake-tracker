@@ -8,16 +8,19 @@ import { renderWithFixtures } from "@/__tests__/react-test-utils";
 import { useSettingsStore } from "@/stores/settings-store";
 import type { LiquidPreset } from "@/stores/settings-store";
 
-/** Expands the collapsible section so its preset list is in the DOM. */
-async function expandSection(user: ReturnType<typeof userEvent.setup>) {
-  await user.click(screen.getByRole("button", { name: /liquid presets/i }));
-}
-
-describe("LiquidPresetsSection", () => {
-  it("lists the default presets from the settings store", async () => {
-    const user = userEvent.setup();
+describe("LiquidPresetsSection (Drink presets page)", () => {
+  it("groups the presets by the Liquids tab they appear on", async () => {
     await renderWithFixtures(<LiquidPresetsSection />);
-    await expandSection(user);
+
+    const coffee = screen.getByRole("region", { name: "Coffee presets" });
+    const alcohol = screen.getByRole("region", { name: "Alcohol presets" });
+    expect(within(coffee).getByText("Espresso")).toBeInTheDocument();
+    expect(within(alcohol).getByText("Beer")).toBeInTheDocument();
+    expect(within(coffee).queryByText("Beer")).not.toBeInTheDocument();
+  });
+
+  it("lists the default presets from the settings store", async () => {
+    await renderWithFixtures(<LiquidPresetsSection />);
 
     // DEFAULT_LIQUID_PRESETS includes Espresso (caffeine) and Beer (alcohol).
     expect(await screen.findByText("Espresso")).toBeInTheDocument();
@@ -32,7 +35,6 @@ describe("LiquidPresetsSection", () => {
   it("adds a custom preset that is written to the settings store", async () => {
     const user = userEvent.setup();
     await renderWithFixtures(<LiquidPresetsSection />);
-    await expandSection(user);
 
     await user.click(await screen.findByRole("button", { name: /add preset/i }));
 
@@ -47,19 +49,16 @@ describe("LiquidPresetsSection", () => {
   });
 
   it("labels ABV as a percentage in the preset summary", async () => {
-    const user = userEvent.setup();
     await renderWithFixtures(<LiquidPresetsSection />);
-    await expandSection(user);
 
     // Default Beer preset: alcoholPer100ml 5 means 5% ABV, not 5 std drinks.
-    expect(await screen.findByText("5% ABV")).toBeInTheDocument();
+    expect(await screen.findByText(/^5% ABV$/)).toBeInTheDocument();
     expect(screen.queryByText(/std alc/)).not.toBeInTheDocument();
   });
 
   it("clears a nutrient when the edit form empties it", async () => {
     const user = userEvent.setup();
     await renderWithFixtures(<LiquidPresetsSection />);
-    await expandSection(user);
 
     await user.click(await screen.findByRole("button", { name: "Edit Coffee" }));
     await user.clear(screen.getByLabelText("Caffeine/100ml"));
@@ -75,7 +74,6 @@ describe("LiquidPresetsSection", () => {
   it("saves and summarises sugar per 100 ml", async () => {
     const user = userEvent.setup();
     await renderWithFixtures(<LiquidPresetsSection />);
-    await expandSection(user);
 
     await user.click(await screen.findByRole("button", { name: /add preset/i }));
     await user.type(await screen.findByPlaceholderText(/beverage name/i), "Cola");
@@ -90,12 +88,10 @@ describe("LiquidPresetsSection", () => {
   });
 
   it("summarises a preset's sodium as sodium, not salt", async () => {
-    const user = userEvent.setup();
     const broth: LiquidPreset = {
       id: "custom-broth",
       name: "Broth",
       tab: "beverage",
-      waterContentPercent: 95,
       defaultVolumeMl: 250,
       saltPer100ml: 350,
       isDefault: false,
@@ -106,7 +102,6 @@ describe("LiquidPresetsSection", () => {
         liquidPresets: [...useSettingsStore.getState().liquidPresets, broth],
       },
     });
-    await expandSection(user);
 
     // saltPer100ml holds sodium mg per 100 ml (see LiquidPreset).
     expect(await screen.findByText(/350mg sodium\/100ml/)).toBeInTheDocument();
@@ -118,7 +113,6 @@ describe("LiquidPresetsSection", () => {
     await renderWithFixtures(<LiquidPresetsSection />, {
       settings: { optionalTrackers: { sugar: false, potassium: false } },
     });
-    await expandSection(user);
 
     await user.click(await screen.findByRole("button", { name: /add preset/i }));
     expect(screen.queryByLabelText("Sugar g/100ml")).not.toBeInTheDocument();
@@ -127,7 +121,6 @@ describe("LiquidPresetsSection", () => {
   it("does not offer the unused Beverage category", async () => {
     const user = userEvent.setup();
     await renderWithFixtures(<LiquidPresetsSection />);
-    await expandSection(user);
 
     await user.click(await screen.findByRole("button", { name: /add preset/i }));
     await user.click(screen.getByRole("combobox"));
@@ -143,7 +136,6 @@ describe("LiquidPresetsSection", () => {
       id: "custom-1",
       name: "Kombucha",
       tab: "beverage",
-      waterContentPercent: 95,
       defaultVolumeMl: 200,
       isDefault: false,
       source: "manual",
@@ -153,7 +145,6 @@ describe("LiquidPresetsSection", () => {
         liquidPresets: [...useSettingsStore.getState().liquidPresets, custom],
       },
     });
-    await expandSection(user);
 
     await user.click(await screen.findByRole("button", { name: /delete kombucha/i }));
     // The row swaps to a "Delete Kombucha?" confirmation prompt.

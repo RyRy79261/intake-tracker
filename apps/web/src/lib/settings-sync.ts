@@ -6,9 +6,9 @@
  * The split
  * ---------
  * Settings that describe the USER are synced (SYNCED_SETTING_KEYS): daily
- * limits and extended buffers, optional trackers, the day-start hour, liquid
- * presets, medication regions, reminder follow-up count/interval and the home
- * timezone. They decide what is recorded and how a day is counted, so every
+ * limits and extended buffers, optional trackers, the day-start hour, the
+ * week start, liquid presets, medication regions, reminder follow-up
+ * count/interval and the home timezone. They decide what is recorded and how a day is counted, so every
  * device has to agree on them, and a backup has to carry them.
  *
  * Settings that describe the DEVICE stay in localStorage only: theme
@@ -56,7 +56,13 @@
  * so any setting the user actually saves on any device outranks it.
  */
 import { liveQuery, type Subscription } from "dexie";
-import { db, type UserSettings, type SyncedLiquidPreset } from "@/lib/db";
+import {
+  db,
+  isPreviewDatabaseActive,
+  readRealDatabase,
+  type UserSettings,
+  type SyncedLiquidPreset,
+} from "@/lib/db";
 import type { LiquidPreset } from "@/lib/constants";
 import { useSettingsStore, type Settings } from "@/stores/settings-store";
 import { useSyncStatusStore } from "@/stores/sync-status-store";
@@ -65,6 +71,7 @@ import { schedulePush } from "@/lib/sync-engine";
 import { getSyncAccountId } from "@/lib/sync-account";
 import { generateId, getDeviceId } from "@/lib/utils";
 import { settingStamp, stampChangedSettings } from "@/lib/settings-merge";
+import { isWeekStartsOn } from "@/lib/week-start";
 
 /** The settings that live in the synced `userSettings` row. */
 export const SYNCED_SETTING_KEYS = [
@@ -77,6 +84,7 @@ export const SYNCED_SETTING_KEYS = [
   "sugarExtendedBuffer",
   "optionalTrackers",
   "dayStartHour",
+  "weekStartsOn",
   "liquidPresets",
   "primaryRegion",
   "secondaryRegion",
@@ -87,6 +95,14 @@ export const SYNCED_SETTING_KEYS = [
 ] as const satisfies ReadonlyArray<keyof Settings & keyof UserSettings>;
 
 export type SyncedSettingKey = (typeof SYNCED_SETTING_KEYS)[number];
+
+/**
+ * Synced settings added after `userSettings` rows already existed. A row
+ * without one predates it (the key is simply absent), so this device's value
+ * for it is a default, not an edit. (Nullable settings are not listed: a
+ * pulled row drops null columns, so their absence proves nothing.)
+ */
+const SETTINGS_ADDED_AFTER_ROWS: readonly SyncedSettingKey[] = ["weekStartsOn"];
 export type SyncedSettings = Pick<Settings, SyncedSettingKey>;
 
 /**
@@ -187,6 +203,7 @@ export function settingsFromRow(
   if (isFiniteNumber(r.dayStartHour) && r.dayStartHour >= 0 && r.dayStartHour <= 23) {
     out.dayStartHour = r.dayStartHour;
   }
+  if (isWeekStartsOn(r.weekStartsOn)) out.weekStartsOn = r.weekStartsOn;
   const trackers = r.optionalTrackers as Record<string, unknown> | undefined;
   if (
     trackers &&
@@ -350,6 +367,12 @@ export function installSettingsSync(): () => void {
       .catch((error) => console.error("[settings-sync]", error));
   };
 
+  // The user's row, never a manual preview's: while a live demo has its
+  // sample database swapped in, this waits for the real one. Reading the
+  // preview instead would seed a row into a database that is thrown away and
+  // leave the real row without the edit.
+  const readRealRow = () => readRealDatabase(getActiveUserSettings);
+
   const isLastSeen = (row: UserSettings) =>
     lastSeen !== null &&
     lastSeen.id === row.id &&
@@ -386,12 +409,16 @@ export function installSettingsSync(): () => void {
 
   /** Write the store's synced settings to the table, if they changed. */
   const writeCurrent = async (seed = false): Promise<void> => {
-    const existing = await getActiveUserSettings();
+    const existing = await readRealRow();
     if (disposed) return;
+    // The read resolves a tick after its own check; everything from here to
+    // the write is synchronous, so the write lands in the real database.
+    if (isPreviewDatabaseActive()) return writeCurrent(seed);
     // A newer row this device has not applied yet: take it first, so this
     // write only carries the keys edited here.
     if (existing && !isLastSeen(existing)) adopt(existing);
     const values = pickSyncedSettings(useSettingsStore.getState());
+    const edited = new Set(dirty);
     dirty.clear();
     if (existing && same(settingsFromRow(existing), values)) {
       lastSeen = versionOf(existing);
@@ -400,13 +427,24 @@ export function installSettingsSync(): () => void {
     const updatedAt = seed
       ? SEED_UPDATED_AT
       : Math.max(Date.now(), (existing?.updatedAt ?? 0) + 1);
+    // The settings this write changes are stamped now; the others keep the
+    // row's stamps, so a merge does not mistake them for new edits.
+    const fieldUpdatedAt = stampChangedSettings(existing, values, updatedAt);
+    // A setting the row predates (written before it existed) that nobody
+    // edited here carries only this device's local value: stamp it as a
+    // seed, so any real choice made on another device outranks it.
+    if (existing) {
+      for (const key of SETTINGS_ADDED_AFTER_ROWS) {
+        if (!Object.prototype.hasOwnProperty.call(existing, key) && !edited.has(key)) {
+          fieldUpdatedAt[key] = SEED_UPDATED_AT;
+        }
+      }
+    }
     const row = buildUserSettingsRow(values, {
       id: existing?.id,
       createdAt: existing?.createdAt,
       updatedAt,
-      // The settings this write changes are stamped now; the others keep
-      // the row's stamps, so a merge does not mistake them for new edits.
-      fieldUpdatedAt: stampChangedSettings(existing, values, updatedAt),
+      fieldUpdatedAt,
     });
     lastSeen = versionOf(row);
     await writeWithSync("userSettings", "upsert", async () => {
@@ -423,7 +461,7 @@ export function installSettingsSync(): () => void {
 
   const reconcile = async (): Promise<void> => {
     if (ready || !mayWrite()) return;
-    const row = await getActiveUserSettings();
+    const row = await readRealRow();
     if (ready || disposed) return;
     // No local row in cloud-sync mode: the cloud may still hold one this
     // device has never pulled (the table is new to an upgraded device whose
@@ -450,6 +488,16 @@ export function installSettingsSync(): () => void {
           !same(local[key as SyncedSettingKey], value)
         ) {
           dirty.add(key as SyncedSettingKey);
+        }
+      }
+      // A setting the row predates cannot have been written by it, so any
+      // edit of it recorded here never reached the table.
+      for (const key of SETTINGS_ADDED_AFTER_ROWS) {
+        if (
+          editedAt[key] !== undefined &&
+          !Object.prototype.hasOwnProperty.call(row, key)
+        ) {
+          dirty.add(key);
         }
       }
       // adopt() keeps a copy of the local values it replaces.
@@ -499,7 +547,7 @@ export function installSettingsSync(): () => void {
       if (!ready || !row || isLastSeen(row)) return;
       run(async () => {
         // Re-read inside the chain: the emission may predate a local write.
-        const fresh = await getActiveUserSettings();
+        const fresh = await readRealRow();
         if (fresh && !isLastSeen(fresh)) adopt(fresh);
       });
     },
