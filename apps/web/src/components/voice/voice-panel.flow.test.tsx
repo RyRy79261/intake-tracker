@@ -17,7 +17,7 @@ import {
   afterAll,
   afterEach,
 } from "vitest";
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
@@ -487,5 +487,42 @@ describe("VoicePanel — recording again", () => {
       expect(await db.weightRecords.count()).toBe(1);
     });
     expect(await waterRows()).toHaveLength(1);
+  });
+});
+
+describe("VoicePanel row refresh", () => {
+  it("re-looks-up only the edited row and keeps its time", async () => {
+    parsedItems = [
+      { kind: "caffeine", description: "lot", caffeineMg: 5, volumeMl: 350, time: "08:30" },
+      { kind: "water", ml: 250 },
+    ];
+    let refreshBody: unknown;
+    const user = userEvent.setup();
+    await renderWithFixtures(<VoicePanel />);
+    await user.click(screen.getByRole("button", { name: "mock-record" }));
+    await screen.findByText(/Items \(/);
+
+    server.use(
+      http.post("*/api/ai/voice-parse", async ({ request }) => {
+        refreshBody = await request.json();
+        return HttpResponse.json({
+          items: [{ kind: "caffeine", description: "latte", caffeineMg: 130, volumeMl: 350 }],
+        });
+      }),
+    );
+
+    const row = screen.getByTestId("voice-item-0");
+    const description = within(row).getByDisplayValue("lot");
+    await user.clear(description);
+    await user.type(description, "latte");
+    await user.click(within(row).getByRole("button", { name: "Refresh Caffeine with AI" }));
+
+    await waitFor(() => {
+      expect(within(row).getByDisplayValue("130")).toBeInTheDocument();
+    });
+    expect(refreshBody).toEqual({ transcript: "latte (350 ml)", kind: "caffeine" });
+    expect(within(row).getByDisplayValue("08:30")).toBeInTheDocument();
+    // The other row is untouched.
+    expect(within(screen.getByTestId("voice-item-1")).getByDisplayValue("250")).toBeInTheDocument();
   });
 });

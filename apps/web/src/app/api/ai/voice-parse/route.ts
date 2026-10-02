@@ -2,13 +2,14 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { withAuth } from "@/lib/auth-middleware";
 import { sanitizeForAI } from "@/lib/security";
-import { getClaudeClientForUser, CLAUDE_MODELS } from "@/app/api/ai/_shared/claude-client";
+import { getClaudeClientForUser, CLAUDE_MODELS, WEB_SEARCH_TOOL } from "@/app/api/ai/_shared/claude-client";
 import { parseJsonBody, zodErrorResponse } from "@/app/api/_shared/validation";
 import { createRateLimiter, rateLimitKey } from "@/app/api/_shared/rate-limit";
 import { requestToolCall } from "@/app/api/ai/_shared/claude-call";
 import { aiErrorResponse } from "@/app/api/ai/_shared/ai-error-response";
 import { SYSTEM_PROMPT } from "@intake/ai-prompts/voice-parse";
 import { PARSE_TOOL, extractVoiceItems } from "@/app/api/ai/voice-parse/schema";
+import { REFRESHABLE_KINDS } from "@/lib/voice-types";
 
 /**
  * Parse a voice transcript into a heterogeneous list of health record items
@@ -40,6 +41,8 @@ const MAX_REQUEST_CHARS = 8000;
 
 const ParseRequestSchema = z.object({
   transcript: z.string().min(1).max(MAX_REQUEST_CHARS),
+  /** Set by a review row's refresh: re-look-up one item of this kind. */
+  kind: z.enum(REFRESHABLE_KINDS).optional(),
 });
 
 const rateLimiter = createRateLimiter(20);
@@ -81,15 +84,25 @@ export const POST = withAuth(async ({ request, auth }) => {
 
     console.log(`[AUDIT] voice-parse from user: ${auth.userId}`);
 
-    const userMessage = `Voice transcript:\n"""\n${sanitized}\n"""\n\nExtract every distinct health log item and return them via the parse_voice_log tool.`;
+    // A row refresh means the first parse got this item wrong — usually a
+    // misheard name, so its values were looked up for the wrong thing. The
+    // model must not trust them, and searches the web for the corrected item.
+    const { kind } = parsed.data;
+    const userMessage = kind
+      ? `The user is correcting one ${kind} item from an earlier recording. The values given for it before were WRONG — most likely the speech-to-text misheard the name, so they were looked up for the wrong thing. Do not reuse or trust them. The corrected description is:\n"""\n${sanitized}\n"""\n\nUse web_search first to look up authoritative values for exactly this item (the manufacturer, a retailer listing, or a national food database), then return exactly one item of kind "${kind}" via the parse_voice_log tool. Keep any amount stated in the description.`
+      : `Voice transcript:\n"""\n${sanitized}\n"""\n\nExtract every distinct health log item and return them via the parse_voice_log tool.`;
 
     const { toolUse: toolBlock } = await requestToolCall(
       client,
       {
         model: CLAUDE_MODELS.quality,
-        max_tokens: 4096, // headroom for Sonnet 5 adaptive thinking
+        // Headroom for Sonnet 5 adaptive thinking, plus the search traffic on
+        // a refresh.
+        max_tokens: kind ? 8192 : 4096,
         system: SYSTEM_PROMPT,
-        tools: [PARSE_TOOL],
+        // web_search stays declared on the retry turn too, since the replayed
+        // assistant turn may hold server_tool_use blocks.
+        tools: kind ? [WEB_SEARCH_TOOL, PARSE_TOOL] : [PARSE_TOOL],
         messages: [{ role: "user", content: userMessage }],
       },
       {

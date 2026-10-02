@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, Check, Info, X } from "lucide-react";
+import { AlertTriangle, Check, Info, RefreshCw, X } from "lucide-react";
 import { Button } from "@intake/ui/button";
 import { Input } from "@intake/ui/input";
 import { Label } from "@intake/ui/label";
@@ -39,6 +39,13 @@ interface ParsedItemRowProps {
   disabled?: boolean;
   /** Notes anchored to this row (merges, presets, possible duplicates). */
   notes?: ParsedItemNote[];
+  /**
+   * Re-look-up this item with AI from its edited description. Only passed
+   * for kinds that have a description (food and drinks).
+   */
+  onRefresh?: () => void;
+  /** A refresh is in flight — the button spins. */
+  refreshing?: boolean;
 }
 
 type ColorClass = { bar: string; ring: string; chip: string };
@@ -577,6 +584,8 @@ export function ParsedItemRow({
   approved,
   disabled,
   notes,
+  onRefresh,
+  refreshing,
 }: ParsedItemRowProps) {
   const token = VOICE_ITEM_COLOR[item.kind];
   const c: ColorClass =
@@ -672,6 +681,24 @@ export function ParsedItemRow({
           >
             <X className="h-4 w-4" />
           </Button>
+          {onRefresh && approved === null && (
+            <Button
+              type="button"
+              size="icon"
+              variant="outline"
+              className="h-8 w-8"
+              disabled={
+                disabled ||
+                !("description" in item) ||
+                item.description.trim() === ""
+              }
+              onClick={onRefresh}
+              aria-label={`Refresh ${label} with AI`}
+              title="Look this item up again from its description"
+            >
+              <RefreshCw className={cn("h-4 w-4", refreshing && "animate-spin")} />
+            </Button>
+          )}
         </div>
       </div>
     </div>
