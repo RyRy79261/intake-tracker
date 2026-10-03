@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.40.1](https://github.com/RyRy79261/intake-tracker/compare/v1.40.0...v1.40.1) (2026-10-03)
+
+
+### Bug Fixes
+
+* **ai:** keep the medicine lookup at high effort and give it a 120 s deadline ([#415](https://github.com/RyRy79261/intake-tracker/issues/415)) ([e86952f](https://github.com/RyRy79261/intake-tracker/commit/e86952f42ef7f6281a3ca52fc3b604da5c185b77))
+* **ai:** run the medicine lookup at medium effort so it ends before the deadline ([#412](https://github.com/RyRy79261/intake-tracker/issues/412)) ([7febe58](https://github.com/RyRy79261/intake-tracker/commit/7febe5882cd0da9540ec30561ae9e635258be740)), closes [#336](https://github.com/RyRy79261/intake-tracker/issues/336)
+* **ui:** stop a long preset name overflowing the coffee/alcohol grid ([#411](https://github.com/RyRy79261/intake-tracker/issues/411)) ([3dfe91f](https://github.com/RyRy79261/intake-tracker/commit/3dfe91ff1add4e77f42f9674026529e97c89d63e)), closes [#408](https://github.com/RyRy79261/intake-tracker/issues/408)
+
 ## [1.40.0](https://github.com/RyRy79261/intake-tracker/compare/v1.39.1...v1.40.0) (2026-10-02)
 
 
