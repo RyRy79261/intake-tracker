@@ -10,9 +10,12 @@ import { aiErrorResponse } from "@/app/api/ai/_shared/ai-error-response";
 import { SYSTEM_PROMPT, MEDICINE_SEARCH_TOOL } from "@intake/ai-prompts/medicine-search";
 
 // Vercel function limit. The shared deadline stops short of it so a slow
-// model call ends in a JSON 504 rather than the platform's own.
-export const maxDuration = 90;
-const DEADLINE_MS = 80_000;
+// model call ends in a JSON 504 rather than the platform's own. An accurate
+// answer matters more here than a fast one: at high effort a lookup took up
+// to 77 s in a live check (#336), almost all of it web search, so 80 s left
+// no margin.
+export const maxDuration = 130;
+const DEADLINE_MS = 120_000;
 
 // --- Zod Schemas (co-located per user decision) ---
 
@@ -105,10 +108,8 @@ export const POST = withAuth(async ({ request, auth }) => {
         // thinking can't be turned off on the premium model and its tokens
         // share this ceiling.
         max_tokens: 8192,
-        // Medium, stated explicitly (it is also Opus 5.5's default). High
-        // took up to 77 s of the 80 s deadline in a live check (#336), almost
-        // all of it web search; medium took 54-58 s with answers as complete.
-        output_config: { effort: "medium" },
+        // Opus 5.5 defaults to medium; a medication lookup is worth high.
+        output_config: { effort: "high" },
         system: SYSTEM_PROMPT,
         tools: [WEB_SEARCH_TOOL, MEDICINE_SEARCH_TOOL],
         tool_choice: { type: "auto" },

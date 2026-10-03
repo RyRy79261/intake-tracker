@@ -217,7 +217,7 @@ describe("POST /api/ai/medicine-search", () => {
     expect(params.tool_choice?.type ?? "auto").toBe("auto");
     expect(params.tools.map((t) => t.name)).toEqual(["web_search", "medicine_search_result"]);
     expect(params.tools.find((t) => t.name === "medicine_search_result")?.strict).toBe(true);
-    expect(params.output_config).toEqual({ effort: "medium" });
+    expect(params.output_config).toEqual({ effort: "high" });
     expect(params).not.toHaveProperty("temperature");
   });
 
