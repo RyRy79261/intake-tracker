@@ -39,6 +39,16 @@ export async function setupTestDb(): Promise<TestDbContext> {
   const connectionString = container.getConnectionUri();
 
   const pool = new pg.Pool({ connectionString });
+  // An idle client that loses its connection emits "error" on the pool, and
+  // an unhandled one fails the whole run after every test has passed. That
+  // happens at teardown: stopping the container terminates any backend still
+  // open (FATAL 57P01, "terminating connection due to administrator
+  // command"). Expected then; anything else is still reported.
+  let stopping = false;
+  pool.on("error", (err: Error & { code?: string }) => {
+    if (stopping && err.code === "57P01") return;
+    console.error("[test-db] idle pool client error:", err);
+  });
 
   // Create the neon_auth schema that Neon provides in production.
   // All app tables have FK constraints referencing neon_auth.users_sync(id).
@@ -86,6 +96,7 @@ export async function setupTestDb(): Promise<TestDbContext> {
     testUserId: TEST_USER_ID,
     connectionString,
     teardown: async () => {
+      stopping = true;
       await pool.end();
       await container.stop();
     },
