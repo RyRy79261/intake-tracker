@@ -105,9 +105,9 @@ export const POST = withAuth(async ({ request, auth }) => {
       // and shares the ceiling with the tool call — plus the search traffic
       // on a refresh.
       max_tokens: kind ? 8192 : 4096,
-      // The user has just spoken and is waiting: medium, not the default
-      // high.
-      output_config: { effort: "medium" as const },
+      // Accuracy first: high was only 0-4 s slower than medium in a live
+      // check, and set explicitly (Opus 5.5 defaults to medium).
+      output_config: { effort: "high" as const },
       system: SYSTEM_PROMPT,
       // web_search stays declared on the retry turn too, since the replayed
       // assistant turn may hold server_tool_use blocks.

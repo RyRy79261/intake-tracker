@@ -34,8 +34,9 @@ export const CLAUDE_MODELS = {
   //     `thinking` is omitted and its tokens count against `max_tokens`, so
   //     budgets need headroom.
   //   - Effort defaults to `medium` on Opus 5.5 (`high` on Sonnet 5.5), so
-  //     every quality request sets `output_config.effort` itself: `medium`
-  //     where the user is waiting on a quick parse, `high` for analysis.
+  //     every quality request sets `output_config.effort` itself: `high`.
+  //     Accuracy comes first; a live check found high only 0-4 s slower
+  //     than medium on the lookups and voice parse.
   //   - A thinking block is signed over the conversation before it. A retry
   //     turn must replay the assistant content unchanged and only append —
   //     an edited system prompt, tool list or earlier message can be a 400.

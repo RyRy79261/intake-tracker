@@ -93,9 +93,9 @@ export const POST = withAuth(async ({ request, auth }) => {
         // Headroom for adaptive thinking (always on for this model) and the
         // search traffic as well as the tool call itself.
         max_tokens: 8192,
-        // The user is waiting on a lookup, not an open-ended analysis:
-        // medium keeps it quick. Set explicitly — the default is high.
-        output_config: { effort: "medium" },
+        // Accuracy first: high was only 0-4 s slower than medium in a live
+        // check. Set explicitly (Opus 5.5 defaults to medium).
+        output_config: { effort: "high" },
         system: SYSTEM_PROMPT,
         tools: [WEB_SEARCH_TOOL, PARSE_RESULT_TOOL],
         tool_choice: { type: "auto" },

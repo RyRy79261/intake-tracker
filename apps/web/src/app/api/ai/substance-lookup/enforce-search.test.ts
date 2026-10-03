@@ -239,7 +239,7 @@ describe("caffeine lookups must be sourced by a completed web search", () => {
     expect(messagesCreate).toHaveBeenCalledTimes(3);
     for (const [params] of messagesCreate.mock.calls) {
       expect(params.tool_choice).toEqual({ type: "auto" });
-      expect(params.output_config).toEqual({ effort: "medium" });
+      expect(params.output_config).toEqual({ effort: "high" });
       expect(params).not.toHaveProperty("temperature");
       expect(params).not.toHaveProperty("top_p");
       expect(params).not.toHaveProperty("top_k");

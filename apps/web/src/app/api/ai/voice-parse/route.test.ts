@@ -316,7 +316,7 @@ describe("voice-parse route handler", () => {
 
     const params = messagesCreate.mock.calls[0]![0] as Record<string, unknown>;
     expect(params.tool_choice).toEqual({ type: "auto" });
-    expect(params.output_config).toEqual({ effort: "medium" });
+    expect(params.output_config).toEqual({ effort: "high" });
     expect(params).not.toHaveProperty("temperature");
     expect(params).not.toHaveProperty("top_p");
     expect(params).not.toHaveProperty("top_k");
@@ -350,7 +350,7 @@ describe("voice-parse route handler", () => {
       messages: Array<{ role: string; content: unknown }>;
     };
     expect(retry.tool_choice).toEqual({ type: "auto" });
-    expect(retry.output_config).toEqual({ effort: "medium" });
+    expect(retry.output_config).toEqual({ effort: "high" });
     expect(retry.system).toBe(first.system);
     expect(retry.tools).toBe(first.tools);
     expect(retry.messages).toHaveLength(3);

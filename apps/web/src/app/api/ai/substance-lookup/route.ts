@@ -96,15 +96,16 @@ export const POST = withAuth(async ({ request, auth }) => {
 
     // Quality tier (Claude Opus 5.5): every request below is `auto` with a
     // strict result tool — a forced tool_choice is a 400 on this model, as
-    // is a sampling parameter. Effort is set on each one (the default is
-    // high): the user is waiting on a lookup, so medium.
+    // is a sampling parameter. Effort is set on each one (Opus 5.5 defaults
+    // to medium): high, because accuracy comes first and it was only 0-4 s
+    // slower in a live check.
     const response = await createMessage(
       client,
       {
         model: CLAUDE_MODELS.quality,
         // Headroom for adaptive thinking, which is always on for this model.
         max_tokens: 4096,
-        output_config: { effort: "medium" },
+        output_config: { effort: "high" },
         system: systemPrompt,
         tools: [WEB_SEARCH_TOOL, SUBSTANCE_LOOKUP_TOOL],
         tool_choice: { type: "auto" },
@@ -131,7 +132,7 @@ export const POST = withAuth(async ({ request, auth }) => {
         {
           model: CLAUDE_MODELS.quality,
           max_tokens: 4096,
-          output_config: { effort: "medium" },
+          output_config: { effort: "high" },
           system: systemPrompt,
           // `auto`, and not only because the model rejects forcing: forcing
           // the structured tool would stop it searching, which is the one
@@ -180,7 +181,7 @@ export const POST = withAuth(async ({ request, auth }) => {
         {
           model: CLAUDE_MODELS.quality,
           max_tokens: 4096,
-          output_config: { effort: "medium" },
+          output_config: { effort: "high" },
           // Append-only: the same system prompt and tools as the turn being
           // replayed, its own user message, and its content passed back
           // unchanged. The model signs each thinking block over the
