@@ -151,7 +151,7 @@ export const POST = withAuth(async ({ request, auth }) => {
 
     const userMessage = `Below are the user's logged food and drink entries from the last ${windowDays} days. Some have approximate portions (in grams) shown in parentheses; many will not. Use web_search if you need to look up specific branded or regional items, then call the report_nutrient_analysis tool with your synthesis.${focusLine}${contextBlock}\n\nFoods:\n${foodListText}`;
 
-    // Quality tier (Claude Sonnet 5.5): no forced tool_choice and no
+    // Quality tier (Claude Opus 5.5): no forced tool_choice and no
     // sampling parameters (each a 400). `auto` with a strict result tool;
     // if the model finishes with prose once web_search has satisfied it,
     // requestToolCall asks for the tool on a second, unforced turn that

@@ -73,7 +73,7 @@ export const PARSE_RESULT_TOOL = {
   name: "parse_food_result" as const,
   description: "Return parsed water (ml), sodium (mg), total sugar (g) and potassium (mg) for a food or drink description.",
   // Schema-valid arguments are guaranteed without forcing the tool, which
-  // the quality model (Claude Sonnet 5.5) rejects.
+  // the quality model (Claude Opus 5.5) rejects.
   strict: true,
   input_schema: {
     type: "object" as const,

@@ -1,5 +1,5 @@
 /**
- * Every structured-result tool sent to the quality (Claude Sonnet 5.5) and
+ * Every structured-result tool sent to the quality and
  * premium (Claude Opus 5.5) models is `strict: true`, and its schema stays
  * inside what strict mode accepts. The one exception is the voice-parse tool
  * (see below).

@@ -94,7 +94,7 @@ export const POST = withAuth(async ({ request, auth }) => {
       deadline: Date.now() + DEADLINE_MS,
     };
 
-    // Quality tier (Claude Sonnet 5.5): every request below is `auto` with a
+    // Quality tier (Claude Opus 5.5): every request below is `auto` with a
     // strict result tool — a forced tool_choice is a 400 on this model, as
     // is a sampling parameter. Effort is set on each one (the default is
     // high): the user is waiting on a lookup, so medium.

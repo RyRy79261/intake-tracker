@@ -84,7 +84,7 @@ export const POST = withAuth(async ({ request, auth }) => {
 
     console.log(`[AUDIT] analytics insights from user: ${auth.userId}`);
 
-    // Quality tier (Claude Sonnet 5.5): a forced tool_choice is a 400 on
+    // Quality tier (Claude Opus 5.5): a forced tool_choice is a 400 on
     // this model, so the request is `auto` with a strict tool. The system
     // prompt says to always answer through the tool, and if the reply is
     // prose anyway requestToolCall asks once more on an unforced,

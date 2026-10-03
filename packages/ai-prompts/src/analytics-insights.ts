@@ -283,7 +283,7 @@ export const INSIGHT_TOOL = {
 /**
  * The fast route's tool: the same call as {@link INSIGHT_TOOL} without
  * `sources` (fast mode never searches), marked `strict`. The quality model
- * (Claude Sonnet 5.5) rejects a forced `tool_choice`, so the route sends
+ * (Claude Opus 5.5) rejects a forced `tool_choice`, so the route sends
  * `auto` and relies on `strict` for schema-valid arguments. It is a separate
  * definition because strict mode has no `maxItems`, and because the deep
  * route must keep declaring exactly the tool its paused turns started with.

@@ -9,10 +9,12 @@
  *
  * Which tier a route uses is a deliberate choice:
  *   - fast (Haiku 4.5): bug-report restructuring only — cheap prose tidying.
- *   - quality (Sonnet 5.5): food parse, voice parse, caffeine lookup,
- *     nutrient analysis and fast insights. These are high-volume nutrition
- *     estimates, most backed by web_search, where Sonnet's accuracy is near
- *     Opus at about half the price.
+ *   - quality (Opus 5.5): food parse, voice parse, caffeine lookup,
+ *     nutrient analysis and fast insights. These ran on Sonnet 5.5 for half
+ *     the price; the owner's spend is a few dollars a month, so they moved
+ *     to Opus (2026-10-03). Measured live first: Opus took 7-23 s on the
+ *     lookups and voice parse (Sonnet 4-15 s) and 45 s on nutrient analysis,
+ *     all well inside each route's deadline.
  *   - premium (Opus 5.5): medicine search, interaction checks, titration
  *     warnings and deep insights — the medication-safety routes, where the
  *     answer matters more than the per-call cost.
@@ -22,17 +24,17 @@ export const CLAUDE_MODELS = {
   // Claude Haiku 4.5. Still accepts sampling parameters, forced tool_choice
   // and `budget_tokens` thinking, but NOT `output_config.effort` (a 400).
   fast: "claude-haiku-4-5-20251001" as const,
-  // Claude Sonnet 5.5 (same price, context and tokenizer as the Sonnet 5 it
-  // replaced). What the quality routes are built around:
+  // Claude Opus 5.5, the same model as premium. The quality routes were
+  // built for Claude Sonnet 5.5, which shares these rules with it:
   //   - Forced `tool_choice` ({type:"tool"} / {type:"any"}) returns a 400.
   //     Routes send `auto` + `strict: true` tools, say in the prompt when
   //     the tool applies, and retry once when no call comes back.
   //   - Thinking can't be turned off: `{type:"disabled"}` and
-  //     `budget_tokens` are both a 400 (`{type:"between_tools"}` is the
-  //     lowest setting). Adaptive thinking runs when `thinking` is omitted
-  //     and its tokens count against `max_tokens`, so budgets need headroom.
-  //   - Effort is recalibrated against Sonnet 5 and defaults to `high`.
-  //     Every quality request sets `output_config.effort` itself: `medium`
+  //     `budget_tokens` are both a 400. Adaptive thinking runs when
+  //     `thinking` is omitted and its tokens count against `max_tokens`, so
+  //     budgets need headroom.
+  //   - Effort defaults to `medium` on Opus 5.5 (`high` on Sonnet 5.5), so
+  //     every quality request sets `output_config.effort` itself: `medium`
   //     where the user is waiting on a quick parse, `high` for analysis.
   //   - A thinking block is signed over the conversation before it. A retry
   //     turn must replay the assistant content unchanged and only append —
@@ -44,7 +46,7 @@ export const CLAUDE_MODELS = {
   //     the default — `temperature: 0` included.
   //   - It declines in more categories (`stop_reason: "refusal"`), which
   //     `_shared/claude-call.ts` turns into a clear 422.
-  quality: "claude-sonnet-5-5" as const,
+  quality: "claude-opus-5-5" as const,
   // Claude Opus 5.5. Differs from the Opus 5 this replaced in ways the
   // premium routes are built around:
   //   - Forced `tool_choice` ({type:"tool"} / {type:"any"}) returns a 400.

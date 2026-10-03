@@ -25,7 +25,7 @@ import {
  * with a bigger budget), record usage for every upstream response, and share
  * one route-wide deadline.
  *
- * Quality tier (Claude Sonnet 5.5): no forced tool_choice and no sampling
+ * Quality tier (Claude Opus 5.5): no forced tool_choice and no sampling
  * parameters (each a 400). The request is `auto`, the prompt says to always
  * call the tool, and the retry turn is unforced. The tool is not strict: the
  * API can't compile its schema (see PARSE_TOOL), so the items are checked

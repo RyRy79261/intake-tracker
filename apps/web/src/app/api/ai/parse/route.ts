@@ -13,7 +13,7 @@ import { SYSTEM_PROMPT, PARSE_RESULT_TOOL } from "@intake/ai-prompts/parse";
  * Server-side AI parsing for food / drink descriptions.
  *
  * Always returns sodium in mg (no salt/sodium ambiguity). Uses the quality
- * tier (Claude Sonnet 5.5) + web_search for branded or regional items. No
+ * tier (Claude Opus 5.5) + web_search for branded or regional items. No
  * sampling parameters (a non-default `temperature` is a 400), so
  * consistency comes from the prompt's reference values and the tool schema.
  * No forced tool_choice either (also a 400): the request is `auto` with a
