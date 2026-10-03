@@ -6,7 +6,7 @@
  * **400**, so the request fails outright instead of being nudged toward
  * determinism. Note `temperature: 0` is a non-default value — "deterministic"
  * is exactly the setting that breaks. The premium (Opus 5.5) and quality
- * (Sonnet 5.5) tiers are both on that request surface now, so the scan covers
+ * (Opus 5.5) tiers are both on that request surface now, so the scan covers
  * every tier. The fast tier (Haiku 4.5) still accepts sampling parameters,
  * but nothing depends on them there and one rule is easier to keep than a
  * per-tier exception that goes stale on the next id bump.
@@ -162,7 +162,7 @@ describe("Claude requests only pass parameters the pinned models accept", () => 
   it("pins the current model ids", () => {
     expect(CLAUDE_MODELS).toEqual({
       fast: "claude-haiku-4-5-20251001",
-      quality: "claude-sonnet-5-5",
+      quality: "claude-opus-5-5",
       premium: "claude-opus-5-5",
     });
   });

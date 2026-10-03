@@ -258,7 +258,7 @@ describe("POST /api/ai/parse", () => {
     expect(params).not.toHaveProperty("top_p");
     expect(params).not.toHaveProperty("top_k");
     expect(params).not.toHaveProperty("thinking");
-    expect(params.output_config).toEqual({ effort: "medium" });
+    expect(params.output_config).toEqual({ effort: "high" });
     // Claude Sonnet 5.5 rejects a forced tool_choice: `auto` + a strict tool.
     expect(params.tool_choice).toEqual({ type: "auto" });
     const tools = params.tools as Array<{ name: string; strict?: boolean }>;
@@ -306,7 +306,7 @@ describe("POST /api/ai/parse", () => {
       messages: Array<{ role: string; content: unknown }>;
     };
     expect(retry.tool_choice).toEqual({ type: "auto" });
-    expect(retry.output_config).toEqual({ effort: "medium" });
+    expect(retry.output_config).toEqual({ effort: "high" });
     expect(retry.system).toBe(first.system);
     expect(retry.tools).toBe(first.tools);
     expect(retry.messages).toHaveLength(3);

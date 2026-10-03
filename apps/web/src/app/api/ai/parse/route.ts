@@ -13,7 +13,7 @@ import { SYSTEM_PROMPT, PARSE_RESULT_TOOL } from "@intake/ai-prompts/parse";
  * Server-side AI parsing for food / drink descriptions.
  *
  * Always returns sodium in mg (no salt/sodium ambiguity). Uses the quality
- * tier (Claude Sonnet 5.5) + web_search for branded or regional items. No
+ * tier (Claude Opus 5.5) + web_search for branded or regional items. No
  * sampling parameters (a non-default `temperature` is a 400), so
  * consistency comes from the prompt's reference values and the tool schema.
  * No forced tool_choice either (also a 400): the request is `auto` with a
@@ -93,9 +93,9 @@ export const POST = withAuth(async ({ request, auth }) => {
         // Headroom for adaptive thinking (always on for this model) and the
         // search traffic as well as the tool call itself.
         max_tokens: 8192,
-        // The user is waiting on a lookup, not an open-ended analysis:
-        // medium keeps it quick. Set explicitly — the default is high.
-        output_config: { effort: "medium" },
+        // Accuracy first: high was only 0-4 s slower than medium in a live
+        // check. Set explicitly (Opus 5.5 defaults to medium).
+        output_config: { effort: "high" },
         system: SYSTEM_PROMPT,
         tools: [WEB_SEARCH_TOOL, PARSE_RESULT_TOOL],
         tool_choice: { type: "auto" },

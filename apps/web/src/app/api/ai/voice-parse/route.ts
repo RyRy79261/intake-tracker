@@ -25,7 +25,7 @@ import {
  * with a bigger budget), record usage for every upstream response, and share
  * one route-wide deadline.
  *
- * Quality tier (Claude Sonnet 5.5): no forced tool_choice and no sampling
+ * Quality tier (Claude Opus 5.5): no forced tool_choice and no sampling
  * parameters (each a 400). The request is `auto`, the prompt says to always
  * call the tool, and the retry turn is unforced. The tool is not strict: the
  * API can't compile its schema (see PARSE_TOOL), so the items are checked
@@ -105,9 +105,9 @@ export const POST = withAuth(async ({ request, auth }) => {
       // and shares the ceiling with the tool call — plus the search traffic
       // on a refresh.
       max_tokens: kind ? 8192 : 4096,
-      // The user has just spoken and is waiting: medium, not the default
-      // high.
-      output_config: { effort: "medium" as const },
+      // Accuracy first: high was only 0-4 s slower than medium in a live
+      // check, and set explicitly (Opus 5.5 defaults to medium).
+      output_config: { effort: "high" as const },
       system: SYSTEM_PROMPT,
       // web_search stays declared on the retry turn too, since the replayed
       // assistant turn may hold server_tool_use blocks.
