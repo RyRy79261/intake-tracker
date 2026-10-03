@@ -105,8 +105,10 @@ export const POST = withAuth(async ({ request, auth }) => {
         // thinking can't be turned off on the premium model and its tokens
         // share this ceiling.
         max_tokens: 8192,
-        // Opus 5.5 defaults to medium; a medication lookup is worth high.
-        output_config: { effort: "high" },
+        // Medium, stated explicitly (it is also Opus 5.5's default). High
+        // took up to 77 s of the 80 s deadline in a live check (#336), almost
+        // all of it web search; medium took 54-58 s with answers as complete.
+        output_config: { effort: "medium" },
         system: SYSTEM_PROMPT,
         tools: [WEB_SEARCH_TOOL, MEDICINE_SEARCH_TOOL],
         tool_choice: { type: "auto" },
