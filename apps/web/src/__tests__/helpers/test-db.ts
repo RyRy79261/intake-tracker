@@ -43,11 +43,13 @@ export async function setupTestDb(): Promise<TestDbContext> {
   // an unhandled one fails the whole run after every test has passed. That
   // happens at teardown: stopping the container terminates any backend still
   // open (FATAL 57P01, "terminating connection due to administrator
-  // command"). Expected then; anything else is still reported.
+  // command"). Expected then, so only that is ignored. Any other error is
+  // rethrown, which leaves it uncaught exactly as with no listener, and
+  // vitest fails the run.
   let stopping = false;
   pool.on("error", (err: Error & { code?: string }) => {
     if (stopping && err.code === "57P01") return;
-    console.error("[test-db] idle pool client error:", err);
+    throw err;
   });
 
   // Create the neon_auth schema that Neon provides in production.
