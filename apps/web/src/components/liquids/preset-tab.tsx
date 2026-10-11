@@ -484,7 +484,7 @@ export function PresetTab({ tab }: PresetTabProps) {
 
   // Primary substance label for the per-100ml input
   const primarySubstanceLabel =
-    tab === "coffee" ? "per 100ml (mg caffeine)" : "% ABV";
+    tab === "coffee" ? "Caffeine mg / 100ml" : "% ABV";
 
   return (
     <div className="flex flex-col gap-2.5">

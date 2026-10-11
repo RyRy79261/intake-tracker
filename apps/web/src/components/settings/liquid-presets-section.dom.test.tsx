@@ -61,7 +61,7 @@ describe("LiquidPresetsSection (Drink presets page)", () => {
     await renderWithFixtures(<LiquidPresetsSection />);
 
     await user.click(await screen.findByRole("button", { name: "Edit Coffee" }));
-    await user.clear(screen.getByLabelText("Caffeine/100ml"));
+    await user.clear(screen.getByLabelText("Caffeine mg / 100ml"));
     await user.click(screen.getByRole("button", { name: /save changes/i }));
 
     const coffee = useSettingsStore
@@ -77,7 +77,7 @@ describe("LiquidPresetsSection (Drink presets page)", () => {
 
     await user.click(await screen.findByRole("button", { name: /add preset/i }));
     await user.type(await screen.findByPlaceholderText(/beverage name/i), "Cola");
-    await user.type(screen.getByLabelText("Sugar g/100ml"), "10.6");
+    await user.type(screen.getByLabelText("Sugar g / 100ml"), "10.6");
     await user.click(screen.getByRole("button", { name: /add preset/i }));
 
     const cola = useSettingsStore
@@ -115,7 +115,7 @@ describe("LiquidPresetsSection (Drink presets page)", () => {
     });
 
     await user.click(await screen.findByRole("button", { name: /add preset/i }));
-    expect(screen.queryByLabelText("Sugar g/100ml")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Sugar g / 100ml")).not.toBeInTheDocument();
   });
 
   it("does not offer the unused Beverage category", async () => {

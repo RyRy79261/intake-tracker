@@ -50,7 +50,7 @@ describe("PresetTab", () => {
 
     // Espresso default preset: 30ml volume, 210mg/100ml caffeine
     expect(screen.getByLabelText("Volume (ml)")).toHaveValue(30);
-    expect(screen.getByLabelText("per 100ml (mg caffeine)")).toHaveValue(210);
+    expect(screen.getByLabelText("Caffeine mg / 100ml")).toHaveValue(210);
     expect(screen.getByLabelText("coffee name")).toHaveValue("Espresso");
 
     // Calculated display reflects 30/100 * 210 ≈ 63 mg
@@ -218,7 +218,7 @@ describe("PresetTab", () => {
     await user.type(screen.getByLabelText("coffee name"), "Cold Brew");
     await user.clear(screen.getByLabelText("Volume (ml)"));
     await user.type(screen.getByLabelText("Volume (ml)"), "300");
-    await user.type(screen.getByLabelText("per 100ml (mg caffeine)"), "65");
+    await user.type(screen.getByLabelText("Caffeine mg / 100ml"), "65");
 
     const before = useSettingsStore
       .getState()
