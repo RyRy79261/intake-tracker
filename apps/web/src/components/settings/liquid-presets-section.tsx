@@ -177,7 +177,7 @@ function PresetEditForm({
       <div className="grid grid-cols-2 gap-2">
         <div className="space-y-1">
           <Label htmlFor={`${idPrefix}-caffeine`}>
-            Caffeine/100ml
+            Caffeine mg / 100ml
           </Label>
           <Input
             id={`${idPrefix}-caffeine`}
@@ -204,7 +204,7 @@ function PresetEditForm({
         </div>
         <div className="space-y-1">
           <Label htmlFor={`${idPrefix}-sodium`}>
-            Na/100ml
+            Sodium mg / 100ml
           </Label>
           <Input
             id={`${idPrefix}-sodium`}
@@ -218,7 +218,7 @@ function PresetEditForm({
         {sugarEnabled && (
           <div className="space-y-1">
             <Label htmlFor={`${idPrefix}-sugar`}>
-              Sugar g/100ml
+              Sugar g / 100ml
             </Label>
             <Input
               id={`${idPrefix}-sugar`}
