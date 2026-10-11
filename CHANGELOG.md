@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.40.2](https://github.com/RyRy79261/intake-tracker/compare/v1.40.1...v1.40.2) (2026-10-11)
+
+
+### Bug Fixes
+
+* **ui:** label per-100ml fields so the unit and basis are clear ([#420](https://github.com/RyRy79261/intake-tracker/issues/420)) ([f151408](https://github.com/RyRy79261/intake-tracker/commit/f151408142dd452bd39fd5f6e88c251e64a84537))
+
 ## [1.40.1](https://github.com/RyRy79261/intake-tracker/compare/v1.40.0...v1.40.1) (2026-10-03)
 
 
