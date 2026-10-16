@@ -1,14 +1,10 @@
 "use client";
 
-import { useCallback, useMemo } from "react";
+import { useCallback } from "react";
 import {
   addComposableEntry,
-  deleteEntryGroup,
-  undoDeleteEntryGroup,
   getEntryGroup,
   syncEatingGroup,
-  syncLiquidEntrySubstances,
-  classifyLiquidDelete,
   parseSodiumKindFromSource,
   pickEatingGroupNutrients,
   type ComposableEntryInput,
@@ -66,67 +62,6 @@ export function useSyncEatingGroup() {
     },
     [],
   );
-}
-
-/**
- * Mutation hook for syncing a liquid entry's caffeine / alcohol / sugar
- * records (used by the inline edit form on the Liquids card). Creates,
- * updates, or soft-deletes the linked records to match the patch.
- */
-export function useSyncLiquidEntrySubstances() {
-  return useCallback(
-    async (
-      intakeId: string,
-      patch: Parameters<typeof syncLiquidEntrySubstances>[1],
-    ): Promise<void> => {
-      unwrap(await syncLiquidEntrySubstances(intakeId, patch));
-    },
-    [],
-  );
-}
-
-/**
- * Mutation hook for deleting an entire composable entry group.
- * Shows an undo toast with 5-second window (per D-06, D-08).
- */
-export function useDeleteEntryGroup() {
-  return useCallback(
-    async (groupId: string) => {
-      const result = unwrap(await deleteEntryGroup(groupId));
-      showUndoToast({
-        title: `Deleted ${result.deletedCount} linked record${result.deletedCount !== 1 ? "s" : ""}`,
-        // Restore only what this delete removed (its tombstone stamp).
-        onUndo: () => runUndo(() => undoDeleteEntryGroup(groupId, result.deletedAt)),
-      });
-      return result;
-    },
-    [],
-  );
-}
-
-/**
- * Mutation hook for deleting a liquid intake record with the right blast
- * radius: a drink's fluid row takes its substances with it, while a meal's
- * water-content row is removed on its own and the meal survives.
- *
- * Shaped as a `{ mutateAsync }` object so it drops straight into
- * `useDeleteWithToast` in place of the plain single-record delete.
- */
-export function useDeleteLiquidEntry(
-  deleteIntakeRecord: (id: string) => Promise<unknown>,
-) {
-  const deleteGroup = useDeleteEntryGroup();
-  const mutateAsync = useCallback(
-    async (id: string) => {
-      const scope = await classifyLiquidDelete(id);
-      if (scope.scope === "group") return deleteGroup(scope.groupId);
-      return deleteIntakeRecord(id);
-    },
-    [deleteGroup, deleteIntakeRecord],
-  );
-  // Memoised so consumers that take this as a dependency (useDeleteWithToast)
-  // don't get a new callback identity on every render.
-  return useMemo(() => ({ mutateAsync }), [mutateAsync]);
 }
 
 const CASCADE_UNITS: Record<string, string> = {

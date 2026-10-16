@@ -54,7 +54,7 @@ describe("liquidPresets CRUD", () => {
       tab: "beverage",
       defaultVolumeMl: 330,
       sugarPer100ml: 10.6,
-      potassiumPer100ml: 2,
+      saltPer100ml: 2,
       isDefault: false,
       source: "ai",
     });
@@ -70,7 +70,7 @@ describe("liquidPresets CRUD", () => {
     expect("sugarPer100ml" in updated).toBe(false);
     expect(updated.name).toBe("Cola Zero");
     // Keys absent from the patch are untouched.
-    expect(updated.potassiumPer100ml).toBe(2);
+    expect(updated.saltPer100ml).toBe(2);
   });
 
   it("deleteLiquidPreset removes the preset by id", () => {

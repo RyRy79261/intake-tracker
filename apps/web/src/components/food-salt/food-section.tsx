@@ -35,7 +35,7 @@ import {
   eatingGroupNutrients,
   type ComposableEntryInput,
 } from "@/hooks/use-composable-entry";
-import { useLogDrink } from "@/hooks/use-drink-log";
+import { useDrink } from "@/hooks/use-drink";
 import {
   useEatingRecords,
   useAddEating,
@@ -164,7 +164,7 @@ export function FoodSection() {
     caffeineMg: number | null;
     abvPercent: number | null;
   } | null>(null);
-  const logDrink = useLogDrink();
+  const logDrink = useDrink().log;
 
   // ─── Derived sodium calculation ───────────────────────────────────
   const sodiumMgNum = sodiumMg ? parseFloat(sodiumMg) : 0;

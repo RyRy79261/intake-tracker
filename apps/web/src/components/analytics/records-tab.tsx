@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect, useMemo, type CSSProperties } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef, type CSSProperties } from "react";
 import { Button } from "@intake/ui/button";
 import { RecordRow } from "@/components/history/record-row";
 import { useSettings } from "@/hooks/use-settings";
@@ -12,6 +12,7 @@ import { EditEatingDialog } from "@/components/edit-eating-dialog";
 import { EditUrinationDialog } from "@/components/edit-urination-dialog";
 import { EditDefecationDialog } from "@/components/edit-defecation-dialog";
 import { EditSubstanceDialog } from "@/components/edit-substance-dialog";
+import { EditDrinkDialog } from "@/components/edit-drink-dialog";
 import {
   Calendar,
   ChevronDown,
@@ -35,7 +36,8 @@ import {
 } from "@/lib/history-types";
 import { CARD_THEMES } from "@/lib/card-themes";
 import { useRecordsTabData } from "@/hooks/use-records-tab-queries";
-import { useUpdateIntake, useDeleteIntake } from "@/hooks/use-intake-queries";
+import { useUpdateIntake } from "@/hooks/use-intake-queries";
+import { useDrink, fetchDrink, findDrinkForRow, standardDrinks } from "@/hooks/use-drink";
 import { useUpdateWeight, useUpdateBloodPressure, useDeleteWeight, useDeleteBloodPressure } from "@/hooks/use-health-queries";
 import { resolveEditedTimestamp } from "@/hooks/use-edit-record";
 import { parseWeightForm, normalizeAmountEstimate } from "@intake/core/record-schemas";
@@ -44,7 +46,6 @@ import { useUpdateUrination, useDeleteUrination } from "@/hooks/use-urination-qu
 import { useUpdateDefecation, useDeleteDefecation } from "@/hooks/use-defecation-queries";
 import { useUpdateSubstance } from "@/hooks/use-substance-queries";
 import {
-  useDeleteLiquidEntry,
   useDeleteSubstanceWithUndo,
   describeSubstanceDeleteCascade,
 } from "@/hooks/use-composable-entry";
@@ -54,7 +55,7 @@ import { domainColor } from "@/lib/domain-colors";
 import { getDeviceTimezone } from "@/lib/timezone";
 import { timestampToDateTimeLocal } from "@/lib/date-utils";
 import type { TimeRange } from "@intake/types/analytics";
-import { standardDrinksFromAbv, abvFromStandardDrinks } from "@intake/core/alcohol";
+import { abvFromStandardDrinks } from "@intake/core/alcohol";
 
 const PAGE_SIZE = 50;
 
@@ -150,10 +151,10 @@ export function RecordsTab({ range, filter: filterProp, onFilterChange }: Record
 
   // Mutations
   const updateMutation = useUpdateIntake();
-  const deleteIntakeMutation = useDeleteIntake();
   // Same blast radius as the Liquids card: a drink's water row takes the
   // whole drink (substances, sugar, salt) with it; a meal's water row doesn't.
-  const deleteMutation = useDeleteLiquidEntry(deleteIntakeMutation.mutateAsync);
+  const drink = useDrink();
+  const deleteMutation = useMemo(() => ({ mutateAsync: drink.remove }), [drink]);
   const deleteSubstance = useDeleteSubstanceWithUndo();
   const updateWeightMutation = useUpdateWeight();
   const deleteWeightMutation = useDeleteWeight();
@@ -169,6 +170,7 @@ export function RecordsTab({ range, filter: filterProp, onFilterChange }: Record
 
   // Edit dialog states
   const [editingIntake, setEditingIntake] = useState<IntakeRecord | null>(null);
+  const [editingDrink, setEditingDrink] = useState<IntakeRecord | null>(null);
   const [editingWeight, setEditingWeight] = useState<WeightRecord | null>(null);
   const [editingBP, setEditingBP] = useState<BloodPressureRecord | null>(null);
   const [editingEating, setEditingEating] = useState<EatingRecord | null>(null);
@@ -243,7 +245,30 @@ export function RecordsTab({ range, filter: filterProp, onFilterChange }: Record
   }, [toast, deleteMutation, deleteWeightMutation, deleteBPMutation, deleteEatingMutation, deleteUrinationMutation, deleteDefecationMutation, deleteSubstance]);
 
   // Edit openers
-  const openEdit = useCallback((unified: UnifiedRecord) => {
+  // The latest click. A slow drink lookup for an older click must not open
+  // over the row the user picked after it.
+  const editRequestRef = useRef(0);
+  const openEdit = useCallback(async (unified: UnifiedRecord) => {
+    const request = ++editRequestRef.current;
+    // Any row of a drink opens the whole drink, as on the Liquids card, so a
+    // time change cannot split it across two times.
+    if (unified.type === "intake" || unified.type === "caffeine" || unified.type === "alcohol") {
+      const table = unified.type === "intake" ? "intakeRecords" : "substanceRecords";
+      // A failed lookup falls back to the row's own editor, so the click is
+      // never lost.
+      let snapshot: Awaited<ReturnType<typeof fetchDrink>>;
+      try {
+        const waterId = await findDrinkForRow(table, unified.record.id);
+        snapshot = waterId ? await fetchDrink(waterId) : null;
+      } catch {
+        snapshot = null;
+      }
+      if (request !== editRequestRef.current) return;
+      if (snapshot) {
+        setEditingDrink(snapshot.water);
+        return;
+      }
+    }
     setEditTimestamp(timestampToDateTimeLocal(unified.record.timestamp));
     setEditNote((unified.record as unknown as { note?: string }).note || "");
 
@@ -414,15 +439,13 @@ export function RecordsTab({ range, filter: filterProp, onFilterChange }: Record
       let amountField: Partial<SubstanceRecord> = {};
       if (hasAmount) {
         if (editingSubstance.type === "caffeine") {
-          amountField = { amountMg: amt };
+          amountField = { amountMg: Math.round(amt) };
         } else {
           // `amt` is ABV %; volume is validated as positive above.
           amountField = {
             abvPercent: amt,
-            volumeMl: vol,
-            amountStandardDrinks: parseFloat(
-              standardDrinksFromAbv(amt, vol).toFixed(2),
-            ),
+            volumeMl: Math.round(vol),
+            amountStandardDrinks: standardDrinks(amt, vol),
           };
         }
       }
@@ -478,7 +501,7 @@ export function RecordsTab({ range, filter: filterProp, onFilterChange }: Record
                     key={unified.record.id}
                     unified={unified}
                     onDelete={() => handleDelete(unified)}
-                    onEdit={() => openEdit(unified)}
+                    onEdit={() => void openEdit(unified)}
                     isDeleting={deletingId === unified.record.id}
                     liquidPresets={settings.liquidPresets}
                   />
@@ -511,6 +534,11 @@ export function RecordsTab({ range, filter: filterProp, onFilterChange }: Record
         onTimestampChange={setEditTimestamp}
         note={editNote}
         onNoteChange={setEditNote}
+        onFocus={scrollOnFocus}
+      />
+      <EditDrinkDialog
+        record={editingDrink}
+        onClose={() => setEditingDrink(null)}
         onFocus={scrollOnFocus}
       />
       <EditWeightDialog

@@ -10,6 +10,7 @@ import {
   makeWeightRecord,
 } from "@/__tests__/fixtures/db-fixtures";
 import type { TimeRange } from "@intake/types/analytics";
+import { timestampToDateTimeLocal } from "@/lib/date-utils";
 // Test-only direct service/DB access to seed a drink group and assert the
 // delete's effect on every row in it.
 // eslint-disable-next-line no-restricted-imports
@@ -133,7 +134,7 @@ describe("RecordsTab", () => {
     expect(chip("All")).toHaveAttribute("aria-pressed", "true");
   });
 
-  it("opens the edit dialog pre-filled when a record's edit button is clicked", async () => {
+  it("opens the drink dialog pre-filled when a water record's edit button is clicked", async () => {
     const user = userEvent.setup();
     const now = Date.now();
 
@@ -148,10 +149,67 @@ describe("RecordsTab", () => {
     await screen.findByText("333 ml");
     await user.click(screen.getByRole("button", { name: "Edit entry" }));
 
-    // The intake edit dialog opens with the amount field pre-populated.
+    // Water is a drink: the drink dialog opens with the amount pre-populated.
     const dialog = await screen.findByRole("dialog");
-    expect(within(dialog).getByText("Edit Water Entry")).toBeInTheDocument();
+    expect(within(dialog).getByText("Edit Drink")).toBeInTheDocument();
     expect(within(dialog).getByLabelText(/Amount/)).toHaveValue(333);
+  });
+
+  it("falls back to the row's own editor when the drink lookup fails", async () => {
+    const user = userEvent.setup();
+    const now = Date.now();
+
+    await renderWithFixtures(<RecordsTab range={RANGE} />, {
+      seed: {
+        intakeRecords: [
+          makeIntakeRecord({ type: "water", amount: 333, timestamp: now, groupId: "g-fail" }),
+        ],
+      },
+    });
+
+    await screen.findByText("333 ml");
+    const where = db.eatingRecords.where.bind(db.eatingRecords);
+    vi.spyOn(db.eatingRecords, "where").mockImplementation(((index: string) => {
+      if (index === "groupId") throw new Error("IndexedDB read failed");
+      return where(index);
+    }) as typeof db.eatingRecords.where);
+    await user.click(screen.getByRole("button", { name: "Edit entry" }));
+
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).queryByText("Edit Drink")).not.toBeInTheDocument();
+    expect(within(dialog).getByDisplayValue("333")).toBeInTheDocument();
+  });
+
+  it("a slow drink lookup does not open over a row picked after it", async () => {
+    const user = userEvent.setup();
+    const drink = await logDrink({ volumeMl: 250, description: "Latte", caffeineMg: 80 });
+    if (!drink.success) throw new Error("logDrink failed");
+    await renderWithFixtures(<RecordsTab range={RANGE} />, {
+      seed: { weightRecords: [makeWeightRecord({ weight: 71.5, timestamp: Date.now() })] },
+    });
+
+    const drinkRow = (await screen.findByText(/^250 ml/)).closest('[data-testid="record-row"]') as HTMLElement;
+    const weightRow = (await screen.findByText(/71\.5/)).closest('[data-testid="record-row"]') as HTMLElement;
+
+    // Hold the drink lookup until the weight row is open.
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => (release = resolve));
+    const get = db.intakeRecords.get.bind(db.intakeRecords);
+    vi.spyOn(db.intakeRecords, "get").mockImplementation((async (key: string) => {
+      await held;
+      return get(key);
+    }) as typeof db.intakeRecords.get);
+
+    await user.click(within(drinkRow).getByRole("button", { name: "Edit entry" }));
+    await user.click(within(weightRow).getByRole("button", { name: "Edit entry" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByDisplayValue("71.5")).toBeInTheDocument();
+
+    release();
+    // Let the late lookup finish.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(screen.queryByText("Edit Drink")).not.toBeInTheDocument();
+    expect(screen.getAllByRole("dialog")).toHaveLength(1);
   });
 
   it("deleting a drink's water row removes the whole drink, as on the Liquids card", async () => {
@@ -187,6 +245,38 @@ describe("RecordsTab", () => {
     await waitFor(() => expect(undoToastCalls).toHaveLength(1));
     await undoToastCalls[0]!.onUndo();
     await waitFor(async () => expect(await liveCount()).toBe(3));
+  });
+
+  it("a time edit on a drink's water row moves the whole drink", async () => {
+    const user = userEvent.setup();
+    const logged = Date.now() - 60 * 60_000;
+    const drink = await logDrink({
+      volumeMl: 250,
+      description: "Latte",
+      caffeineMg: 80,
+      sugarG: 10,
+      timestamp: logged,
+    });
+    if (!drink.success) throw new Error("logDrink failed");
+    await renderWithFixtures(<RecordsTab range={RANGE} />);
+
+    const row = (await screen.findByText(/^250 ml/)).closest('[data-testid="record-row"]') as HTMLElement;
+    await user.click(within(row).getByRole("button", { name: "Edit entry" }));
+    const dialog = await screen.findByRole("dialog");
+    const moved = logged - 2 * 60 * 60_000;
+    const time = within(dialog).getByLabelText(/^Time/);
+    await user.clear(time);
+    await user.type(time, timestampToDateTimeLocal(moved));
+    await user.click(within(dialog).getByRole("button", { name: /save/i }));
+
+    const expected = new Date(timestampToDateTimeLocal(moved)).getTime();
+    await waitFor(async () => {
+      const intakes = await db.intakeRecords.where("groupId").equals(drink.data.groupId).toArray();
+      const substances = await db.substanceRecords.where("groupId").equals(drink.data.groupId).toArray();
+      const times = [...intakes, ...substances].map((r) => r.timestamp);
+      expect(times).toHaveLength(3);
+      expect(new Set(times)).toEqual(new Set([expected]));
+    });
   });
 
   it("editing a meal's time moves its sodium and clearing the note clears it", async () => {
