@@ -122,13 +122,15 @@ describe("v25 migration: drinks count at full volume", () => {
     ]);
   });
 
-  it("leaves a drink logged before the reduction shipped untouched", async () => {
+  // v25 skips a drink logged before its cutoff; v26, which runs right after
+  // it on open, raises that drink too (see v26-migration.test.ts).
+  it("raises a drink logged before the reduction shipped, through v26", async () => {
     const seed = drink("g0", 1000, 950);
     seed.intakeRecords![0]!.createdAt = 1_790_000_000_000;
     await seedAtV24(seed);
 
-    expect((await db.intakeRecords.get("g0-water"))!.amount).toBe(950);
-    expect(await db._syncQueue.count()).toBe(0);
+    expect((await db.intakeRecords.get("g0-water"))!.amount).toBe(1000);
+    expect(await db._syncQueue.count()).toBe(1);
   });
 
   it("leaves a drink already booked at full volume untouched", async () => {
