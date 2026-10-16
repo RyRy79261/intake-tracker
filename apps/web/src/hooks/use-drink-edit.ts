@@ -27,16 +27,16 @@ const EMPTY: DrinkEditFieldValues = {
 
 /**
  * Read a caffeine/ABV/sugar field for {@link EditDrinkInput}. A field the user
- * did not change is left out, so the amount follows the volume. A cleared
- * field removes the substance, but only when it held a value: the prefill is
- * async, so a blank field may just not have loaded yet.
+ * did not change is left out (`undefined`), so the amount follows the volume.
+ * A cleared field removes the substance (0). A value that is not a number, or
+ * is negative, is `null`: the save must stop, not drop the edit.
  */
-function readField(text: string, prefilled: string): number | undefined {
+function readField(text: string, prefilled: string): number | undefined | null {
   const trimmed = text.trim();
   if (trimmed === prefilled) return undefined;
   if (trimmed === "") return 0;
-  const n = parseFloat(trimmed);
-  return Number.isFinite(n) && n >= 0 ? n : undefined;
+  const n = Number(trimmed);
+  return Number.isFinite(n) && n >= 0 ? n : null;
 }
 
 /**
@@ -59,6 +59,10 @@ export function useDrinkEdit() {
   const openedNameRef = useRef("");
   // Discards a slow fetch for a record that is no longer open.
   const openTokenRef = useRef(0);
+  // Whether the drink has loaded. Until it has, the fields hold the water row
+  // only, and an old drink's water can be less than its volume: a save then
+  // would scale the drink down.
+  const loadRef = useRef<"loading" | "ready" | "failed">("loading");
 
   const setField = (field: keyof DrinkEditFieldValues, value: string) =>
     setValues((v) => ({ ...v, [field]: value }));
@@ -83,10 +87,13 @@ export function useDrinkEdit() {
       prefilledRef.current = opened;
       setValues(opened);
       setKind(record.source === "manual:food_water_content" ? "meal-water" : "drink");
+      loadRef.current = "loading";
 
       void fetchDrink(record.id)
         .then((snapshot) => {
-          if (token !== openTokenRef.current || !snapshot) return;
+          if (token !== openTokenRef.current) return;
+          loadRef.current = "ready";
+          if (!snapshot) return;
           setKind(snapshot.kind);
           if (snapshot.kind !== "drink") return;
           const loaded: DrinkEditFieldValues = {
@@ -111,7 +118,7 @@ export function useDrinkEdit() {
           });
         })
         .catch(() => {
-          // Leave the fields as opened. An unloaded field reads as unchanged.
+          if (token === openTokenRef.current) loadRef.current = "failed";
         });
     },
     buildUpdates: (timestamp, note) => {
@@ -125,6 +132,20 @@ export function useDrinkEdit() {
         toast({
           title: "Invalid amount",
           description: "Enter the amount as a whole number of ml.",
+          variant: "destructive",
+        });
+        return null;
+      }
+      // A meal's water row is not a drink, so a failed load does not block it.
+      const blocked =
+        loadRef.current === "loading" || (loadRef.current === "failed" && kind === "drink");
+      if (blocked) {
+        toast({
+          title: loadRef.current === "loading" ? "Still loading" : "Could not load the drink",
+          description:
+            loadRef.current === "loading"
+              ? "Wait a moment, then save again."
+              : "Close the form and open it again.",
           variant: "destructive",
         });
         return null;
@@ -153,6 +174,14 @@ export function useDrinkEdit() {
       const caffeineMg = readField(values.caffeineMg, prefilled.caffeineMg);
       const abvPercent = readField(values.abvPercent, prefilled.abvPercent);
       const sugarG = sugarEnabled ? readField(values.sugarG, prefilled.sugarG) : undefined;
+      if (caffeineMg === null || abvPercent === null || sugarG === null) {
+        toast({
+          title: "Invalid value",
+          description: "Caffeine, ABV and sugar must be 0 or more.",
+          variant: "destructive",
+        });
+        return null;
+      }
       if (caffeineMg !== undefined) updates.caffeineMg = caffeineMg;
       if (abvPercent !== undefined) updates.abvPercent = abvPercent;
       if (sugarG !== undefined) updates.sugarG = sugarG;

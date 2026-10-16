@@ -250,8 +250,15 @@ export function RecordsTab({ range, filter: filterProp, onFilterChange }: Record
     // time change cannot split it across two times.
     if (unified.type === "intake" || unified.type === "caffeine" || unified.type === "alcohol") {
       const table = unified.type === "intake" ? "intakeRecords" : "substanceRecords";
-      const waterId = await findDrinkForRow(table, unified.record.id);
-      const snapshot = waterId ? await fetchDrink(waterId) : null;
+      // A failed lookup falls back to the row's own editor, so the click is
+      // never lost.
+      let snapshot: Awaited<ReturnType<typeof fetchDrink>>;
+      try {
+        const waterId = await findDrinkForRow(table, unified.record.id);
+        snapshot = waterId ? await fetchDrink(waterId) : null;
+      } catch {
+        snapshot = null;
+      }
       if (snapshot) {
         setEditingDrink(snapshot.water);
         return;

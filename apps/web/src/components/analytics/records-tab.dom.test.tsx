@@ -155,6 +155,31 @@ describe("RecordsTab", () => {
     expect(within(dialog).getByLabelText(/Amount/)).toHaveValue(333);
   });
 
+  it("falls back to the row's own editor when the drink lookup fails", async () => {
+    const user = userEvent.setup();
+    const now = Date.now();
+
+    await renderWithFixtures(<RecordsTab range={RANGE} />, {
+      seed: {
+        intakeRecords: [
+          makeIntakeRecord({ type: "water", amount: 333, timestamp: now, groupId: "g-fail" }),
+        ],
+      },
+    });
+
+    await screen.findByText("333 ml");
+    const where = db.eatingRecords.where.bind(db.eatingRecords);
+    vi.spyOn(db.eatingRecords, "where").mockImplementation(((index: string) => {
+      if (index === "groupId") throw new Error("IndexedDB read failed");
+      return where(index);
+    }) as typeof db.eatingRecords.where);
+    await user.click(screen.getByRole("button", { name: "Edit entry" }));
+
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).queryByText("Edit Drink")).not.toBeInTheDocument();
+    expect(within(dialog).getByDisplayValue("333")).toBeInTheDocument();
+  });
+
   it("deleting a drink's water row removes the whole drink, as on the Liquids card", async () => {
     const user = userEvent.setup();
     const drink = await logDrink({ volumeMl: 250, description: "Latte", caffeineMg: 80, sugarG: 10 });

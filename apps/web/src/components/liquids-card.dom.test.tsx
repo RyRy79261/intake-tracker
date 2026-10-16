@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import { act, screen, waitFor, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type * as ToastModule from "@intake/ui/use-toast";
@@ -45,6 +45,10 @@ async function recentEntry(amount: string) {
   });
 }
 import { useSettingsStore } from "@/stores/settings-store";
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 describe("LiquidsCard", () => {
   it("renders the tab strip", async () => {
@@ -200,6 +204,56 @@ describe("LiquidsCard", () => {
       ),
     );
     expect((await db.intakeRecords.get(record.id))?.amount).toBe(250);
+  });
+
+  it("rejects a negative caffeine value instead of dropping the edit", async () => {
+    const user = userEvent.setup();
+    const drink = await logDrink({ volumeMl: 250, description: "Coffee", caffeineMg: 95 });
+    if (!drink.success) throw new Error("logDrink failed");
+
+    await renderWithFixtures(<LiquidsCard />);
+    await user.click(await recentEntry("250ml"));
+    const caffeine = (await screen.findByLabelText(/Caffeine \(mg\)/)) as HTMLInputElement;
+    await waitFor(() => expect(caffeine.value).toBe("95"));
+    fireEvent.change(caffeine, { target: { value: "-5" } });
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() =>
+      expect(toastMock).toHaveBeenCalledWith(
+        expect.objectContaining({ title: "Invalid value" }),
+      ),
+    );
+    expect((await db.substanceRecords.get(drink.data.substanceIds[0]!))?.amountMg).toBe(95);
+  });
+
+  it("does not save a drink whose details failed to load", async () => {
+    const user = userEvent.setup();
+    const drink = await logDrink({ volumeMl: 45, description: "Vodka", abvPercent: 40 });
+    if (!drink.success) throw new Error("logDrink failed");
+    // A legacy water row below the drink volume: saving it as the volume
+    // would scale the dose down.
+    await db.intakeRecords.update(drink.data.waterIntakeId, { amount: 27 });
+    const before = (await db.substanceRecords.get(drink.data.substanceIds[0]!))!;
+
+    await renderWithFixtures(<LiquidsCard />);
+    const row = await recentEntry("27ml");
+    const where = db.eatingRecords.where.bind(db.eatingRecords);
+    vi.spyOn(db.eatingRecords, "where").mockImplementation(((index: string) => {
+      if (index === "groupId") throw new Error("IndexedDB read failed");
+      return where(index);
+    }) as typeof db.eatingRecords.where);
+    await user.click(row);
+    await screen.findByLabelText("Amount (ml)");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() =>
+      expect(toastMock).toHaveBeenCalledWith(
+        expect.objectContaining({ title: "Could not load the drink" }),
+      ),
+    );
+    vi.restoreAllMocks();
+    expect(await db.substanceRecords.get(before.id)).toEqual(before);
+    expect((await db.intakeRecords.get(drink.data.waterIntakeId))?.amount).toBe(27);
   });
 
   // liquids-save#9: the Recent label is the water row's note, so renaming a
