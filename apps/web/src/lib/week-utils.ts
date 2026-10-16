@@ -1,68 +1,14 @@
 /**
- * The logical week: seven logical days (each starting at `dayStartHour`),
- * beginning on the user's first day of the week. Shared by the Today gadget
- * and the legacy TextMetrics summary.
+ * Day labels for Home: the week range and weekday of the Today gadget's day
+ * keys, and the "Yest"/weekday prefix in Recent lists. Which day a record
+ * belongs to, and the week itself, come from `@intake/core/daily-totals`.
  */
-
-import { toLocalDateKey, weekDayPosition } from "@/lib/date-utils";
 
 /** The calendar date a timestamp's logical day (starting at dayStartHour) belongs to. */
 export function logicalDate(timestamp: number, dayStartHour: number): Date {
   const d = new Date(timestamp);
   if (d.getHours() < dayStartHour) d.setDate(d.getDate() - 1);
   return d;
-}
-
-export interface LogicalWeek {
-  /** Start of the week's first logical day (ms). */
-  start: number;
-  /** Start of the next week's first logical day (ms, exclusive). */
-  end: number;
-  /** "YYYY-MM-DD" of each of the seven days, in display order. */
-  dayKeys: string[];
-  /** Column of today (0-6). */
-  todayIndex: number;
-}
-
-/**
- * The logical week containing `now`, starting on `weekStartsOn` (0-6, JS
- * getDay): its seven day keys, the [start, end) timestamps to query, and
- * today's column. Days are calendar dates shifted by dayStartHour, and the end
- * is the next logical day start rather than start + 7 × 24h, so 23h/25h DST
- * days don't drop or borrow an hour.
- */
-export function getLogicalWeek(now: Date, dayStartHour: number, weekStartsOn: number): LogicalWeek {
-  const today = logicalDate(now.getTime(), dayStartHour);
-  const todayIndex = weekDayPosition(today.getDay(), weekStartsOn);
-
-  const first = new Date(today);
-  first.setDate(today.getDate() - todayIndex);
-  first.setHours(dayStartHour, 0, 0, 0);
-
-  const dayKeys: string[] = [];
-  for (let i = 0; i < 7; i++) {
-    const d = new Date(first);
-    d.setDate(first.getDate() + i);
-    dayKeys.push(toLocalDateKey(d));
-  }
-
-  const next = new Date(first);
-  next.setDate(first.getDate() + 7);
-  next.setHours(dayStartHour, 0, 0, 0);
-
-  return { start: first.getTime(), end: next.getTime(), dayKeys, todayIndex };
-}
-
-/** Sum records into the week's columns by the logical day each belongs to. */
-export function bucketByLogicalDay<T extends { timestamp: number }>(
-  records: readonly T[], dayKeys: readonly string[], dayStartHour: number, accessor: (r: T) => number
-): number[] {
-  const buckets = [0, 0, 0, 0, 0, 0, 0];
-  for (const r of records) {
-    const i = dayKeys.indexOf(toLocalDateKey(logicalDate(r.timestamp, dayStartHour)));
-    if (i >= 0) buckets[i] = (buckets[i] ?? 0) + accessor(r);
-  }
-  return buckets;
 }
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"] as const;

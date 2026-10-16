@@ -9,7 +9,6 @@ import { BeverageTab } from "@/components/liquids/beverage-tab";
 import { PresetTab } from "@/components/liquids/preset-tab";
 import { RecentEntriesList, InlineEditFormShell } from "@/components/recent-entries-list";
 import {
-  useIntake,
   useRecentIntakeRecords,
   useSugarTotalsByGroupIds,
 } from "@/hooks/use-intake-queries";
@@ -21,7 +20,7 @@ import { DrinkEditFields } from "@/components/liquids/drink-edit-fields";
 import { useOptionalTrackerEnabled } from "@/lib/optional-trackers";
 import { formatAmount, getLiquidTypeLabel } from "@/lib/utils";
 import { ModuleCard } from "@/components/home/module-card";
-import { getProgressStatus } from "@intake/core/progress";
+import { useDailyTotals } from "@/hooks/use-daily-totals";
 import { progressStatusTextClass } from "@intake/ui/progress";
 
 const TAB_THEMES = {
@@ -42,7 +41,7 @@ const TAB_ICONS = {
 
 export function LiquidsCard() {
   const [activeTab, setActiveTab] = useState<string>("water");
-  const waterIntake = useIntake("water");
+  const water = useDailyTotals().metrics.water;
   const settings = useSettings();
   const recentRecords = useRecentIntakeRecords("water");
 
@@ -83,11 +82,7 @@ export function LiquidsCard() {
   const theme = TAB_THEMES[activeTab as TabKey] ?? TAB_THEMES.water;
   const Icon = TAB_ICONS[activeTab as TabKey] ?? TAB_ICONS.water;
 
-  const waterStatus = getProgressStatus(
-    waterIntake.dailyTotal,
-    settings.waterLimit,
-    settings.waterExtendedBuffer
-  );
+  const waterStatus = water.today.status === "none" ? "ok" : water.today.status;
 
   return (
     <ModuleCard
@@ -101,11 +96,11 @@ export function LiquidsCard() {
             data-testid="liquids-today-total"
             className={progressStatusTextClass(waterStatus, "")}
           >
-            {formatAmount(waterIntake.dailyTotal, "ml")}
+            {formatAmount(water.today.value, "ml")}
           </b>{" "}
-          / {formatAmount(settings.waterLimit, "ml")}
+          / {formatAmount(water.today.limit, "ml")}
           <br />
-          today · 24h {formatAmount(waterIntake.rollingTotal, "ml")}
+          today · 24h {formatAmount(water.rolling24h, "ml")}
         </>
       }
     >

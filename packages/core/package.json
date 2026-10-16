@@ -18,6 +18,7 @@
     "./strength": "./src/strength-parser.ts",
     "./record-schemas": "./src/record-schemas.ts",
     "./logical-day": "./src/logical-day.ts",
+    "./daily-totals": "./src/daily-totals.ts",
     "./sodium": "./src/sodium.ts"
   },
   "scripts": {

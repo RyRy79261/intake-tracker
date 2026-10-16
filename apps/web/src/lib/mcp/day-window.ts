@@ -7,7 +7,7 @@
  * `Intl`, so the host zone never leaks in.
  */
 
-const DAY_MS = 24 * 60 * 60_000;
+import { totalsWindow } from "@intake/core/daily-totals";
 
 export function isValidTimeZone(tz: string): boolean {
   try {
@@ -69,37 +69,15 @@ function wallClock(instant: number, tz: string): WallClock {
   };
 }
 
-/** Milliseconds `tz` is ahead of UTC at `instant`. */
-function offsetAt(instant: number, tz: string): number {
-  const w = wallClock(instant, tz);
-  const asUtc = Date.UTC(w.year, w.month - 1, w.day, w.hour, w.minute, w.second);
-  return asUtc - Math.floor(instant / 1000) * 1000;
-}
-
-/**
- * The instant a local wall-clock time occurs in `tz`. Two passes so the
- * offset used is the one in force at the result, not at the first guess
- * (matters on DST-change days).
- */
-function zonedInstant(
-  year: number,
-  month: number,
-  day: number,
-  hour: number,
-  tz: string,
-): number {
-  const naive = Date.UTC(year, month - 1, day, hour);
-  let guess = naive - offsetAt(naive, tz);
-  guess = naive - offsetAt(guess, tz);
-  return guess;
-}
-
 function pad(n: number): string {
   return String(n).padStart(2, "0");
 }
 
 export interface DayWindow {
-  /** When the user's current app day began (local `dayStartHour`). */
+  /**
+   * When the user's current app day began (local `dayStartHour`): the
+   * logical day start from `@intake/core/daily-totals`.
+   */
   start: number;
   /**
    * Local calendar date ("YYYY-MM-DD") in `tz`. Dose logs are keyed by
@@ -119,15 +97,6 @@ export function zonedDayWindow(
   const date = `${w.year}-${pad(w.month)}-${pad(w.day)}`;
   const weekday = new Date(Date.UTC(w.year, w.month - 1, w.day)).getUTCDay();
 
-  let start = zonedInstant(w.year, w.month, w.day, dayStartHour, tz);
-  if (start > now) {
-    // Before today's day-start hour: the app day began yesterday. Date.UTC
-    // normalises day 0 to the previous month's last day.
-    start = zonedInstant(w.year, w.month, w.day - 1, dayStartHour, tz);
-  }
-  // A day start inside a spring-forward gap can land a little past `now`
-  // right after the switch; clamp to a full day back rather than the future.
-  if (start > now) start -= DAY_MS;
-
+  const start = totalsWindow(now, tz, dayStartHour).dayStart;
   return { start, date, weekday };
 }

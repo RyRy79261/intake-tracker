@@ -47,6 +47,7 @@ import {
   titrationPlanFixture,
 } from "@/__tests__/helpers/mcp-query-fixtures";
 import * as schema from "@intake/db/schema";
+import { PARITY_DAY } from "@/__tests__/fixtures/daily-totals-parity";
 import type * as QueriesMod from "@/lib/mcp/queries";
 
 const OTHER_USER_ID = "other-user-integration";
@@ -1018,6 +1019,27 @@ describe("MCP query fns — getTodaySummary day boundary (real Postgres)", () =>
 
     expect(summary.day_started_at).toBe(Date.UTC(2026, 8, 24, 22, 0));
     await ctx.db.delete(schema.userSettings);
+  });
+
+  it("leaves out a record dated later today, as the app does (Daily Totals parity)", async () => {
+    // The same day of records as daily-totals-parity.dom.test.tsx, so the
+    // MCP summary must show what the Liquids header and Today gadget show.
+    await ctx.db.insert(schema.intakeRecords).values(
+      PARITY_DAY.rows.map((r) => intakeFixture(ctx.testUserId, r)),
+    );
+    await ctx.db.insert(schema.pushSettings).values({
+      userId: ctx.testUserId,
+      dayStartHour: PARITY_DAY.dayStartHour,
+    });
+
+    const summary = await queries.getTodaySummary(ctx.testUserId, {
+      // The fixture's times are host wall-clock times, as in the app tests.
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      now: PARITY_DAY.now.getTime(),
+    });
+
+    expect(summary.intake.water_ml).toBe(PARITY_DAY.expected.water);
+    expect(summary.intake.sodium_mg).toBe(PARITY_DAY.expected.sodium);
   });
 
   it("falls back to the synced home timezone when no other zone is known", async () => {
