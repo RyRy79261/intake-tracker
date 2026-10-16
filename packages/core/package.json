@@ -18,7 +18,8 @@
     "./strength": "./src/strength-parser.ts",
     "./record-schemas": "./src/record-schemas.ts",
     "./logical-day": "./src/logical-day.ts",
-    "./sodium": "./src/sodium.ts"
+    "./sodium": "./src/sodium.ts",
+    "./voice-items": "./src/voice-items.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
