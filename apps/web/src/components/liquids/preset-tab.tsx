@@ -15,7 +15,15 @@ import { CARD_THEMES } from "@/lib/card-themes";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useSettings } from "@/hooks/use-settings";
 import { useIntake } from "@/hooks/use-intake-queries";
-import { useLogDrink, type LogDrinkInput } from "@/hooks/use-drink-log";
+import {
+  useDrink,
+  drinkAmounts,
+  drinkFromRecipe,
+  formatStandardDrinks,
+  amountForVolume,
+  type DrinkRecipe,
+  type LogDrinkInput,
+} from "@/hooks/use-drink";
 import { useOptionalTrackerEnabled } from "@/lib/optional-trackers";
 import { reportSaveError } from "@/lib/db-recovery";
 import { useToast } from "@intake/ui/use-toast";
@@ -32,7 +40,6 @@ import {
 } from "@intake/ui/alert-dialog";
 import type { LiquidPreset } from "@/lib/constants";
 import type { SubstanceLookupResponse } from "@/lib/substance-lookup-schema";
-import { standardDrinksFromAbv } from "@intake/core/alcohol";
 import { useFieldId, useOnLogged } from "@/components/log-form-scope";
 import { useInPreview } from "@/lib/help/preview-context";
 
@@ -140,7 +147,7 @@ function sugarGrams(form: DrinkForm): number {
     const typed = parseFloat(form.sugarGInput);
     return Number.isFinite(typed) && typed > 0 ? typed : 0;
   }
-  return (form.volumeMl / 100) * form.sugarPer100ml;
+  return amountForVolume(form.sugarPer100ml, form.volumeMl);
 }
 
 /**
@@ -196,7 +203,7 @@ export function PresetTab({ tab }: PresetTabProps) {
   const longPressTriggeredRef = useRef(false);
 
   const { allPresets, addPreset, deletePreset } = useLiquidPresets();
-  const logDrinkEntry = useLogDrink();
+  const drink = useDrink();
   const { toast } = useToast();
   const showAi = useAuthGate();
   // A disabled tracker is hidden from input forms and its entries are not
@@ -227,9 +234,20 @@ export function PresetTab({ tab }: PresetTabProps) {
   // scaled to the current volume.
   const sugarFieldValue = useMemo(() => {
     if (form.sugarGInput !== null) return form.sugarGInput;
-    const derived = (volumeMl / 100) * sugarPer100ml;
+    const derived = amountForVolume(sugarPer100ml, volumeMl);
     return derived > 0 ? String(Math.round(derived * 10) / 10) : "";
   }, [form.sugarGInput, volumeMl, sugarPer100ml]);
+
+  // The drink as the Drink module will log it. Sugar is already rounded and
+  // zero while the tracker is off.
+  const recipe: DrinkRecipe = {
+    volumeMl,
+    caffeinePer100ml,
+    abvPercent: alcoholPer100ml,
+    saltPer100ml,
+    sugarG,
+  };
+  const amounts = drinkAmounts(recipe);
 
   // Calculated substance amounts for display. Every non-zero solute is listed:
   // this tab has no salt input, so the summary is the only place a preset's
@@ -237,22 +255,16 @@ export function PresetTab({ tab }: PresetTabProps) {
   const calculatedDisplay = useMemo(() => {
     if (volumeMl <= 0) return null;
     const parts: string[] = [];
-    if (caffeinePer100ml > 0) {
+    if (amounts.caffeineMg > 0) parts.push(`${amounts.caffeineMg} mg caffeine`);
+    if (amounts.abvPercent > 0) {
       parts.push(
-        `${Math.round((volumeMl / 100) * caffeinePer100ml)} mg caffeine`
+        `${amounts.abvPercent}% ABV (${formatStandardDrinks(amounts.standardDrinks)} std drinks)`
       );
     }
-    if (alcoholPer100ml > 0) {
-      const stdDrinks = standardDrinksFromAbv(alcoholPer100ml, volumeMl);
-      parts.push(
-        `${alcoholPer100ml}% ABV (${parseFloat(stdDrinks.toFixed(1))} std drinks)`
-      );
-    }
-    const sodiumMg = Math.round((volumeMl / 100) * saltPer100ml);
-    if (sodiumMg > 0) parts.push(`${sodiumMg} mg sodium`);
-    if (sugarG > 0) parts.push(`${sugarG} g sugar`);
+    if (amounts.saltMg > 0) parts.push(`${amounts.saltMg} mg sodium`);
+    if (amounts.sugarG > 0) parts.push(`${amounts.sugarG} g sugar`);
     return parts.length > 0 ? parts.join(", ") : null;
-  }, [volumeMl, caffeinePer100ml, alcoholPer100ml, saltPer100ml, sugarG]);
+  }, [volumeMl, amounts.caffeineMg, amounts.abvPercent, amounts.standardDrinks, amounts.saltMg, amounts.sugarG]);
 
   // Whether we have anything worth recording besides the volume itself.
   // Salt and sugar count: gating on caffeine/alcohol alone made decaf, herbal
@@ -357,44 +369,23 @@ export function PresetTab({ tab }: PresetTabProps) {
     }
   };
 
-  /**
-   * Build the `logDrink` payload for the current form state.
-   *
-   * This used to hand-assemble a composable entry: an explicit water intake
-   * plus substances whose `volumeMl` was omitted to suppress the service's
-   * implicit auto-water side effect (`...(waterAmount <= 0 && { volumeMl })`).
-   * That guard was tautologically dead — `waterAmount` *is* `volumeMl` and
-   * logging requires a positive volume — so the substance records were written
-   * with no volume at all, leaving nothing to sync a later volume edit against.
-   * `logDrink` owns the fluid instead: it derives the one water record from
-   * `volumeMl` and stores the volume on the substances as plain data.
-   */
+  /** The `logDrink` payload for the current form state. */
   const buildDrink = (): LogDrinkInput => {
     const description =
       beverageName || searchText.trim() || (tab === "coffee" ? "Coffee" : "Drink");
     const presetTag = `preset:${selectedPresetId ?? "manual"}`;
-
-    return {
-      volumeMl,
+    return drinkFromRecipe(recipe, {
       description,
       waterSource: presetTag,
       groupSource: presetTag,
-      ...(caffeinePer100ml > 0 && {
-        caffeineMg: Math.round((volumeMl / 100) * caffeinePer100ml),
-      }),
-      ...(alcoholPer100ml > 0 && { abvPercent: alcoholPer100ml }),
-      ...(saltPer100ml > 0 && {
-        saltMg: Math.round((volumeMl / 100) * saltPer100ml),
-      }),
-      ...(sugarG > 0 && { sugarG }),
-    };
+    });
   };
 
   const handleLog = async () => {
     if (isSubmitting || volumeMl <= 0 || !hasSubstance) return;
     setIsSubmitting(true);
     try {
-      await logDrinkEntry(buildDrink());
+      await drink.log(buildDrink());
       toast({
         title: "Logged",
         description: `${beverageName || searchText.trim() || "Entry"} recorded`,
@@ -435,7 +426,7 @@ export function PresetTab({ tab }: PresetTabProps) {
       // Log first. The preset used to be saved before logging, so a failed log
       // still left a new preset behind while the toast blamed the preset.
       try {
-        await logDrinkEntry(buildDrink());
+        await drink.log(buildDrink());
       } catch (cause) {
         reportSaveError(tab, cause);
         toast({

@@ -282,118 +282,36 @@ describe("substance-service: getUnenrichedSubstanceRecords", () => {
   });
 });
 
-describe("substance-service: updateSubstanceRecord keeps the group's fluid in step", () => {
-  it("updates the group's water row when the volume changes", async () => {
-    const drink = await logDrink({
-      volumeMl: 330,
-      description: "Beer",
-      abvPercent: 5,
-    });
-    expect(drink.success).toBe(true);
-    if (!drink.success) return;
-
-    // Editing the volume on the substance alone let the two halves of one
-    // drink disagree: the substance said 500 ml, hydration still counted 330.
-    const result = await updateSubstanceRecord(drink.data.substanceIds[0]!, {
-      volumeMl: 500,
-    });
-    expect(result.success).toBe(true);
-
-    const water = await db.intakeRecords.get(drink.data.waterIntakeId);
-    expect(water!.amount).toBe(500);
-  });
-
-  it("moves the group's water row when the timestamp changes", async () => {
-    const drink = await logDrink({
-      volumeMl: 250,
-      description: "Coffee",
-      caffeineMg: 95,
-      timestamp: 1700000000000,
-    });
-    expect(drink.success).toBe(true);
-    if (!drink.success) return;
-
-    const moved = 1700086400000;
-    await updateSubstanceRecord(drink.data.substanceIds[0]!, { timestamp: moved });
-
-    const water = await db.intakeRecords.get(drink.data.waterIntakeId);
-    expect(water!.timestamp).toBe(moved);
-  });
-
-  it("leaves the water row alone for a description-only edit", async () => {
-    const drink = await logDrink({
-      volumeMl: 250,
-      description: "Coffee",
-      caffeineMg: 95,
-    });
-    expect(drink.success).toBe(true);
-    if (!drink.success) return;
-    const before = await db.intakeRecords.get(drink.data.waterIntakeId);
-
-    await updateSubstanceRecord(drink.data.substanceIds[0]!, {
-      description: "Flat white",
-    });
-
-    const after = await db.intakeRecords.get(drink.data.waterIntakeId);
-    expect(after!.amount).toBe(before!.amount);
-    expect(after!.timestamp).toBe(before!.timestamp);
-  });
-
-  it("leaves a legacy water row alone when the edit re-sends the same volume", async () => {
-    // The Records-tab alcohol edit always re-sends the prefilled volume. A
-    // re-send is not a volume change, so it must not rewrite the water row —
-    // here a legacy row that booked only the non-alcohol share (27 of 45 ml).
-    const drink = await logDrink({
-      volumeMl: 45,
-      description: "Spirit",
-      abvPercent: 40,
-    });
-    expect(drink.success).toBe(true);
-    if (!drink.success) return;
-    await db.intakeRecords.update(drink.data.waterIntakeId, { amount: 27 });
-
-    await updateSubstanceRecord(drink.data.substanceIds[0]!, {
-      description: "Gin",
-      abvPercent: 40,
-      volumeMl: 45,
-    });
-
-    const water = await db.intakeRecords.get(drink.data.waterIntakeId);
-    expect(water!.amount).toBe(27);
-  });
-
-  it("moves a drink's water row with a changed volume", async () => {
-    const drink = await logDrink({
-      volumeMl: 45,
-      description: "Spirit",
-      abvPercent: 40,
-    });
-    expect(drink.success).toBe(true);
-    if (!drink.success) return;
-
-    // A double: 90 ml of drink is 90 ml of fluid.
-    await updateSubstanceRecord(drink.data.substanceIds[0]!, { volumeMl: 90 });
-
-    const water = await db.intakeRecords.get(drink.data.waterIntakeId);
-    expect(water!.amount).toBe(90);
-  });
-
-  it("sets the water row to the volume when the substance had none stored", async () => {
-    const groupId = "legacy-group";
-    const { volumeMl: _unused, ...noVolume } = makeSubstanceRecord({
-      id: "legacy-sub",
-      type: "alcohol",
-      groupId,
-    });
-    await db.substanceRecords.add(noVolume);
-    await db.intakeRecords.add(
-      makeIntakeRecord({ id: "legacy-water", type: "water", amount: 200, groupId }),
+describe("substance-service: updateSubstanceRecord (not a drink)", () => {
+  it("moves the rest of a meal's group with a new time", async () => {
+    const meal = await addComposableEntry(
+      {
+        eating: { note: "Chocolate" },
+        intakes: [{ type: "sugar", amount: 20, source: "manual:sugar" }],
+        substance: { type: "caffeine", amountMg: 20, description: "Chocolate" },
+      },
+      1700000000000,
     );
+    if (!meal.success) throw new Error("add failed");
+    const moved = 1700086400000;
 
-    await updateSubstanceRecord("legacy-sub", { volumeMl: 330 });
+    await updateSubstanceRecord(meal.data.substanceId!, { timestamp: moved });
 
-    const water = await db.intakeRecords.get("legacy-water");
-    expect(water!.amount).toBe(330);
+    expect((await db.eatingRecords.get(meal.data.eatingId!))!.timestamp).toBe(moved);
+    expect((await db.intakeRecords.get(meal.data.intakeIds[0]!))!.timestamp).toBe(moved);
+  });
+
+  it("rounds amounts to whole numbers", async () => {
+    const created = await addSubstanceRecord({
+      type: "caffeine",
+      amountMg: 95,
+      description: "Caffeine tablet",
+    });
+    if (!created.success) throw new Error("add failed");
+
+    await updateSubstanceRecord(created.data.id, { amountMg: 95.6 });
+
+    expect((await db.substanceRecords.get(created.data.id))!.amountMg).toBe(96);
   });
 
   it("does not create a water row for an ungrouped substance", async () => {

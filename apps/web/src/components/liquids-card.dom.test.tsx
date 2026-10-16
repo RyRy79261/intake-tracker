@@ -135,11 +135,9 @@ describe("LiquidsCard", () => {
     expect(live).toHaveLength(0);
   });
 
-  // ai-routes-models#9: a drink logged before full-volume booking (or one
-  // that could not be repaired) can have a water row smaller than the drink.
-  // The edit form used to send the water amount as the drink volume, so a
-  // time-only edit cut the alcohol record to the water amount.
-  it("keeps a spirit's drink volume and standard drinks through a time-only edit", async () => {
+  // A drink logged before full-volume booking can have a water row smaller
+  // than the drink. The form shows the real volume, so saving fixes the water.
+  it("shows an old spirit's real volume and keeps its dose through a time-only edit", async () => {
     const user = userEvent.setup();
     const drink = await logDrink({
       volumeMl: 45,
@@ -156,6 +154,7 @@ describe("LiquidsCard", () => {
     await user.click(await recentEntry("27ml"));
     const abv = (await screen.findByLabelText(/Alcohol \(% ABV\)/)) as HTMLInputElement;
     await waitFor(() => expect(abv.value).toBe("40"));
+    expect(screen.getByLabelText("Amount (ml)")).toHaveValue(45);
 
     const earlier = timestampToDateTimeLocal(Date.now() - 3_600_000);
     fireEvent.change(screen.getByLabelText(/Date and time/), { target: { value: earlier } });
@@ -168,7 +167,7 @@ describe("LiquidsCard", () => {
     const after = (await db.substanceRecords.get(before.id))!;
     expect(after.volumeMl).toBe(45);
     expect(after.amountStandardDrinks).toBe(before.amountStandardDrinks);
-    expect((await db.intakeRecords.get(drink.data.waterIntakeId))?.amount).toBe(27);
+    expect((await db.intakeRecords.get(drink.data.waterIntakeId))?.amount).toBe(45);
   });
 
   // liquids-save#12: parseInt read "1e3" as 1 ml.

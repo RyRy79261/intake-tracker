@@ -154,40 +154,6 @@ describe("PresetTab", () => {
     });
   });
 
-  // A drink counts as fluid at its full volume, as on a clinical intake/output
-  // chart; the alcohol dose comes from the same volume.
-  it("logs a spirit preset's full volume as fluid", async () => {
-    const user = userEvent.setup();
-    await renderWithFixtures(<PresetTab tab="alcohol" />);
-
-    // Default Spirit preset: 45 ml, 40% ABV.
-    await user.click(screen.getByRole("button", { name: "Spirit45ml" }));
-    await user.click(screen.getByRole("button", { name: "Log Entry" }));
-
-    await waitFor(async () => {
-      const water = await db.intakeRecords.where("type").equals("water").toArray();
-      expect(water.map((r) => r.amount)).toEqual([45]);
-    });
-    const [alcohol] = await db.substanceRecords.toArray();
-    expect(alcohol!.volumeMl).toBe(45);
-  });
-
-  it("logs a manual alcohol entry's full volume as fluid", async () => {
-    const user = userEvent.setup();
-    await renderWithFixtures(<PresetTab tab="alcohol" />);
-
-    await user.type(screen.getByLabelText("alcohol name"), "Gin");
-    await user.clear(screen.getByLabelText("Volume (ml)"));
-    await user.type(screen.getByLabelText("Volume (ml)"), "50");
-    await user.type(screen.getByLabelText("% ABV"), "40");
-    await user.click(screen.getByRole("button", { name: "Log Entry" }));
-
-    await waitFor(async () => {
-      const water = await db.intakeRecords.where("type").equals("water").toArray();
-      expect(water.map((r) => r.amount)).toEqual([50]);
-    });
-  });
-
   it("reports a failed save through the save-error pipeline", async () => {
     const user = userEvent.setup();
     await renderWithFixtures(<PresetTab tab="coffee" />);

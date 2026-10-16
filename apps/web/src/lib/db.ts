@@ -555,7 +555,7 @@ realDb.version(21).stores({
 // Version 22: Backfill `groupId` onto drink pairs written by the old implicit
 // auto-water path (issue #322). Those pairs — a SubstanceRecord plus a water
 // IntakeRecord whose `source` is `substance:<substanceId>` — were linked only
-// by that source string and carried no group. `syncLiquidEntrySubstances` keys
+// by that source string and carried no group. The drink edit (now `editDrink`) keys
 // exclusively on `groupId`, so editing one of these entries could not find the
 // existing substance and created a *second* one instead. Stamping a shared
 // group on both halves closes that off for data already on disk.

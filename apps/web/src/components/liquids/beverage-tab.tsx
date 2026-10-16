@@ -12,10 +12,7 @@ import { ManualInputDialog } from "@/components/manual-input-dialog";
 import { useSettings } from "@/hooks/use-settings";
 import { useToast } from "@intake/ui/use-toast";
 import { useIntake } from "@/hooks/use-intake-queries";
-import {
-  useAddComposableEntry,
-  type ComposableEntryInput,
-} from "@/hooks/use-composable-entry";
+import { useDrink } from "@/hooks/use-drink";
 import { reportSaveError } from "@/lib/db-recovery";
 import { useOptionalTrackerEnabled } from "@/lib/optional-trackers";
 import { formatDateTime } from "@/lib/date-utils";
@@ -83,7 +80,7 @@ export function BeverageTab() {
   // A disabled tracker is hidden from input forms and its entries are not
   // persisted (see optional-trackers.ts).
   const sugarEnabled = useOptionalTrackerEnabled("sugar");
-  const addEntry = useAddComposableEntry();
+  const drink = useDrink();
 
   const handleIncrement = useCallback(() => {
     setPendingAmount((prev) => prev + waterIncrement);
@@ -103,19 +100,20 @@ export function BeverageTab() {
         : "beverage";
       const sugar = sugarEnabled ? parseSugarGrams(sugarG) : 0;
       if (sugar > 0) {
-        const intakes: ComposableEntryInput["intakes"] = [
-          { type: "water", amount, source, ...(note ? { note } : {}) },
-          { type: "sugar", amount: sugar, source: "manual:sugar" },
-        ];
-        await addEntry(
-          { intakes, groupSource: "manual_beverage_entry" },
-          timestamp
-        );
+        await drink.log({
+          volumeMl: amount,
+          description: beverageName.trim() || "Beverage",
+          ...(note ? { note } : {}),
+          sugarG: sugar,
+          waterSource: source,
+          groupSource: "manual_beverage_entry",
+          ...(timestamp !== undefined && { timestamp }),
+        });
       } else {
         await waterIntake.addRecord(amount, source, timestamp, note);
       }
     },
-    [beverageName, sugarG, sugarEnabled, addEntry, waterIntake]
+    [beverageName, sugarG, sugarEnabled, drink, waterIntake]
   );
 
   const handleConfirm = useCallback(async () => {

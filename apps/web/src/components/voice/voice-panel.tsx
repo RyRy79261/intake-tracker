@@ -12,7 +12,7 @@ import { useAddWeight, useAddBloodPressure } from "@/hooks/use-health-queries";
 import { useAddUrination } from "@/hooks/use-urination-queries";
 import { useAddDefecation } from "@/hooks/use-defecation-queries";
 import { useAddSubstance } from "@/hooks/use-substance-queries";
-import { useLogDrink } from "@/hooks/use-drink-log";
+import { useDrink } from "@/hooks/use-drink";
 import { useAddComposableEntry, type ComposableEntryInput } from "@/hooks/use-composable-entry";
 import { useOptionalTrackerEnabled } from "@/lib/optional-trackers";
 import {
@@ -113,7 +113,7 @@ export function VoicePanel({ onCommitted, initialClip }: VoicePanelProps) {
   const addUrination = useAddUrination();
   const addDefecation = useAddDefecation();
   const addSubstance = useAddSubstance();
-  const logDrinkEntry = useLogDrink();
+  const logDrinkEntry = useDrink().log;
   const addComposableEntry = useAddComposableEntry();
   const sugarEnabled = useOptionalTrackerEnabled("sugar");
   const potassiumEnabled = useOptionalTrackerEnabled("potassium");

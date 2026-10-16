@@ -5,6 +5,7 @@ import type { ServiceResult } from "@intake/types/service";
 import { syncFields } from "@/lib/utils";
 import { enqueueInsideTx } from "@/lib/sync-queue";
 import { schedulePush } from "@/lib/sync-engine";
+import { COMPOSABLE_TABLES, retimeGroupInTx } from "@/lib/composable-entry-service";
 
 export type AddSubstanceInput = {
   type: 'caffeine' | 'alcohol';
@@ -180,7 +181,7 @@ export async function deleteSubstanceRecord(
         // the whole group there would soft-delete the meal's components while
         // leaving the meal itself alive, which is incoherent. Presence of a
         // live eating record is what distinguishes the two, matching
-        // `classifyLiquidDelete`.
+        // the Drink module (`deleteDrink`).
         const groupId = substance?.groupId;
         if (groupId) {
           const groupEatings = await db.eatingRecords
@@ -292,14 +293,13 @@ export async function undoDeleteSubstanceRecord(
 }
 
 /**
- * Update a SubstanceRecord, keeping its group's fluid row consistent.
+ * Update a SubstanceRecord that is not part of a drink: a caffeine dose with
+ * no volume, or a substance in a meal. Drinks are edited through the Drink
+ * module (`editDrink`), which keeps the water row equal to the volume.
  *
- * `volumeMl` is the drink's volume, and the group's water IntakeRecord is
- * derived from it (the full volume, see logDrink). Editing the volume
- * on the substance alone let the two halves of one drink disagree — the
- * substance said 500 ml while hydration still counted 330 — with nothing to
- * reconcile them. Same for `timestamp`: moving
- * the substance without its water stranded the halves on different days.
+ * A new time moves the rest of the record's group with it, so a meal is
+ * never split across two times. Amounts are rounded: the columns are
+ * Postgres integers, and a fractional value is rejected by the push.
  */
 export async function updateSubstanceRecord(
   id: string,
@@ -307,51 +307,19 @@ export async function updateSubstanceRecord(
 ): Promise<ServiceResult<void>> {
   try {
     const now = Date.now();
+    const patch: Partial<SubstanceRecord> = { ...updates, updatedAt: now };
+    if (patch.amountMg !== undefined) patch.amountMg = Math.round(patch.amountMg);
+    if (patch.volumeMl !== undefined) patch.volumeMl = Math.round(patch.volumeMl);
     await db.transaction(
       "rw",
-      [db.substanceRecords, db.intakeRecords, db._syncQueue],
+      [...COMPOSABLE_TABLES, db._syncQueue],
       async () => {
         const existing = await db.substanceRecords.get(id);
-        await db.substanceRecords.update(id, { ...updates, updatedAt: now });
+        await db.substanceRecords.update(id, patch);
         await enqueueInsideTx("substanceRecords", id, "upsert");
-
         const groupId = updates.groupId ?? existing?.groupId;
-        if (!groupId) return;
-
-        // Scale the water row by the change in volume rather than copying
-        // the volume over: re-sending the same volume leaves it alone, and a
-        // row the user adjusted by hand keeps its proportion. With no stored
-        // volume to compare against, the water row takes the new volume.
-        const oldVolume = existing?.volumeMl;
-        const newVolume = updates.volumeMl;
-        const volumeChanged = newVolume !== undefined && newVolume !== oldVolume;
-        const scale =
-          volumeChanged && oldVolume !== undefined && oldVolume > 0
-            ? newVolume / oldVolume
-            : null;
-        if (!volumeChanged && updates.timestamp === undefined) return;
-
-        const groupIntakes = await db.intakeRecords
-          .where("groupId")
-          .equals(groupId)
-          .toArray();
-        for (const intake of groupIntakes) {
-          if (intake.type !== "water" || intake.deletedAt !== null) continue;
-          const waterPatch: Record<string, number> = {};
-          if (volumeChanged) {
-            waterPatch.amount = Math.max(
-              1,
-              Math.round(scale !== null ? intake.amount * scale : newVolume),
-            );
-          }
-          if (updates.timestamp !== undefined) {
-            waterPatch.timestamp = updates.timestamp;
-          }
-          await db.intakeRecords.update(intake.id, {
-            ...waterPatch,
-            updatedAt: now,
-          });
-          await enqueueInsideTx("intakeRecords", intake.id, "upsert");
+        if (groupId && updates.timestamp !== undefined) {
+          await retimeGroupInTx(groupId, updates.timestamp, now);
         }
       },
     );

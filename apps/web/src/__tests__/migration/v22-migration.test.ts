@@ -6,7 +6,7 @@ import { db } from "@/lib/db";
  * auto-water path (issue #322).
  *
  * Those pairs were linked only by the water row's `source: "substance:<id>"`
- * string. `syncLiquidEntrySubstances` keys exclusively on `groupId`, so editing
+ * string. The drink edit (now `editDrink`) keys exclusively on `groupId`, so editing
  * one of these entries found no substance in the (nonexistent) group and
  * created a *second* one — a deterministic duplicate needing no AI misbehaviour.
  * Without this backfill, every drink already on disk stays that trap.

@@ -1,6 +1,7 @@
 import type { LiquidPreset } from "@/lib/constants";
 import type { VoiceParsedItem } from "@/lib/voice-types";
 import { tokenize, type ReconcileNote } from "@/lib/voice-reconcile";
+import { amountForVolume } from "@/lib/drink-service";
 
 /**
  * Align voice caffeine estimates with the user's liquid presets.
@@ -77,7 +78,7 @@ export function applyPresetCaffeine(
     }
     const preset = findPreset(item.description, presets);
     if (!preset || preset.caffeinePer100ml === undefined) return item;
-    const caffeineMg = Math.round((preset.caffeinePer100ml * item.volumeMl) / 100);
+    const caffeineMg = Math.round(amountForVolume(preset.caffeinePer100ml, item.volumeMl));
     if (caffeineMg === item.caffeineMg) return item;
     notes.push({
       message: `Caffeine from your "${preset.name}" preset (${preset.caffeinePer100ml} mg per 100 ml) instead of the estimate of ${item.caffeineMg} mg.`,

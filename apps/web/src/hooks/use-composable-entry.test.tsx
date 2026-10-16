@@ -3,11 +3,11 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 import {
   useAddComposableEntry,
-  useDeleteEntryGroup,
   useSyncEatingGroup,
   fetchEntryGroup,
   sodiumKindFromSource,
 } from "@/hooks/use-composable-entry";
+import { useDrink } from "@/hooks/use-drink";
 import { db } from "@/lib/db";
 
 // Capture the undo callbacks passed to the toast so tests can fire them.
@@ -89,31 +89,25 @@ describe("useAddComposableEntry recovery", () => {
   });
 });
 
-describe("useDeleteEntryGroup", () => {
-  it("soft-deletes every record in the group and shows an undo toast", async () => {
-    const add = renderHook(() => useAddComposableEntry());
-    let groupId!: string;
+describe("useDrink().remove", () => {
+  it("soft-deletes the whole drink and shows an undo toast", async () => {
+    const drink = renderHook(() => useDrink());
+    let logged!: { groupId: string; waterIntakeId: string };
     await act(async () => {
-      groupId = (
-        await add.result.current(
-          {
-            eating: { note: "meal" },
-            intakes: [{ type: "salt", amount: 300 }],
-          },
-          1_700_000_000_000,
-        )
-      ).groupId;
+      logged = await drink.result.current.log({
+        volumeMl: 250,
+        description: "Juice",
+        sugarG: 20,
+        timestamp: 1_700_000_000_000,
+      });
     });
 
-    const { result } = renderHook(() => useDeleteEntryGroup());
-    let deleted!: { deletedCount: number };
     await act(async () => {
-      deleted = await result.current(groupId);
+      await drink.result.current.remove(logged.waterIntakeId);
     });
 
-    expect(deleted.deletedCount).toBe(2);
-    expect(await fetchEntryGroup(groupId)).toEqual({
-      groupId,
+    expect(await fetchEntryGroup(logged.groupId)).toEqual({
+      groupId: logged.groupId,
       intakes: [],
       eatings: [],
       substances: [],
@@ -123,13 +117,11 @@ describe("useDeleteEntryGroup", () => {
     expect(undoToastCalls).toHaveLength(1);
     expect(undoToastCalls[0]?.title).toBe("Deleted 2 linked records");
 
-    // Firing the undo callback restores the group.
+    // Firing the undo callback restores the drink.
     await act(async () => {
       await undoToastCalls[0]!.onUndo();
     });
-    const restored = await fetchEntryGroup(groupId);
-    expect(restored?.eatings).toHaveLength(1);
-    expect(restored?.intakes).toHaveLength(1);
+    expect((await fetchEntryGroup(logged.groupId))?.intakes).toHaveLength(2);
   });
 });
 
@@ -172,21 +164,16 @@ describe("useSyncEatingGroup", () => {
 });
 
 describe("undo failures are surfaced", () => {
-  it("useDeleteEntryGroup shows an error toast when the restore fails", async () => {
-    const add = renderHook(() => useAddComposableEntry());
-    let groupId!: string;
+  it("useDrink().remove shows an error toast when the restore fails", async () => {
+    const { result } = renderHook(() => useDrink());
     await act(async () => {
-      groupId = (
-        await add.result.current(
-          { intakes: [{ type: "water", amount: 250 }] },
-          1_700_000_000_000,
-        )
-      ).groupId;
-    });
-
-    const { result } = renderHook(() => useDeleteEntryGroup());
-    await act(async () => {
-      await result.current(groupId);
+      const logged = await result.current.log({
+        volumeMl: 250,
+        description: "Juice",
+        sugarG: 20,
+        timestamp: 1_700_000_000_000,
+      });
+      await result.current.remove(logged.waterIntakeId);
     });
 
     // Make the restore transaction fail.
