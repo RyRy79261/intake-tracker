@@ -102,4 +102,7 @@ export const voiceParseTask = {
     };
   },
   messages: { failed: "Failed to parse transcript" },
+  // The response is not yet checked against the client's VoiceParseResponse:
+  // the server's and the client's voice item types are separate copies
+  // (idea #8 merges them into one contract).
 } satisfies AiTaskSpec<Request, Extracted, unknown>;

@@ -24,9 +24,8 @@ import {
 import type { PhaseSchedule, Prescription, TitrationPlan } from "@/lib/db";
 import { getMaintenancePhase } from "@/lib/medication-ui-utils";
 import { summarizeRegimen } from "@/lib/titration-regimen";
-import { useAiFetch } from "@/hooks/use-ai-fetch";
 import { useToast } from "@intake/ui/use-toast";
-import { readAiErrorMessage } from "@/lib/ai-error-message";
+import { aiClient } from "@/lib/ai-client";
 import { useAuthGate } from "@/components/auth-guard";
 import { RxEntryCard, EditPhaseScheduleLoader } from "@/components/medications/titrations/rx-entry-card";
 import { DAY_LABELS_LONG } from "@/components/medications/titrations/types";
@@ -47,7 +46,6 @@ export function TitrationDrawer({
 }) {
   const createMutation = useCreateTitrationPlan();
   const updateMutation = useUpdateTitrationPlan();
-  const aiFetch = useAiFetch();
   const { toast } = useToast();
   const showAi = useAuthGate();
   const isEditing = editingPlan !== null;
@@ -131,40 +129,26 @@ export function TitrationDrawer({
     if (changingRx.length === 0) return;
 
     setAiLoading(true);
-    try {
-      const res = await aiFetch("/api/ai/titration-warnings", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          prescriptions: changingRx,
-          otherMedications: otherRx.length > 0 ? otherRx : undefined,
-          title: title || undefined,
-        }),
-      });
+    const result = await aiClient.call("/api/ai/titration-warnings", {
+      prescriptions: changingRx,
+      ...(otherRx.length > 0 && { otherMedications: otherRx }),
+      ...(title && { title }),
+    });
+    setAiLoading(false);
 
-      if (res && res.ok) {
-        const data = await res.json();
-        if (data.warnings && Array.isArray(data.warnings)) {
-          const existing = warnings.trim();
-          const newWarnings = data.warnings.join("\n");
-          setWarnings(existing ? `${existing}\n${newWarnings}` : newWarnings);
-        }
-      } else if (res) {
-        // e.g. NO_AI_KEY: the route's message says where to add a key.
-        toast({
-          title: "Couldn't generate warnings",
-          description: await readAiErrorMessage(res, "You can still type warnings manually."),
-          variant: "destructive",
-        });
+    if (result.ok) {
+      if (Array.isArray(result.data.warnings)) {
+        const existing = warnings.trim();
+        const newWarnings = result.data.warnings.join("\n");
+        setWarnings(existing ? `${existing}\n${newWarnings}` : newWarnings);
       }
-    } catch {
+    } else {
+      // e.g. NO_AI_KEY: the route's message says where to add a key.
       toast({
         title: "Couldn't generate warnings",
-        description: "You can still type warnings manually.",
+        description: `${result.error.message} You can still type warnings manually.`,
         variant: "destructive",
       });
-    } finally {
-      setAiLoading(false);
     }
   };
 

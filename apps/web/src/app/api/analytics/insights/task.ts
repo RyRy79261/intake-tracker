@@ -8,6 +8,8 @@ import {
   buildInsightsPrompt,
 } from "@intake/ai-prompts/analytics-insights";
 import { zodOutput, type AiTaskSpec } from "@/app/api/ai/_shared/ai-task";
+// The client's contract for this route: the response must match it.
+import type { AiRoutes } from "@/lib/ai-client";
 import { sanitizeInsightsRequest } from "@/lib/server/sanitize-insights-request";
 
 /**
@@ -56,5 +58,5 @@ export const insightsTask = {
 } satisfies AiTaskSpec<
   z.infer<typeof AnalyticsInsightsRequestSchema>,
   z.infer<typeof InsightResponseSchema>,
-  unknown
+  AiRoutes["/api/analytics/insights"]["result"]
 >;

@@ -2,6 +2,8 @@ import "server-only";
 import { z } from "zod";
 import { sanitizeForAI } from "@/lib/security";
 import { zodOutput, type AiTaskSpec } from "@/app/api/ai/_shared/ai-task";
+// The client's contract for this route: the response must match it.
+import type { AiRoutes } from "@/lib/ai-client";
 import { TITRATION_WARNINGS_TOOL, SYSTEM_PROMPT } from "@intake/ai-prompts/titration-warnings";
 
 /**
@@ -84,4 +86,4 @@ export const titrationWarningsTask = {
   output: zodOutput(ResponseSchema),
   respond: (out) => out,
   messages: { failed: "Failed to generate warnings" },
-} satisfies AiTaskSpec<z.infer<typeof RequestSchema>, z.infer<typeof ResponseSchema>, unknown>;
+} satisfies AiTaskSpec<z.infer<typeof RequestSchema>, z.infer<typeof ResponseSchema>, AiRoutes["/api/ai/titration-warnings"]["result"]>;

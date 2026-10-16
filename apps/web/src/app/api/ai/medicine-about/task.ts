@@ -2,6 +2,8 @@ import "server-only";
 import { z } from "zod";
 import { sanitizeForAI } from "@/lib/security";
 import { reply, zodOutput, type AiTaskSpec } from "@/app/api/ai/_shared/ai-task";
+// The client's contract for this route: the response must match it.
+import type { AiRoutes } from "@/lib/ai-client";
 import { SYSTEM_PROMPT, MEDICINE_ABOUT_TOOL } from "@intake/ai-prompts/medicine-about";
 
 /**
@@ -67,4 +69,4 @@ export const medicineAboutTask = {
       ? reply(404, { error: "No information was found for this medicine.", code: "NOT_FOUND" })
       : out,
   messages: { failed: "Failed to look up the medicine" },
-} satisfies AiTaskSpec<z.infer<typeof RequestSchema>, z.infer<typeof ResponseSchema>, unknown>;
+} satisfies AiTaskSpec<z.infer<typeof RequestSchema>, z.infer<typeof ResponseSchema>, AiRoutes["/api/ai/medicine-about"]["result"]>;

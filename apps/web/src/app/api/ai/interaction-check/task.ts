@@ -2,6 +2,8 @@ import "server-only";
 import { z } from "zod";
 import { sanitizeForAI } from "@/lib/security";
 import { zodOutput, type AiTaskSpec } from "@/app/api/ai/_shared/ai-task";
+// The client's contract for this route: the response must match it.
+import type { AiRoutes } from "@/lib/ai-client";
 import {
   SYSTEM_PROMPT,
   INTERACTION_CHECK_TOOL,
@@ -78,8 +80,10 @@ export const interactionCheckTask = {
   },
   output: zodOutput(InteractionResultSchema),
   // An omitted medication would read as "no interaction"; flag it instead.
-  respond: (out, { req }) => ({
+  respond: ({ drugClass, summary, ...out }, { req }) => ({
     ...out,
+    ...(drugClass !== undefined && { drugClass }),
+    ...(summary !== undefined && { summary }),
     interactions: withUnassessedMedications(
       out.interactions,
       req.activePrescriptions.map((rx) => rx.genericName),
@@ -87,4 +91,4 @@ export const interactionCheckTask = {
     ),
   }),
   messages: { failed: "Failed to check interactions" },
-} satisfies AiTaskSpec<Request, z.infer<typeof InteractionResultSchema>, unknown>;
+} satisfies AiTaskSpec<Request, z.infer<typeof InteractionResultSchema>, AiRoutes["/api/ai/interaction-check"]["result"]>;

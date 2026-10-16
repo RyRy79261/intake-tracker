@@ -2,6 +2,8 @@ import "server-only";
 import { z } from "zod";
 import { sanitizeForAI } from "@/lib/security";
 import { reply, zodOutput, type AiTaskSpec } from "@/app/api/ai/_shared/ai-task";
+// The client's contract for this route: the response must match it.
+import type { AiRoutes } from "@/lib/ai-client";
 import { SYSTEM_PROMPT, PARSE_RESULT_TOOL } from "@intake/ai-prompts/parse";
 
 /**
@@ -73,5 +75,5 @@ export const parseTask = {
 } satisfies AiTaskSpec<
   z.infer<typeof ParseRequestSchema>,
   z.infer<typeof AIParseResponseSchema>,
-  unknown
+  AiRoutes["/api/ai/parse"]["result"]
 >;

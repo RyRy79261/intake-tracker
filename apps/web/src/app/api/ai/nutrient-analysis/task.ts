@@ -2,6 +2,8 @@ import "server-only";
 import { z } from "zod";
 import { sanitizeForAI } from "@/lib/security";
 import { reply, zodOutput, type AiTaskSpec } from "@/app/api/ai/_shared/ai-task";
+// The client's contract for this route: the response must match it.
+import type { AiRoutes } from "@/lib/ai-client";
 import {
   SYSTEM_PROMPT,
   NUTRIENT_ANALYSIS_TOOL,
@@ -140,5 +142,5 @@ export const nutrientAnalysisTask = {
 } satisfies AiTaskSpec<
   z.infer<typeof NutrientAnalysisRequestSchema>,
   z.infer<typeof NutrientAnalysisResponseSchema>,
-  unknown
+  AiRoutes["/api/ai/nutrient-analysis"]["result"]
 >;
