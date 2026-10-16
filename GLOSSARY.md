@@ -11,3 +11,7 @@ Domain words used in code, reviews and plans. Use these names exactly.
 **Meal water**: the water content of a meal, stored as a water row in the meal's group. Its time moves the whole meal; its other values belong to the Food card.
 
 **Strength**: the amount of a substance per volume of a drink. When a drink's volume changes, its strength stays the same, so caffeine, sugar, sodium and potassium change with the volume. ABV is already a strength.
+
+**AI task**: one server-side Claude request type, such as a food parse or an interaction check. Each AI route declares an AI task spec (request schema, prompt, result tool, tier, token budget, search rule) in its `task.ts`; the AI task module (`apps/web/src/app/api/ai/_shared/ai-task.ts`) runs it and answers every failure from one error table.
+
+**Tier**: how much model an AI task gets (`quality` or `premium`). The tier policy in the AI task module turns it into the model, the effort and the request rules.

@@ -268,7 +268,7 @@ describe("voice-parse route handler", () => {
     expect(messagesCreate).not.toHaveBeenCalled();
   });
 
-  it("returns 422 when the tool output has no usable items", async () => {
+  it("returns 502 AI_BAD_OUTPUT when the tool output has no usable items", async () => {
     // items present but every one fails Zod validation.
     messagesCreate.mockResolvedValueOnce(
       toolUseResponse({ items: [{ kind: "blood_pressure" }] }),
@@ -277,9 +277,10 @@ describe("voice-parse route handler", () => {
     const { POST } = await import("@/app/api/ai/voice-parse/route");
     const res = await POST(makeRequest({ now: NOW, transcript: "garbled audio" }));
 
-    expect(res.status).toBe(422);
-    const body = (await res.json()) as { error: string };
-    expect(body.error).toBe("AI response format invalid");
+    expect(res.status).toBe(502);
+    const body = (await res.json()) as { code: string; fallbackToManual: boolean };
+    expect(body.code).toBe("AI_BAD_OUTPUT");
+    expect(body.fallbackToManual).toBe(true);
   });
 
   it("AI-failure path: a thrown error from Claude yields a graceful 502, not a crash", async () => {
