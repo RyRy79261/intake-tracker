@@ -907,12 +907,123 @@ realDb.version(25).stores({
   }
 });
 
+// Version 26 (2026-10): finish the v25 repair for older drinks. v25 only
+// touched drinks logged after WATER_SHARE_SHIPPED_AT, on the belief that
+// older drinks were already booked at full volume. They were not all: from
+// 2026-03-24 to 2026-04-09 the preset tab booked volume x waterContentPercent,
+// and the implicit auto-water path of that era did the same. A drink counts
+// at its whole volume (330 ml of beer is 330 ml of fluid), so this raises the
+// water row of every drink group to the volume stored on its caffeine/alcohol
+// record, whatever its age. Stores are byte-identical to v25.
+//
+// The same groups as v25 are skipped (meals, groups with no single live water
+// row, rows already at or above the volume, drinks with no stored volume).
+// One more guard: the water row must not be newer than the record that holds
+// the volume. Before the Drink module, the Records tab edited a water row on
+// its own and left the stored volume behind, so a water row edited after its
+// volume may hold the amount the user meant. Skipping it can only leave an
+// old drink as it is; the edit form shows the stored volume, and one save
+// there fixes it.
+realDb.version(26).stores({
+  // --- REPEAT all v25 stores verbatim ---
+  intakeRecords:           "id, [type+timestamp], timestamp, source, groupId, updatedAt",
+  weightRecords:           "id, timestamp, updatedAt",
+  bloodPressureRecords:    "id, timestamp, position, arm, updatedAt",
+  eatingRecords:           "id, timestamp, groupId, updatedAt",
+  urinationRecords:        "id, timestamp, updatedAt",
+  defecationRecords:       "id, timestamp, updatedAt",
+  prescriptions:           "id, updatedAt, createdAt",
+  medicationPhases:        "id, prescriptionId, status, type, titrationPlanId, updatedAt",
+  phaseSchedules:          "id, phaseId, time, updatedAt",
+  inventoryItems:          "id, prescriptionId, updatedAt",
+  inventoryTransactions:   "id, [inventoryItemId+timestamp], inventoryItemId, timestamp, type, updatedAt",
+  doseLogs:                "id, [prescriptionId+scheduledDate], [scheduleId+scheduledDate], prescriptionId, phaseId, scheduleId, scheduledDate, scheduledTime, status, updatedAt",
+  dailyNotes:              "id, date, prescriptionId, doseLogId, updatedAt",
+  auditLogs:               "id, [action+timestamp], timestamp, action",
+  substanceRecords:        "id, [type+timestamp], type, timestamp, source, sourceRecordId, groupId, updatedAt",
+  titrationPlans:          "id, conditionLabel, status, updatedAt",
+  _syncQueue:              "++id, [tableName+recordId], tableName, enqueuedAt",
+  _syncMeta:               "tableName",
+  _errorLogs:              "id, timestamp, source",
+  userProfile:             "id, updatedAt",
+  insightReports:          "id, generatedAt, updatedAt",
+  userSettings:            "id, updatedAt",
+}).upgrade(async (trans) => {
+  const now = Date.now();
+  const intakeTable = trans.table("intakeRecords");
+  const substanceTable = trans.table("substanceRecords");
+  const eatingTable = trans.table("eatingRecords");
+  const queueTable = trans.table("_syncQueue");
+
+  // As in v22/v25: the repair has to reach the server, and push reads the
+  // live row, so an op already queued for the record suffices.
+  const enqueueRepair = async (tableName: string, recordId: string) => {
+    const existing = await queueTable
+      .where("[tableName+recordId]")
+      .equals([tableName, recordId])
+      .first();
+    if (existing) return;
+    await queueTable.add({
+      tableName,
+      recordId,
+      op: "upsert",
+      enqueuedAt: now,
+      attempts: 0,
+    });
+  };
+
+  // Drink volume per group (the largest, as getDrink reads it), with the
+  // `updatedAt` of the record it came from.
+  const volumeByGroup = new Map<string, { volume: number; updatedAt: number }>();
+  const substances = (await substanceTable.toArray()) as Record<string, unknown>[];
+  for (const substance of substances) {
+    const groupId = substance.groupId as string | undefined;
+    const volume = substance.volumeMl as number | undefined;
+    if (!groupId || substance.deletedAt != null) continue;
+    if (typeof volume !== "number" || !Number.isFinite(volume) || volume <= 0) continue;
+    const updatedAt = typeof substance.updatedAt === "number" ? substance.updatedAt : 0;
+    const current = volumeByGroup.get(groupId);
+    if (!current || volume > current.volume) {
+      volumeByGroup.set(groupId, { volume, updatedAt });
+    }
+  }
+
+  for (const [groupId, { volume, updatedAt: volumeUpdatedAt }] of volumeByGroup) {
+    // One malformed group must not abort the version change (see v22).
+    try {
+      const eatings = (await eatingTable
+        .where("groupId")
+        .equals(groupId)
+        .toArray()) as Record<string, unknown>[];
+      if (eatings.some((e) => e.deletedAt == null)) continue;
+
+      const waters = ((await intakeTable
+        .where("groupId")
+        .equals(groupId)
+        .toArray()) as Record<string, unknown>[]).filter(
+        (r) => r.type === "water" && r.deletedAt == null,
+      );
+      if (waters.length !== 1) continue;
+      const water = waters[0]!;
+      if (typeof water.updatedAt !== "number" || water.updatedAt > volumeUpdatedAt) continue;
+      const amount = Math.round(volume);
+      if (typeof water.amount !== "number" || water.amount >= amount) continue;
+
+      // Queue first, then write (see v25 for why this order fails safe).
+      await enqueueRepair("intakeRecords", water.id as string);
+      await intakeTable.update(water.id, { amount, updatedAt: now });
+    } catch {
+      // Skip this group; the rest of the repair still applies.
+    }
+  }
+});
+
 /**
  * Current Dexie schema version. Bump this constant in lockstep with each new
  * `realDb.version(N)` block above so diagnostic surfaces (Debug → Environment)
  * always reflect the real schema.
  */
-export const DB_SCHEMA_VERSION = 25;
+export const DB_SCHEMA_VERSION = 26;
 
 /**
  * True when `e` (or anything in its `cause` chain) is Dexie's
@@ -956,7 +1067,7 @@ export async function recoverClosedDatabase(e: unknown): Promise<boolean> {
 }
 
 /**
- * Store definitions for a preview database — the current (v25) schema in a
+ * Store definitions for a preview database — the current (v26) schema in a
  * single version. A preview database is created empty and discarded, so it
  * needs no migration history.
  */
