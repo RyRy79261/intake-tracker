@@ -29,21 +29,14 @@ import {
   updateEatingRecord,
 } from "@/lib/eating-service";
 import {
-  addUrinationRecord,
-  getUrinationRecords,
-  getUrinationRecordsByDateRange,
-  deleteUrinationRecord,
-  undoDeleteUrinationRecord,
-  updateUrinationRecord,
-} from "@/lib/urination-service";
-import {
-  addDefecationRecord,
-  getDefecationRecords,
-  getDefecationRecordsByDateRange,
-  deleteDefecationRecord,
-  undoDeleteDefecationRecord,
-  updateDefecationRecord,
-} from "@/lib/defecation-service";
+  addEstimateRecord,
+  getEstimateRecords,
+  getEstimateRecordsBetween,
+  deleteEstimateRecord,
+  undoDeleteEstimateRecord,
+  updateEstimateRecord,
+} from "@/lib/estimate-tracker-service";
+import { ESTIMATE_TRACKERS, ESTIMATE_TRACKER_IDS } from "@/lib/estimate-trackers";
 import { writeAuditLog, buildAuditEntry } from "@/lib/audit-service";
 import { schedulePush } from "@/lib/sync-engine";
 
@@ -276,146 +269,78 @@ describe("Tier 1 sync-wired services", () => {
     });
   });
 
-  // ── Urination ──
+  // ── Urination, defecation ──
 
-  describe("urination-service", () => {
-    it("addUrinationRecord enqueues upsert", async () => {
-      const result = await addUrinationRecord(undefined, "medium");
+  describe.each(ESTIMATE_TRACKER_IDS)("estimate-tracker-service (%s)", (tracker) => {
+    const { table } = ESTIMATE_TRACKERS[tracker];
+
+    it("addEstimateRecord enqueues upsert", async () => {
+      const result = await addEstimateRecord(tracker, { amountEstimate: "medium" });
       expect(result.success).toBe(true);
       if (!result.success) return;
 
       const queueRows = await db._syncQueue.toArray();
       expect(queueRows).toHaveLength(1);
-      expect(queueRows[0]!.tableName).toBe("urinationRecords");
+      expect(queueRows[0]!.tableName).toBe(table);
       expect(queueRows[0]!.op).toBe("upsert");
     });
 
-    it("deleteUrinationRecord soft-deletes instead of hard-delete", async () => {
-      const addResult = await addUrinationRecord(undefined, "small");
+    it("deleteEstimateRecord soft-deletes instead of hard-delete", async () => {
+      const addResult = await addEstimateRecord(tracker, { amountEstimate: "small" });
       if (!addResult.success) return;
       await db._syncQueue.clear();
 
-      await deleteUrinationRecord(addResult.data.id);
+      await deleteEstimateRecord(tracker, addResult.data.id);
 
-      const raw = await db.urinationRecords.get(addResult.data.id);
+      const raw = await db[table].get(addResult.data.id);
       expect(raw).toBeDefined();
       expect(raw!.deletedAt).not.toBeNull();
 
       const queueRows = await db._syncQueue.toArray();
+      expect(queueRows[0]!.tableName).toBe(table);
       expect(queueRows[0]!.op).toBe("delete");
     });
 
-    it("getUrinationRecords filters soft-deleted", async () => {
-      const r1 = await addUrinationRecord();
-      const r2 = await addUrinationRecord();
+    it("getEstimateRecords filters soft-deleted", async () => {
+      const r1 = await addEstimateRecord(tracker);
+      const r2 = await addEstimateRecord(tracker);
       if (!r1.success || !r2.success) return;
-      await deleteUrinationRecord(r1.data.id);
+      await deleteEstimateRecord(tracker, r1.data.id);
 
-      const records = await getUrinationRecords();
+      const records = await getEstimateRecords(tracker);
       expect(records).toHaveLength(1);
     });
 
-    it("getUrinationRecordsByDateRange filters soft-deleted", async () => {
+    it("getEstimateRecordsBetween filters soft-deleted", async () => {
       const now = Date.now();
-      const r1 = await addUrinationRecord(now - 500);
-      const r2 = await addUrinationRecord(now);
+      const r1 = await addEstimateRecord(tracker, { timestamp: now - 500 });
+      const r2 = await addEstimateRecord(tracker, { timestamp: now });
       if (!r1.success || !r2.success) return;
-      await deleteUrinationRecord(r1.data.id);
+      await deleteEstimateRecord(tracker, r1.data.id);
 
-      const records = await getUrinationRecordsByDateRange(now - 1000, now + 1000);
+      const records = await getEstimateRecordsBetween(tracker, now - 1000, now + 1000);
       expect(records).toHaveLength(1);
     });
 
-    it("undoDeleteUrinationRecord restores record", async () => {
-      const addResult = await addUrinationRecord();
+    it("undoDeleteEstimateRecord restores record", async () => {
+      const addResult = await addEstimateRecord(tracker);
       if (!addResult.success) return;
-      await deleteUrinationRecord(addResult.data.id);
+      await deleteEstimateRecord(tracker, addResult.data.id);
 
-      await undoDeleteUrinationRecord(addResult.data.id);
-      const records = await getUrinationRecords();
+      await undoDeleteEstimateRecord(tracker, addResult.data.id);
+      const records = await getEstimateRecords(tracker);
       expect(records).toHaveLength(1);
     });
 
-    it("updateUrinationRecord enqueues upsert", async () => {
-      const addResult = await addUrinationRecord(undefined, "small");
+    it("updateEstimateRecord enqueues upsert", async () => {
+      const addResult = await addEstimateRecord(tracker, { amountEstimate: "small" });
       if (!addResult.success) return;
       await db._syncQueue.clear();
 
-      await updateUrinationRecord(addResult.data.id, { amountEstimate: "large" });
+      await updateEstimateRecord(tracker, addResult.data.id, { amountEstimate: "large" });
 
       const queueRows = await db._syncQueue.toArray();
-      expect(queueRows[0]!.op).toBe("upsert");
-    });
-  });
-
-  // ── Defecation ──
-
-  describe("defecation-service", () => {
-    it("addDefecationRecord enqueues upsert", async () => {
-      const result = await addDefecationRecord(undefined, "medium");
-      expect(result.success).toBe(true);
-      if (!result.success) return;
-
-      const queueRows = await db._syncQueue.toArray();
-      expect(queueRows).toHaveLength(1);
-      expect(queueRows[0]!.tableName).toBe("defecationRecords");
-      expect(queueRows[0]!.op).toBe("upsert");
-    });
-
-    it("deleteDefecationRecord soft-deletes instead of hard-delete", async () => {
-      const addResult = await addDefecationRecord(undefined, "small");
-      if (!addResult.success) return;
-      await db._syncQueue.clear();
-
-      await deleteDefecationRecord(addResult.data.id);
-
-      const raw = await db.defecationRecords.get(addResult.data.id);
-      expect(raw).toBeDefined();
-      expect(raw!.deletedAt).not.toBeNull();
-
-      const queueRows = await db._syncQueue.toArray();
-      expect(queueRows[0]!.op).toBe("delete");
-    });
-
-    it("getDefecationRecords filters soft-deleted", async () => {
-      const r1 = await addDefecationRecord();
-      const r2 = await addDefecationRecord();
-      if (!r1.success || !r2.success) return;
-      await deleteDefecationRecord(r1.data.id);
-
-      const records = await getDefecationRecords();
-      expect(records).toHaveLength(1);
-    });
-
-    it("getDefecationRecordsByDateRange filters soft-deleted", async () => {
-      const now = Date.now();
-      const r1 = await addDefecationRecord(now - 500);
-      const r2 = await addDefecationRecord(now);
-      if (!r1.success || !r2.success) return;
-      await deleteDefecationRecord(r1.data.id);
-
-      const records = await getDefecationRecordsByDateRange(now - 1000, now + 1000);
-      expect(records).toHaveLength(1);
-    });
-
-    it("undoDeleteDefecationRecord restores record", async () => {
-      const addResult = await addDefecationRecord();
-      if (!addResult.success) return;
-      await deleteDefecationRecord(addResult.data.id);
-
-      await undoDeleteDefecationRecord(addResult.data.id);
-      const records = await getDefecationRecords();
-      expect(records).toHaveLength(1);
-    });
-
-    it("updateDefecationRecord enqueues upsert", async () => {
-      const addResult = await addDefecationRecord(undefined, "medium");
-      if (!addResult.success) return;
-      await db._syncQueue.clear();
-
-      await updateDefecationRecord(addResult.data.id, { amountEstimate: "large" });
-
-      const queueRows = await db._syncQueue.toArray();
+      expect(queueRows[0]!.tableName).toBe(table);
       expect(queueRows[0]!.op).toBe("upsert");
     });
   });

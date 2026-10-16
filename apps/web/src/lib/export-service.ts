@@ -32,8 +32,7 @@ import {
   getBloodPressureRecordsByDateRange,
 } from "@/lib/health-service";
 import { getEatingRecordsByDateRange } from "@/lib/eating-service";
-import { getUrinationRecordsByDateRange } from "@/lib/urination-service";
-import { getDefecationRecordsByDateRange } from "@/lib/defecation-service";
+import { getEstimateRecordsBetween } from "@/lib/estimate-tracker-service";
 import { getSubstanceRecordsByDateRange } from "@/lib/substance-service";
 import { isLive } from "@intake/core/lifecycle";
 import { logicalDayKey } from "@intake/core/logical-day";
@@ -86,8 +85,8 @@ async function loadRecords(range: TimeRange): Promise<ExportRecords> {
     getWeightRecordsByDateRange(start, end),
     getBloodPressureRecordsByDateRange(start, end),
     getEatingRecordsByDateRange(start, end),
-    getUrinationRecordsByDateRange(start, end),
-    getDefecationRecordsByDateRange(start, end),
+    getEstimateRecordsBetween("urination", start, end),
+    getEstimateRecordsBetween("defecation", start, end),
     getSubstanceRecordsByDateRange(start, end),
   ]);
   return { intake, weight, bp, eating, urination, defecation, substances };

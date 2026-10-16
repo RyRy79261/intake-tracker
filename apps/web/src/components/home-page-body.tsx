@@ -1,19 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { WeightCard } from "@/components/weight-card";
-import { BloodPressureCard } from "@/components/blood-pressure-card";
 import { TodayGadget } from "@/components/home/today-gadget";
-import { UrinationCard } from "@/components/urination-card";
-import { DefecationCard } from "@/components/defecation-card";
-import { LiquidsCard } from "@/components/liquids-card";
-import { FoodSaltCard } from "@/components/food-salt-card";
+import { HOME_CARDS } from "@/components/shell/module-registry";
 import { Droplets } from "lucide-react";
 
 /**
- * Home: the Today gadget over a scroll of the module cards. The shell renders
- * it under the windows on every window route, so it stays mounted while
- * windows open and close.
+ * Home: the Today gadget over a scroll of the module cards (the registry's
+ * cards, in its order). The shell renders it under the windows on every
+ * window route, so it stays mounted while windows open and close.
  */
 export function HomePageBody() {
   const [mounted, setMounted] = useState(false);
@@ -37,24 +32,9 @@ export function HomePageBody() {
     <div className="flex flex-col gap-2.5 pb-3">
       <TodayGadget />
       <div className="wc-mods">
-        <div id="section-water">
-          <LiquidsCard />
-        </div>
-        <div id="section-food-salt">
-          <FoodSaltCard />
-        </div>
-        <div id="section-bp">
-          <BloodPressureCard />
-        </div>
-        <div id="section-weight">
-          <WeightCard />
-        </div>
-        <div id="section-urination">
-          <UrinationCard />
-        </div>
-        <div id="section-defecation">
-          <DefecationCard />
-        </div>
+        {HOME_CARDS.map(({ id, Body }) => (
+          <Body key={id} />
+        ))}
       </div>
     </div>
   );

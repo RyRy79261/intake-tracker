@@ -16,16 +16,12 @@ vi.mock("@/lib/health-service", () => ({
   getBloodPressureRecordsByDateRange: vi.fn().mockResolvedValue([]),
 }));
 
-vi.mock("@/lib/urination-service", () => ({
-  getUrinationRecordsByDateRange: vi.fn().mockResolvedValue([]),
+vi.mock("@/lib/estimate-tracker-service", () => ({
+  getEstimateRecordsBetween: vi.fn().mockResolvedValue([]),
 }));
 
 vi.mock("@/lib/eating-service", () => ({
   getEatingRecordsByDateRange: vi.fn().mockResolvedValue([]),
-}));
-
-vi.mock("@/lib/defecation-service", () => ({
-  getDefecationRecordsByDateRange: vi.fn().mockResolvedValue([]),
 }));
 
 vi.mock("@/lib/dose-schedule-service", () => ({
@@ -66,7 +62,7 @@ import {
   getWeightRecordsByDateRange as mockGetWeight,
   getBloodPressureRecordsByDateRange as mockGetBP,
 } from "@/lib/health-service";
-import { getUrinationRecordsByDateRange as mockGetUrination } from "@/lib/urination-service";
+import { getEstimateRecordsBetween as mockGetEstimates } from "@/lib/estimate-tracker-service";
 import { getDoseScheduleForDateRange as mockGetDoseSchedule } from "@/lib/dose-schedule-service";
 import { db as mockDb } from "@/lib/db";
 import { useSettingsStore } from "@/stores/settings-store";
@@ -157,10 +153,14 @@ describe("fluidBalance", () => {
       makeIntakeRecord({ type: "water", amount: 400, timestamp: day2 }),
     ]);
 
-    vi.mocked(mockGetUrination).mockResolvedValue([
-      makeUrinationRecord(day1 + 7_200_000, "medium"), // 300ml
-      makeUrinationRecord(day2 + 3_600_000, "large"), // 500ml
-    ]);
+    vi.mocked(mockGetEstimates).mockImplementation(async (tracker) =>
+      tracker === "urination"
+        ? [
+            makeUrinationRecord(day1 + 7_200_000, "medium"), // 300ml
+            makeUrinationRecord(day2 + 3_600_000, "large"), // 500ml
+          ]
+        : [],
+    );
 
     const result = await fluidBalance(makeRange(3));
 
@@ -181,7 +181,7 @@ describe("fluidBalance", () => {
 
   it("returns empty results for no data", async () => {
     vi.mocked(mockGetIntake).mockResolvedValue([]);
-    vi.mocked(mockGetUrination).mockResolvedValue([]);
+    vi.mocked(mockGetEstimates).mockResolvedValue([]);
     const result = await fluidBalance(makeRange(7));
     expect(result.value.daily).toHaveLength(0);
     expect(result.value.avgBalance).toBe(0);
@@ -555,7 +555,7 @@ describe("day buckets and per-domain aggregation", () => {
       makeIntakeRecord({ type: "water", amount: 1000, timestamp: Date.UTC(2024, 5, 1, 20) }),
       makeIntakeRecord({ type: "water", amount: 500, timestamp: Date.UTC(2024, 5, 2, 1, 30) }),
     ]);
-    vi.mocked(mockGetUrination).mockResolvedValue([]);
+    vi.mocked(mockGetEstimates).mockResolvedValue([]);
 
     const result = await fluidBalance(makeRange(3));
     expect(result.value.daily.map((d) => [d.date, d.intakeMl])).toEqual([

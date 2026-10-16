@@ -1,12 +1,15 @@
-import { domainColor } from "@/lib/domain-colors";
+import { domainColor, type Domain } from "@/lib/domain-colors";
 import type { ShellIconName } from "@/lib/nav-routes";
 import type { Area, Rect } from "@/lib/window-geometry";
 
 /**
- * The intake modules of desktop mode: Today and the six logging cards, each
- * in its own free window on the desk. This file is the data about them and
- * the default arrangement; `stores/module-window-store.ts` holds where each
- * one is.
+ * The intake modules: Today and the six logging cards. This is the one list
+ * of them. Home shows them in this order (Today on top, then each card under
+ * its section id), the phone's quick links jump to those sections, and
+ * desktop mode puts each in its own free window on the desk. What each module
+ * shows is in `components/shell/module-registry.tsx`; where each desk window
+ * is lives in `stores/module-window-store.ts`. This file also holds the
+ * desk's default arrangement.
  */
 
 export const MODULE_IDS = ["today", "liquids", "food", "bp", "weight", "wee", "bowel"] as const;
@@ -23,7 +26,18 @@ export interface DeskModule {
   /** Label under the desk icon of a minimised module. */
   short: string;
   icon: ShellIconName;
+  /** Its domain; null for Today, which is in ink. */
+  domain: Domain | null;
+  /** Its colour (the domain colour, or ink for Today). */
   color: string;
+  /**
+   * The id of the element that wraps the card on Home and in its window: the
+   * target of its quick link and of deep links ("section-water"). Null for
+   * Today, which is not a card and has no quick link.
+   */
+  sectionId: string | null;
+  /** Its label in the phone's quick links; null for no quick link. */
+  linkLabel: string | null;
   /** Height of the window that shows the whole module without scrolling. */
   natural: number;
   /** The least height at which the module's main action still shows. */
@@ -32,55 +46,85 @@ export interface DeskModule {
 
 const FG = "hsl(var(--fg))";
 
-export const DESK_MODULES: Record<ModuleId, DeskModule> = {
-  today: { id: "today", title: "Today", short: "Today", icon: "today", color: FG, natural: 376, comfy: 330 },
+const FACTS: Record<ModuleId, Omit<DeskModule, "id" | "color">> = {
+  today: {
+    title: "Today",
+    short: "Today",
+    icon: "today",
+    domain: null,
+    sectionId: null,
+    linkLabel: null,
+    natural: 376,
+    comfy: 330,
+  },
   liquids: {
-    id: "liquids",
     title: "Liquids",
     short: "Liquids",
     icon: "drop",
-    color: domainColor("water"),
+    domain: "water",
+    sectionId: "section-water",
+    linkLabel: "Liquids",
     natural: 428,
     comfy: 396,
   },
-  food: { id: "food", title: "Food", short: "Food", icon: "food", color: domainColor("sodium"), natural: 760, comfy: 320 },
+  food: {
+    title: "Food",
+    short: "Food",
+    icon: "food",
+    domain: "sodium",
+    sectionId: "section-food-salt",
+    linkLabel: "Food",
+    natural: 760,
+    comfy: 320,
+  },
   bp: {
-    id: "bp",
     title: "Blood Pressure",
     short: "BP",
     icon: "bp",
-    color: domainColor("bp"),
+    domain: "bp",
+    sectionId: "section-bp",
+    linkLabel: "BP",
     natural: 384,
     comfy: 320,
   },
   weight: {
-    id: "weight",
     title: "Weight",
     short: "Weight",
     icon: "weight",
-    color: domainColor("weight"),
+    domain: "weight",
+    sectionId: "section-weight",
+    linkLabel: "Weight",
     natural: 336,
     comfy: 270,
   },
   wee: {
-    id: "wee",
     title: "Urination",
     short: "Urination",
     icon: "wee",
-    color: domainColor("bath"),
+    domain: "bath",
+    sectionId: "section-urination",
+    linkLabel: "Urine",
     natural: 226,
     comfy: 226,
   },
   bowel: {
-    id: "bowel",
     title: "Defecation",
     short: "Defecation",
     icon: "bowel",
-    color: domainColor("bath"),
+    domain: "bath",
+    sectionId: "section-defecation",
+    linkLabel: "Bowel",
     natural: 226,
     comfy: 226,
   },
 };
+
+export const DESK_MODULES = Object.fromEntries(
+  MODULE_IDS.map((id) => {
+    const facts = FACTS[id];
+    return [id, { id, ...facts, color: facts.domain ? domainColor(facts.domain) : FG }];
+  }),
+) as Record<ModuleId, DeskModule>;
 
 /** The smallest a module window can be: a narrow phone's width. */
 export const MODULE_MIN = { w: 340, h: 150 } as const;

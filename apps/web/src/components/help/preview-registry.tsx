@@ -4,8 +4,7 @@ import { BloodPressureCard } from "@/components/blood-pressure-card";
 import { WeightCard } from "@/components/weight-card";
 import { LiquidsCard } from "@/components/liquids-card";
 import { FoodSaltCard } from "@/components/food-salt-card";
-import { UrinationCard } from "@/components/urination-card";
-import { DefecationCard } from "@/components/defecation-card";
+import { EstimateTrackerCard } from "@/components/estimate-tracker-card";
 import { MedsDemo, RecordsDemo, TodayDemo } from "@/components/help/preview-demos";
 import {
   seedBathroomPreview,
@@ -54,8 +53,8 @@ const MANUAL_PREVIEWS: Record<string, ManualPreview> = {
   "urination-and-bowel": {
     render: () => (
       <div className="flex flex-col gap-2.5">
-        <UrinationCard />
-        <DefecationCard />
+        <EstimateTrackerCard tracker="urination" />
+        <EstimateTrackerCard tracker="defecation" />
       </div>
     ),
     seed: seedBathroomPreview,
