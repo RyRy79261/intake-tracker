@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect, useMemo, type CSSProperties } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef, type CSSProperties } from "react";
 import { Button } from "@intake/ui/button";
 import { RecordRow } from "@/components/history/record-row";
 import { useSettings } from "@/hooks/use-settings";
@@ -245,7 +245,11 @@ export function RecordsTab({ range, filter: filterProp, onFilterChange }: Record
   }, [toast, deleteMutation, deleteWeightMutation, deleteBPMutation, deleteEatingMutation, deleteUrinationMutation, deleteDefecationMutation, deleteSubstance]);
 
   // Edit openers
+  // The latest click. A slow drink lookup for an older click must not open
+  // over the row the user picked after it.
+  const editRequestRef = useRef(0);
   const openEdit = useCallback(async (unified: UnifiedRecord) => {
+    const request = ++editRequestRef.current;
     // Any row of a drink opens the whole drink, as on the Liquids card, so a
     // time change cannot split it across two times.
     if (unified.type === "intake" || unified.type === "caffeine" || unified.type === "alcohol") {
@@ -259,6 +263,7 @@ export function RecordsTab({ range, filter: filterProp, onFilterChange }: Record
       } catch {
         snapshot = null;
       }
+      if (request !== editRequestRef.current) return;
       if (snapshot) {
         setEditingDrink(snapshot.water);
         return;

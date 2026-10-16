@@ -180,6 +180,38 @@ describe("RecordsTab", () => {
     expect(within(dialog).getByDisplayValue("333")).toBeInTheDocument();
   });
 
+  it("a slow drink lookup does not open over a row picked after it", async () => {
+    const user = userEvent.setup();
+    const drink = await logDrink({ volumeMl: 250, description: "Latte", caffeineMg: 80 });
+    if (!drink.success) throw new Error("logDrink failed");
+    await renderWithFixtures(<RecordsTab range={RANGE} />, {
+      seed: { weightRecords: [makeWeightRecord({ weight: 71.5, timestamp: Date.now() })] },
+    });
+
+    const drinkRow = (await screen.findByText(/^250 ml/)).closest('[data-testid="record-row"]') as HTMLElement;
+    const weightRow = (await screen.findByText(/71\.5/)).closest('[data-testid="record-row"]') as HTMLElement;
+
+    // Hold the drink lookup until the weight row is open.
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => (release = resolve));
+    const get = db.intakeRecords.get.bind(db.intakeRecords);
+    vi.spyOn(db.intakeRecords, "get").mockImplementation((async (key: string) => {
+      await held;
+      return get(key);
+    }) as typeof db.intakeRecords.get);
+
+    await user.click(within(drinkRow).getByRole("button", { name: "Edit entry" }));
+    await user.click(within(weightRow).getByRole("button", { name: "Edit entry" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByDisplayValue("71.5")).toBeInTheDocument();
+
+    release();
+    // Let the late lookup finish.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(screen.queryByText("Edit Drink")).not.toBeInTheDocument();
+    expect(screen.getAllByRole("dialog")).toHaveLength(1);
+  });
+
   it("deleting a drink's water row removes the whole drink, as on the Liquids card", async () => {
     const user = userEvent.setup();
     const drink = await logDrink({ volumeMl: 250, description: "Latte", caffeineMg: 80, sugarG: 10 });
