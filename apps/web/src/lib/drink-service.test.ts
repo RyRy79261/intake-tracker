@@ -599,14 +599,13 @@ describe("drink-service: editDrink", () => {
   });
 
   it("edits one row of a group with two water rows, and moves the group", async () => {
-    const entry = await addComposableEntry({
-      intakes: [
-        { type: "water", amount: 200, source: "drink" },
-        { type: "water", amount: 100, source: "drink" },
-      ],
-    });
-    if (!entry.success) throw new Error("add failed");
-    const [first, second] = entry.data.intakeIds;
+    // An old shape no write path makes now; seeded as stored rows.
+    const groupId = crypto.randomUUID();
+    const rows = [200, 100].map((amount) =>
+      makeIntakeRecord({ type: "water", amount, source: "drink", groupId }),
+    );
+    await db.intakeRecords.bulkAdd(rows);
+    const [first, second] = rows.map((r) => r.id);
     const moved = Date.now() - 60_000;
 
     expect((await getDrink(first!))!.kind).toBe("other");
@@ -687,14 +686,11 @@ describe("drink-service: deleteDrink", () => {
   });
 
   it("takes the whole group for a beverage with sugar but no substance", async () => {
-    const entry = await addComposableEntry({
-      intakes: [
-        { type: "water", amount: 330, source: "beverage:Juice" },
-        { type: "sugar", amount: 30, source: "manual:sugar" },
-      ],
-    });
-    if (!entry.success) throw new Error("add failed");
-    const result = await deleteDrink(entry.data.intakeIds[0]!);
+    const groupId = crypto.randomUUID();
+    const water = makeIntakeRecord({ type: "water", amount: 330, source: "beverage:Juice", groupId });
+    const sugar = makeIntakeRecord({ type: "sugar", amount: 30, source: "manual:sugar", groupId });
+    await db.intakeRecords.bulkAdd([water, sugar]);
+    const result = await deleteDrink(water.id);
     expect(result.success && result.data.scope).toBe("group");
     expect((await live()).intakes).toHaveLength(0);
   });

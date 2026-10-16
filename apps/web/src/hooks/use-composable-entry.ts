@@ -2,7 +2,6 @@
 
 import { useCallback } from "react";
 import {
-  addComposableEntry,
   getEntryGroup,
   syncEatingGroup,
   parseSodiumKindFromSource,
@@ -19,7 +18,6 @@ import {
   previewSubstanceDelete,
 } from "@/lib/substance-service";
 import { unwrap } from "@intake/core/service";
-import { withDbRecovery } from "@/lib/db-recovery";
 import { showUndoToast } from "@/components/medications/undo-toast";
 import { runUndo } from "@/hooks/use-undo-delete-mutation";
 
@@ -32,21 +30,6 @@ export type { ComposableEntryInput, ComposableEntryResult, EntryGroup, RecordTab
 export const fetchEntryGroup = getEntryGroup;
 export const sodiumKindFromSource = parseSodiumKindFromSource;
 export const eatingGroupNutrients = pickEatingGroupNutrients;
-
-/**
- * Mutation hook for creating a composable entry.
- * Wraps addComposableEntry with unwrap for throwing on error.
- */
-export function useAddComposableEntry() {
-  return useCallback(
-    async (input: ComposableEntryInput, timestamp?: number): Promise<ComposableEntryResult> => {
-      return withDbRecovery(async () =>
-        unwrap(await addComposableEntry(input, timestamp)),
-      );
-    },
-    [],
-  );
-}
 
 /**
  * Mutation hook for syncing an eating record's linked sodium / water-content
