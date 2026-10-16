@@ -25,8 +25,7 @@
 import { addDays, isValid, parse } from "date-fns";
 import { db } from "@/lib/db";
 import { TABLE_PUSH_ORDER, type TableName } from "@/lib/sync-topology";
-import { enqueueInsideTx } from "@/lib/sync-queue";
-import { schedulePush } from "@/lib/sync-engine";
+import { syncedWrite } from "@/lib/synced-write";
 import { isLive } from "@intake/core/lifecycle";
 import { ok, err } from "@intake/core/service";
 import type { ServiceResult } from "@intake/types/service";
@@ -102,51 +101,25 @@ function dayInRange(scheduledDate: string, range: DeleteRange): boolean {
   return inRange(dayStart.getTime(), range) && inRange(dayEnd, range);
 }
 
-/** Extra changes that switch a configuration row off as it is tombstoned. */
-function deactivate(tableName: TableName, row: Row): Record<string, unknown> {
-  switch (tableName) {
-    case "prescriptions":
-    case "inventoryItems":
-      return { isActive: false };
-    case "phaseSchedules":
-      return { enabled: false };
-    case "medicationPhases":
-      return row.status === "active" || row.status === "pending"
-        ? { status: "cancelled" }
-        : {};
-    case "titrationPlans":
-      return row.status === "active" || row.status === "draft" || row.status === "pending"
-        ? { status: "cancelled" }
-        : {};
-    default:
-      return {};
-  }
-}
-
 type Row = Record<string, unknown> & { id: string; deletedAt?: number | null };
 
-/** Tombstone and enqueue every live row of one table that `matches`. */
+/**
+ * Tombstone and enqueue every live row of one table that `matches`. The
+ * synced write switches tombstoned configuration off (inactive / cancelled).
+ */
 async function tombstoneWhere(
   tableName: TableName,
   matches: (row: Row) => boolean,
 ): Promise<number> {
-  const table = db.table<Row, string>(tableName);
-  let count = 0;
-  await db.transaction("rw", table, db._syncQueue, async () => {
-    const now = Date.now();
-    const rows = await table.toArray();
+  return syncedWrite([tableName], async (w) => {
+    let count = 0;
+    const rows = await db.table<Row, string>(tableName).toArray();
     for (const row of rows) {
       if (!isLive(row) || !matches(row)) continue;
-      await table.update(row.id, {
-        ...deactivate(tableName, row),
-        deletedAt: now,
-        updatedAt: now,
-      });
-      await enqueueInsideTx(tableName, row.id, "delete");
-      count += 1;
+      if (await w.tombstone(tableName, row.id)) count += 1;
     }
+    return count;
   });
-  return count;
 }
 
 /**
@@ -175,7 +148,6 @@ export async function deleteRecordsInRange(
         (row) => typeof row.scheduledDate === "string" && dayInRange(row.scheduledDate, range),
       );
     }
-    if (total > 0) schedulePush();
     return ok(total);
   } catch (e) {
     return err("Failed to delete records", e);
@@ -194,18 +166,13 @@ export async function deleteRecordsInRange(
 export async function deleteAllMedicationData(): Promise<ServiceResult<number>> {
   try {
     // One outer transaction: either every medication table is wiped or none.
-    const total = await db.transaction(
-      "rw",
-      [...MEDICATION_TABLES.map((t) => db.table(t)), db._syncQueue],
-      async () => {
-        let count = 0;
-        for (const tableName of MEDICATION_TABLES) {
-          count += await tombstoneWhere(tableName, () => true);
-        }
-        return count;
-      },
-    );
-    if (total > 0) schedulePush();
+    const total = await syncedWrite(MEDICATION_TABLES, async () => {
+      let count = 0;
+      for (const tableName of MEDICATION_TABLES) {
+        count += await tombstoneWhere(tableName, () => true);
+      }
+      return count;
+    });
     return ok(total);
   } catch (e) {
     return err("Failed to delete medication data", e);

@@ -1,17 +1,16 @@
-import type { EntityTable, Table, UpdateSpec } from "dexie";
+import type { EntityTable, Table } from "dexie";
 import { ok, err } from "@intake/core/service";
 import type { ServiceResult } from "@intake/types/service";
-import { writeWithSync } from "@/lib/sync-queue";
-import { schedulePush } from "@/lib/sync-engine";
-import type { TableName } from "@/lib/sync-topology";
+import { db } from "@/lib/db";
+import { syncedWrite, type SyncedChanges, type SyncedTable } from "@/lib/synced-write";
 
 /**
  * Shared soft-delete CRUD helpers for the simple per-domain record tables
  * (urination, defecation, eating, …). Each of those services kept its own
- * byte-identical copies of these read/delete/update bodies; this collapses the
- * `writeWithSync` + `schedulePush` ceremony and the `deletedAt === null` read
- * filtering into one place. The per-domain `add` stays in each service because
- * its field shaping differs.
+ * byte-identical copies of these read/delete/update bodies; this puts the
+ * `deletedAt === null` read filtering and the ServiceResult wrapping of the
+ * synced writes (lib/synced-write.ts) in one place. The per-domain `add` stays
+ * in each service because its field shaping differs.
  *
  * Call sites pass an `EntityTable<T, "id">` (what `db.*` exposes) with an
  * explicit `<RecordType>` so T binds concretely; internally we treat it as a
@@ -57,37 +56,23 @@ export async function getRecordsBetween<T extends SoftDeleteRow>(
 }
 
 /**
- * Thrown inside a write transaction when the target row is missing, so the
- * transaction aborts before `writeWithSync` enqueues an op for an id that
- * doesn't exist (Dexie's update resolves 0 there rather than throwing).
- */
-class RecordNotFoundError extends Error {
-  constructor() {
-    super("Record not found");
-  }
-}
-
-/**
  * Soft-delete a record (sets deletedAt) and enqueue a sync delete.
  * Returns `err("Record not found")` for a missing id, without queueing.
  */
 export async function softDeleteRecord<T extends SoftDeleteRow>(
-  table: RecordTable<T>,
-  tableName: TableName,
+  _table: RecordTable<T>,
+  tableName: SyncedTable,
   id: string,
   errorMessage: string,
 ): Promise<ServiceResult<void>> {
   try {
-    const now = Date.now();
-    await writeWithSync(tableName, "delete", async () => {
-      const changed = await asTable(table).update(id, { deletedAt: now, updatedAt: now } as unknown as UpdateSpec<T>);
-      if (changed === 0) throw new RecordNotFoundError();
-      return { id };
+    const found = await syncedWrite([tableName], async (w) => {
+      if (!(await db.table(tableName).get(id))) return false;
+      await w.tombstone(tableName, id);
+      return true;
     });
-    schedulePush();
-    return ok(undefined);
+    return found ? ok(undefined) : err("Record not found");
   } catch (e) {
-    if (e instanceof RecordNotFoundError) return err(e.message);
     return err(errorMessage, e);
   }
 }
@@ -97,22 +82,19 @@ export async function softDeleteRecord<T extends SoftDeleteRow>(
  * Returns `err("Record not found")` for a missing id, without queueing.
  */
 export async function undoSoftDeleteRecord<T extends SoftDeleteRow>(
-  table: RecordTable<T>,
-  tableName: TableName,
+  _table: RecordTable<T>,
+  tableName: SyncedTable,
   id: string,
   errorMessage: string,
 ): Promise<ServiceResult<void>> {
   try {
-    const now = Date.now();
-    await writeWithSync(tableName, "upsert", async () => {
-      const changed = await asTable(table).update(id, { deletedAt: null, updatedAt: now } as unknown as UpdateSpec<T>);
-      if (changed === 0) throw new RecordNotFoundError();
-      return { id };
+    const found = await syncedWrite([tableName], async (w) => {
+      if (!(await db.table(tableName).get(id))) return false;
+      await w.restore(tableName, id);
+      return true;
     });
-    schedulePush();
-    return ok(undefined);
+    return found ? ok(undefined) : err("Record not found");
   } catch (e) {
-    if (e instanceof RecordNotFoundError) return err(e.message);
     return err(errorMessage, e);
   }
 }
@@ -123,8 +105,8 @@ export async function undoSoftDeleteRecord<T extends SoftDeleteRow>(
  * succeeding — matching the intake/defecation services.
  */
 export async function updateRecord<T extends SoftDeleteRow>(
-  table: RecordTable<T>,
-  tableName: TableName,
+  _table: RecordTable<T>,
+  tableName: SyncedTable,
   id: string,
   // NoInfer so T binds from `table` alone — otherwise a narrow `updates` object
   // widens T and collides with Dexie's invariant Table<T> typing.
@@ -132,15 +114,11 @@ export async function updateRecord<T extends SoftDeleteRow>(
   errorMessage: string,
 ): Promise<ServiceResult<void>> {
   try {
-    const t = asTable(table);
-    const existing = await t.get(id);
-    if (!existing) return err("Record not found");
-    await writeWithSync(tableName, "upsert", async () => {
-      await t.update(id, { ...updates, updatedAt: Date.now() } as UpdateSpec<T>);
-      return { id };
-    });
-    schedulePush();
-    return ok(undefined);
+    const { id: _id, updatedAt: _updatedAt, ...changes } = updates;
+    const written = await syncedWrite([tableName], (w) =>
+      w.patch(tableName, id, changes as SyncedChanges<typeof tableName>),
+    );
+    return written ? ok(undefined) : err("Record not found");
   } catch (e) {
     return err(errorMessage, e);
   }

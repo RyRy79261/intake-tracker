@@ -328,3 +328,27 @@ describe("substance-service: updateSubstanceRecord (not a drink)", () => {
     expect(water).toHaveLength(0);
   });
 });
+
+describe("substance-service: deleteSubstanceRecord queues deletes", () => {
+  // A soft delete must reach the sync queue as a "delete". Queued as an
+  // "upsert", the op is dropped as an orphan if the row is gone locally by
+  // push time, and the server copy stays live.
+  it("queues every row the delete tombstones as a delete op", async () => {
+    const drink = await logDrink({
+      volumeMl: 300,
+      description: "Espresso martini",
+      caffeineMg: 60,
+      abvPercent: 15,
+    });
+    expect(drink.success).toBe(true);
+    if (!drink.success) return;
+    await db._syncQueue.clear();
+
+    expect((await deleteSubstanceRecord(drink.data.substanceIds[0]!)).success).toBe(true);
+
+    const ops = new Map((await db._syncQueue.toArray()).map((q) => [q.recordId, q.op]));
+    for (const id of [...drink.data.substanceIds, drink.data.waterIntakeId]) {
+      expect(ops.get(id)).toBe("delete");
+    }
+  });
+});

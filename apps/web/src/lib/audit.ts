@@ -12,6 +12,7 @@
 import { db, type AuditAction, type AuditLog } from "@/lib/db";
 import { getDeviceId } from "@/lib/utils";
 import { getDeviceTimezone } from "@/lib/timezone";
+import { syncedWrite } from "@/lib/synced-write";
 
 // Re-export the types
 export type { AuditAction };
@@ -58,8 +59,10 @@ async function flushAuditBuffer(): Promise<void> {
   auditBuffer.length = 0;
   
   try {
-    // Bulk add to audit logs table
-    await db.auditLogs.bulkAdd(entries);
+    // Audit logs are a synced table: each entry is queued like any other row.
+    await syncedWrite(["auditLogs"], async (w) => {
+      for (const entry of entries) await w.insert("auditLogs", entry);
+    });
   } catch (error) {
     // Don't let audit failures break the app
     console.error("Failed to write audit log:", error);

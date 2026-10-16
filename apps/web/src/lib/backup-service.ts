@@ -47,8 +47,7 @@ import type { ServiceResult } from "@intake/types/service";
 import { logAudit } from "@/lib/audit";
 import { BACKUP_VALIDATORS } from "@/lib/backup-schemas";
 import { TABLE_PUSH_ORDER, type TableName } from "@/lib/sync-topology";
-import { enqueueInsideTx } from "@/lib/sync-queue";
-import { schedulePush } from "@/lib/sync-engine";
+import { syncedWrite, type SyncedWriter } from "@/lib/synced-write";
 import { getDeviceId } from "@/lib/utils";
 import { getDeviceTimezone } from "@/lib/timezone";
 import {
@@ -414,20 +413,17 @@ function normaliseRow(tableName: TableName, record: Row, now: number): Row {
   return row;
 }
 
-/**
- * Write one backup row and queue it for sync. Must run inside a transaction
- * that covers the table and `_syncQueue`. Returns true if a sync op was queued.
- */
+/** Write one backup row and queue it for sync. */
 async function writeRow(
+  w: SyncedWriter,
   tableName: TableName,
   row: Row,
   existing: Row | undefined,
-  now: number,
-): Promise<boolean> {
+): Promise<void> {
   // A row that replaces a local copy must beat it (and the server's copy of
   // it) under last-write-wins.
   const written: Row = existing
-    ? { ...row, updatedAt: Math.max(now, (existing.updatedAt ?? 0) + 1) }
+    ? { ...row, updatedAt: Math.max(w.now, (existing.updatedAt ?? 0) + 1) }
     : row;
   // Settings merge per setting by `fieldUpdatedAt`, not by the row's
   // updatedAt. The backup's old stamps would make every restored setting
@@ -435,10 +431,9 @@ async function writeRow(
   // replacing settings row drops them: every setting then counts as changed
   // at the fresh updatedAt, as a whole-row restore should.
   if (existing && tableName === "userSettings") delete written.fieldUpdatedAt;
-  await db.table<Row, string>(tableName).put(written);
-  if (!existing && !isLive(written)) return false;
-  await enqueueInsideTx(tableName, written.id, isLive(written) ? "upsert" : "delete");
-  return true;
+  // A backup tombstone for a record this device never had is kept locally but
+  // not pushed: an old backup must not delete a record living on the server.
+  await w.put(tableName, written as never, { queue: existing !== undefined || isLive(written) });
 }
 
 /**
@@ -469,18 +464,16 @@ function backupRows(data: BackupData, tableName: TableName): Row[] {
 }
 
 /**
- * Import every table inside one transaction. Returns the number of sync ops
- * queued. Throws (rolling back the whole import) if any write fails.
+ * Import every table inside one synced write. Throws (rolling back the whole
+ * import) if any write fails.
  */
 async function importTables(
   data: BackupData,
   mode: "merge" | "replace",
   result: ImportResult,
-): Promise<number> {
-  let queuedOps = 0;
-  const tables = TABLE_PUSH_ORDER.map((t) => db.table(t));
-  await db.transaction("rw", [...tables, db._syncQueue], async () => {
-    const now = Date.now();
+): Promise<void> {
+  await syncedWrite(TABLE_PUSH_ORDER, async (w) => {
+    const now = w.now;
     for (const tableName of TABLE_PUSH_ORDER) {
       const table = db.table<Row, string>(tableName);
       const local = new Map((await table.toArray()).map((r) => [r.id, r]));
@@ -513,7 +506,7 @@ async function importTables(
           }
         }
 
-        if (await writeRow(tableName, row, existing, now)) queuedOps++;
+        await writeRow(w, tableName, row, existing);
         // A repeated id later in the same file is then treated as existing.
         local.set(row.id, row);
         imported++;
@@ -526,16 +519,13 @@ async function importTables(
         // the deletion reaches the server copy too.
         for (const existing of local.values()) {
           if (backupIds.has(existing.id) || !isLive(existing)) continue;
-          await table.update(existing.id, { deletedAt: now, updatedAt: now });
-          await enqueueInsideTx(tableName, existing.id, "delete");
-          queuedOps++;
+          await w.tombstone(tableName, existing.id);
         }
       }
 
       result[IMPORT_COUNT_KEY[tableName]] = imported;
     }
   });
-  return queuedOps;
 }
 
 /**
@@ -588,8 +578,7 @@ export async function importBackup(
       return ok(result);
     }
 
-    const queuedOps = await importTables(await withLegacySettingsRow(data), mode, result);
-    if (queuedOps > 0) schedulePush();
+    await importTables(await withLegacySettingsRow(data), mode, result);
 
     result.totalImported = TABLE_PUSH_ORDER.reduce(
       (sum, t) => sum + result[IMPORT_COUNT_KEY[t]],
@@ -626,23 +615,16 @@ export async function resolveConflicts(
       if (!isTableName(res.table)) throw new Error(`Unknown table "${res.table}"`);
     }
     const tableNames = [...new Set(chosen.map((r) => r.table as TableName))];
-    let queuedOps = 0;
     if (chosen.length > 0) {
-      await db.transaction(
-        "rw",
-        [...tableNames.map((t) => db.table(t)), db._syncQueue],
-        async () => {
-          const now = Date.now();
-          for (const res of chosen) {
-            const tableName = res.table as TableName;
-            const row = normaliseRow(tableName, { ...res.backupRecord, id: res.id }, now);
-            const existing = await db.table<Row, string>(tableName).get(res.id);
-            if (await writeRow(tableName, row, existing, now)) queuedOps++;
-          }
-        },
-      );
+      await syncedWrite(tableNames, async (w) => {
+        for (const res of chosen) {
+          const tableName = res.table as TableName;
+          const row = normaliseRow(tableName, { ...res.backupRecord, id: res.id }, w.now);
+          const existing = await db.table<Row, string>(tableName).get(res.id);
+          await writeRow(w, tableName, row, existing);
+        }
+      });
     }
-    if (queuedOps > 0) schedulePush();
     const resolved = chosen.length;
     logAudit("data_import", `Resolved ${resolved} conflicts (${resolutions.length - resolved} kept current)`);
     return ok({ resolved });

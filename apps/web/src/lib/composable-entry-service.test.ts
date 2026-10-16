@@ -810,3 +810,62 @@ describe("composable-entry-service", () => {
     });
   });
 });
+
+describe("composable-entry-service: soft deletes queue as deletes", () => {
+  const opsById = async () =>
+    new Map((await db._syncQueue.toArray()).map((q) => [q.recordId, q.op]));
+
+  it("deleteEntryGroup queues every tombstoned row as a delete op", async () => {
+    const meal = await addComposableEntry({
+      eating: { note: "Soup", grams: 300 },
+      intakes: [
+        { type: "water", amount: 200, source: "manual:food_water_content" },
+        { type: "salt", amount: 600, source: "manual:sodium" },
+      ],
+    });
+    expect(meal.success).toBe(true);
+    if (!meal.success) return;
+    await db._syncQueue.clear();
+
+    expect((await deleteEntryGroup(meal.data.groupId)).success).toBe(true);
+
+    const ops = await opsById();
+    for (const id of [meal.data.eatingId!, ...meal.data.intakeIds]) {
+      expect(ops.get(id)).toBe("delete");
+    }
+  });
+
+  it("deleteEatingEntry queues an ungrouped meal as a delete op", async () => {
+    await db.eatingRecords.add(makeEatingRecord({ id: "lone-meal" }));
+
+    expect((await deleteEatingEntry("lone-meal")).success).toBe(true);
+
+    expect((await opsById()).get("lone-meal")).toBe("delete");
+  });
+
+  it("syncEatingGroup queues a removed nutrient row as a delete op", async () => {
+    const meal = await addComposableEntry({
+      eating: { note: "Crisps", grams: 50 },
+      intakes: [{ type: "salt", amount: 400, source: "manual:sodium" }],
+    });
+    expect(meal.success).toBe(true);
+    if (!meal.success) return;
+    await db._syncQueue.clear();
+
+    const result = await syncEatingGroup(meal.data.eatingId!, {
+      timestamp: Date.now(),
+      note: "Crisps",
+      grams: 50,
+      sodiumMg: 0,
+      sodiumKind: "sodium",
+      waterMl: 0,
+    });
+    expect(result.success).toBe(true);
+
+    const salt = meal.data.intakeIds[0]!;
+    expect((await db.intakeRecords.get(salt))!.deletedAt).toBeTypeOf("number");
+    const ops = await opsById();
+    expect(ops.get(salt)).toBe("delete");
+    expect(ops.get(meal.data.eatingId!)).toBe("upsert");
+  });
+});

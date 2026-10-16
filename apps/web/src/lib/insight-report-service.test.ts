@@ -266,3 +266,19 @@ describe("cacheServerInsightReport — a completed deep job lands locally", () =
     expect(row!.narrative).toBe("Deep narrative.");
   });
 });
+
+describe("deleteInsightReport — sync queue", () => {
+  it("queues the soft delete as a delete op", async () => {
+    const saved = await saveInsightReport(makeInput());
+    expect(saved.success).toBe(true);
+    if (!saved.success) return;
+    await db._syncQueue.clear();
+
+    await deleteInsightReport(saved.data.id);
+
+    const ops = await db._syncQueue.toArray();
+    expect(ops.map((q) => [q.tableName, q.recordId, q.op])).toEqual([
+      ["insightReports", saved.data.id, "delete"],
+    ]);
+  });
+});

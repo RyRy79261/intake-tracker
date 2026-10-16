@@ -1,50 +1,20 @@
 /**
  * Audit service — append-only audit log writer.
  *
- * Two usage patterns:
- *   1. `writeAuditLog(action, details)` — standalone, outside transactions
- *   2. `buildAuditEntry(action, details)` + `db.auditLogs.add(entry)` — inside
- *      an existing db.transaction() to stay within the transaction scope
+ * Inside a synced write, use `w.audit(action, details)` (lib/synced-write.ts).
+ * `writeAuditLog` is the standalone form, for code that has no write open.
  */
 
-import { db, type AuditAction, type AuditLog } from "@/lib/db";
-import { syncFields } from "@/lib/utils";
-import { writeWithSync } from "@/lib/sync-queue";
-import { schedulePush } from "@/lib/sync-engine";
+import type { AuditAction } from "@/lib/db";
+import { buildAuditEntry, syncedWrite } from "@/lib/synced-write";
 
 export type { AuditAction } from "@/lib/db";
+export { buildAuditEntry };
 
-/**
- * Build a complete AuditLog record ready for insertion.
- * Does NOT write to the database — the caller is responsible for that.
- * Use this inside transactions where you need to `db.auditLogs.add()` yourself.
- */
-export function buildAuditEntry(
-  action: AuditAction,
-  details: Record<string, unknown>,
-): AuditLog {
-  return {
-    id: crypto.randomUUID(),
-    timestamp: Date.now(),
-    action,
-    details: JSON.stringify(details),
-    ...syncFields(),
-  };
-}
-
-/**
- * Write an audit log entry to the database.
- * Standalone — creates its own implicit transaction.
- * Do NOT call from inside an existing db.transaction(); use buildAuditEntry instead.
- */
+/** Write one synced audit-log entry in its own transaction. */
 export async function writeAuditLog(
   action: AuditAction,
   details: Record<string, unknown>,
 ): Promise<void> {
-  const entry = buildAuditEntry(action, details);
-  await writeWithSync("auditLogs", "upsert", async () => {
-    await db.auditLogs.add(entry);
-    return entry;
-  });
-  schedulePush();
+  await syncedWrite([], (w) => w.audit(action, details));
 }
