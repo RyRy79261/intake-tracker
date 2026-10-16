@@ -252,7 +252,7 @@ async function capture(c: Case) {
 }
 
 const toolNames = (r: Anthropic.Messages.MessageCreateParamsNonStreaming) =>
-  (r.tools ?? []).map((t) => t.name);
+  (r.tools ?? []).map((t) => ("name" in t ? t.name : t.type));
 
 describe("AI task tier policy", () => {
   it("covers every AI task route", () => {

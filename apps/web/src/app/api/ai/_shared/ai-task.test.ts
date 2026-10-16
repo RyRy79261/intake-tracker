@@ -195,7 +195,7 @@ describe("aiRoute", () => {
       expect(res.status).toBe(200);
       expect(json).toEqual({ value: 4, searched: true });
       expect(fake.requests).toHaveLength(1);
-      expect(fake.requests[0]!.tools!.map((t) => t.name)).toEqual(["web_search", TOOL.name]);
+      expect(fake.requests[0]!.tools!.map((t) => ("name" in t ? t.name : t.type))).toEqual(["web_search", TOOL.name]);
     });
 
     it("retries an unsourced answer once on a fresh turn that insists on a search, and takes that answer", async () => {
@@ -213,7 +213,7 @@ describe("aiRoute", () => {
 
     it("does not declare web_search when search is off", async () => {
       const { fake } = await run([tool(1)]);
-      expect(fake.requests[0]!.tools!.map((t) => t.name)).toEqual([TOOL.name]);
+      expect(fake.requests[0]!.tools!.map((t) => ("name" in t ? t.name : t.type))).toEqual([TOOL.name]);
     });
   });
 });
