@@ -37,6 +37,9 @@ const HOME_SECTIONS = [
 const entries = (card: Locator) => card.getByTestId("recent-entry");
 
 async function openHome(page: Page) {
+  // In CI the session is real: without this the app may switch to cloud sync
+  // and pull rows other specs left on the server into these cards.
+  await page.route("**/api/sync/**", (route) => route.abort());
   await page.goto("/");
   // The first load of a route under `next dev` can be slow while it compiles.
   await expect(page.locator("#section-defecation")).toBeVisible({ timeout: 30_000 });

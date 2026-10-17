@@ -6,6 +6,7 @@
  * (which re-exports the tool below so existing importers resolve unchanged).
  */
 import { SODIUM_FRACTION, MSG_SODIUM_FRACTION } from "@intake/core/sodium";
+import { voiceToolItemProperties } from "@intake/core/voice-items";
 
 export const SYSTEM_PROMPT = `You convert a spoken health log transcript into a structured list of items. The user dictates multiple distinct events in one utterance — extract each as its own item.
 
@@ -64,42 +65,12 @@ export const PARSE_TOOL = {
         items: {
           type: "object",
           properties: {
-            kind: {
-              type: "string",
-              enum: [
-                "blood_pressure",
-                "weight",
-                "water",
-                "salt",
-                "food",
-                "caffeine",
-                "alcohol",
-                "urination",
-                "defecation",
-              ],
-            },
-            // Fields are a union across kinds. One flat object with optional
-            // fields keeps the schema small; which fields belong to
-            // which kind, and their ranges, is validated server-side with
-            // Zod.
-            systolic: { type: "number" },
-            diastolic: { type: "number" },
-            heartRate: { type: "number" },
-            position: { type: "string", enum: ["sitting", "standing"] },
-            arm: { type: "string", enum: ["left", "right"] },
-            weightKg: { type: "number" },
-            ml: { type: "number" },
-            sodiumMg: { type: "number" },
-            description: { type: "string" },
-            grams: { type: "number" },
-            waterMl: { type: "number" },
-            sugarG: { type: "number" },
-            potassiumMg: { type: "number" },
-            caffeineMg: { type: "number" },
-            abvPercent: { type: "number" },
-            volumeMl: { type: "number" },
-            amountEstimate: { type: "string", enum: ["small", "medium", "large"] },
-            note: { type: "string" },
+            // `kind`, then every kind's fields as one flat object of
+            // optional properties, from the voice item contract
+            // (@intake/core/voice-items). One flat object keeps the schema
+            // small; which fields belong to which kind, and their ranges, is
+            // validated server-side with Zod built from the same contract.
+            ...voiceToolItemProperties(),
             // Required, so the model states a time or says there is none
             // (null) for every item. Each branch is a closed object with all
             // of its fields required.

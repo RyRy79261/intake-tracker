@@ -16,6 +16,9 @@ const moduleWindow = (page: Page, id: string) => page.locator(`[data-testid="mod
 const deskIcon = (page: Page, id: string) => page.locator(`[data-desk-icon="${id}"]`);
 
 async function openDesk(page: Page) {
+  // In CI the session is real: without this the app may switch to cloud sync
+  // and pull rows other specs left on the server into these cards.
+  await page.route("**/api/sync/**", (route) => route.abort());
   await page.addInitScript(() => {
     const key = "intake-tracker-settings";
     let parsed: { state?: Record<string, unknown>; version?: number } = {};
