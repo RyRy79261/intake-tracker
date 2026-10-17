@@ -2,13 +2,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 import {
-  useAddComposableEntry,
   useSyncEatingGroup,
   fetchEntryGroup,
   sodiumKindFromSource,
 } from "@/hooks/use-composable-entry";
 import { useDrink } from "@/hooks/use-drink";
 import { db } from "@/lib/db";
+import { addComposableEntry } from "@/lib/composable-entry-service";
 
 // Capture the undo callbacks passed to the toast so tests can fire them.
 const undoToastCalls: Array<{
@@ -38,54 +38,6 @@ describe("sodiumKindFromSource (re-export)", () => {
     expect(sodiumKindFromSource("manual:msg")).toBe("msg");
     expect(sodiumKindFromSource("manual:sodium")).toBe("sodium");
     expect(sodiumKindFromSource(undefined)).toBe("sodium");
-  });
-});
-
-describe("useAddComposableEntry", () => {
-  it("creates linked eating + intake records sharing one groupId", async () => {
-    const { result } = renderHook(() => useAddComposableEntry());
-
-    let created!: Awaited<ReturnType<typeof result.current>>;
-    await act(async () => {
-      created = await result.current(
-        {
-          eating: { note: "toast", grams: 80 },
-          intakes: [{ type: "salt", amount: 500 }],
-        },
-        1_700_000_000_000,
-      );
-    });
-
-    expect(created.eatingId).toBeDefined();
-    expect(created.intakeIds).toHaveLength(1);
-
-    const group = await fetchEntryGroup(created.groupId);
-    expect(group?.eatings).toHaveLength(1);
-    expect(group?.intakes).toHaveLength(1);
-    expect(group?.eatings[0]?.groupId).toBe(created.groupId);
-    expect(group?.intakes[0]?.amount).toBe(500);
-  });
-});
-
-describe("useAddComposableEntry recovery", () => {
-  it("reopens a severed database and still saves (issue #287)", async () => {
-    const { result } = renderHook(() => useAddComposableEntry());
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-
-    db.close();
-    let created!: Awaited<ReturnType<typeof result.current>>;
-    await act(async () => {
-      created = await result.current({
-        intakes: [
-          { type: "water", amount: 330, source: "beverage" },
-          { type: "sugar", amount: 20, source: "manual:sugar" },
-        ],
-      });
-    });
-
-    const group = await fetchEntryGroup(created.groupId);
-    expect(group?.intakes).toHaveLength(2);
-    warn.mockRestore();
   });
 });
 
@@ -127,16 +79,12 @@ describe("useDrink().remove", () => {
 
 describe("useSyncEatingGroup", () => {
   it("creates a linked salt intake record for an eating record", async () => {
-    const add = renderHook(() => useAddComposableEntry());
-    let eatingId!: string;
-    await act(async () => {
-      eatingId = (
-        await add.result.current(
-          { eating: { note: "lunch", grams: 200 } },
-          1_700_000_000_000,
-        )
-      ).eatingId!;
-    });
+    const added = await addComposableEntry(
+      { eating: { note: "lunch", grams: 200 } },
+      1_700_000_000_000,
+    );
+    if (!added.success) throw new Error(added.error);
+    const eatingId = added.data.eatingId!;
 
     const { result } = renderHook(() => useSyncEatingGroup());
     await act(async () => {

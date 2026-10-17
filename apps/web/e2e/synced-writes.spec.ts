@@ -9,6 +9,12 @@ import { test, expect, type Page } from '@playwright/test';
 
 const DB_NAME = 'IntakeTrackerDB';
 
+// In CI the session is real: without this the app may switch to cloud sync,
+// push the queue these tests read, and pull other specs' rows.
+test.beforeEach(async ({ page }) => {
+  await page.route('**/api/sync/**', (route) => route.abort());
+});
+
 type QueueRow = { tableName: string; recordId: string; op: string };
 
 /** Every row of one IndexedDB store. */

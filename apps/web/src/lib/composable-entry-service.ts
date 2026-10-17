@@ -18,6 +18,15 @@ export const COMPOSABLE_TABLES = ["intakeRecords", "eatingRecords", "substanceRe
 
 // ─── Input / Output types ─────────────────────────────────────────────
 
+/**
+ * A meal (an eating record with its water content and nutrients) or a dose
+ * (a caffeine or alcohol record with its solutes and no fluid).
+ *
+ * Not a drink. A drink is a water row with no meal, and only the Drink module
+ * (`logDrink`) writes one: it derives the water row from the volume, so the
+ * fluid is booked exactly once. This input has no volume field, and
+ * {@link addComposableEntry} refuses a water intake without a meal.
+ */
 export interface ComposableEntryInput {
   eating?: { note?: string; grams?: number };
   intakes?: Array<{
@@ -30,22 +39,13 @@ export interface ComposableEntryInput {
     sourceAmount?: number;
     sourceUnit?: SodiumSourceUnit;
   }>;
+  /** A dose with no fluid of its own (a caffeine pill, coffee in a cake). */
   substance?: {
     type: "caffeine" | "alcohol";
     amountMg?: number;
     amountStandardDrinks?: number;
-    abvPercent?: number;
-    volumeMl?: number;
     description: string;
   };
-  substances?: Array<{
-    type: "caffeine" | "alcohol";
-    amountMg?: number;
-    amountStandardDrinks?: number;
-    abvPercent?: number;
-    volumeMl?: number;
-    description: string;
-  }>;
   originalInputText?: string;
   groupSource?: string;
 }
@@ -54,8 +54,8 @@ export interface ComposableEntryResult {
   groupId: string;
   eatingId?: string;
   intakeIds: string[];
-  substanceId?: string;    // kept for backward compat (single substance)
-  substanceIds: string[];  // all substance record IDs
+  substanceId?: string;
+  substanceIds: string[];
 }
 
 export interface EntryGroup {
@@ -73,6 +73,9 @@ export async function addComposableEntry(
   input: ComposableEntryInput,
   timestamp?: number,
 ): Promise<ServiceResult<ComposableEntryResult>> {
+  if (!input.eating && input.intakes?.some((i) => i.type === "water")) {
+    return err("A drink goes through logDrink, not addComposableEntry");
+  }
   try {
     const groupId = crypto.randomUUID();
     const ts = timestamp ?? Date.now();
@@ -130,13 +133,7 @@ export async function addComposableEntry(
         }
       }
 
-      // ── Substance record (singular — backward compat) ──
-      // `volumeMl` is recorded as data only. This branch used to also write a
-      // water IntakeRecord from it, which double-counted the fluid whenever
-      // the caller had already queued its own water intake (issue #322) and
-      // left the plural `substances` branch below behaving differently for
-      // identical input. Drinks now go through `logDrink`, the single owner of
-      // liquid volume; this path records substances and nothing more.
+      // ── Substance record (a dose) ──
       if (input.substance) {
         const id = crypto.randomUUID();
         substanceId = id;
@@ -146,8 +143,6 @@ export async function addComposableEntry(
           type: input.substance.type,
           ...(input.substance.amountMg !== undefined && { amountMg: input.substance.amountMg }),
           ...(input.substance.amountStandardDrinks !== undefined && { amountStandardDrinks: input.substance.amountStandardDrinks }),
-          ...(input.substance.type === "alcohol" && input.substance.abvPercent !== undefined && { abvPercent: input.substance.abvPercent }),
-          ...(input.substance.volumeMl !== undefined && { volumeMl: input.substance.volumeMl }),
           description: input.substance.description,
           source: "standalone" as const,
           aiEnriched: false,
@@ -158,30 +153,6 @@ export async function addComposableEntry(
           ...fields,
         };
         await w.insert("substanceRecords", record);
-      }
-
-      // ── Substance records (plural — multi-substance presets, per D-11) ──
-      if (input.substances) {
-        for (const sub of input.substances) {
-          const id = crypto.randomUUID();
-          substanceIds.push(id);
-          const record: SubstanceRecord = {
-            id,
-            type: sub.type,
-            ...(sub.amountMg !== undefined && { amountMg: sub.amountMg }),
-            ...(sub.amountStandardDrinks !== undefined && { amountStandardDrinks: sub.amountStandardDrinks }),
-            ...(sub.type === "alcohol" && sub.abvPercent !== undefined && { abvPercent: sub.abvPercent }),
-            ...(sub.volumeMl !== undefined && { volumeMl: sub.volumeMl }),
-            description: sub.description,
-            source: "standalone" as const,
-            aiEnriched: false,
-            timestamp: ts,
-            groupId,
-            ...(input.groupSource !== undefined && { groupSource: input.groupSource }),
-            ...fields,
-          };
-          await w.insert("substanceRecords", record);
-        }
       }
     });
 

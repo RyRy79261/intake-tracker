@@ -165,12 +165,11 @@ describe("Tier 2 sync-wired services", () => {
       expect(schedulePush).toHaveBeenCalled();
     });
 
-    it("addComposableEntry with substance.volumeMl enqueues the substance only", async () => {
+    it("addComposableEntry with a dose enqueues the substance only", async () => {
       const result = await addComposableEntry({
         substance: {
           type: "caffeine",
           amountMg: 100,
-          volumeMl: 250,
           description: "coffee",
         },
       });
@@ -180,22 +179,6 @@ describe("Tier 2 sync-wired services", () => {
       expect(queueRows).toHaveLength(1);
       expect(queueRows.filter((r) => r.tableName === "intakeRecords")).toHaveLength(0);
     });
-
-    it("addComposableEntry with plural substances enqueues each", async () => {
-      const result = await addComposableEntry({
-        substances: [
-          { type: "caffeine", amountMg: 80, description: "tea" },
-          { type: "caffeine", amountMg: 120, description: "cola" },
-        ],
-      });
-      expect(result.success).toBe(true);
-      if (!result.success) return;
-
-      const queueRows = await db._syncQueue.toArray();
-      expect(queueRows).toHaveLength(2);
-      expect(queueRows.every((r) => r.tableName === "substanceRecords")).toBe(true);
-    });
-
 
     it("syncEatingGroup enqueues every record it touches", async () => {
       // This was the one mutator missing from this suite, and it showed: the
