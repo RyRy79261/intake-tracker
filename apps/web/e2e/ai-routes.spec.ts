@@ -263,34 +263,40 @@ test.describe('Analytics insights (/api/analytics/insights)', () => {
     await signIn(page);
   });
 
+  /** The snapshot is built from IndexedDB first, which is slow under load. */
+  const SLOW = { timeout: 15_000 };
+
   /**
-   * Log a glass of water at noon yesterday (insights cover whole days before
-   * today), move the clock to now, and ask for a fast summary.
+   * Log a glass of water at noon one day, then ask for a fast summary at
+   * noon the next (insights cover whole days before today). Fixed dates at
+   * noon keep both clear of midnight and of the day-start hour.
    */
   async function generate(page: Page, mock: (route: Route) => unknown): Promise<Page> {
-    const now = new Date();
-    const noonYesterday = new Date(now);
-    noonYesterday.setDate(noonYesterday.getDate() - 1);
-    noonYesterday.setHours(12, 0, 0, 0);
-    await page.clock.install({ time: noonYesterday });
+    await page.clock.install({ time: new Date('2026-10-14T12:00:00') });
     await page.route('**/api/analytics/insights', mock);
     await page.goto('/');
     await page.getByRole('button', { name: 'Confirm Entry' }).first().click();
     await expect(page.getByRole('button', { name: /^Water today 250 of/ })).toBeVisible();
 
-    await page.clock.setSystemTime(now);
+    // Next day, and hold the clock there: no timer runs, so an error toast
+    // stays up until it is read (its auto-dismiss is a timer).
+    await page.clock.setSystemTime(new Date('2026-10-15T12:00:00'));
+    await page.clock.pauseAt(new Date('2026-10-15T12:00:01'));
     await page.goto('/analytics');
     // First visit: the analytics intro dialog.
-    await page
-      .getByRole('dialog')
-      .filter({ hasText: 'Your analytics' })
-      .getByRole('button', { name: 'Got it' })
-      .click();
+    const intro = page.getByRole('dialog').filter({ hasText: 'Your analytics' });
+    await intro.getByRole('button', { name: 'Got it' }).click();
+    await expect(intro).toBeHidden();
     await page.getByRole('button', { name: 'Fast analysis' }).click();
     const generateButton = page.getByRole('dialog').getByRole('button', { name: 'Generate insights' });
     await expect(generateButton).toBeEnabled();
-    // The installed clock drives the dialog's open animation, which can
-    // keep the button "not stable" for Playwright; it is visible and enabled.
+    // Let the dialog's open animation finish: a click mid-animation can land
+    // on the overlay and close the dialog instead.
+    await generateButton.evaluate((el) =>
+      Promise.all(
+        (el.closest('[role=dialog]')?.getAnimations({ subtree: true }) ?? []).map((a) => a.finished),
+      ),
+    );
     await generateButton.click({ force: true });
     return page;
   }
@@ -307,13 +313,15 @@ test.describe('Analytics insights (/api/analytics/insights)', () => {
         },
       });
     });
-    await expect(today.getByText('Your water intake was steady this week.').first()).toBeVisible();
+    // Showing the report waits on timers: let the clock run again.
+    await today.clock.resume();
+    await expect(today.getByText('Your water intake was steady this week.').first()).toBeVisible(SLOW);
     expect(body?.metrics).toBeTruthy();
   });
 
   test('502 AI_BAD_OUTPUT says it could not generate insights', async ({ page }) => {
     const today = await generate(page, json(502, BAD_OUTPUT));
-    await expect(today.getByText("Couldn't generate insights", { exact: true }).first()).toBeVisible();
+    await expect(today.getByText("Couldn't generate insights", { exact: true }).first()).toBeVisible(SLOW);
     await expect(today.getByText(BAD_OUTPUT.error).first()).toBeVisible();
   });
 
@@ -322,6 +330,6 @@ test.describe('Analytics insights (/api/analytics/insights)', () => {
       page,
       json(422, { error: 'The AI declined to summarise this data.', code: 'AI_REFUSED' }),
     );
-    await expect(today.getByText('The AI declined to summarise this data.').first()).toBeVisible();
+    await expect(today.getByText('The AI declined to summarise this data.').first()).toBeVisible(SLOW);
   });
 });
