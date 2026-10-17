@@ -9,12 +9,9 @@ import type { ServiceResult } from "@intake/types/service";
 import { baseSyncFields } from "@/lib/utils";
 import { localHHMMStringToUTCMinutes } from "@/lib/timezone";
 import { getScheduleAnchorTimezone } from "@/lib/schedule-anchor";
-import { buildAuditEntry } from "@/lib/audit-service";
-import { enqueueInsideTx } from "@/lib/sync-queue";
-import { schedulePush } from "@/lib/sync-engine";
 import { isLive } from "@intake/core/lifecycle";
 import { toLocalDateKey } from "@/lib/date-utils";
-import { updateSyncedInsideTx, softDeleteInsideTx } from "@/lib/synced-update";
+import { syncedWrite, type SyncedWriter } from "@/lib/synced-write";
 
 // ---------------------------------------------------------------------------
 // Input types
@@ -206,10 +203,11 @@ function newSchedule(
  * Identical schedules are left untouched; the remaining ones are paired by
  * time order and updated in place; only a surplus is added or soft-deleted.
  */
-async function reconcileSchedulesInsideTx(
+async function reconcileSchedules(
+  w: SyncedWriter,
   phaseId: string,
   inputs: readonly TitrationScheduleInput[],
-  ctx: { now: number; tz: string; deviceId: string },
+  ctx: { tz: string; deviceId: string },
 ): Promise<void> {
   const unmatchedExisting = await liveSchedulesForPhaseInsideTx(phaseId);
   const unmatchedInputs: TitrationScheduleInput[] = [];
@@ -233,38 +231,32 @@ async function reconcileSchedulesInsideTx(
   for (let i = 0; i < pairs; i++) {
     const existing = unmatchedExisting[i]!;
     const input = unmatchedInputs[i]!;
-    await updateSyncedInsideTx(
-      "phaseSchedules",
-      existing.id,
-      {
-        dosage: input.dosage,
-        daysOfWeek: input.daysOfWeek,
-        enabled: true,
-        ...(input.time !== existing.time && {
-          time: input.time,
-          scheduleTimeUTC: localHHMMStringToUTCMinutes(input.time, ctx.tz),
-          anchorTimezone: ctx.tz,
-        }),
-      },
-      { now: ctx.now },
-    );
+    await w.patch("phaseSchedules", existing.id, {
+      dosage: input.dosage,
+      daysOfWeek: input.daysOfWeek,
+      enabled: true,
+      ...(input.time !== existing.time && {
+        time: input.time,
+        scheduleTimeUTC: localHHMMStringToUTCMinutes(input.time, ctx.tz),
+        anchorTimezone: ctx.tz,
+      }),
+    });
   }
   for (const input of unmatchedInputs.slice(pairs)) {
-    const schedule = newSchedule(phaseId, input, ctx.tz, ctx.deviceId, ctx.now);
-    await db.phaseSchedules.add(schedule);
-    await enqueueInsideTx("phaseSchedules", schedule.id, "upsert");
+    const schedule = newSchedule(phaseId, input, ctx.tz, ctx.deviceId, w.now);
+    await w.insert("phaseSchedules", schedule);
   }
   for (const stale of unmatchedExisting.slice(pairs)) {
-    await softDeleteInsideTx("phaseSchedules", stale, ctx.now);
+    await w.tombstone("phaseSchedules", stale.id);
   }
 }
 
 /** Tombstone a phase and its schedules; running/pending phases become cancelled. */
-async function retirePhaseInsideTx(phase: MedicationPhase, now: number): Promise<void> {
+async function retirePhase(w: SyncedWriter, phase: MedicationPhase): Promise<void> {
   for (const s of await liveSchedulesForPhaseInsideTx(phase.id)) {
-    await softDeleteInsideTx("phaseSchedules", s, now);
+    await w.tombstone("phaseSchedules", s.id);
   }
-  await softDeleteInsideTx("medicationPhases", phase, now);
+  await w.tombstone("medicationPhases", phase.id);
 }
 
 /**
@@ -272,12 +264,12 @@ async function retirePhaseInsideTx(phase: MedicationPhase, now: number): Promise
  * prescription back on its maintenance dose — but only when no maintenance
  * phase is already running for it.
  */
-async function restoreMaintenanceInsideTx(prescriptionIds: Iterable<string>, now: number): Promise<void> {
+async function restoreMaintenance(w: SyncedWriter, prescriptionIds: Iterable<string>): Promise<void> {
   for (const rxId of new Set(prescriptionIds)) {
     const rxPhases = await livePhasesForRxInsideTx(rxId);
     const latest = pickMaintenancePhase(rxPhases);
     if (latest && latest.status !== "active") {
-      await updateSyncedInsideTx("medicationPhases", latest.id, { status: "active" }, { now });
+      await w.patch("medicationPhases", latest.id, { status: "active" });
     }
   }
 }
@@ -310,57 +302,43 @@ export async function createTitrationPlan(
       deviceId: sf.deviceId,
     };
 
-    await db.transaction(
-      "rw",
-      [db.titrationPlans, db.medicationPhases, db.phaseSchedules, db.auditLogs, db._syncQueue],
-      async () => {
-        const phases: MedicationPhase[] = [];
-        const schedules: PhaseSchedule[] = [];
+    await syncedWrite(["titrationPlans", "medicationPhases", "phaseSchedules"], async (w) => {
+      const phases: MedicationPhase[] = [];
+      const schedules: PhaseSchedule[] = [];
 
-        for (const entry of input.entries) {
-          const rxPhases = await livePhasesForRxInsideTx(entry.prescriptionId);
-          const phaseId = crypto.randomUUID();
-          phases.push({
-            id: phaseId,
-            prescriptionId: entry.prescriptionId,
-            type: "titration",
-            unit: resolveEntryUnit(entry, rxPhases),
-            startDate: input.startImmediately ? now : (input.recommendedStartDate ?? now),
-            foodInstruction: entry.foodInstruction ?? "none",
-            status: input.startImmediately ? "active" : "pending",
-            titrationPlanId: plan.id,
-            createdAt: now,
-            updatedAt: now,
-            deletedAt: null,
-            deviceId: sf.deviceId,
-          });
-
-          for (const s of entry.schedules) {
-            schedules.push(newSchedule(phaseId, s, tz, sf.deviceId, now));
-          }
-        }
-
-        await db.titrationPlans.add(plan);
-        await enqueueInsideTx("titrationPlans", plan.id, "upsert");
-        await db.medicationPhases.bulkAdd(phases);
-        for (const p of phases) {
-          await enqueueInsideTx("medicationPhases", p.id, "upsert");
-        }
-        await db.phaseSchedules.bulkAdd(schedules);
-        for (const s of schedules) {
-          await enqueueInsideTx("phaseSchedules", s.id, "upsert");
-        }
-
-        const auditEntry = buildAuditEntry("phase_started", {
+      for (const entry of input.entries) {
+        const rxPhases = await livePhasesForRxInsideTx(entry.prescriptionId);
+        const phaseId = crypto.randomUUID();
+        phases.push({
+          id: phaseId,
+          prescriptionId: entry.prescriptionId,
+          type: "titration",
+          unit: resolveEntryUnit(entry, rxPhases),
+          startDate: input.startImmediately ? now : (input.recommendedStartDate ?? now),
+          foodInstruction: entry.foodInstruction ?? "none",
+          status: input.startImmediately ? "active" : "pending",
           titrationPlanId: plan.id,
-          title: plan.title,
-          prescriptionCount: input.entries.length,
+          createdAt: now,
+          updatedAt: now,
+          deletedAt: null,
+          deviceId: sf.deviceId,
         });
-        await db.auditLogs.add(auditEntry);
-        await enqueueInsideTx("auditLogs", auditEntry.id, "upsert");
-      },
-    );
-    schedulePush();
+
+        for (const s of entry.schedules) {
+          schedules.push(newSchedule(phaseId, s, tz, sf.deviceId, now));
+        }
+      }
+
+      await w.insert("titrationPlans", plan);
+      for (const p of phases) await w.insert("medicationPhases", p);
+      for (const s of schedules) await w.insert("phaseSchedules", s);
+
+      await w.audit("phase_started", {
+        titrationPlanId: plan.id,
+        title: plan.title,
+        prescriptionCount: input.entries.length,
+      });
+    });
 
     return ok(plan);
   } catch (e) {
@@ -404,96 +382,87 @@ export async function updateTitrationPlan(
     if (input.notes !== undefined) planUpdates.notes = input.notes;
     if (input.warnings !== undefined) planUpdates.warnings = input.warnings;
 
-    await db.transaction(
-      "rw",
-      [db.titrationPlans, db.medicationPhases, db.phaseSchedules, db.auditLogs, db._syncQueue],
-      async () => {
-        await updateSyncedInsideTx("titrationPlans", plan.id, planUpdates, { now });
+    await syncedWrite(["titrationPlans", "medicationPhases", "phaseSchedules"], async (w) => {
+      await w.patch("titrationPlans", plan.id, planUpdates);
 
-        if (input.entries) {
-          const planPhases = (await db.medicationPhases
-            .where("titrationPlanId")
-            .equals(plan.id)
-            .toArray()).filter(isLive);
+      if (input.entries) {
+        const planPhases = (await db.medicationPhases
+          .where("titrationPlanId")
+          .equals(plan.id)
+          .toArray()).filter(isLive);
 
-          // One phase per prescription; any extra live duplicates (left by
-          // older clients' replace-on-edit) are retired below.
-          const phaseByRx = new Map<string, MedicationPhase>();
-          const surplus: MedicationPhase[] = [];
-          for (const phase of planPhases) {
-            if (phaseByRx.has(phase.prescriptionId)) surplus.push(phase);
-            else phaseByRx.set(phase.prescriptionId, phase);
+        // One phase per prescription; any extra live duplicates (left by
+        // older clients' replace-on-edit) are retired below.
+        const phaseByRx = new Map<string, MedicationPhase>();
+        const surplus: MedicationPhase[] = [];
+        for (const phase of planPhases) {
+          if (phaseByRx.has(phase.prescriptionId)) surplus.push(phase);
+          else phaseByRx.set(phase.prescriptionId, phase);
+        }
+
+        const keptRx = new Set<string>();
+        for (const entry of input.entries) {
+          keptRx.add(entry.prescriptionId);
+          const rxPhases = await livePhasesForRxInsideTx(entry.prescriptionId);
+          const unit = resolveEntryUnit(entry, rxPhases);
+          const existing = phaseByRx.get(entry.prescriptionId);
+
+          if (existing) {
+            const changes: Partial<Omit<MedicationPhase, "id" | "updatedAt">> = {};
+            if (existing.unit !== unit) changes.unit = unit;
+            if (entry.foodInstruction !== undefined && entry.foodInstruction !== existing.foodInstruction) {
+              changes.foodInstruction = entry.foodInstruction;
+            }
+            if (
+              existing.status === "pending" &&
+              input.recommendedStartDate !== undefined &&
+              existing.startDate !== input.recommendedStartDate
+            ) {
+              changes.startDate = input.recommendedStartDate;
+            }
+            if (Object.keys(changes).length > 0) {
+              await w.patch("medicationPhases", existing.id, changes);
+            }
+            await reconcileSchedules(w, existing.id, entry.schedules, { tz, deviceId: sf.deviceId });
+            continue;
           }
 
-          const keptRx = new Set<string>();
-          for (const entry of input.entries) {
-            keptRx.add(entry.prescriptionId);
-            const rxPhases = await livePhasesForRxInsideTx(entry.prescriptionId);
-            const unit = resolveEntryUnit(entry, rxPhases);
-            const existing = phaseByRx.get(entry.prescriptionId);
-
-            if (existing) {
-              const changes: Partial<Omit<MedicationPhase, "id" | "updatedAt">> = {};
-              if (existing.unit !== unit) changes.unit = unit;
-              if (entry.foodInstruction !== undefined && entry.foodInstruction !== existing.foodInstruction) {
-                changes.foodInstruction = entry.foodInstruction;
-              }
-              if (
-                existing.status === "pending" &&
-                input.recommendedStartDate !== undefined &&
-                existing.startDate !== input.recommendedStartDate
-              ) {
-                changes.startDate = input.recommendedStartDate;
-              }
-              if (Object.keys(changes).length > 0) {
-                await updateSyncedInsideTx("medicationPhases", existing.id, changes, { now });
-              }
-              await reconcileSchedulesInsideTx(existing.id, entry.schedules, { now, tz, deviceId: sf.deviceId });
-              continue;
-            }
-
-            const running = plan.status === "active";
-            const phase: MedicationPhase = {
-              id: crypto.randomUUID(),
-              prescriptionId: entry.prescriptionId,
-              type: "titration",
-              unit,
-              startDate: running ? now : (input.recommendedStartDate ?? plan.recommendedStartDate ?? now),
-              foodInstruction: entry.foodInstruction ?? "none",
-              status: running ? "active" : "pending",
-              titrationPlanId: plan.id,
-              createdAt: now,
-              updatedAt: now,
-              deletedAt: null,
-              deviceId: sf.deviceId,
-            };
-            await db.medicationPhases.add(phase);
-            await enqueueInsideTx("medicationPhases", phase.id, "upsert");
-            for (const s of entry.schedules) {
-              const schedule = newSchedule(phase.id, s, tz, sf.deviceId, now);
-              await db.phaseSchedules.add(schedule);
-              await enqueueInsideTx("phaseSchedules", schedule.id, "upsert");
-            }
-          }
-
-          const removed = [
-            ...planPhases.filter((p) => !keptRx.has(p.prescriptionId)),
-            ...surplus,
-          ];
-          for (const phase of removed) {
-            await retirePhaseInsideTx(phase, now);
+          const running = plan.status === "active";
+          const phase: MedicationPhase = {
+            id: crypto.randomUUID(),
+            prescriptionId: entry.prescriptionId,
+            type: "titration",
+            unit,
+            startDate: running ? now : (input.recommendedStartDate ?? plan.recommendedStartDate ?? now),
+            foodInstruction: entry.foodInstruction ?? "none",
+            status: running ? "active" : "pending",
+            titrationPlanId: plan.id,
+            createdAt: now,
+            updatedAt: now,
+            deletedAt: null,
+            deviceId: sf.deviceId,
+          };
+          await w.insert("medicationPhases", phase);
+          for (const s of entry.schedules) {
+            const schedule = newSchedule(phase.id, s, tz, sf.deviceId, now);
+            await w.insert("phaseSchedules", schedule);
           }
         }
 
-        const auditEntry = buildAuditEntry("titration_plan_updated", {
-          titrationPlanId: plan.id,
-          title: input.title ?? plan.title,
-        });
-        await db.auditLogs.add(auditEntry);
-        await enqueueInsideTx("auditLogs", auditEntry.id, "upsert");
-      },
-    );
-    schedulePush();
+        const removed = [
+          ...planPhases.filter((p) => !keptRx.has(p.prescriptionId)),
+          ...surplus,
+        ];
+        for (const phase of removed) {
+          await retirePhase(w, phase);
+        }
+      }
+
+      await w.audit("titration_plan_updated", {
+        titrationPlanId: plan.id,
+        title: input.title ?? plan.title,
+      });
+    });
 
     const updated = await db.titrationPlans.get(plan.id);
     return ok(updated!);
@@ -508,41 +477,29 @@ export async function activateTitrationPlan(
   try {
     const now = Date.now();
 
-    await db.transaction(
-      "rw",
-      [db.titrationPlans, db.medicationPhases, db.auditLogs, db._syncQueue],
-      async () => {
-        const plan = await db.titrationPlans.get(planId);
-        if (!plan) throw new Error("Titration plan not found");
+    await syncedWrite(["titrationPlans", "medicationPhases"], async (w) => {
+      const plan = await db.titrationPlans.get(planId);
+      if (!plan) throw new Error("Titration plan not found");
 
-        await updateSyncedInsideTx("titrationPlans", planId, { status: "active" }, { now });
+      await w.patch("titrationPlans", planId, { status: "active" });
 
-        // Activate the plan's live pending phases. A tombstoned phase keeps
-        // whatever status it had and must never come back to life.
-        const titrationPhases = (await db.medicationPhases
-          .where("titrationPlanId")
-          .equals(planId)
-          .toArray()).filter((p) => isLive(p) && p.status === "pending");
+      // Activate the plan's live pending phases. A tombstoned phase keeps
+      // whatever status it had and must never come back to life.
+      const titrationPhases = (await db.medicationPhases
+        .where("titrationPlanId")
+        .equals(planId)
+        .toArray()).filter((p) => isLive(p) && p.status === "pending");
 
-        for (const phase of titrationPhases) {
-          await updateSyncedInsideTx(
-            "medicationPhases",
-            phase.id,
-            { status: "active", startDate: now },
-            { now },
-          );
-        }
+      for (const phase of titrationPhases) {
+        await w.patch("medicationPhases", phase.id, { status: "active", startDate: now });
+      }
 
-        const auditEntry = buildAuditEntry("phase_activated", {
-          titrationPlanId: planId,
-          title: plan.title,
-          phasesActivated: titrationPhases.length,
-        });
-        await db.auditLogs.add(auditEntry);
-        await enqueueInsideTx("auditLogs", auditEntry.id, "upsert");
-      },
-    );
-    schedulePush();
+      await w.audit("phase_activated", {
+        titrationPlanId: planId,
+        title: plan.title,
+        phasesActivated: titrationPhases.length,
+      });
+    });
 
     return ok(undefined);
   } catch (e) {
@@ -562,84 +519,64 @@ export async function completeTitrationPlan(
   try {
     const now = Date.now();
 
-    await db.transaction(
-      "rw",
-      [db.titrationPlans, db.medicationPhases, db.phaseSchedules, db.auditLogs, db._syncQueue],
-      async () => {
-        const plan = await db.titrationPlans.get(planId);
-        if (!plan) throw new Error("Titration plan not found");
+    await syncedWrite(["titrationPlans", "medicationPhases", "phaseSchedules"], async (w) => {
+      const plan = await db.titrationPlans.get(planId);
+      if (!plan) throw new Error("Titration plan not found");
 
-        const titrationPhases = (await db.medicationPhases
-          .where("titrationPlanId")
-          .equals(planId)
-          .toArray()).filter(
-          (p) => isLive(p) && p.type === "titration" && (p.status === "active" || p.status === "pending"),
-        );
+      const titrationPhases = (await db.medicationPhases
+        .where("titrationPlanId")
+        .equals(planId)
+        .toArray()).filter(
+        (p) => isLive(p) && p.type === "titration" && (p.status === "active" || p.status === "pending"),
+      );
 
-        const sf = baseSyncFields();
-        for (const titPhase of titrationPhases) {
-          const titSchedules = (await liveSchedulesForPhaseInsideTx(titPhase.id))
-            .filter((s) => s.enabled === true);
+      const sf = baseSyncFields();
+      for (const titPhase of titrationPhases) {
+        const titSchedules = (await liveSchedulesForPhaseInsideTx(titPhase.id))
+          .filter((s) => s.enabled === true);
 
-          const rxPhases = await livePhasesForRxInsideTx(titPhase.prescriptionId);
-          const maintenancePhase = pickMaintenancePhase(rxPhases);
+        const rxPhases = await livePhasesForRxInsideTx(titPhase.prescriptionId);
+        const maintenancePhase = pickMaintenancePhase(rxPhases);
 
-          if (maintenancePhase) {
-            for (const os of await liveSchedulesForPhaseInsideTx(maintenancePhase.id)) {
-              await softDeleteInsideTx("phaseSchedules", os, now);
-            }
-
-            // Copies keep the titration schedule's own anchor so time and
-            // scheduleTimeUTC stay consistent.
-            const newSchedules: PhaseSchedule[] = titSchedules.map((s) => ({
-              id: crypto.randomUUID(),
-              phaseId: maintenancePhase.id,
-              time: s.time,
-              scheduleTimeUTC: s.scheduleTimeUTC,
-              anchorTimezone: s.anchorTimezone,
-              dosage: s.dosage,
-              daysOfWeek: s.daysOfWeek,
-              enabled: true,
-              createdAt: now,
-              updatedAt: now,
-              deletedAt: null,
-              deviceId: sf.deviceId,
-            }));
-            await db.phaseSchedules.bulkAdd(newSchedules);
-            for (const ns of newSchedules) {
-              await enqueueInsideTx("phaseSchedules", ns.id, "upsert");
-            }
-
-            if (maintenancePhase.status !== "active") {
-              await updateSyncedInsideTx(
-                "medicationPhases",
-                maintenancePhase.id,
-                { status: "active" },
-                { now },
-              );
-            }
+        if (maintenancePhase) {
+          for (const os of await liveSchedulesForPhaseInsideTx(maintenancePhase.id)) {
+            await w.tombstone("phaseSchedules", os.id);
           }
 
-          await updateSyncedInsideTx(
-            "medicationPhases",
-            titPhase.id,
-            { status: "completed", endDate: now },
-            { now },
-          );
+          // Copies keep the titration schedule's own anchor so time and
+          // scheduleTimeUTC stay consistent.
+          const newSchedules: PhaseSchedule[] = titSchedules.map((s) => ({
+            id: crypto.randomUUID(),
+            phaseId: maintenancePhase.id,
+            time: s.time,
+            scheduleTimeUTC: s.scheduleTimeUTC,
+            anchorTimezone: s.anchorTimezone,
+            dosage: s.dosage,
+            daysOfWeek: s.daysOfWeek,
+            enabled: true,
+            createdAt: now,
+            updatedAt: now,
+            deletedAt: null,
+            deviceId: sf.deviceId,
+          }));
+          for (const ns of newSchedules) await w.insert("phaseSchedules", ns);
+
+          if (maintenancePhase.status !== "active") {
+            await w.patch("medicationPhases", maintenancePhase.id, { status: "active" });
+          }
         }
 
-        await updateSyncedInsideTx("titrationPlans", planId, { status: "completed" }, { now });
+        await w.patch("medicationPhases", titPhase.id, { status: "completed", endDate: now });
+      }
 
-        const auditEntry = buildAuditEntry("phase_completed", {
-          titrationPlanId: planId,
-          title: plan.title,
-          action: "titration_completed_and_promoted",
-        });
-        await db.auditLogs.add(auditEntry);
-        await enqueueInsideTx("auditLogs", auditEntry.id, "upsert");
-      },
-    );
-    schedulePush();
+      await w.patch("titrationPlans", planId, { status: "completed" });
+
+      await w.audit("phase_completed", {
+        titrationPlanId: planId,
+        title: plan.title,
+        action: "titration_completed_and_promoted",
+      });
+    });
 
     return ok(undefined);
   } catch (e) {
@@ -653,46 +590,34 @@ export async function cancelTitrationPlan(
   try {
     const now = Date.now();
 
-    await db.transaction(
-      "rw",
-      [db.titrationPlans, db.medicationPhases, db.auditLogs, db._syncQueue],
-      async () => {
-        const plan = await db.titrationPlans.get(planId);
-        if (!plan) throw new Error("Titration plan not found");
+    await syncedWrite(["titrationPlans", "medicationPhases"], async (w) => {
+      const plan = await db.titrationPlans.get(planId);
+      if (!plan) throw new Error("Titration plan not found");
 
-        const planPhases = (await db.medicationPhases
-          .where("titrationPlanId")
-          .equals(planId)
-          .toArray()).filter(isLive);
+      const planPhases = (await db.medicationPhases
+        .where("titrationPlanId")
+        .equals(planId)
+        .toArray()).filter(isLive);
 
-        const stoppedRx: string[] = [];
-        for (const phase of planPhases) {
-          if (phase.status === "active" || phase.status === "pending") {
-            if (phase.status === "active") stoppedRx.push(phase.prescriptionId);
-            await updateSyncedInsideTx(
-              "medicationPhases",
-              phase.id,
-              { status: "cancelled", endDate: now },
-              { now },
-            );
-          }
+      const stoppedRx: string[] = [];
+      for (const phase of planPhases) {
+        if (phase.status === "active" || phase.status === "pending") {
+          if (phase.status === "active") stoppedRx.push(phase.prescriptionId);
+          await w.patch("medicationPhases", phase.id, { status: "cancelled", endDate: now });
         }
+      }
 
-        // Put prescriptions whose titration was running back on maintenance.
-        await restoreMaintenanceInsideTx(stoppedRx, now);
+      // Put prescriptions whose titration was running back on maintenance.
+      await restoreMaintenance(w, stoppedRx);
 
-        await updateSyncedInsideTx("titrationPlans", planId, { status: "cancelled" }, { now });
+      await w.patch("titrationPlans", planId, { status: "cancelled" });
 
-        const auditEntry = buildAuditEntry("phase_completed", {
-          titrationPlanId: planId,
-          title: plan.title,
-          action: "titration_cancelled",
-        });
-        await db.auditLogs.add(auditEntry);
-        await enqueueInsideTx("auditLogs", auditEntry.id, "upsert");
-      },
-    );
-    schedulePush();
+      await w.audit("phase_completed", {
+        titrationPlanId: planId,
+        title: plan.title,
+        action: "titration_cancelled",
+      });
+    });
 
     return ok(undefined);
   } catch (e) {
@@ -704,41 +629,33 @@ export async function deleteTitrationPlan(
   planId: string,
 ): Promise<ServiceResult<void>> {
   try {
-    const now = Date.now();
-    await db.transaction(
-      "rw",
-      [db.titrationPlans, db.medicationPhases, db.phaseSchedules, db.auditLogs, db._syncQueue],
-      async () => {
-        const planPhases = (await db.medicationPhases
-          .where("titrationPlanId")
-          .equals(planId)
-          .toArray()).filter(isLive);
+    await syncedWrite(["titrationPlans", "medicationPhases", "phaseSchedules"], async (w) => {
+      const planPhases = (await db.medicationPhases
+        .where("titrationPlanId")
+        .equals(planId)
+        .toArray()).filter(isLive);
 
-        // Tombstones also retire their lifecycle flags (cancelled phases,
-        // disabled schedules), so readers that only check status/enabled
-        // stop dosing them too.
-        const stoppedRx = planPhases
-          .filter((p) => p.status === "active")
-          .map((p) => p.prescriptionId);
-        for (const phase of planPhases) {
-          await retirePhaseInsideTx(phase, now);
-        }
-        await restoreMaintenanceInsideTx(stoppedRx, now);
+      // Tombstones also retire their lifecycle flags (cancelled phases,
+      // disabled schedules), so readers that only check status/enabled
+      // stop dosing them too.
+      const stoppedRx = planPhases
+        .filter((p) => p.status === "active")
+        .map((p) => p.prescriptionId);
+      for (const phase of planPhases) {
+        await retirePhase(w, phase);
+      }
+      await restoreMaintenance(w, stoppedRx);
 
-        const plan = await db.titrationPlans.get(planId);
-        if (plan && isLive(plan)) {
-          await softDeleteInsideTx("titrationPlans", plan, now);
-        }
+      const plan = await db.titrationPlans.get(planId);
+      if (plan && isLive(plan)) {
+        await w.tombstone("titrationPlans", plan.id);
+      }
 
-        const auditEntry = buildAuditEntry("phase_completed", {
-          titrationPlanId: planId,
-          action: "titration_deleted",
-        });
-        await db.auditLogs.add(auditEntry);
-        await enqueueInsideTx("auditLogs", auditEntry.id, "upsert");
-      },
-    );
-    schedulePush();
+      await w.audit("phase_completed", {
+        titrationPlanId: planId,
+        action: "titration_deleted",
+      });
+    });
 
     return ok(undefined);
   } catch (e) {

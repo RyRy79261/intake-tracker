@@ -1,6 +1,5 @@
 import { describe, it, expect } from "vitest";
 import { db } from "@/lib/db";
-import { updateSyncedInsideTx, softDeleteInsideTx } from "@/lib/synced-update";
 import { activatePhase, startNewPhase, updatePhase, deletePhase } from "@/lib/phase-service";
 import { deletePrescription, updatePrescription } from "@/lib/prescription-service";
 import { deleteSchedule, updateSchedule } from "@/lib/medication-schedule-service";
@@ -59,44 +58,21 @@ async function seedRx() {
   return { rx, maint, pending, sched };
 }
 
-describe("updateSyncedInsideTx", () => {
-  it("stamps updatedAt and enqueues the row in one step", async () => {
-    const rx = makePrescription();
-    await db.prescriptions.add(rx);
+describe("medication deletes retire what they tombstone", () => {
+  it("deletePrescription queues deletes and switches every row off", async () => {
+    const { rx, maint, pending, sched } = await seedRx();
+    await deletePrescription(rx.id);
 
-    await db.transaction("rw", [db.prescriptions, db._syncQueue], () =>
-      updateSyncedInsideTx("prescriptions", rx.id, { notes: "x" }, { now: BASE_TS + 5 }),
-    );
-
-    const row = await db.prescriptions.get(rx.id);
-    expect(row!.notes).toBe("x");
-    expect(row!.updatedAt).toBe(BASE_TS + 5);
-    const q = await db._syncQueue.toArray();
-    expect(q.map((r) => [r.tableName, r.recordId, r.op])).toEqual([["prescriptions", rx.id, "upsert"]]);
-  });
-});
-
-describe("softDeleteInsideTx", () => {
-  it("tombstones, retires the lifecycle flag and enqueues a delete", async () => {
-    const rx = makePrescription();
-    const phase = makeMedicationPhase(rx.id, { status: "pending" });
-    const sched = makePhaseSchedule(phase.id);
-    await db.prescriptions.add(rx);
-    await db.medicationPhases.add(phase);
-    await db.phaseSchedules.add(sched);
-
-    await db.transaction("rw", [db.prescriptions, db.medicationPhases, db.phaseSchedules, db._syncQueue], async () => {
-      await softDeleteInsideTx("prescriptions", rx, BASE_TS + 9);
-      await softDeleteInsideTx("medicationPhases", phase, BASE_TS + 9);
-      await softDeleteInsideTx("phaseSchedules", sched, BASE_TS + 9);
-    });
-
-    const r = await db.prescriptions.get(rx.id);
-    expect(r).toMatchObject({ deletedAt: BASE_TS + 9, updatedAt: BASE_TS + 9, isActive: false });
-    expect(await db.medicationPhases.get(phase.id)).toMatchObject({ status: "cancelled" });
-    expect(await db.phaseSchedules.get(sched.id)).toMatchObject({ enabled: false });
-    const ops = (await db._syncQueue.toArray()).map((q) => q.op);
-    expect(ops).toEqual(["delete", "delete", "delete"]);
+    expect(await db.prescriptions.get(rx.id)).toMatchObject({ isActive: false });
+    expect((await db.prescriptions.get(rx.id))!.deletedAt).toBeTypeOf("number");
+    expect((await db.medicationPhases.get(maint.id))!.status).toBe("cancelled");
+    expect((await db.medicationPhases.get(pending.id))!.status).toBe("cancelled");
+    expect((await db.phaseSchedules.get(sched.id))!.enabled).toBe(false);
+    const ops = (await db._syncQueue.toArray())
+      .filter((q) => q.tableName !== "auditLogs")
+      .map((q) => q.op);
+    expect(ops.length).toBeGreaterThan(0);
+    expect(new Set(ops)).toEqual(new Set(["delete"]));
   });
 });
 

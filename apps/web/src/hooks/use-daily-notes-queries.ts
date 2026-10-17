@@ -5,8 +5,7 @@ import { useMutation } from "@tanstack/react-query";
 import { isLive } from "@intake/core/lifecycle";
 import { db, type DailyNote } from "@/lib/db";
 import { syncFields } from "@/lib/utils";
-import { writeWithSync } from "@/lib/sync-queue";
-import { schedulePush } from "@/lib/sync-engine";
+import { syncedWrite } from "@/lib/synced-write";
 
 /** Live (non-soft-deleted) notes for a day, optionally scoped to one prescription. */
 export function useDailyNotes(date: string, prescriptionId?: string) {
@@ -44,11 +43,7 @@ export function useAddDailyNote() {
       };
       // Same write path as every other synced table: the row and its queue
       // entry commit atomically, then a debounced push is scheduled.
-      await writeWithSync("dailyNotes", "upsert", async () => {
-        await db.dailyNotes.add(entry);
-        return entry;
-      });
-      schedulePush();
+      await syncedWrite(["dailyNotes"], (w) => w.insert("dailyNotes", entry));
       return entry;
     },
   });

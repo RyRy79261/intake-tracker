@@ -2,8 +2,6 @@ import { db, type EatingRecord } from "@/lib/db";
 import { ok, err } from "@intake/core/service";
 import type { ServiceResult } from "@intake/types/service";
 import { generateId, syncFields } from "@/lib/utils";
-import { writeWithSync } from "@/lib/sync-queue";
-import { schedulePush } from "@/lib/sync-engine";
 import {
   getActiveRecords,
   getRecordsBetween,
@@ -11,6 +9,7 @@ import {
   undoSoftDeleteRecord,
   updateRecord,
 } from "@/lib/record-crud";
+import { syncedWrite } from "@/lib/synced-write";
 
 /**
  * `eating_records.grams` is a Postgres `integer`. AI parses and the voice
@@ -41,11 +40,7 @@ export async function addEatingRecord(
       ...syncFields(),
     };
 
-    await writeWithSync("eatingRecords", "upsert", async () => {
-      await db.eatingRecords.add(record);
-      return record;
-    });
-    schedulePush();
+    await syncedWrite(["eatingRecords"], (w) => w.insert("eatingRecords", record));
     return ok(record);
   } catch (e) {
     return err("Failed to add eating record", e);
