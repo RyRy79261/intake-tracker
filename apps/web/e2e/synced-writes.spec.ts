@@ -230,3 +230,56 @@ test.describe('Synced writes: medications', () => {
     expect(ops[`inventoryItems:${items[0]!.id}`]).toBe('upsert');
   });
 });
+
+test.describe('Sync manifest: backup import', () => {
+  test('an old backup gets a timezone only on tables that have one, and its rows show and sync', async ({ page }) => {
+    await openHome(page);
+    const now = Date.now();
+    // Rows from a backup older than the sync fields: no timezone, deviceId or
+    // deletedAt. Import fills them in from the generated table facts.
+    const backup = {
+      version: 1,
+      exportedAt: new Date(now).toISOString(),
+      intakeRecords: [],
+      weightRecords: [{ id: 'e2e-w-1', weight: 81.5, timestamp: now - 3_600_000 }],
+      bloodPressureRecords: [],
+      prescriptions: [
+        {
+          id: 'e2e-rx-old',
+          genericName: 'Ramipril',
+          indication: 'Hypertension',
+          contraindications: [],
+          warnings: [],
+          isActive: true,
+          createdAt: now - 7_200_000,
+        },
+      ],
+    };
+
+    await page.goto('/settings');
+    const sheet = page.getByRole('dialog', { name: 'Settings' });
+    await expect(sheet).toBeVisible({ timeout: 30_000 });
+    const group = sheet.getByRole('button', { name: 'Data & storage', exact: true });
+    if ((await group.getAttribute('aria-expanded')) !== 'true') await group.click();
+    await sheet.locator('input[type="file"]').setInputFiles({
+      name: 'old-backup.json',
+      mimeType: 'application/json',
+      buffer: Buffer.from(JSON.stringify(backup)),
+    });
+    await sheet.getByRole('button', { name: 'Continue Import' }).click();
+    await expect(sheet.getByText(/Last import: 2 new/)).toBeVisible();
+
+    // The weight shows on Home.
+    await page.goBack();
+    await expect(page.locator('#section-weight').getByTestId('recent-entry')).toHaveCount(1);
+
+    const [weight] = await readStore<Record<string, unknown>>(page, 'weightRecords');
+    const [rx] = await readStore<Record<string, unknown>>(page, 'prescriptions');
+    expect(typeof weight!.timezone).toBe('string');
+    expect(weight!.deletedAt).toBeNull();
+    expect('timezone' in rx!).toBe(false);
+    const ops = await queuedOps(page);
+    expect(ops['weightRecords:e2e-w-1']).toBe('upsert');
+    expect(ops['prescriptions:e2e-rx-old']).toBe('upsert');
+  });
+});

@@ -44,6 +44,7 @@ import { db, type SyncQueueRow } from "@/lib/db";
 import { ackIfUnchanged, enqueueInsideTx, getQueueDepth } from "@/lib/sync-queue";
 import { mergeSettingsRows, type SettingsRowLike } from "@/lib/settings-merge";
 import { TABLE_PUSH_ORDER, type TableName } from "@/lib/sync-topology";
+import { SYNC_TABLES } from "@intake/db/sync-manifest";
 import { normalizeRowForPush } from "@/lib/sync-column-types";
 import {
   fillClearedFieldsForPush,
@@ -168,36 +169,6 @@ function setPullError(lastError: string): void {
 }
 
 /**
- * FK columns per child table and the table each one points at — the FK graph
- * documented in `sync-topology.ts`, as column names.
- */
-const FK_PARENTS: Partial<
-  Record<TableName, ReadonlyArray<readonly [string, TableName]>>
-> = {
-  medicationPhases: [
-    ["prescriptionId", "prescriptions"],
-    ["titrationPlanId", "titrationPlans"],
-  ],
-  phaseSchedules: [["phaseId", "medicationPhases"]],
-  inventoryItems: [["prescriptionId", "prescriptions"]],
-  doseLogs: [
-    ["prescriptionId", "prescriptions"],
-    ["phaseId", "medicationPhases"],
-    ["scheduleId", "phaseSchedules"],
-    ["inventoryItemId", "inventoryItems"],
-  ],
-  inventoryTransactions: [
-    ["inventoryItemId", "inventoryItems"],
-    ["doseLogId", "doseLogs"],
-  ],
-  dailyNotes: [
-    ["prescriptionId", "prescriptions"],
-    ["doseLogId", "doseLogs"],
-  ],
-  substanceRecords: [["sourceRecordId", "intakeRecords"]],
-};
-
-/**
  * Add the still-queued FK parents of every row in the batch (transitively,
  * at most PUSH_BATCH_CAP extra rows).
  *
@@ -223,8 +194,9 @@ async function withQueuedParents(pending: SyncQueueRow[]): Promise<{
     const q = work.pop()!;
     const tableName = q.tableName as TableName;
     const key = `${tableName}:${q.recordId}`;
-    const fks = FK_PARENTS[tableName];
-    if (!fks) continue;
+    // A queue row for an unknown table has no parents to add.
+    const fks = (SYNC_TABLES as Partial<typeof SYNC_TABLES>)[tableName]?.fkParents ?? [];
+    if (fks.length === 0) continue;
     const live = (await db.table(tableName).get(q.recordId)) as
       | Record<string, unknown>
       | undefined;

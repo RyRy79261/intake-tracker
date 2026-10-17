@@ -30,7 +30,7 @@ When adding a new Dexie version, you must repeat all existing store definitions 
 
 The sync engine mirrors every Dexie table to Neon Postgres. The server schema lives in `@intake/db/schema` (`packages/db/src/schema.ts`) and must stay field-for-field in parity with the Dexie record interfaces in `@intake/types/records` (`packages/types/src/records.ts`) — `apps/web/src/__tests__/schema-parity.test.ts` fails the build otherwise.
 
-Workflow: edit `src/db/schema.ts`, run `pnpm db:generate` (emits a numbered SQL file + snapshot under `drizzle/`), commit the generated files. `pnpm db:migrate` applies them. **Never** run `drizzle-kit push`.
+Workflow: edit `src/db/schema.ts`, run `pnpm db:generate` (emits a numbered SQL file + snapshot under `drizzle/`, and rewrites the client sync manifest `packages/db/src/sync-manifest.generated.ts`), commit the generated files. `pnpm db:migrate` applies them. **Never** run `drizzle-kit push`.
 
 **Migration timestamp footgun.** drizzle's migrator applies a migration only when its journal `when` exceeds the highest `created_at` already recorded in the target database's `__drizzle_migrations` table. Migrations 0006–0011 carry **hand-edited future-dated `when` values** (up to `1780200000000` ≈ 2026-05-31) — a pre-existing wart (see commit `7935991`).
 

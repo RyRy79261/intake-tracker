@@ -22,116 +22,36 @@
  *   point every write must pass through, and repairs rows already sitting in
  *   IndexedDB with a bad value.
  *
- * Why the field lists are hand-maintained rather than derived:
- *   `@intake/db/schema` pulls drizzle-orm + drizzle-zod into whatever imports
- *   it. The push loop runs in the browser, so importing the schema here would
- *   drag both into the client bundle of a mobile-first PWA. `sync-topology.ts`
- *   mirrors the FK graph for exactly this reason and pays for it with a
- *   parity test; this module follows that convention.
- *   `src/__tests__/sync-column-types.test.ts` derives the real column types
- *   from the Drizzle schema and fails if either map drifts.
+ * The field lists come from the generated sync manifest
+ *   (`@intake/db/sync-manifest`, built from the Drizzle schema by
+ *   `pnpm db:generate`). The push loop runs in the browser and must not import
+ *   drizzle, so the facts are generated as plain data rather than read from
+ *   the schema at run time.
  */
 
-import type { TableName } from "@/lib/sync-topology";
+import { SYNC_TABLES } from "@intake/db/sync-manifest";
+import { TABLE_PUSH_ORDER, type TableName } from "@/lib/sync-topology";
+
+function fieldsByTable(
+  pick: (facts: (typeof SYNC_TABLES)[TableName]) => readonly string[],
+): Record<TableName, readonly string[]> {
+  return Object.fromEntries(
+    TABLE_PUSH_ORDER.map((t) => [t, pick(SYNC_TABLES[t])]),
+  ) as Record<TableName, readonly string[]>;
+}
 
 /**
  * Fields backed by a Postgres `integer` or `bigint` column — a fractional
- * value is rejected by the push validator.
- *
- * `userId` and `serverUpdatedAt` are omitted throughout: the client never
- * sends them (the push route stamps both), so they cannot carry a bad value.
+ * value is rejected by the push validator. `userId` and `serverUpdatedAt` are
+ * left out: the client never sends them.
  */
-export const INTEGER_SYNC_FIELDS: Record<TableName, readonly string[]> = {
-  prescriptions: ["createdAt", "updatedAt", "deletedAt"],
-  titrationPlans: ["recommendedStartDate", "createdAt", "updatedAt", "deletedAt"],
-  medicationPhases: ["startDate", "endDate", "createdAt", "updatedAt", "deletedAt"],
-  phaseSchedules: ["scheduleTimeUTC", "createdAt", "updatedAt", "deletedAt"],
-  inventoryItems: [
-    "refillAlertDays",
-    "refillAlertPills",
-    "createdAt",
-    "updatedAt",
-    "deletedAt",
-  ],
-  doseLogs: ["actionTimestamp", "createdAt", "updatedAt", "deletedAt"],
-  inventoryTransactions: ["timestamp", "createdAt", "updatedAt", "deletedAt"],
-  dailyNotes: ["createdAt", "updatedAt", "deletedAt"],
-  intakeRecords: ["amount", "timestamp", "createdAt", "updatedAt", "deletedAt"],
-  substanceRecords: [
-    "amountMg",
-    "volumeMl",
-    "timestamp",
-    "createdAt",
-    "updatedAt",
-    "deletedAt",
-  ],
-  weightRecords: ["timestamp", "createdAt", "updatedAt", "deletedAt"],
-  bloodPressureRecords: [
-    "systolic",
-    "diastolic",
-    "heartRate",
-    "timestamp",
-    "createdAt",
-    "updatedAt",
-    "deletedAt",
-  ],
-  eatingRecords: ["grams", "timestamp", "createdAt", "updatedAt", "deletedAt"],
-  urinationRecords: ["timestamp", "createdAt", "updatedAt", "deletedAt"],
-  defecationRecords: ["timestamp", "createdAt", "updatedAt", "deletedAt"],
-  auditLogs: ["timestamp", "createdAt", "updatedAt", "deletedAt"],
-  userProfile: ["aiInsightsConsentAt", "createdAt", "updatedAt", "deletedAt"],
-  insightReports: [
-    "generatedAt",
-    "rangeStart",
-    "rangeEnd",
-    "createdAt",
-    "updatedAt",
-    "deletedAt",
-  ],
-  userSettings: [
-    "waterLimit",
-    "saltLimit",
-    "sugarLimit",
-    "potassiumLimit",
-    "waterExtendedBuffer",
-    "saltExtendedBuffer",
-    "sugarExtendedBuffer",
-    "dayStartHour",
-    "weekStartsOn",
-    "reminderFollowUpCount",
-    "reminderFollowUpInterval",
-    "homeTimezoneConfirmedAt",
-    "createdAt",
-    "updatedAt",
-    "deletedAt",
-  ],
-};
+export const INTEGER_SYNC_FIELDS = fieldsByTable((t) => t.integerFields);
 
 /**
  * Fields backed by a Postgres `real` column. Fractions are fine here; only
  * NaN/Infinity need scrubbing, since the push validator rejects those too.
  */
-export const FLOAT_SYNC_FIELDS: Record<TableName, readonly string[]> = {
-  prescriptions: [],
-  titrationPlans: [],
-  medicationPhases: [],
-  phaseSchedules: ["dosage"],
-  inventoryItems: ["currentStock", "strength"],
-  doseLogs: ["doseMg", "doseAmount", "pillsConsumed", "pillStrength"],
-  inventoryTransactions: ["amount"],
-  dailyNotes: [],
-  intakeRecords: ["sourceAmount"],
-  substanceRecords: ["amountStandardDrinks", "abvPercent"],
-  weightRecords: ["weight"],
-  bloodPressureRecords: [],
-  eatingRecords: [],
-  urinationRecords: [],
-  defecationRecords: [],
-  auditLogs: [],
-  userProfile: [],
-  insightReports: [],
-  userSettings: [],
-};
+export const FLOAT_SYNC_FIELDS = fieldsByTable((t) => t.floatFields);
 
 /**
  * Coerce a Dexie row into the numeric shape its Postgres table accepts.

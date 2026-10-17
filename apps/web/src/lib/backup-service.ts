@@ -47,6 +47,7 @@ import type { ServiceResult } from "@intake/types/service";
 import { logAudit } from "@/lib/audit";
 import { BACKUP_VALIDATORS } from "@/lib/backup-schemas";
 import { TABLE_PUSH_ORDER, type TableName } from "@/lib/sync-topology";
+import { SYNC_TABLES } from "@intake/db/sync-manifest";
 import { syncedWrite, type SyncedWriter } from "@/lib/synced-write";
 import { getDeviceId } from "@/lib/utils";
 import { getDeviceTimezone } from "@/lib/timezone";
@@ -160,17 +161,6 @@ const SKIP_EXISTING_TABLES: ReadonlySet<TableName> = new Set<TableName>([
   "urinationRecords",
   "defecationRecords",
   "substanceRecords",
-]);
-
-/** Tables whose record type has no `timezone` column (see baseSyncFields). */
-const NO_TIMEZONE_TABLES: ReadonlySet<TableName> = new Set<TableName>([
-  "prescriptions",
-  "medicationPhases",
-  "phaseSchedules",
-  "titrationPlans",
-  "userProfile",
-  "insightReports",
-  "userSettings",
 ]);
 
 type Row = Record<string, unknown> & { id: string; deletedAt?: number | null; updatedAt?: number };
@@ -409,7 +399,7 @@ function normaliseRow(tableName: TableName, record: Row, now: number): Row {
   }
   row.updatedAt ??= row.createdAt as number;
   row.deviceId ??= getDeviceId();
-  if (!NO_TIMEZONE_TABLES.has(tableName)) row.timezone ??= getDeviceTimezone();
+  if (SYNC_TABLES[tableName].hasTimezone) row.timezone ??= getDeviceTimezone();
   return row;
 }
 
