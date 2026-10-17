@@ -1,4 +1,3 @@
-import type { UpdateSpec } from "dexie";
 import {
   db,
   type WeightRecord,
@@ -8,8 +7,7 @@ import {
 import { ok, err } from "@intake/core/service";
 import type { ServiceResult, PaginatedResult } from "@intake/types/service";
 import { generateId, syncFields } from "@/lib/utils";
-import { writeWithSync } from "@/lib/sync-queue";
-import { schedulePush } from "@/lib/sync-engine";
+import { syncedWrite, type SyncedChanges } from "@/lib/synced-write";
 
 // Weight Records
 
@@ -31,11 +29,7 @@ export async function addWeightRecord(
       ...syncFields(),
     };
 
-    await writeWithSync("weightRecords", "upsert", async () => {
-      await db.weightRecords.add(record);
-      return record;
-    });
-    schedulePush();
+    await syncedWrite(["weightRecords"], (w) => w.insert("weightRecords", record));
     return ok(record);
   } catch (e) {
     return err("Failed to add weight record", e);
@@ -66,12 +60,7 @@ export async function getLatestWeightRecord(): Promise<WeightRecord | undefined>
 
 export async function deleteWeightRecord(id: string): Promise<ServiceResult<void>> {
   try {
-    const now = Date.now();
-    await writeWithSync("weightRecords", "delete", async () => {
-      await db.weightRecords.update(id, { deletedAt: now, updatedAt: now });
-      return { id };
-    });
-    schedulePush();
+    await syncedWrite(["weightRecords"], (w) => w.tombstone("weightRecords", id));
     return ok(undefined);
   } catch (e) {
     return err("Failed to delete weight record", e);
@@ -80,12 +69,7 @@ export async function deleteWeightRecord(id: string): Promise<ServiceResult<void
 
 export async function undoDeleteWeightRecord(id: string): Promise<ServiceResult<void>> {
   try {
-    const now = Date.now();
-    await writeWithSync("weightRecords", "upsert", async () => {
-      await db.weightRecords.update(id, { deletedAt: null, updatedAt: now });
-      return { id };
-    });
-    schedulePush();
+    await syncedWrite(["weightRecords"], (w) => w.restore("weightRecords", id));
     return ok(undefined);
   } catch (e) {
     return err("Failed to undo delete weight record", e);
@@ -99,11 +83,9 @@ export async function updateWeightRecord(
   updates: { weight?: number; timestamp?: number; note?: string | null }
 ): Promise<ServiceResult<void>> {
   try {
-    await writeWithSync("weightRecords", "upsert", async () => {
-      await db.weightRecords.update(id, { ...updates, updatedAt: Date.now() } as UpdateSpec<WeightRecord>);
-      return { id };
-    });
-    schedulePush();
+    await syncedWrite(["weightRecords"], (w) =>
+      w.patch("weightRecords", id, updates as unknown as SyncedChanges<"weightRecords">),
+    );
     return ok(undefined);
   } catch (e) {
     return err("Failed to update weight record", e);
@@ -140,11 +122,7 @@ export async function addBloodPressureRecord(
       ...syncFields(),
     };
 
-    await writeWithSync("bloodPressureRecords", "upsert", async () => {
-      await db.bloodPressureRecords.add(record);
-      return record;
-    });
-    schedulePush();
+    await syncedWrite(["bloodPressureRecords"], (w) => w.insert("bloodPressureRecords", record));
     return ok(record);
   } catch (e) {
     return err("Failed to add blood pressure record", e);
@@ -175,12 +153,7 @@ export async function getLatestBloodPressureRecord(): Promise<BloodPressureRecor
 
 export async function deleteBloodPressureRecord(id: string): Promise<ServiceResult<void>> {
   try {
-    const now = Date.now();
-    await writeWithSync("bloodPressureRecords", "delete", async () => {
-      await db.bloodPressureRecords.update(id, { deletedAt: now, updatedAt: now });
-      return { id };
-    });
-    schedulePush();
+    await syncedWrite(["bloodPressureRecords"], (w) => w.tombstone("bloodPressureRecords", id));
     return ok(undefined);
   } catch (e) {
     return err("Failed to delete blood pressure record", e);
@@ -189,12 +162,7 @@ export async function deleteBloodPressureRecord(id: string): Promise<ServiceResu
 
 export async function undoDeleteBloodPressureRecord(id: string): Promise<ServiceResult<void>> {
   try {
-    const now = Date.now();
-    await writeWithSync("bloodPressureRecords", "upsert", async () => {
-      await db.bloodPressureRecords.update(id, { deletedAt: null, updatedAt: now });
-      return { id };
-    });
-    schedulePush();
+    await syncedWrite(["bloodPressureRecords"], (w) => w.restore("bloodPressureRecords", id));
     return ok(undefined);
   } catch (e) {
     return err("Failed to undo delete blood pressure record", e);
@@ -215,11 +183,9 @@ export async function updateBloodPressureRecord(
   }
 ): Promise<ServiceResult<void>> {
   try {
-    await writeWithSync("bloodPressureRecords", "upsert", async () => {
-      await db.bloodPressureRecords.update(id, { ...updates, updatedAt: Date.now() } as UpdateSpec<BloodPressureRecord>);
-      return { id };
-    });
-    schedulePush();
+    await syncedWrite(["bloodPressureRecords"], (w) =>
+      w.patch("bloodPressureRecords", id, updates as unknown as SyncedChanges<"bloodPressureRecords">),
+    );
     return ok(undefined);
   } catch (e) {
     return err("Failed to update blood pressure record", e);

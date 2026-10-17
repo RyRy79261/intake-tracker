@@ -34,6 +34,10 @@ import {
   makeIntakeRecord,
   makeWeightRecord,
   makePrescription,
+  makeMedicationPhase,
+  makePhaseSchedule,
+  makeInventoryItem,
+  makeTitrationPlan,
   makeDoseLog,
   makeUserProfile,
   makeInsightReport,
@@ -788,5 +792,50 @@ describe("backup-service: restored settings beat newer per-setting stamps", () =
     const restored = (await db.userSettings.get("settings-1"))!;
     expect(restored.fieldUpdatedAt).toEqual({ waterLimit: 1_000 });
     expect(mergeSettingsRows(server, restored).row.waterLimit).toBe(2500);
+  });
+});
+
+describe("backup-service: tombstones retire their lifecycle flag", () => {
+  // Many readers key off isActive / enabled / status rather than deletedAt.
+  // A tombstone that still says "active" keeps showing and scheduling (the
+  // bug the Dexie v23 repair fixed for data already on disk).
+  it("replace mode switches off the medication rows it tombstones", async () => {
+    await db.prescriptions.add(makePrescription({ id: "rx-gone", isActive: true }));
+    await db.medicationPhases.add(makeMedicationPhase("rx-gone", { id: "ph-gone", status: "active" }));
+    await db.phaseSchedules.add(makePhaseSchedule("ph-gone", { id: "sch-gone", enabled: true }));
+    await db.inventoryItems.add(makeInventoryItem("rx-gone", { id: "inv-gone", isActive: true }));
+    await db.titrationPlans.add(makeTitrationPlan({ id: "tp-gone", status: "active" }));
+
+    const body = makeBackupJson({
+      prescriptions: [],
+      medicationPhases: [],
+      phaseSchedules: [],
+      inventoryItems: [],
+      titrationPlans: [],
+    });
+    const res = await importBackup(makeFile(body), "replace");
+    expect(res.success && res.data.success).toBe(true);
+
+    const rx = (await db.prescriptions.get("rx-gone"))!;
+    expect(rx.deletedAt).toBeTypeOf("number");
+    expect(rx.isActive).toBe(false);
+    expect((await db.medicationPhases.get("ph-gone"))!.status).toBe("cancelled");
+    expect((await db.phaseSchedules.get("sch-gone"))!.enabled).toBe(false);
+    expect((await db.inventoryItems.get("inv-gone"))!.isActive).toBe(false);
+    expect((await db.titrationPlans.get("tp-gone"))!.status).toBe("cancelled");
+  });
+
+  it("a backup tombstone written over a local row is switched off too", async () => {
+    await db.prescriptions.add(makePrescription({ id: "rx", isActive: true }));
+    // A backup exported before v23 can hold a tombstone that still says active.
+    const body = makeBackupJson({
+      prescriptions: [makePrescription({ id: "rx", isActive: true, deletedAt: 1_700_000_500_000 })],
+    });
+    const res = await importBackup(makeFile(body), "replace");
+    expect(res.success && res.data.success).toBe(true);
+
+    const rx = (await db.prescriptions.get("rx"))!;
+    expect(rx.deletedAt).toBe(1_700_000_500_000);
+    expect(rx.isActive).toBe(false);
   });
 });

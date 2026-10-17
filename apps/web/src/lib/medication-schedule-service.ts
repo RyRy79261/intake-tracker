@@ -4,11 +4,8 @@ import type { ServiceResult } from "@intake/types/service";
 import { baseSyncFields } from "@/lib/utils";
 import { localHHMMStringToUTCMinutes } from "@/lib/timezone";
 import { getScheduleAnchorTimezone, homeAnchorOrUndefined } from "@/lib/schedule-anchor";
-import { buildAuditEntry } from "@/lib/audit-service";
-import { enqueueInsideTx } from "@/lib/sync-queue";
-import { schedulePush } from "@/lib/sync-engine";
 import { isLive } from "@intake/core/lifecycle";
-import { updateSyncedInsideTx, softDeleteInsideTx } from "@/lib/synced-update";
+import { syncedWrite } from "@/lib/synced-write";
 
 // ---------------------------------------------------------------------------
 // Read functions — return T directly (throw on error)
@@ -36,20 +33,16 @@ export async function addSchedule(
       anchorTimezone: tz,
       ...baseSyncFields(),
     };
-    await db.transaction("rw", [db.phaseSchedules, db.auditLogs, db._syncQueue], async () => {
-      await db.phaseSchedules.add(schedule);
-      const auditEntry = buildAuditEntry("prescription_updated", {
+    await syncedWrite(["phaseSchedules"], async (w) => {
+      await w.insert("phaseSchedules", schedule);
+      await w.audit("prescription_updated", {
         action: "schedule_added",
         scheduleId: schedule.id,
         phaseId: input.phaseId,
         time: input.time,
         dosage: input.dosage,
       });
-      await db.auditLogs.add(auditEntry);
-      await enqueueInsideTx("phaseSchedules", schedule.id, "upsert");
-      await enqueueInsideTx("auditLogs", auditEntry.id, "upsert");
     });
-    schedulePush();
     return ok(schedule);
   } catch (e) {
     return err("Failed to add schedule", e);
@@ -82,17 +75,14 @@ export async function updateSchedule(
       }
     }
 
-    await db.transaction("rw", [db.phaseSchedules, db.auditLogs, db._syncQueue], async () => {
-      await updateSyncedInsideTx("phaseSchedules", id, finalUpdates);
-      const auditEntry = buildAuditEntry("prescription_updated", {
+    await syncedWrite(["phaseSchedules"], async (w) => {
+      await w.patch("phaseSchedules", id, finalUpdates);
+      await w.audit("prescription_updated", {
         action: "schedule_updated",
         scheduleId: id,
         updatedFields: Object.keys(updates),
       });
-      await db.auditLogs.add(auditEntry);
-      await enqueueInsideTx("auditLogs", auditEntry.id, "upsert");
     });
-    schedulePush();
     return ok(undefined);
   } catch (e) {
     return err("Failed to update schedule", e);
@@ -101,19 +91,15 @@ export async function updateSchedule(
 
 export async function deleteSchedule(id: string): Promise<ServiceResult<void>> {
   try {
-    const now = Date.now();
-    await db.transaction("rw", [db.phaseSchedules, db.auditLogs, db._syncQueue], async () => {
+    await syncedWrite(["phaseSchedules"], async (w) => {
       const schedule = await db.phaseSchedules.get(id);
       if (!schedule) throw new Error("Schedule not found");
-      await softDeleteInsideTx("phaseSchedules", schedule, now);
-      const auditEntry = buildAuditEntry("prescription_updated", {
+      await w.tombstone("phaseSchedules", schedule.id);
+      await w.audit("prescription_updated", {
         action: "schedule_deleted",
         scheduleId: id,
       });
-      await db.auditLogs.add(auditEntry);
-      await enqueueInsideTx("auditLogs", auditEntry.id, "upsert");
     });
-    schedulePush();
     return ok(undefined);
   } catch (e) {
     return err("Failed to delete schedule", e);

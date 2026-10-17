@@ -185,3 +185,22 @@ describe("purgeOldAuditLogs", () => {
     expect(await db.auditLogs.count()).toBe(1);
   });
 });
+
+describe("logAudit — sync", () => {
+  // The audit log is a synced table. Entries written by logAudit (AI parse
+  // requests, backup export/import, validation errors) used to land in
+  // IndexedDB with no sync-queue entry, so they never reached the server.
+  it("queues every flushed entry for sync", async () => {
+    logAudit("ai_parse_request");
+    logAudit("data_export", "Exported 3 records");
+
+    await vi.waitFor(async () => {
+      const logs = await db.auditLogs.toArray();
+      expect(logs).toHaveLength(2);
+      const queued = await db._syncQueue.toArray();
+      expect(
+        queued.map((q) => [q.tableName, q.recordId, q.op]).sort(),
+      ).toEqual(logs.map((l) => ["auditLogs", l.id, "upsert"]).sort());
+    }, WAIT);
+  });
+});

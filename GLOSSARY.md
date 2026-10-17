@@ -12,6 +12,10 @@ Domain words used in code, reviews and plans. Use these names exactly.
 
 **Strength**: the amount of a substance per volume of a drink. When a drink's volume changes, its strength stays the same, so caffeine, sugar, sodium and potassium change with the volume. ABV is already a strength.
 
+**Synced write**: one change to synced tables, made through `syncedWrite` (`apps/web/src/lib/synced-write.ts`). It stamps `updatedAt`, queues each row it touches with the op the row stands for, retires a tombstone's lifecycle flag, writes audit entries as synced rows, and schedules a push. Services describe the change; they never queue rows themselves.
+
+**Tombstone**: a soft-deleted row (`deletedAt` set). It stays in the table so the deletion syncs, is queued as a "delete", and has its lifecycle flag retired (`isActive: false`, `enabled: false`, or a running status set to `cancelled`).
+
 **Voice item**: one thing a voice log holds: a blood pressure reading, a weight, water, sodium, food, a caffeine or alcohol drink, a urination or a defecation. The voice item contract (`packages/core/src/voice-items.ts`) is the one place that says each kind's fields, units, ranges and which are required; the route's Zod schema, the parse tool's fields, the item types and the review check are built from it.
 
 **Parsed entry**: a voice item, or the Food card's detail form, about to be saved. The parsed-entry logger (`apps/web/src/lib/parsed-entry-service.ts`) is the only code that turns one into records: it picks the records, tags their source, rounds amounts to whole numbers and applies the sugar and potassium trackers. Drinks go through the Drink module.

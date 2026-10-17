@@ -1,5 +1,5 @@
 import "client-only";
-import Dexie, { RangeSet, type EntityTable, type ObservabilitySet } from "dexie";
+import Dexie, { RangeSet, type EntityTable, type ObservabilitySet, type Transaction } from "dexie";
 import {
   getTimezoneForTimestamp,
   localHHMMStringToUTCMinutes,
@@ -161,6 +161,89 @@ const V15_STORES = {
   eatingRecords:           "id, timestamp, groupId, updatedAt",
   substanceRecords:        "id, [type+timestamp], type, timestamp, source, sourceRecordId, groupId, updatedAt",
 } as const;
+
+// ─── Upgrade-hook helpers ─────────────────────────────────────────────
+//
+// Frozen on purpose: an upgrade hook must keep doing what it did when it
+// shipped, so these never import the live service rules.
+
+/**
+ * Queue a row an upgrade hook repaired. The repair has to reach the server,
+ * not just this device: push selects from `_syncQueue`, so an un-enqueued
+ * change is invisible to it, while a later pull overwrites the row with the
+ * server's unrepaired version. Push reads the live row at push time, so an op
+ * already queued for the record carries the repair on its own; only enqueue
+ * when there is none.
+ */
+async function enqueueRepair(
+  trans: Transaction,
+  tableName: string,
+  recordId: string,
+  now: number,
+  op: "upsert" | "delete" = "upsert",
+): Promise<void> {
+  const queueTable = trans.table("_syncQueue");
+  const existing = await queueTable
+    .where("[tableName+recordId]")
+    .equals([tableName, recordId])
+    .first();
+  if (existing) return;
+  await queueTable.add({ tableName, recordId, op, enqueuedAt: now, attempts: 0 });
+}
+
+/**
+ * Retire the lifecycle flag of every tombstone that still reads "live" (a
+ * soft-deleted prescription with `isActive: true`, a deleted phase that is
+ * still `active`, ...), and queue each repaired row with `op`. Readers that
+ * trust the flag without checking `deletedAt` kept showing, and scheduling,
+ * those rows. Used by v23, and again by v27 for tombstones written since.
+ */
+async function repairTombstoneFlags(
+  trans: Transaction,
+  now: number,
+  op: "upsert" | "delete",
+): Promise<void> {
+  // Tombstones only. `deletedAt` is not indexed, so scan and filter — these
+  // are one user's medication tables, which stay small.
+  const repair = async (
+    tableName: string,
+    fix: (row: Record<string, unknown>) => Record<string, unknown> | null,
+  ) => {
+    const table = trans.table(tableName);
+    const rows = (await table.toArray()) as Record<string, unknown>[];
+    for (const row of rows) {
+      // One malformed row must not abort the version change (see v22).
+      try {
+        if (row.deletedAt == null) continue;
+        const changes = fix(row);
+        if (!changes) continue;
+        // `updatedAt` is bumped so the pushed repair wins last-write-wins
+        // against the server's copy. `deletedAt` itself is left untouched.
+        await table.update(row.id, { ...changes, updatedAt: now });
+        await enqueueRepair(trans, tableName, row.id as string, now, op);
+      } catch {
+        // Skip this row; the rest of the repair still applies.
+      }
+    }
+  };
+
+  await repair("prescriptions", (r) =>
+    r.isActive === false ? null : { isActive: false });
+  await repair("inventoryItems", (r) =>
+    r.isActive === false ? null : { isActive: false });
+  await repair("phaseSchedules", (r) =>
+    r.enabled === false ? null : { enabled: false });
+  await repair("medicationPhases", (r) =>
+    r.status === "active" || r.status === "pending"
+      ? { status: "cancelled" }
+      : null);
+  // TitrationPlan has no "pending" status today; it is matched anyway so a
+  // row written by an older/newer client with that value is still repaired.
+  await repair("titrationPlans", (r) =>
+    r.status === "active" || r.status === "draft" || r.status === "pending"
+      ? { status: "cancelled" }
+      : null);
+}
 
 // Version 10: Consolidated schema with sync-readiness fields, compound indexes,
 // and event-sourced inventory. Replaces v4-v9 (all prior migrations ran on
@@ -589,32 +672,12 @@ realDb.version(22).stores({
   const now = Date.now();
   const intakeTable = trans.table("intakeRecords");
   const substanceTable = trans.table("substanceRecords");
-  const queueTable = trans.table("_syncQueue");
 
-  // The repair has to reach the server, not just this device. Push selects from
-  // `_syncQueue`, so an un-enqueued change is invisible to it — while a later
-  // pull happily overwrites the row with the server's still-ungrouped version
-  // (`bulkPut`, no field-level merge). It also means a fresh install, which
-  // creates the database at v22 directly and never runs this hook, would pull
-  // legacy ungrouped pairs and keep them forever.
+  // Each repaired row is queued (enqueueRepair): besides reaching the server,
+  // that matters for a fresh install, which creates the database at v22
+  // directly and never runs this hook, and would otherwise pull legacy
+  // ungrouped pairs and keep them forever.
   //
-  // Push reads the live row at push time, so an op already queued for a record
-  // will carry the new groupId on its own; only enqueue when there is none.
-  const enqueueRepair = async (tableName: string, recordId: string) => {
-    const existing = await queueTable
-      .where("[tableName+recordId]")
-      .equals([tableName, recordId])
-      .first();
-    if (existing) return;
-    await queueTable.add({
-      tableName,
-      recordId,
-      op: "upsert",
-      enqueuedAt: now,
-      attempts: 0,
-    });
-  };
-
   // `source` is indexed, so scope the scan to the rows that can possibly match
   // rather than materialising every intake row a multi-year user has.
   const linkedWaters = await intakeTable
@@ -647,11 +710,11 @@ realDb.version(22).stores({
       // effect if it looks newer than the version already stored.
       if (water.groupId !== groupId) {
         await intakeTable.update(water.id, { groupId, updatedAt: now });
-        await enqueueRepair("intakeRecords", water.id as string);
+        await enqueueRepair(trans, "intakeRecords", water.id as string, now);
       }
       if (substance.groupId !== groupId) {
         await substanceTable.update(substanceId, { groupId, updatedAt: now });
-        await enqueueRepair("substanceRecords", substanceId);
+        await enqueueRepair(trans, "substanceRecords", substanceId, now);
       }
     } catch {
       // Skip this pair; the rest of the backfill still applies.
@@ -694,67 +757,7 @@ realDb.version(23).stores({
   userProfile:             "id, updatedAt",
   insightReports:          "id, generatedAt, updatedAt",
 }).upgrade(async (trans) => {
-  const now = Date.now();
-  const queueTable = trans.table("_syncQueue");
-
-  // Same reasoning as v22: the repair has to reach the server (a later pull
-  // would otherwise overwrite it with the stale flag), and push reads the
-  // live row at push time, so an op already queued for the record suffices.
-  const enqueueRepair = async (tableName: string, recordId: string) => {
-    const existing = await queueTable
-      .where("[tableName+recordId]")
-      .equals([tableName, recordId])
-      .first();
-    if (existing) return;
-    await queueTable.add({
-      tableName,
-      recordId,
-      op: "upsert",
-      enqueuedAt: now,
-      attempts: 0,
-    });
-  };
-
-  // Tombstones only. `deletedAt` is not indexed, so scan and filter — these
-  // are one user's medication tables, which stay small.
-  const repair = async (
-    tableName: string,
-    fix: (row: Record<string, unknown>) => Record<string, unknown> | null,
-  ) => {
-    const table = trans.table(tableName);
-    const rows = (await table.toArray()) as Record<string, unknown>[];
-    for (const row of rows) {
-      // One malformed row must not abort the version change (see v22).
-      try {
-        if (row.deletedAt == null) continue;
-        const changes = fix(row);
-        if (!changes) continue;
-        // `updatedAt` is bumped so the pushed repair wins last-write-wins
-        // against the server's copy. `deletedAt` itself is left untouched.
-        await table.update(row.id, { ...changes, updatedAt: now });
-        await enqueueRepair(tableName, row.id as string);
-      } catch {
-        // Skip this row; the rest of the repair still applies.
-      }
-    }
-  };
-
-  await repair("prescriptions", (r) =>
-    r.isActive === false ? null : { isActive: false });
-  await repair("inventoryItems", (r) =>
-    r.isActive === false ? null : { isActive: false });
-  await repair("phaseSchedules", (r) =>
-    r.enabled === false ? null : { enabled: false });
-  await repair("medicationPhases", (r) =>
-    r.status === "active" || r.status === "pending"
-      ? { status: "cancelled" }
-      : null);
-  // TitrationPlan has no "pending" status today; it is matched anyway so a
-  // row written by an older/newer client with that value is still repaired.
-  await repair("titrationPlans", (r) =>
-    r.status === "active" || r.status === "draft" || r.status === "pending"
-      ? { status: "cancelled" }
-      : null);
+  await repairTombstoneFlags(trans, Date.now(), "upsert");
 });
 
 // Version 24 (2026-09 audit follow-up, state-settings-cache#2): adds the
@@ -839,25 +842,7 @@ realDb.version(25).stores({
   const intakeTable = trans.table("intakeRecords");
   const substanceTable = trans.table("substanceRecords");
   const eatingTable = trans.table("eatingRecords");
-  const queueTable = trans.table("_syncQueue");
 
-  // Same reasoning as v22: the repair has to reach the server (a later pull
-  // would otherwise overwrite it with the reduced amount), and push reads the
-  // live row at push time, so an op already queued for the record suffices.
-  const enqueueRepair = async (tableName: string, recordId: string) => {
-    const existing = await queueTable
-      .where("[tableName+recordId]")
-      .equals([tableName, recordId])
-      .first();
-    if (existing) return;
-    await queueTable.add({
-      tableName,
-      recordId,
-      op: "upsert",
-      enqueuedAt: now,
-      attempts: 0,
-    });
-  };
 
   // Drink volume per group, from its live caffeine/alcohol records.
   const volumeByGroup = new Map<string, number>();
@@ -898,7 +883,7 @@ realDb.version(25).stores({
       // skips the write, and a failed write leaves only a harmless push of
       // the unchanged row. `updatedAt` is bumped so the pushed repair wins
       // last-write-wins.
-      await enqueueRepair("intakeRecords", water.id as string);
+      await enqueueRepair(trans, "intakeRecords", water.id as string, now);
       await intakeTable.update(water.id, { amount, updatedAt: now });
     } catch {
       // Skip this group; the rest of the repair still applies. Rethrowing
@@ -953,24 +938,7 @@ realDb.version(26).stores({
   const intakeTable = trans.table("intakeRecords");
   const substanceTable = trans.table("substanceRecords");
   const eatingTable = trans.table("eatingRecords");
-  const queueTable = trans.table("_syncQueue");
 
-  // As in v22/v25: the repair has to reach the server, and push reads the
-  // live row, so an op already queued for the record suffices.
-  const enqueueRepair = async (tableName: string, recordId: string) => {
-    const existing = await queueTable
-      .where("[tableName+recordId]")
-      .equals([tableName, recordId])
-      .first();
-    if (existing) return;
-    await queueTable.add({
-      tableName,
-      recordId,
-      op: "upsert",
-      enqueuedAt: now,
-      attempts: 0,
-    });
-  };
 
   // Drink volume per group (the largest, as getDrink reads it), with the
   // `updatedAt` of the record it came from.
@@ -1010,10 +978,99 @@ realDb.version(26).stores({
       if (typeof water.amount !== "number" || water.amount >= amount) continue;
 
       // Queue first, then write (see v25 for why this order fails safe).
-      await enqueueRepair("intakeRecords", water.id as string);
+      await enqueueRepair(trans, "intakeRecords", water.id as string, now);
       await intakeTable.update(water.id, { amount, updatedAt: now });
     } catch {
       // Skip this group; the rest of the repair still applies.
+    }
+  }
+});
+
+// Version 27 (2026-10, synced-write module): repair what three write-path
+// bugs may have left on a device. Stores are byte-identical to v26; the
+// version bump exists to carry the `upgrade` hook.
+//
+//   1. A backup restore in replace mode tombstoned the medication rows the
+//      file lacked without switching them off, so a deleted prescription
+//      could still read `isActive: true` (the defect v23 repaired, written
+//      again after v23 ran). The v23 repair runs again; repaired rows are
+//      queued as deletes, the op a tombstone stands for.
+//   2. `logAudit` (AI parse requests, backup export/import, validation
+//      errors) wrote audit rows with no sync-queue entry, so none of them
+//      reached the server. Those rows are recognised by their id, which is
+//      `<ms>-<base36>` rather than a UUID, and are queued as they stand
+//      (no field is changed). Rows already on the server resolve to a no-op
+//      under last-write-wins.
+//   3. Several soft deletes were queued as "upsert". A queued upsert for a
+//      row that is gone by push time is dropped, so the delete never reached
+//      the server. Every queued upsert whose row is a tombstone becomes a
+//      delete.
+/** The id shape `logAudit` gave its rows (Date.now() + "-" + 7 base-36 chars). */
+const LOG_AUDIT_ID = /^\d+-[a-z0-9]+$/;
+
+realDb.version(27).stores({
+  // --- REPEAT all v26 stores verbatim ---
+  intakeRecords:           "id, [type+timestamp], timestamp, source, groupId, updatedAt",
+  weightRecords:           "id, timestamp, updatedAt",
+  bloodPressureRecords:    "id, timestamp, position, arm, updatedAt",
+  eatingRecords:           "id, timestamp, groupId, updatedAt",
+  urinationRecords:        "id, timestamp, updatedAt",
+  defecationRecords:       "id, timestamp, updatedAt",
+  prescriptions:           "id, updatedAt, createdAt",
+  medicationPhases:        "id, prescriptionId, status, type, titrationPlanId, updatedAt",
+  phaseSchedules:          "id, phaseId, time, updatedAt",
+  inventoryItems:          "id, prescriptionId, updatedAt",
+  inventoryTransactions:   "id, [inventoryItemId+timestamp], inventoryItemId, timestamp, type, updatedAt",
+  doseLogs:                "id, [prescriptionId+scheduledDate], [scheduleId+scheduledDate], prescriptionId, phaseId, scheduleId, scheduledDate, scheduledTime, status, updatedAt",
+  dailyNotes:              "id, date, prescriptionId, doseLogId, updatedAt",
+  auditLogs:               "id, [action+timestamp], timestamp, action",
+  substanceRecords:        "id, [type+timestamp], type, timestamp, source, sourceRecordId, groupId, updatedAt",
+  titrationPlans:          "id, conditionLabel, status, updatedAt",
+  _syncQueue:              "++id, [tableName+recordId], tableName, enqueuedAt",
+  _syncMeta:               "tableName",
+  _errorLogs:              "id, timestamp, source",
+  userProfile:             "id, updatedAt",
+  insightReports:          "id, generatedAt, updatedAt",
+  userSettings:            "id, updatedAt",
+}).upgrade(async (trans) => {
+  const now = Date.now();
+
+  // 1. Tombstones that still read "live".
+  await repairTombstoneFlags(trans, now, "delete");
+
+  // 2. Audit rows logAudit never queued. Only rows the push route can accept
+  //    are queued; anything else stays local, as it was.
+  const audits = (await trans.table("auditLogs").toArray()) as Record<string, unknown>[];
+  for (const row of audits) {
+    // One malformed row must not abort the version change (see v22).
+    try {
+      if (typeof row.id !== "string" || !LOG_AUDIT_ID.test(row.id)) continue;
+      if (row.deletedAt != null || typeof row.action !== "string") continue;
+      if (typeof row.deviceId !== "string" || typeof row.timezone !== "string") continue;
+      if (![row.timestamp, row.createdAt, row.updatedAt].every((v) => typeof v === "number")) continue;
+      await enqueueRepair(trans, "auditLogs", row.id, now);
+    } catch {
+      // Skip this row; the rest still applies.
+    }
+  }
+
+  // 3. Queued upserts that stand for a tombstone.
+  const queueTable = trans.table("_syncQueue");
+  const pending = (await queueTable.toArray()) as Array<{
+    id: number;
+    tableName: string;
+    recordId: string;
+    op: string;
+  }>;
+  for (const q of pending) {
+    try {
+      if (q.op !== "upsert") continue;
+      const row = (await trans.table(q.tableName).get(q.recordId)) as
+        | { deletedAt?: number | null }
+        | undefined;
+      if (row?.deletedAt != null) await queueTable.update(q.id, { op: "delete" });
+    } catch {
+      // An unknown table name, or a bad row: leave this entry as it is.
     }
   }
 });
@@ -1023,7 +1080,7 @@ realDb.version(26).stores({
  * `realDb.version(N)` block above so diagnostic surfaces (Debug → Environment)
  * always reflect the real schema.
  */
-export const DB_SCHEMA_VERSION = 26;
+export const DB_SCHEMA_VERSION = 27;
 
 /**
  * True when `e` (or anything in its `cause` chain) is Dexie's

@@ -8,14 +8,13 @@ import type {
 import { ok, err } from "@intake/core/service";
 import type { ServiceResult } from "@intake/types/service";
 import { syncFields } from "@/lib/utils";
-import { enqueueInsideTx } from "@/lib/sync-queue";
-import { schedulePush } from "@/lib/sync-engine";
+import { syncedWrite, type SyncedChanges } from "@/lib/synced-write";
 import { standardDrinksFromAbv, abvFromStandardDrinks } from "@intake/core/alcohol";
 import { isLive } from "@intake/core/lifecycle";
 import {
   COMPOSABLE_TABLES,
   deleteEntryGroup,
-  retimeGroupInTx,
+  retimeGroup,
 } from "@/lib/composable-entry-service";
 import { deleteIntakeRecord } from "@/lib/intake-service";
 
@@ -206,10 +205,9 @@ export async function logDrink(
     const substanceIds: string[] = [];
     const waterIntakeId = crypto.randomUUID();
 
-    await db.transaction(
-      "rw",
-      [db.intakeRecords, db.substanceRecords, db._syncQueue],
-      async () => {
+    await syncedWrite(
+      ["intakeRecords", "substanceRecords"],
+      async (w) => {
         // ── The derived water record — invariant 1 ──
         const water: IntakeRecord = {
           id: waterIntakeId,
@@ -225,8 +223,7 @@ export async function logDrink(
           }),
           ...fields,
         };
-        await db.intakeRecords.add(water);
-        await enqueueInsideTx("intakeRecords", waterIntakeId, "upsert");
+        await w.insert("intakeRecords", water);
         intakeIds.push(waterIntakeId);
 
         // ── Dissolved solutes ──
@@ -279,8 +276,7 @@ export async function logDrink(
             ...(input.groupSource !== undefined && { groupSource: input.groupSource }),
             ...fields,
           };
-          await db.intakeRecords.add(record);
-          await enqueueInsideTx("intakeRecords", id, "upsert");
+          await w.insert("intakeRecords", record);
           intakeIds.push(id);
         }
 
@@ -320,14 +316,12 @@ export async function logDrink(
           });
         }
         for (const record of substances) {
-          await db.substanceRecords.add(record);
-          await enqueueInsideTx("substanceRecords", record.id, "upsert");
+          await w.insert("substanceRecords", record);
           substanceIds.push(record.id);
         }
       },
     );
 
-    schedulePush();
     return ok({ groupId, waterIntakeId, intakeIds, substanceIds });
   } catch (e) {
     return err("Failed to log drink", e);
@@ -508,33 +502,29 @@ export async function editDrink(
   }
   try {
     const fields = syncFields();
-    const now = fields.updatedAt;
     const volumeMl = Math.max(1, Math.round(input.volumeMl));
     const ts = input.timestamp;
 
-    await db.transaction("rw", [...COMPOSABLE_TABLES, db._syncQueue], async () => {
+    await syncedWrite(COMPOSABLE_TABLES, async (w) => {
       const group = await loadDrinkGroup(waterIntakeId);
       if (!group) throw new Error("Drink not found");
       const { water } = group;
 
-      const tombstone = async (table: "intakeRecords" | "substanceRecords", id: string) => {
-        await db[table].update(id, { deletedAt: now, updatedAt: now });
-        await enqueueInsideTx(table, id, "upsert");
-      };
+      const tombstone = (table: "intakeRecords" | "substanceRecords", id: string) =>
+        w.tombstone(table, id);
 
       // ── The water row: always the full drink volume ──
-      const waterPatch: Record<string, unknown> = {
+      // An `undefined` note clears it.
+      const waterPatch: SyncedChanges<"intakeRecords"> = {
         amount: volumeMl,
         timestamp: ts,
         note: input.note,
-        updatedAt: now,
       };
       if (input.waterSource !== undefined) waterPatch.source = input.waterSource;
 
       if (group.kind !== "drink") {
-        await db.intakeRecords.update(water.id, waterPatch);
-        await enqueueInsideTx("intakeRecords", water.id, "upsert");
-        if (water.groupId) await retimeGroupInTx(water.groupId, ts, now);
+        await w.patch("intakeRecords", water.id, waterPatch);
+        if (water.groupId) await retimeGroup(w, water.groupId, ts);
         return;
       }
 
@@ -549,8 +539,7 @@ export async function editDrink(
         groupId = crypto.randomUUID();
         waterPatch.groupId = groupId;
       }
-      await db.intakeRecords.update(water.id, waterPatch);
-      await enqueueInsideTx("intakeRecords", water.id, "upsert");
+      await w.patch("intakeRecords", water.id, waterPatch);
       if (!groupId) return;
       const groupSource = water.groupSource;
 
@@ -572,8 +561,7 @@ export async function editDrink(
           ...(description !== undefined && { description }),
         };
         if (existing) {
-          await db.substanceRecords.update(existing.id, { ...common, updatedAt: now });
-          await enqueueInsideTx("substanceRecords", existing.id, "upsert");
+          await w.patch("substanceRecords", existing.id, common);
           return;
         }
         const record: SubstanceRecord = {
@@ -587,8 +575,7 @@ export async function editDrink(
           ...fields,
           ...common,
         };
-        await db.substanceRecords.add(record);
-        await enqueueInsideTx("substanceRecords", record.id, "upsert");
+        await w.insert("substanceRecords", record);
       };
 
       const caffeine = group.substances.find((s) => s.type === "caffeine");
@@ -635,8 +622,7 @@ export async function editDrink(
         if (amount <= 0) {
           if (existing) await tombstone("intakeRecords", existing.id);
         } else if (existing) {
-          await db.intakeRecords.update(existing.id, { amount, timestamp: ts, updatedAt: now });
-          await enqueueInsideTx("intakeRecords", existing.id, "upsert");
+          await w.patch("intakeRecords", existing.id, { amount, timestamp: ts });
         } else {
           const record: IntakeRecord = {
             id: crypto.randomUUID(),
@@ -648,8 +634,7 @@ export async function editDrink(
             ...(groupSource !== undefined && { groupSource }),
             ...fields,
           };
-          await db.intakeRecords.add(record);
-          await enqueueInsideTx("intakeRecords", record.id, "upsert");
+          await w.insert("intakeRecords", record);
         }
       }
       if (ratio !== 1) {
@@ -665,20 +650,18 @@ export async function editDrink(
             await tombstone("intakeRecords", row.id);
             continue;
           }
-          const patch: Partial<IntakeRecord> = { amount, timestamp: ts, updatedAt: now };
+          const patch: SyncedChanges<"intakeRecords"> = { amount, timestamp: ts };
           if (row.sourceAmount !== undefined) {
             patch.sourceAmount = parseFloat(scale(row.sourceAmount).toFixed(2));
           }
-          await db.intakeRecords.update(row.id, patch);
-          await enqueueInsideTx("intakeRecords", row.id, "upsert");
+          await w.patch("intakeRecords", row.id, patch);
         }
       }
 
       // Every row left (and any the patch did not touch) moves with the drink.
-      await retimeGroupInTx(groupId, ts, now);
+      await retimeGroup(w, groupId, ts);
     });
 
-    schedulePush();
     return ok(undefined);
   } catch (e) {
     return err("Failed to edit drink", e);

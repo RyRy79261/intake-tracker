@@ -3,9 +3,8 @@ import { ok, err } from "@intake/core/service";
 import { isLive } from "@intake/core/lifecycle";
 import type { ServiceResult } from "@intake/types/service";
 import { syncFields } from "@/lib/utils";
-import { enqueueInsideTx } from "@/lib/sync-queue";
-import { schedulePush } from "@/lib/sync-engine";
-import { COMPOSABLE_TABLES, retimeGroupInTx } from "@/lib/composable-entry-service";
+import { syncedWrite } from "@/lib/synced-write";
+import { COMPOSABLE_TABLES, retimeGroup } from "@/lib/composable-entry-service";
 
 export type AddSubstanceInput = {
   type: 'caffeine' | 'alcohol';
@@ -59,12 +58,7 @@ export async function addSubstanceRecord(
       ...fields,
     };
 
-    await db.transaction("rw", [db.substanceRecords, db._syncQueue], async () => {
-      await db.substanceRecords.add(record);
-      await enqueueInsideTx("substanceRecords", substanceId, "upsert");
-    });
-
-    schedulePush();
+    await syncedWrite(["substanceRecords"], (w) => w.insert("substanceRecords", record));
     return ok(record);
   } catch (e) {
     return err("Failed to add substance record", e);
@@ -157,15 +151,11 @@ export async function deleteSubstanceRecord(
   id: string
 ): Promise<ServiceResult<{ deletedAt: number }>> {
   try {
-    const now = Date.now();
-
-    await db.transaction(
-      "rw",
-      [db.substanceRecords, db.intakeRecords, db.eatingRecords, db._syncQueue],
-      async () => {
+    const now = await syncedWrite(
+      ["substanceRecords", "intakeRecords", "eatingRecords"],
+      async (w) => {
         const substance = await db.substanceRecords.get(id);
-        await db.substanceRecords.update(id, { deletedAt: now, updatedAt: now });
-        await enqueueInsideTx("substanceRecords", id, "upsert");
+        await w.tombstone("substanceRecords", id);
 
         // Rows written by the old implicit auto-water path are linked only by
         // this source string, one-to-one with the substance, so they always
@@ -211,25 +201,19 @@ export async function deleteSubstanceRecord(
               .equals(groupId)
               .toArray();
             for (const sibling of siblings) {
-              if (sibling.id === id || sibling.deletedAt !== null) continue;
-              await db.substanceRecords.update(sibling.id, {
-                deletedAt: now,
-                updatedAt: now,
-              });
-              await enqueueInsideTx("substanceRecords", sibling.id, "upsert");
+              if (sibling.id === id) continue;
+              await w.tombstone("substanceRecords", sibling.id);
             }
           }
         }
 
         for (const intake of linkedIntakes) {
-          if (intake.deletedAt !== null) continue;
-          await db.intakeRecords.update(intake.id, { deletedAt: now, updatedAt: now });
-          await enqueueInsideTx("intakeRecords", intake.id, "upsert");
+          await w.tombstone("intakeRecords", intake.id);
         }
+        return w.now;
       },
     );
 
-    schedulePush();
     return ok({ deletedAt: now });
   } catch (e) {
     return err("Failed to delete substance record", e);
@@ -246,12 +230,9 @@ export async function undoDeleteSubstanceRecord(
   deletedAt: number
 ): Promise<ServiceResult<void>> {
   try {
-    const now = Date.now();
-
-    await db.transaction(
-      "rw",
-      [db.substanceRecords, db.intakeRecords, db._syncQueue],
-      async () => {
+    await syncedWrite(
+      ["substanceRecords", "intakeRecords"],
+      async (w) => {
         const substance = await db.substanceRecords.get(id);
         if (!substance) throw new Error("Substance record not found");
 
@@ -260,8 +241,7 @@ export async function undoDeleteSubstanceRecord(
           : [substance];
         for (const s of substances) {
           if (s.deletedAt !== deletedAt) continue;
-          await db.substanceRecords.update(s.id, { deletedAt: null, updatedAt: now });
-          await enqueueInsideTx("substanceRecords", s.id, "upsert");
+          await w.restore("substanceRecords", s.id);
         }
 
         const intakes = await db.intakeRecords
@@ -279,13 +259,11 @@ export async function undoDeleteSubstanceRecord(
         }
         for (const intake of intakes) {
           if (intake.deletedAt !== deletedAt) continue;
-          await db.intakeRecords.update(intake.id, { deletedAt: null, updatedAt: now });
-          await enqueueInsideTx("intakeRecords", intake.id, "upsert");
+          await w.restore("intakeRecords", intake.id);
         }
       },
     );
 
-    schedulePush();
     return ok(undefined);
   } catch (e) {
     return err("Failed to undo delete substance record", e);
@@ -306,24 +284,16 @@ export async function updateSubstanceRecord(
   updates: Partial<SubstanceRecord>
 ): Promise<ServiceResult<void>> {
   try {
-    const now = Date.now();
-    const patch: Partial<SubstanceRecord> = { ...updates, updatedAt: now };
+    const { id: _id, updatedAt: _updatedAt, ...patch } = updates;
     if (patch.amountMg !== undefined) patch.amountMg = Math.round(patch.amountMg);
     if (patch.volumeMl !== undefined) patch.volumeMl = Math.round(patch.volumeMl);
-    await db.transaction(
-      "rw",
-      [...COMPOSABLE_TABLES, db._syncQueue],
-      async () => {
-        const existing = await db.substanceRecords.get(id);
-        await db.substanceRecords.update(id, patch);
-        await enqueueInsideTx("substanceRecords", id, "upsert");
-        const groupId = updates.groupId ?? existing?.groupId;
-        if (groupId && updates.timestamp !== undefined) {
-          await retimeGroupInTx(groupId, updates.timestamp, now);
-        }
-      },
-    );
-    schedulePush();
+    await syncedWrite(COMPOSABLE_TABLES, async (w) => {
+      const written = await w.patch("substanceRecords", id, patch);
+      const groupId = written?.groupId;
+      if (groupId && updates.timestamp !== undefined) {
+        await retimeGroup(w, groupId, updates.timestamp);
+      }
+    });
     return ok(undefined);
   } catch (e) {
     return err("Failed to update substance record", e);

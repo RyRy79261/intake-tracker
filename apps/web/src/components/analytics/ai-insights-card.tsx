@@ -251,7 +251,7 @@ export function AiInsightsCard() {
       setDeleteArmed(true);
       return;
     }
-    // Soft delete through writeWithSync, so the removal syncs like any edit.
+    // A synced soft delete, so the removal syncs like any edit.
     deleteReport.mutate(readingReport.id, {
       onSuccess: () => {
         openReport(null);

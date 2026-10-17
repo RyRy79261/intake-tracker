@@ -7,12 +7,15 @@
     ".": "./src/index.ts",
     "./client": "./src/client.ts",
     "./schema": "./src/schema.ts",
-    "./sync-payload": "./src/sync-payload.ts"
+    "./sync-payload": "./src/sync-payload.ts",
+    "./sync-manifest": "./src/sync-manifest.generated.ts",
+    "./sync-manifest-builder": "./src/sync-manifest-builder.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "db:generate": "drizzle-kit generate",
-    "lint": "eslint src"
+    "db:generate": "drizzle-kit generate && pnpm run sync-manifest",
+    "lint": "eslint src",
+    "sync-manifest": "tsx scripts/generate-sync-manifest.ts"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.1.0",
@@ -28,6 +31,7 @@
     "@types/node": "^26.6.2",
     "drizzle-kit": "^0.31.11",
     "eslint": "^10.11.0",
+    "tsx": "^4.23.15",
     "typescript": "^6.0.3"
   }
 }
