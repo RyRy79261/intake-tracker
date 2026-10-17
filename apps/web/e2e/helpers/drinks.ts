@@ -56,6 +56,9 @@ const DEFAULT_BEER = {
  * default.
  */
 export async function prepareDrinkPage(page: Page, now: Date = fixedNow()) {
+  // In CI the session is real: without this the app may switch to cloud sync
+  // and pull rows other specs left on the server onto this device.
+  await page.route("**/api/sync/**", (route) => route.abort());
   await page.clock.setSystemTime(now);
   await page.addInitScript(
     ({ presets }) => {
@@ -297,7 +300,7 @@ declare global {
     __drinkHold?: {
       held: boolean;
       waiting: Array<() => void>;
-      eatingQueries: number;
+      groupQueries: number;
     };
   }
 }
@@ -306,12 +309,12 @@ declare global {
  * From now on, hold every `intakeRecords` get: IndexedDB answers it, but the
  * code that asked does not hear back until {@link releaseIntakeGets}. Each
  * get runs in its own read-only transaction (Dexie's implicit one), so a
- * late answer is safe. Also counts finished `eatingRecords` index queries:
- * the last step of the Drink module's lookup.
+ * late answer is safe. Also counts finished `groupId` index queries on the
+ * three group tables: the last step of the Drink module's lookup.
  */
 export async function holdIntakeGets(page: Page) {
   await page.evaluate(() => {
-    const hold = { held: true, waiting: [] as Array<() => void>, eatingQueries: 0 };
+    const hold = { held: true, waiting: [] as Array<() => void>, groupQueries: 0 };
     window.__drinkHold = hold;
     const get = IDBObjectStore.prototype.get;
     IDBObjectStore.prototype.get = function (this: IDBObjectStore, query: IDBValidKey | IDBKeyRange) {
@@ -337,9 +340,12 @@ export async function holdIntakeGets(page: Page) {
       const original = proto[method]!;
       proto[method] = function (this: IDBIndex, ...args: unknown[]) {
         const req = original.apply(this, args);
-        if (this.objectStore.name === "eatingRecords") {
+        if (
+          this.name === "groupId" &&
+          ["intakeRecords", "eatingRecords", "substanceRecords"].includes(this.objectStore.name)
+        ) {
           req.addEventListener("success", () => {
-            hold.eatingQueries += 1;
+            hold.groupQueries += 1;
           });
         }
         return req;
@@ -358,14 +364,14 @@ export async function releaseIntakeGets(page: Page) {
   await page.evaluate(() => {
     const hold = window.__drinkHold!;
     hold.held = false;
-    hold.eatingQueries = 0;
+    hold.groupQueries = 0;
     for (const run of hold.waiting.splice(0)) run();
   });
 }
 
 /** Finished `eatingRecords` index queries since the release. */
-export async function eatingQueriesSinceRelease(page: Page): Promise<number> {
-  return page.evaluate(() => window.__drinkHold?.eatingQueries ?? 0);
+export async function groupQueriesSinceRelease(page: Page): Promise<number> {
+  return page.evaluate(() => window.__drinkHold?.groupQueries ?? 0);
 }
 
 /** Wait for React to commit what the last answers changed. */

@@ -17,7 +17,7 @@ import {
   holdIntakeGets,
   heldIntakeGets,
   releaseIntakeGets,
-  eatingQueriesSinceRelease,
+  groupQueriesSinceRelease,
   nextFrames,
 } from "./helpers/drinks";
 
@@ -283,9 +283,10 @@ test.describe("Drinks on a phone", () => {
     await expect(dialog).toBeVisible();
     await expect(dialog.getByLabel("Weight (kg)")).toHaveValue("72.4");
 
-    // Let the lookup finish (its last step reads the meal table twice).
+    // Let the lookup finish: its last step reads the three group tables, and
+    // it runs twice.
     await releaseIntakeGets(page);
-    await expect.poll(() => eatingQueriesSinceRelease(page)).toBeGreaterThanOrEqual(2);
+    await expect.poll(() => groupQueriesSinceRelease(page)).toBeGreaterThanOrEqual(6);
     await nextFrames(page);
     await expect(page.getByRole("dialog")).toHaveCount(1);
     await expect(page.getByText("Edit Drink", { exact: true })).toHaveCount(0);
