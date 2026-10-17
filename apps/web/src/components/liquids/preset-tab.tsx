@@ -8,8 +8,7 @@ import { SegmentBar } from "@/components/home/module-card";
 import { Sparkles, Check } from "lucide-react";
 import { FieldScope, Pip } from "@/components/domain-scope";
 import { Spinner } from "@intake/ui/spinner";
-import { apiFetch } from "@/lib/api-fetch";
-import { readAiErrorMessage } from "@/lib/ai-error-message";
+import { aiClient } from "@/lib/ai-client";
 import { cn } from "@/lib/utils";
 import { CARD_THEMES } from "@/lib/card-themes";
 import { useSettingsStore } from "@/stores/settings-store";
@@ -341,32 +340,24 @@ export function PresetTab({ tab }: PresetTabProps) {
   const handleAiLookup = async () => {
     if (!searchText.trim() || isLookingUp) return;
     setIsLookingUp(true);
-    let failureMessage = "Try a different name or enter values manually.";
-    try {
-      const res = await apiFetch("/api/ai/substance-lookup", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: searchText.trim(), type: tab === "coffee" ? "caffeine" : "alcohol" }),
-      });
-      if (!res.ok) {
-        // The route's message is actionable (add a key, retry, enter manually).
-        failureMessage = await readAiErrorMessage(res, failureMessage);
-        throw new Error(failureMessage);
-      }
-      const result = (await res.json()) as SubstanceLookupResponse;
+    const lookup = await aiClient.call("/api/ai/substance-lookup", {
+      query: searchText.trim(),
+      type: tab === "coffee" ? "caffeine" : "alcohol",
+    });
+    setIsLookingUp(false);
+    if (lookup.ok) {
       // Replaces the whole drink, sugar and sodium included — a value left
       // over from the previous drink must not ride along with this one.
-      dispatch({ type: "lookup", tab, result });
-    } catch (cause) {
-      console.error("[preset-tab] substance lookup failed", cause);
-      toast({
-        title: "Lookup failed",
-        description: failureMessage,
-        variant: "destructive",
-      });
-    } finally {
-      setIsLookingUp(false);
+      dispatch({ type: "lookup", tab, result: lookup.data });
+      return;
     }
+    console.error("[preset-tab] substance lookup failed", lookup.error);
+    toast({
+      title: "Lookup failed",
+      // The route's message is actionable (add a key, retry, enter manually).
+      description: lookup.error.message || "Try a different name or enter values manually.",
+      variant: "destructive",
+    });
   };
 
   /** The `logDrink` payload for the current form state. */

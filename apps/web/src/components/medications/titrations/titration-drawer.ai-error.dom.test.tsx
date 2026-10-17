@@ -9,7 +9,7 @@ const { aiFetchSpy, toastSpy } = vi.hoisted(() => ({
 }));
 
 vi.mock("@/components/auth-guard", () => ({ useAuthGate: () => true }));
-vi.mock("@/hooks/use-ai-fetch", () => ({ useAiFetch: () => aiFetchSpy }));
+vi.mock("@/lib/api-fetch", () => ({ apiFetch: aiFetchSpy }));
 vi.mock("@intake/ui/use-toast", () => ({
   useToast: () => ({ toast: toastSpy }),
   toast: toastSpy,

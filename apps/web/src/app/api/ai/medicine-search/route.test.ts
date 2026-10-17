@@ -184,7 +184,7 @@ describe("POST /api/ai/medicine-search", () => {
     expect(body.error).toBe("Failed to process request");
   });
 
-  it("AI-failure: no tool_use block on the first turn or the retry → 422 fallbackToManual", async () => {
+  it("AI-failure: no tool_use block on the first turn or the retry → 502 AI_BAD_OUTPUT, fallbackToManual", async () => {
     const prose = {
       content: [{ type: "text", text: "prose only, no tool call" }],
       usage: { input_tokens: 10, output_tokens: 5 },
@@ -194,9 +194,9 @@ describe("POST /api/ai/medicine-search", () => {
     const { POST } = await import("@/app/api/ai/medicine-search/route");
     const res = await POST(makeRequest({ query: "aspirin" }));
 
-    expect(res.status).toBe(422);
-    const body = (await res.json()) as { error: string; fallbackToManual: boolean };
-    expect(body.error).toBe("AI response format invalid");
+    expect(res.status).toBe(502);
+    const body = (await res.json()) as { code: string; fallbackToManual: boolean };
+    expect(body.code).toBe("AI_BAD_OUTPUT");
     expect(body.fallbackToManual).toBe(true);
     expect(messagesCreate).toHaveBeenCalledTimes(2);
   });
@@ -306,7 +306,7 @@ describe("POST /api/ai/medicine-search", () => {
     expect(body.pillShape).toBe("oval");
   });
 
-  it("AI-failure: tool result violates schema (bad foodInstruction enum) → 422", async () => {
+  it("AI-failure: tool result violates schema (bad foodInstruction enum) → 502 AI_BAD_OUTPUT", async () => {
     messagesCreate.mockResolvedValueOnce(
       toolResponse(fullToolInput({ foodInstruction: "sometimes" })),
     );
@@ -314,9 +314,9 @@ describe("POST /api/ai/medicine-search", () => {
     const { POST } = await import("@/app/api/ai/medicine-search/route");
     const res = await POST(makeRequest({ query: "aspirin" }));
 
-    expect(res.status).toBe(422);
-    const body = (await res.json()) as { error: string; fallbackToManual: boolean };
-    expect(body.error).toBe("AI response format invalid");
+    expect(res.status).toBe(502);
+    const body = (await res.json()) as { code: string; fallbackToManual: boolean };
+    expect(body.code).toBe("AI_BAD_OUTPUT");
     expect(body.fallbackToManual).toBe(true);
   });
 });
