@@ -13,13 +13,20 @@ import {
  * so what is stored on the device must be whole numbers too; the stored
  * values are read straight from IndexedDB.
  *
- * Offline: the session check and every AI call are mocked.
+ * Offline: the session check and every AI call are mocked, and sync is
+ * blocked. In CI the session is real, and the app would switch to cloud sync
+ * and pull rows other specs left on the server, so a count here would see them.
  */
 test.use(FAKE_MIC);
 
 type Row = Record<string, unknown>;
 
 const live = (rows: Row[]) => rows.filter((r) => r.deletedAt === null);
+
+async function isolate(page: Page) {
+  await mockSignedIn(page);
+  await page.route("**/api/sync/**", (route) => route.abort());
+}
 
 async function saveVoice(page: Page, items: unknown[]) {
   await mockVoiceParse(page, items);
@@ -45,7 +52,7 @@ async function parseOnFoodCard(page: Page, text: string, result: Record<string, 
 
 test.describe("Parsed entries: voice", () => {
   test.beforeEach(async ({ page }) => {
-    await mockSignedIn(page);
+    await isolate(page);
   });
 
   test("stores whole numbers for fractional voice values", async ({ page }) => {
@@ -86,7 +93,7 @@ test.describe("Parsed entries: voice", () => {
 
 test.describe("Parsed entries: Food card", () => {
   test.beforeEach(async ({ page }) => {
-    await mockSignedIn(page);
+    await isolate(page);
   });
 
   test("saves an AI-parsed meal as one rounded group", async ({ page }) => {
