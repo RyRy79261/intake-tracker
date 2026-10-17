@@ -4,7 +4,9 @@ import { useMemo, type ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
 import { useNowTick } from "@intake/ui/use-now-tick";
 import { domainStripeStyle, type Domain } from "@/lib/domain-colors";
-import { formatTimeOnly, getDayStartTimestamp } from "@/lib/date-utils";
+import { formatTimeOnly } from "@/lib/date-utils";
+import { getDeviceTimezone } from "@/lib/timezone";
+import { totalsWindow } from "@intake/core/daily-totals";
 import { recentDayLabel } from "@/lib/week-utils";
 import { useSettingsStore } from "@/stores/settings-store";
 import { cn } from "@/lib/utils";
@@ -57,11 +59,8 @@ export function useLogicalTodayRange(): [number, number] {
   const dayStartHour = useSettingsStore((s) => s.dayStartHour);
   const tick = useNowTick();
   return useMemo(() => {
-    const start = new Date(getDayStartTimestamp(dayStartHour));
-    const end = new Date(start);
-    end.setDate(start.getDate() + 1);
-    end.setHours(dayStartHour, 0, 0, 0);
-    return [start.getTime(), end.getTime()];
+    const { start, end } = totalsWindow(Date.now(), getDeviceTimezone(), dayStartHour);
+    return [start, end];
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dayStartHour, tick]);
 }

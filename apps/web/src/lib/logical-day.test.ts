@@ -48,6 +48,34 @@ describe("logicalDayStart / logicalDayRange", () => {
     expect(next - start).toBe(23 * HOUR);
   });
 
+  it("starts at the first of a repeated hour on a fall-back day", () => {
+    // Europe/Berlin leaves CEST at 03:00 on 25 Oct 2026: 02:00-03:00 happens
+    // twice. The first 02:00 is 00:00 UTC (CEST), the second 01:00 UTC.
+    expect(logicalDayStart("2026-10-25", 2, "Europe/Berlin")).toBe(Date.UTC(2026, 9, 25, 0, 0));
+    const next = logicalDayStart("2026-10-26", 2, "Europe/Berlin");
+    expect(next - logicalDayStart("2026-10-25", 2, "Europe/Berlin")).toBe(25 * HOUR);
+  });
+
+  it("starts when the clock jumps on a spring-forward day that skips the hour", () => {
+    // 02:00 does not exist in Berlin on 29 Mar 2026: 02:00 CET is 03:00 CEST.
+    expect(logicalDayStart("2026-03-29", 2, "Europe/Berlin")).toBe(Date.UTC(2026, 2, 29, 1, 0));
+  });
+
+  it("agrees with logicalDayKey at every minute across both DST changes", () => {
+    for (const [tz, hour, from] of [
+      ["Europe/Berlin", 2, Date.UTC(2026, 9, 24, 20)],
+      ["Europe/Berlin", 2, Date.UTC(2026, 2, 28, 20)],
+      ["America/New_York", 1, Date.UTC(2026, 10, 1, 0)],
+      ["Australia/Lord_Howe", 2, Date.UTC(2026, 3, 4, 10)],
+    ] as const) {
+      for (let ts = from; ts < from + 12 * HOUR; ts += 60_000) {
+        const key = logicalDayKey(ts, hour, tz);
+        expect(ts).toBeGreaterThanOrEqual(logicalDayStart(key, hour, tz));
+        expect(ts).toBeLessThan(logicalDayStart(shiftDayKey(key, 1), hour, tz));
+      }
+    }
+  });
+
   it("gives the logical day containing now, ending 1 ms before the next", () => {
     // 01:00 Johannesburg on 21 Sep with dayStartHour 2 is still 20 Sep.
     const now = Date.UTC(2026, 8, 20, 23, 0);
