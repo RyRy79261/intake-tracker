@@ -235,77 +235,106 @@ function tableOf<K extends SyncedTable>(name: K): Table<SyncedRow<K>, string> {
   return (db as unknown as Record<K, Table<SyncedRow<K>, string>>)[name];
 }
 
+/**
+ * The writer's methods chain Dexie's own promises (`.then`) instead of using
+ * `async`/`await`. Dexie carries its transaction across a native `await` only
+ * for a limited number of hops; each extra layer of async function spends
+ * some, and once they run out the following reads and writes leave the
+ * transaction (Dexie's "Transaction committed too early"). A `.then` on a
+ * Dexie promise always runs inside it.
+ */
 function createWriter(now: number, onQueued: () => void): SyncedWriter {
-  const queue = async (tableName: SyncedTable, row: AnyRow) => {
-    await enqueueInsideTx(tableName, row.id, syncOpFor(row));
-    onQueued();
-  };
+  const queue = <T>(tableName: SyncedTable, row: AnyRow, value: T): Promise<T> =>
+    enqueueInsideTx(tableName, row.id, syncOpFor(row)).then(() => {
+      onQueued();
+      return value;
+    });
 
-  const patch = async <K extends SyncedTable>(
+  const patch = <K extends SyncedTable>(
     tableName: K,
     id: string,
     changes: SyncedChanges<K>,
   ): Promise<SyncedRow<K> | undefined> => {
     const table = tableOf(tableName);
-    const existing = (await table.get(id)) as AnyRow | undefined;
-    if (!existing) return undefined;
-    const merged: AnyRow = { ...existing, ...(changes as Record<string, unknown>), updatedAt: now };
-    const retire = merged.deletedAt != null ? retireChanges(tableName, merged) : {};
-    const spec = { ...(changes as Record<string, unknown>), ...retire, updatedAt: now };
-    await table.update(id, spec as unknown as UpdateSpec<SyncedRow<K>>);
-    const written: AnyRow = { ...merged, ...retire };
-    for (const [key, value] of Object.entries(spec)) {
-      if (value === undefined) delete written[key];
-    }
-    await queue(tableName, written);
-    return written as unknown as SyncedRow<K>;
+    return table.get(id).then((found) => {
+      const existing = found as AnyRow | undefined;
+      if (!existing) return undefined;
+      const merged: AnyRow = { ...existing, ...(changes as Record<string, unknown>), updatedAt: now };
+      const retire = merged.deletedAt != null ? retireChanges(tableName, merged) : {};
+      const spec = { ...(changes as Record<string, unknown>), ...retire, updatedAt: now };
+      const written: AnyRow = { ...merged, ...retire };
+      for (const [key, value] of Object.entries(spec)) {
+        if (value === undefined) delete written[key];
+      }
+      return table
+        .update(id, spec as unknown as UpdateSpec<SyncedRow<K>>)
+        .then(() => queue(tableName, written, written as unknown as SyncedRow<K>));
+    });
   };
+
+  /** Patch the row if `when(existing)` holds; resolves to whether it did. */
+  const patchIf = <K extends SyncedTable>(
+    tableName: K,
+    id: string,
+    when: (row: AnyRow) => boolean,
+    changes: SyncedChanges<K>,
+  ): Promise<boolean> =>
+    tableOf(tableName)
+      .get(id)
+      .then((found) => {
+        const existing = found as AnyRow | undefined;
+        if (!existing || !when(existing)) return false;
+        return patch(tableName, id, changes).then(() => true);
+      });
 
   return {
     now,
 
-    async insert(tableName, row) {
+    insert(tableName, row) {
       const written = retired(tableName, row as unknown as AnyRow);
-      await tableOf(tableName).add(written as never);
-      await queue(tableName, written);
-      return written as never;
+      return tableOf(tableName)
+        .add(written as never)
+        .then(() => queue(tableName, written, written as never));
     },
 
-    async put(tableName, row, opts) {
+    put(tableName, row, opts) {
       const written = retired(tableName, row as unknown as AnyRow);
-      await tableOf(tableName).put(written as never);
-      if (opts?.queue !== false) await queue(tableName, written);
-      return written as never;
+      return tableOf(tableName)
+        .put(written as never)
+        .then(() =>
+          opts?.queue === false ? (written as never) : queue(tableName, written, written as never),
+        );
     },
 
     patch,
 
-    async tombstone(tableName, id, extra) {
-      const existing = (await tableOf(tableName).get(id)) as AnyRow | undefined;
-      if (!existing || existing.deletedAt != null) return false;
-      await patch(tableName, id, { ...extra, deletedAt: now } as SyncedChanges<typeof tableName>);
-      return true;
+    tombstone(tableName, id, extra) {
+      return patchIf(tableName, id, (r) => r.deletedAt == null, {
+        ...extra,
+        deletedAt: now,
+      } as SyncedChanges<typeof tableName>);
     },
 
-    async restore(tableName, id, extra) {
-      const existing = (await tableOf(tableName).get(id)) as AnyRow | undefined;
-      if (!existing || existing.deletedAt == null) return false;
-      await patch(tableName, id, { ...extra, deletedAt: null } as SyncedChanges<typeof tableName>);
-      return true;
+    restore(tableName, id, extra) {
+      return patchIf(tableName, id, (r) => r.deletedAt != null, {
+        ...extra,
+        deletedAt: null,
+      } as SyncedChanges<typeof tableName>);
     },
 
-    async audit(action, details) {
+    audit(action, details) {
       const entry = { ...buildAuditEntry(action, details), timestamp: now };
-      await tableOf("auditLogs").add(entry);
-      await queue("auditLogs", entry as unknown as AnyRow);
-      return entry;
+      return tableOf("auditLogs")
+        .add(entry)
+        .then(() => queue("auditLogs", entry as unknown as AnyRow, entry));
     },
 
-    async requeue(tableName, id) {
-      const existing = (await tableOf(tableName).get(id)) as AnyRow | undefined;
-      if (!existing) return false;
-      await queue(tableName, existing);
-      return true;
+    requeue(tableName, id) {
+      return tableOf(tableName)
+        .get(id)
+        .then((found) =>
+          found ? queue(tableName, found as unknown as AnyRow, true) : false,
+        );
     },
   };
 }
@@ -318,7 +347,7 @@ function createWriter(now: number, onQueued: () => void): SyncedWriter {
  * `opts.now` pins the write's timestamp, for a caller that stamps several
  * writes, or a field of its own, with one value.
  */
-export async function syncedWrite<R>(
+export function syncedWrite<R>(
   tables: readonly SyncedTable[],
   body: (w: SyncedWriter) => Promise<R>,
   opts?: { now?: number | undefined },
@@ -332,17 +361,21 @@ export async function syncedWrite<R>(
         queued = true;
       }),
     );
+  const afterCommit = (result: R): R => {
+    if (queued) schedulePush();
+    return result;
+  };
 
+  // Join only a transaction that is still open. Code that runs after an
+  // awaited transaction (a React Query mutation calling services in turn) can
+  // still see that finished transaction as current; joining it would fail.
   const ambient = Dexie.currentTransaction;
-  const result =
-    ambient && ambient.db === db && ambient.mode === "readwrite"
-      ? await run()
-      : await db.transaction(
-          "rw",
-          [...new Set<string>([...tables, "auditLogs", "_syncQueue"])],
-          run,
-        );
-
-  if (queued) schedulePush();
-  return result;
+  if (ambient && ambient.active && ambient.db === db && ambient.mode === "readwrite") {
+    return run().then(afterCommit);
+  }
+  // Returned as Dexie's own promise (no `async` wrapper), so a caller that
+  // awaits it resumes the way it would after awaiting `db.transaction`.
+  return db
+    .transaction("rw", [...new Set<string>([...tables, "auditLogs", "_syncQueue"])], run)
+    .then(afterCommit);
 }

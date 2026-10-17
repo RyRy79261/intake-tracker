@@ -12,7 +12,9 @@
  *   in a single `rw` transaction so both roll back on throw.
  *
  * This module is pure helpers — no timers, no fetch, no scheduler. The engine
- * loop (Plan 06) composes these into the real push/pull lifecycle.
+ * loop (Plan 06) composes these into the real push/pull lifecycle. Services
+ * change synced tables through `syncedWrite` (lib/synced-write.ts), which
+ * picks the op from the row it writes.
  *
  * Refs:
  * - `.planning/phases/43-sync-engine-core/43-CONTEXT.md` §D-01/D-03/D-04
@@ -39,48 +41,51 @@ export type SyncOp = "upsert" | "delete";
  *   delete + upsert      → switch op to upsert, reset attempts (un-delete)
  *   delete + delete      → update enqueuedAt only
  */
-export async function enqueueInsideTx(
+export function enqueueInsideTx(
   tableName: TableName,
   recordId: string,
   op: SyncOp,
 ): Promise<void> {
+  // Chained on Dexie's promises rather than awaited: a `.then` on a Dexie
+  // promise always runs inside the caller's transaction, however deep the
+  // call (see lib/synced-write.ts).
   const wallNow = Date.now();
-  const existing = await db._syncQueue
+  return db._syncQueue
     .where("[tableName+recordId]")
     .equals([tableName, recordId])
-    .first();
+    .first()
+    .then((existing): Promise<unknown> => {
+      // A coalesce must always move enqueuedAt forward, even within the same
+      // millisecond: `ackIfUnchanged` uses it to tell the op an in-flight push
+      // carried from a newer edit that coalesced into the same row.
+      const now = existing
+        ? Math.max(wallNow, existing.enqueuedAt + 1)
+        : wallNow;
 
-  // A coalesce must always move enqueuedAt forward, even within the same
-  // millisecond: `ackIfUnchanged` uses it to tell the op an in-flight push
-  // carried from a newer edit that coalesced into the same row.
-  const now = existing
-    ? Math.max(wallNow, existing.enqueuedAt + 1)
-    : wallNow;
+      if (!existing) {
+        return db._syncQueue.add({
+          tableName,
+          recordId,
+          op,
+          enqueuedAt: now,
+          attempts: 0,
+        });
+      }
 
-  if (!existing) {
-    await db._syncQueue.add({
-      tableName,
-      recordId,
-      op,
-      enqueuedAt: now,
-      attempts: 0,
-    });
-    return;
-  }
+      if (existing.op === op) {
+        // Same op → latest-wins enqueuedAt, keep attempts as-is. (D-04)
+        return db._syncQueue.update(existing.id!, { enqueuedAt: now });
+      }
 
-  if (existing.op === op) {
-    // Same op → latest-wins enqueuedAt, keep attempts as-is. (D-04)
-    await db._syncQueue.update(existing.id!, { enqueuedAt: now });
-    return;
-  }
-
-  // Op transitions: upsert↔delete. Reset attempts so the new intent gets a
-  // clean retry budget. (D-04: delete supersedes upsert; upsert un-deletes.)
-  await db._syncQueue.update(existing.id!, {
-    op,
-    enqueuedAt: now,
-    attempts: 0,
-  });
+      // Op transitions: upsert↔delete. Reset attempts so the new intent gets a
+      // clean retry budget. (D-04: delete supersedes upsert; upsert un-deletes.)
+      return db._syncQueue.update(existing.id!, {
+        op,
+        enqueuedAt: now,
+        attempts: 0,
+      });
+    })
+    .then(() => undefined);
 }
 
 /**
@@ -141,6 +146,9 @@ export async function getQueueDepth(): Promise<number> {
 }
 
 /**
+ * @deprecated Use `syncedWrite` (lib/synced-write.ts), which also picks the
+ * op from the row it writes and schedules the push.
+ *
  * Atomic data write + enqueue. `action()` runs inside a single Dexie `rw`
  * transaction scoped to the target data table and `_syncQueue`. If `action()`
  * throws, both the data write and the enqueue roll back together.
