@@ -296,6 +296,46 @@ describe("VoicePanel commit — one drink, one fluid amount", () => {
     expect(await totalWaterMl()).toBe(300);
   });
 
+  it("stores whole numbers for a meal's fractional water and nutrients", async () => {
+    // Postgres keeps intake amounts as integers. The food path wrote the
+    // model's (or the user's) fractions as they came, so the device kept
+    // 236.6 ml while the server, after sync rounded it, kept 237.
+    await dictateAndSave([
+      {
+        kind: "food",
+        description: "smoothie",
+        waterMl: 236.6,
+        sodiumMg: 41.5,
+        sugarG: 12.4,
+      },
+    ]);
+
+    await waitFor(async () => {
+      expect(await db.eatingRecords.count()).toBe(1);
+    });
+    const amounts = Object.fromEntries(
+      (await db.intakeRecords.toArray()).map((r) => [r.type, r.amount]),
+    );
+    expect(amounts).toEqual({ water: 237, salt: 42, sugar: 12 });
+  });
+
+  it("stores whole numbers for fractional water, sodium and caffeine", async () => {
+    // 8 fl oz is 236.588 ml by the prompt's own conversion.
+    await dictateAndSave([
+      { kind: "water", ml: 236.588 },
+      { kind: "salt", sodiumMg: 393.4 },
+      { kind: "caffeine", description: "espresso", caffeineMg: 63.4 },
+    ]);
+
+    await waitFor(async () => {
+      expect(await db.substanceRecords.count()).toBe(1);
+    });
+    const intakes = await db.intakeRecords.toArray();
+    expect(intakes.find((r) => r.type === "water")!.amount).toBe(237);
+    expect(intakes.find((r) => r.type === "salt")!.amount).toBe(393);
+    expect((await db.substanceRecords.toArray())[0]!.amountMg).toBe(63);
+  });
+
   it("maps each item kind to exactly one domain table", async () => {
     await dictateAndSave([
       { kind: "blood_pressure", systolic: 118, diastolic: 76, heartRate: 60 },

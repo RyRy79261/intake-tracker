@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.40.3](https://github.com/RyRy79261/intake-tracker/compare/v1.40.2...v1.40.3) (2026-10-16)
+
+
+### Bug Fixes
+
+* **drinks:** raise every old drink's water row to its full volume (Dexie v26) ([#425](https://github.com/RyRy79261/intake-tracker/issues/425)) ([7d6bc8b](https://github.com/RyRy79261/intake-tracker/commit/7d6bc8b76d3a55789a133ccf98752312667f7d86))
+
 ## [1.40.2](https://github.com/RyRy79261/intake-tracker/compare/v1.40.1...v1.40.2) (2026-10-11)
 
 

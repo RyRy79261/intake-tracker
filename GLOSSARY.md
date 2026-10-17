@@ -15,3 +15,7 @@ Domain words used in code, reviews and plans. Use these names exactly.
 **AI task**: one server-side Claude request type, such as a food parse or an interaction check. Each AI route declares an AI task spec (request schema, prompt, result tool, tier, token budget, search rule) in its `task.ts`; the AI task module (`apps/web/src/app/api/ai/_shared/ai-task.ts`) runs it and answers every failure from one error table.
 
 **Tier**: how much model an AI task gets (`quality` or `premium`). The tier policy in the AI task module turns it into the model, the effort and the request rules.
+
+**Voice item**: one thing a voice log holds: a blood pressure reading, a weight, water, sodium, food, a caffeine or alcohol drink, a urination or a defecation. The voice item contract (`packages/core/src/voice-items.ts`) is the one place that says each kind's fields, units, ranges and which are required; the route's Zod schema, the parse tool's fields, the item types and the review check are built from it.
+
+**Parsed entry**: a voice item, or the Food card's detail form, about to be saved. The parsed-entry logger (`apps/web/src/lib/parsed-entry-service.ts`) is the only code that turns one into records: it picks the records, tags their source, rounds amounts to whole numbers and applies the sugar and potassium trackers. Drinks go through the Drink module.
