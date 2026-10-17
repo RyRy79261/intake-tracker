@@ -80,9 +80,16 @@ export const voiceParseTask = {
   },
   output: (toolInput, req) => {
     const extracted = extractVoiceItems(toolInput, { absoluteTimes: req.now !== undefined });
-    return extracted.ok
-      ? { ok: true, value: extracted }
-      : { ok: false, detail: `no usable items in ${JSON.stringify(toolInput)}` };
+    if (extracted.ok) return { ok: true, value: extracted };
+    // The detail is logged: a count only, never the items, which hold what
+    // the user said about their health.
+    const items = (toolInput as { items?: unknown } | null)?.items;
+    return {
+      ok: false,
+      detail: Array.isArray(items)
+        ? `no usable items (${items.length} returned, none valid)`
+        : "no usable items (no items array)",
+    };
   },
   // What was left out travels with the items, so the review panel can say
   // so instead of looking complete.

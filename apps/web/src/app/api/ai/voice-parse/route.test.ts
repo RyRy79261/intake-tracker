@@ -283,6 +283,22 @@ describe("voice-parse route handler", () => {
     expect(body.fallbackToManual).toBe(true);
   });
 
+  it("does not log what the user said when no item is usable", async () => {
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    messagesCreate.mockResolvedValueOnce(
+      toolUseResponse({ items: [{ kind: "blood_pressure", note: "PRIVATE-NOTE" }] }),
+    );
+
+    const { POST } = await import("@/app/api/ai/voice-parse/route");
+    const res = await POST(makeRequest({ now: NOW, transcript: "garbled audio" }));
+
+    expect(res.status).toBe(502);
+    const logged = errors.mock.calls.flat().map(String).join(" ");
+    expect(logged).toContain("no usable items (1 returned, none valid)");
+    expect(logged).not.toContain("PRIVATE-NOTE");
+    errors.mockRestore();
+  });
+
   it("AI-failure path: a thrown error from Claude yields a graceful 502, not a crash", async () => {
     messagesCreate.mockRejectedValueOnce(new Error("upstream exploded"));
 
