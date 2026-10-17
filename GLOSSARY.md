@@ -17,3 +17,11 @@ Domain words used in code, reviews and plans. Use these names exactly.
 **Daily Totals**: today's (and this week's) total per metric against its target, from `packages/core/src/daily-totals.ts`. The Today gadget, the Liquids header, the Food card and the MCP today summary all show its output. A record dated after now does not count yet.
 
 **Target status**: where a total sits against its target. `ok` at or under the target, `extended` past it but inside the buffer, `over` past target + buffer (or past the target with no buffer), `none` with no target. Past the target the app shows the buffer used against the buffer's size ("200 / 500 ml extra").
+
+**AI task**: one server-side Claude request type, such as a food parse or an interaction check. Each AI route declares an AI task spec (request schema, prompt, result tool, tier, token budget, search rule) in its `task.ts`; the AI task module (`apps/web/src/app/api/ai/_shared/ai-task.ts`) runs it and answers every failure from one error table.
+
+**Tier**: how much model an AI task gets (`quality` or `premium`). The tier policy in the AI task module turns it into the model, the effort and the request rules.
+
+**Voice item**: one thing a voice log holds: a blood pressure reading, a weight, water, sodium, food, a caffeine or alcohol drink, a urination or a defecation. The voice item contract (`packages/core/src/voice-items.ts`) is the one place that says each kind's fields, units, ranges and which are required; the route's Zod schema, the parse tool's fields, the item types and the review check are built from it.
+
+**Parsed entry**: a voice item, or the Food card's detail form, about to be saved. The parsed-entry logger (`apps/web/src/lib/parsed-entry-service.ts`) is the only code that turns one into records: it picks the records, tags their source, rounds amounts to whole numbers and applies the sugar and potassium trackers. Drinks go through the Drink module.

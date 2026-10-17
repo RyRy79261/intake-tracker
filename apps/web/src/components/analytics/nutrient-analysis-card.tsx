@@ -30,7 +30,7 @@ import { useEatingRecordsByDateRange } from "@/hooks/use-eating-queries";
 import { useUserProfile } from "@/hooks/use-profile-queries";
 import { useSharedMedicationCount } from "@/hooks/use-insights";
 import { buildMedicationSummary } from "@/lib/analytics-snapshot";
-import { apiFetch } from "@/lib/api-fetch";
+import { aiClient, type NutrientAnalysisResult, type NutrientFinding } from "@/lib/ai-client";
 import {
   MAX_FOOD_DESCRIPTION_CHARS,
   MAX_FOOD_GRAMS,
@@ -40,18 +40,6 @@ import {
 const WINDOW_DAYS = 30;
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
-interface NutrientFinding {
-  nutrient: string;
-  status: "high" | "low" | "balanced";
-  detail: string;
-  exampleFoods: string[];
-}
-
-interface NutrientAnalysisResult {
-  summary: string;
-  findings: NutrientFinding[];
-  caveats: string[];
-}
 
 /** A scan result with the metadata needed for the in-session history list. */
 interface ScanRecord extends NutrientAnalysisResult {
@@ -228,37 +216,27 @@ export function NutrientAnalysisCard() {
       const medications = shareMedications
         ? await buildMedicationSummary()
         : null;
-      // apiFetch, not fetch: the Android static export has no local api/
-      // routes and needs the base URL + Bearer token apiFetch adds.
-      const res = await apiFetch("/api/ai/nutrient-analysis", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          windowDays: WINDOW_DAYS,
-          foods,
-          ...(trimmedFocus && { focus: trimmedFocus }),
-          ...(shareConditions && { conditions: profile.conditions }),
-          ...(medications && medications.length > 0 && { medications }),
-        }),
+      const res = await aiClient.call("/api/ai/nutrient-analysis", {
+        windowDays: WINDOW_DAYS,
+        foods,
+        ...(trimmedFocus && { focus: trimmedFocus }),
+        ...(shareConditions && { conditions: profile.conditions }),
+        ...(medications && medications.length > 0 && { medications }),
       });
 
       if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
         toast({
           title:
-            res.status === 429
+            res.error.code === "RATE_LIMITED"
               ? "Try again in a minute"
               : "Couldn't analyze your food log",
-          description:
-            typeof body?.error === "string"
-              ? body.error
-              : `Request failed with status ${res.status}.`,
+          description: res.error.message,
           variant: "destructive",
         });
         return;
       }
 
-      const data = (await res.json()) as NutrientAnalysisResult;
+      const data = res.data;
       const record: ScanRecord = {
         ...data,
         id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,

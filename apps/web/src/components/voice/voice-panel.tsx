@@ -7,14 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@intake/ui/card";
 import { useToast } from "@intake/ui/use-toast";
 import { VoiceRecorder } from "@/components/voice/voice-recorder";
 import { ParsedItemRow, type ParsedItemNote } from "@/components/voice/parsed-item-row";
-import { useAddIntake } from "@/hooks/use-intake-queries";
-import { useAddWeight, useAddBloodPressure } from "@/hooks/use-health-queries";
-import { useAddUrination } from "@/hooks/use-urination-queries";
-import { useAddDefecation } from "@/hooks/use-defecation-queries";
-import { useAddSubstance } from "@/hooks/use-substance-queries";
-import { useDrink } from "@/hooks/use-drink";
-import { useAddComposableEntry, type ComposableEntryInput } from "@/hooks/use-composable-entry";
-import { useOptionalTrackerEnabled } from "@/lib/optional-trackers";
+import { useLogParsedEntry } from "@/hooks/use-parsed-entry";
 import {
   isRefreshable,
   type RefreshableItem,
@@ -32,8 +25,7 @@ import {
 } from "@/lib/voice-time";
 import { getDeviceTimezone } from "@/lib/timezone";
 import { useSettingsStore } from "@/stores/settings-store";
-import { recoverClosedDatabase } from "@/lib/db";
-import { apiFetch } from "@/lib/api-fetch";
+import { aiClient } from "@/lib/ai-client";
 import { useQueryClient } from "@tanstack/react-query";
 
 type RowState = {
@@ -107,16 +99,7 @@ export function VoicePanel({ onCommitted, initialClip }: VoicePanelProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const addIntake = useAddIntake();
-  const addWeight = useAddWeight();
-  const addBloodPressure = useAddBloodPressure();
-  const addUrination = useAddUrination();
-  const addDefecation = useAddDefecation();
-  const addSubstance = useAddSubstance();
-  const logDrinkEntry = useDrink().log;
-  const addComposableEntry = useAddComposableEntry();
-  const sugarEnabled = useOptionalTrackerEnabled("sugar");
-  const potassiumEnabled = useOptionalTrackerEnabled("potassium");
+  const logParsedEntry = useLogParsedEntry();
   const liquidPresets = useSettingsStore((s) => s.liquidPresets);
 
   const [transcript, setTranscript] = useState<string>("");
@@ -171,41 +154,20 @@ export function VoicePanel({ onCommitted, initialClip }: VoicePanelProps) {
         const form = new FormData();
         form.append("audio", blob, `clip.${ext}`);
 
-        const transcribeRes = await apiFetch("/api/ai/voice-transcribe", {
-          method: "POST",
-          body: form,
-        });
-        if (!transcribeRes) {
-          setStage("idle");
-          return;
-        }
-        if (!transcribeRes.ok) {
-          const j = await transcribeRes.json().catch(() => ({}));
-          throw new Error(j.error || `Transcribe failed (${transcribeRes.status})`);
-        }
-        const { text } = (await transcribeRes.json()) as { text: string };
+        const transcribed = await aiClient.call("/api/ai/voice-transcribe", form);
+        if (!transcribed.ok) throw new Error(transcribed.error.message);
+        const { text } = transcribed.data;
         setTranscript(text);
 
         setStage("parsing");
-        const parseRes = await apiFetch("/api/ai/voice-parse", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          // The device's clock goes with the transcript: the parser cannot
-          // date "yesterday at 8pm" without knowing what today is here.
-          body: JSON.stringify({
-            transcript: text,
-            now: clientNowForParse(spokenAt, timeZone),
-          }),
+        // The device's clock goes with the transcript: the parser cannot
+        // date "yesterday at 8pm" without knowing what today is here.
+        const parsed = await aiClient.call("/api/ai/voice-parse", {
+          transcript: text,
+          now: clientNowForParse(spokenAt, timeZone),
         });
-        if (!parseRes) {
-          setStage("idle");
-          return;
-        }
-        if (!parseRes.ok) {
-          const j = await parseRes.json().catch(() => ({}));
-          throw new Error(j.error || `Parse failed (${parseRes.status})`);
-        }
-        const data = (await parseRes.json()) as VoiceParseResponse;
+        if (!parsed.ok) throw new Error(parsed.error.message);
+        const data = parsed.data;
         // Collapse a drink the parser split into two items before the review
         // list is built, so the user approves one row per drink instead of
         // having a correction applied invisibly at save time (issue #322).
@@ -293,20 +255,12 @@ export function VoicePanel({ onCommitted, initialClip }: VoicePanelProps) {
       if (!isRefreshable(item) || item.description.trim() === "") return;
       patchRowById(row.id, { refreshing: true });
       try {
-        const res = await apiFetch("/api/ai/voice-parse", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ transcript: refreshText(item), kind: item.kind }),
+        const res = await aiClient.call("/api/ai/voice-parse", {
+          transcript: refreshText(item),
+          kind: item.kind,
         });
-        if (!res) {
-          patchRowById(row.id, { refreshing: false });
-          return;
-        }
-        if (!res.ok) {
-          const j = await res.json().catch(() => ({}));
-          throw new Error(j.error || `Refresh failed (${res.status})`);
-        }
-        const data = (await res.json()) as VoiceParseResponse;
+        if (!res.ok) throw new Error(res.error.message);
+        const data = res.data;
         const found = data.items.find((i) => i.kind === item.kind);
         if (!found) throw new Error("The AI found no matching item. Check the description.");
         // The row keeps the time it already has — a refresh fixes what the
@@ -365,213 +319,6 @@ export function VoicePanel({ onCommitted, initialClip }: VoicePanelProps) {
     setStage("idle");
   }, []);
 
-  const saveItem = useCallback(
-    async (item: VoiceParsedItem, timestamp: number) => {
-      switch (item.kind) {
-        case "blood_pressure":
-          await addBloodPressure.mutateAsync({
-            systolic: item.systolic,
-            diastolic: item.diastolic,
-            position: item.position ?? "sitting",
-            arm: item.arm ?? "left",
-            ...(item.heartRate !== undefined && { heartRate: item.heartRate }),
-            ...(item.note !== undefined && { note: item.note }),
-            source: "voice",
-            timestamp,
-          });
-          break;
-        case "weight":
-          await addWeight.mutateAsync({
-            weight: item.weightKg,
-            ...(item.note !== undefined && { note: item.note }),
-            source: "voice",
-            timestamp,
-          });
-          break;
-        case "water":
-          await addIntake.mutateAsync({
-            type: "water",
-            amount: item.ml,
-            source: "voice",
-            timestamp,
-            ...(item.note !== undefined && { note: item.note }),
-          });
-          break;
-        case "salt":
-          await addIntake.mutateAsync({
-            type: "salt",
-            amount: item.sodiumMg,
-            source: "voice",
-            timestamp,
-            ...(item.note !== undefined && { note: item.note }),
-          });
-          break;
-        case "food": {
-          const intakes: ComposableEntryInput["intakes"] = [];
-          if (item.waterMl && item.waterMl > 0) {
-            intakes.push({
-              type: "water",
-              amount: item.waterMl,
-              source: "manual:food_water_content",
-              note: item.description,
-            });
-          }
-          if (item.sodiumMg && item.sodiumMg > 0) {
-            intakes.push({
-              type: "salt",
-              amount: item.sodiumMg,
-              source: "manual:sodium",
-              note: item.description,
-            });
-          }
-          if (sugarEnabled && item.sugarG && item.sugarG > 0) {
-            intakes.push({
-              type: "sugar",
-              amount: item.sugarG,
-              source: "manual:sugar",
-              note: item.description,
-            });
-          }
-          if (potassiumEnabled && item.potassiumMg && item.potassiumMg > 0) {
-            intakes.push({
-              type: "potassium",
-              amount: item.potassiumMg,
-              source: "manual:potassium",
-              note: item.description,
-            });
-          }
-          await addComposableEntry({
-            eating: {
-              note: item.description,
-              ...(item.grams !== undefined && { grams: item.grams }),
-            },
-            ...(intakes.length > 0 && { intakes }),
-            groupSource: "ai_food_parse",
-          }, timestamp);
-          break;
-        }
-        case "caffeine":
-          // A caffeinated drink goes through logDrink, which owns the fluid:
-          // it writes exactly one water record from volumeMl and groups it
-          // with the caffeine record. With no volume we record the dose only —
-          // no hydration is invented, and the review row exposes the volume
-          // field so the user can supply it.
-          if (item.volumeMl !== undefined && item.volumeMl > 0) {
-            await logDrinkEntry({
-              volumeMl: item.volumeMl,
-              description: item.description,
-              caffeineMg: item.caffeineMg,
-              ...(item.sugarG !== undefined && sugarEnabled && { sugarG: item.sugarG }),
-              ...(item.sodiumMg !== undefined && { saltMg: item.sodiumMg }),
-              ...(item.potassiumMg !== undefined &&
-                potassiumEnabled && { potassiumMg: item.potassiumMg }),
-              waterSource: "voice",
-              groupSource: "voice_drink",
-              timestamp,
-            });
-          } else {
-            // No volume: record the dose and any solutes, but no water — the
-            // group still ties them together. Routing this through addSubstance
-            // alone silently dropped the item's sugar/sodium/potassium.
-            const soluteIntakes: ComposableEntryInput["intakes"] = [];
-            if (sugarEnabled && item.sugarG !== undefined && item.sugarG > 0) {
-              soluteIntakes.push({
-                type: "sugar",
-                amount: Math.round(item.sugarG),
-                source: "manual:sugar",
-                note: item.description,
-              });
-            }
-            if (item.sodiumMg !== undefined && item.sodiumMg > 0) {
-              soluteIntakes.push({
-                type: "salt",
-                amount: Math.round(item.sodiumMg),
-                source: "manual:sodium",
-                note: item.description,
-              });
-            }
-            if (
-              potassiumEnabled &&
-              item.potassiumMg !== undefined &&
-              item.potassiumMg > 0
-            ) {
-              soluteIntakes.push({
-                type: "potassium",
-                amount: Math.round(item.potassiumMg),
-                source: "manual:potassium",
-                note: item.description,
-              });
-            }
-            if (soluteIntakes.length > 0) {
-              await addComposableEntry({
-                substance: {
-                  type: "caffeine",
-                  amountMg: item.caffeineMg,
-                  description: item.description,
-                },
-                intakes: soluteIntakes,
-                groupSource: "voice_drink",
-              }, timestamp);
-            } else {
-              await addSubstance({
-                type: "caffeine",
-                amountMg: item.caffeineMg,
-                description: item.description,
-                timestamp,
-              });
-            }
-          }
-          break;
-        case "alcohol":
-          await logDrinkEntry({
-            volumeMl: item.volumeMl,
-            description: item.description,
-            abvPercent: item.abvPercent,
-            ...(item.sugarG !== undefined && sugarEnabled && { sugarG: item.sugarG }),
-            ...(item.sodiumMg !== undefined && { saltMg: item.sodiumMg }),
-            ...(item.potassiumMg !== undefined &&
-              potassiumEnabled && { potassiumMg: item.potassiumMg }),
-            waterSource: "voice",
-            groupSource: "voice_drink",
-            timestamp,
-          });
-          break;
-        case "urination":
-          await addUrination.mutateAsync({
-            ...(item.amountEstimate !== undefined && {
-              amountEstimate: item.amountEstimate,
-            }),
-            ...(item.note !== undefined && { note: item.note }),
-            source: "voice",
-            timestamp,
-          });
-          break;
-        case "defecation":
-          await addDefecation.mutateAsync({
-            ...(item.amountEstimate !== undefined && {
-              amountEstimate: item.amountEstimate,
-            }),
-            ...(item.note !== undefined && { note: item.note }),
-            source: "voice",
-            timestamp,
-          });
-          break;
-      }
-    },
-    [
-      addIntake,
-      addComposableEntry,
-      addWeight,
-      addBloodPressure,
-      addUrination,
-      addDefecation,
-      addSubstance,
-      logDrinkEntry,
-      sugarEnabled,
-      potassiumEnabled,
-    ]
-  );
-
   const commit = useCallback(async () => {
     // Rows already written by an earlier partial commit are skipped, so
     // re-tapping Save after a failure retries only what actually failed.
@@ -595,24 +342,12 @@ export function VoicePanel({ onCommitted, initialClip }: VoicePanelProps) {
     for (const { row, index } of pending) {
       const { item } = row;
       try {
-        await saveItem(item, timestampFor(item));
+        // The logger owns what records an item becomes; the hook reopens a
+        // closed database and retries once (issue #287).
+        await logParsedEntry(item, { timestamp: timestampFor(item), origin: "voice" });
         successCount++;
         savedIndices.push(index);
-      } catch (e) {
-        let saveError: unknown = e;
-        if (await recoverClosedDatabase(e)) {
-          // The browser severed the IndexedDB connection out from under us
-          // (storage eviction / backing-store loss — issue #287). The DB has
-          // been reopened; retry this item once before declaring it failed.
-          try {
-            await saveItem(item, timestampFor(item));
-            successCount++;
-            savedIndices.push(index);
-            continue;
-          } catch (retryError) {
-            saveError = retryError;
-          }
-        }
+      } catch (saveError) {
         // console.error is patched by the error-log service, so this both
         // reaches devtools and persists the underlying cause for bug reports.
         console.error(`[voice] save failed for ${item.kind}:`, saveError);
@@ -647,7 +382,7 @@ export function VoicePanel({ onCommitted, initialClip }: VoicePanelProps) {
     } else {
       setStage("ready");
     }
-  }, [rows, toast, reset, queryClient, saveItem, onCommitted]);
+  }, [rows, toast, reset, queryClient, logParsedEntry, onCommitted]);
 
   const hasItems = rows.length > 0;
 

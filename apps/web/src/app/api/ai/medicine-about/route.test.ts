@@ -192,8 +192,8 @@ describe("medicine-about route handler", () => {
     const res = await POST(makeRequest({ genericName: "Ramipril" }));
 
     expect(res.status).toBe(502);
-    const body = (await res.json()) as { error: string };
-    expect(body.error).toBe("AI service unavailable");
+    const body = (await res.json()) as { code: string };
+    expect(body.code).toBe("AI_BAD_OUTPUT");
   });
 
   it("returns 502 when the tool output fails response-schema validation", async () => {
@@ -273,14 +273,15 @@ describe("medicine-about route handler", () => {
     expect(statuses[5]).toBe(429);
   });
 
-  it("AI-failure path: a thrown error from Claude yields a graceful 500", async () => {
+  it("AI-failure path: a thrown error from Claude yields a graceful 502 AI_FAILED", async () => {
     messagesCreate.mockRejectedValueOnce(new Error("upstream exploded"));
 
     const { POST } = await import("@/app/api/ai/medicine-about/route");
     const res = await POST(makeRequest({ genericName: "Ramipril" }));
 
-    expect(res.status).toBe(500);
-    const body = (await res.json()) as { error: string };
+    expect(res.status).toBe(502);
+    const body = (await res.json()) as { error: string; code: string };
+    expect(body.code).toBe("AI_FAILED");
     expect(body.error).toBe("Failed to look up the medicine");
   });
 });
