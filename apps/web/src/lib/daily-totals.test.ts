@@ -57,6 +57,18 @@ describe("overTargetText: the #309 rule", () => {
 });
 
 describe("dailyTotals", () => {
+  it("today and the week count the same rows in the repeated hour of a fall-back day", () => {
+    // 25 Oct 2026, Berlin, day starts 02:00. 00:30 UTC is 02:30 CEST: the
+    // first pass through 02:00-03:00, so it is already today.
+    const now = Date.UTC(2026, 9, 25, 10, 0);
+    const rows = [water(Date.UTC(2026, 9, 25, 0, 30), 250), water(Date.UTC(2026, 9, 25, 1, 30), 100)];
+    const base = { now, tz: BERLIN, dayStartHour: 2, rows };
+    const today = dailyTotals(base).metrics.water.today.value;
+    const week = dailyTotals({ ...base, weekStartsOn: 1 }).metrics.water.today.value;
+    expect(today).toBe(350);
+    expect(week).toBe(today);
+  });
+
   const base = { tz: BERLIN, dayStartHour: 2 };
 
   it("leaves out records dated after now, today and in the rolling 24 hours", () => {

@@ -41,6 +41,9 @@ async function setTargets(page: Page, targets: Record<string, number>) {
  * page reloads and reads them.
  */
 async function openHomeWith(page: Page, rows: SeedRow[]) {
+  // In CI the session is real: without this the app may switch to cloud sync
+  // and pull rows other specs left on the server into these totals.
+  await page.route("**/api/sync/**", (route) => route.abort());
   await page.clock.setFixedTime(NOW);
   await page.goto("/");
   await expect(page.getByTestId("today-gadget")).toBeVisible();
