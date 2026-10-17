@@ -42,7 +42,7 @@
 
 import { db, type SyncQueueRow } from "@/lib/db";
 import { ackIfUnchanged, enqueueInsideTx, getQueueDepth } from "@/lib/sync-queue";
-import { mergeSettingsRows, type SettingsRowLike } from "@/lib/settings-merge";
+import { resolvePull } from "@/lib/sync-protocol";
 import { TABLE_PUSH_ORDER, type TableName } from "@/lib/sync-topology";
 import { SYNC_TABLES } from "@intake/db/sync-manifest";
 import { normalizeRowForPush } from "@/lib/sync-column-types";
@@ -157,6 +157,48 @@ type PushOpPayload = {
   op: "upsert" | "delete";
   row: Record<string, unknown>;
 };
+
+// ─────────────────────────────────────────────────────────────────────────
+// Transport port
+// ─────────────────────────────────────────────────────────────────────────
+
+/** A pull request body: the per-table cursors. */
+export interface PullRequestBody {
+  cursors: Record<string, { updatedAt: number; id: string }>;
+  cursorKind: "server";
+}
+
+/**
+ * How the engine reaches the server. The HTTP adapter posts to the sync
+ * routes; tests plug in an in-memory server (two engines against one server
+ * converge). Responses keep the route's shape: `{ accepted, rejected }` for a
+ * push, `{ result, serverTime }` for a pull, and an HTTP status.
+ */
+export interface SyncTransport {
+  push(body: { ops: PushOpPayload[] }): Promise<Response>;
+  pull(body: PullRequestBody): Promise<Response>;
+}
+
+const post = (url: string, body: unknown) =>
+  apiFetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    cache: "no-store",
+    body: JSON.stringify(body),
+  });
+
+/** The production transport: the `/api/sync/*` routes. */
+export const httpSyncTransport: SyncTransport = {
+  push: (body) => post("/api/sync/push", body),
+  pull: (body) => post("/api/sync/pull", body),
+};
+
+let transport: SyncTransport = httpSyncTransport;
+
+/** Swap the transport (tests); `null` restores the HTTP one. */
+export function setSyncTransport(next: SyncTransport | null): void {
+  transport = next ?? httpSyncTransport;
+}
 
 /** Record a push-side error. A successful pull leaves it standing. */
 function setPushError(lastError: string): void {
@@ -405,12 +447,7 @@ async function pushCycle(): Promise<void> {
 
   let res: Response;
   try {
-    res = await apiFetch("/api/sync/push", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      cache: "no-store",
-      body: JSON.stringify({ ops }),
-    });
+    res = await transport.push({ ops });
   } catch (err) {
     // Network error — back the loop off and retry.
     await rescheduleAfterBatchFailure(
@@ -638,61 +675,6 @@ type PulledRow = Record<string, unknown> & {
 };
 
 /**
- * Should a pulled server row replace the local copy? Mirrors the push route's
- * LWW rules, so the device converges on what the server will keep instead of
- * blindly overwriting (audit sync-engine#1):
- *   - A server tombstone beats a live local row (rule 1: a delete is never
- *     resurrected by an edit).
- *   - A server live row beats a local tombstone only when strictly newer
- *     (rule 2b: the tombstone wins ties).
- *   - Otherwise the strictly newer `updatedAt` wins. A tie goes to the server
- *     (rule 3) unless a local edit is still queued.
- *
- * A pending queue entry alone does not block a strictly newer server row: the
- * server rejects the older local edit anyway, and skipping the row while the
- * cursor moves past it would leave this device stale for good.
- */
-function pulledRowWins(
-  pulled: PulledRow,
-  local: PulledRow | undefined,
-  hasPendingOp: boolean,
-): boolean {
-  if (!local) return true;
-  const pulledDeleted = pulled.deletedAt != null;
-  const localDeleted = local.deletedAt != null;
-  if (pulledDeleted && !localDeleted) return true;
-  const pulledAt = pulled.updatedAt ?? 0;
-  const localAt = local.updatedAt ?? 0;
-  if (pulledAt !== localAt) return pulledAt > localAt;
-  if (localDeleted && !pulledDeleted) return false;
-  return !hasPendingOp;
-}
-
-/**
- * What a pulled settings row does to the local copy. Settings merge per
- * setting (lib/settings-merge.ts, the push route's rule with the server as
- * base): the local row takes every setting the server changed more recently
- * and keeps its own newer ones. `write` is the merged row, or null when the
- * server has nothing newer; `pushLocal` is true when the local row holds
- * edits the server lacks. A tombstone on either side falls back to LWW.
- */
-function mergePulledSettings(
-  pulled: PulledRow,
-  local: PulledRow | undefined,
-): { write: PulledRow | null; pushLocal: boolean } | null {
-  if (!local || pulled.deletedAt != null || local.deletedAt != null) return null;
-  const merge = mergeSettingsRows(
-    pulled as SettingsRowLike,
-    local as SettingsRowLike,
-  );
-  const pushLocal = merge.incomingWins.length > 0;
-  if (merge.baseWins.length === 0) return { write: null, pushLocal };
-  // A version the local row never had, so the settings mirror applies it.
-  const updatedAt = Math.max(pulled.updatedAt ?? 0, (local.updatedAt ?? 0) + 1);
-  return { write: { ...merge.row, updatedAt } as PulledRow, pushLocal };
-}
-
-/**
  * Apply one table's pulled page and advance its cursor, atomically. Returns
  * the number of rows written.
  */
@@ -720,14 +702,17 @@ async function applyPulledRows(
       const pendingIds = new Set(pending.map((q) => q.recordId));
       const winners: PulledRow[] = [];
       const toPush: string[] = [];
+      // The conflict rules live in lib/sync-protocol.ts (the push route
+      // applies the same ones); this only carries out the decision.
       rows.forEach((row, i) => {
-        const merged = tn === "userSettings" ? mergePulledSettings(row, locals[i]) : null;
-        if (merged) {
-          if (merged.write) winners.push(merged.write);
-          if (merged.pushLocal && !pendingIds.has(row.id)) toPush.push(row.id);
-          return;
-        }
-        if (pulledRowWins(row, locals[i], pendingIds.has(row.id))) winners.push(row);
+        const decision = resolvePull({
+          tableName: tn,
+          pulled: row,
+          local: locals[i],
+          hasPendingOp: pendingIds.has(row.id),
+        });
+        if (decision.write) winners.push(decision.write as PulledRow);
+        if (decision.pushLocal && !pendingIds.has(row.id)) toPush.push(row.id);
       });
       if (winners.length > 0) await db.table(tn).bulkPut(winners);
       for (const id of toPush) await enqueueInsideTx(tn, id, "upsert");
@@ -789,14 +774,9 @@ async function pullCycle(): Promise<boolean> {
 
     let res: Response;
     try {
-      res = await apiFetch("/api/sync/pull", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        cache: "no-store",
-        // Opt into the server-stamp keyset; without it the route pages by
-        // `updatedAt` for older clients (audit sync-engine#3).
-        body: JSON.stringify({ cursors, cursorKind: "server" }),
-      });
+      // Opt into the server-stamp keyset; without it the route pages by
+      // `updatedAt` for older clients (audit sync-engine#3).
+      res = await transport.pull({ cursors, cursorKind: "server" });
     } catch (err) {
       scheduleFailedPullRetry(
         err instanceof Error ? err.message : String(err),
