@@ -30,13 +30,15 @@ import {
   type LookupResult,
 } from "@/components/medications/medicine-lookup";
 import { useSettingsStore } from "@/stores/settings-store";
+import { aiErrorText, aiTimeoutMs } from "@/lib/ai-client";
 import { cn } from "@/lib/utils";
 
 /**
- * Client-side stop for a lookup. The route stops itself at 80 s (a JSON 504)
- * inside a 90 s function limit; this catches a request that never answers.
+ * Client-side stop for a lookup: the route's own limit plus a grace (the
+ * route answers a slow model with a JSON 504 before then). It was a fixed
+ * 95 s, shorter than the route's 120 s deadline since #415.
  */
-export const LOOKUP_TIMEOUT_MS = 95_000;
+export const LOOKUP_TIMEOUT_MS = aiTimeoutMs("/api/ai/medicine-search")!;
 
 export const AI_NOTE = "AI information can be wrong. Check with your doctor or pharmacist.";
 
@@ -47,8 +49,6 @@ const MSG_TIMEOUT =
   "The lookup took too long and stopped. Try again, or enter the details from the box.";
 const MSG_FAILED =
   "The AI service did not answer. Try again later, or enter the details from the box.";
-/** Route error codes whose message tells the user what to do. */
-const ACTIONABLE_CODES = new Set(["NO_AI_KEY", "KEY_UNREADABLE", "INVALID_KEY", "AI_REFUSED"]);
 
 type LookupStatus = "idle" | "busy" | "done" | "error";
 
@@ -90,12 +90,11 @@ const fresh = (): LookupState => ({
 
 function describeError(err: unknown): string {
   if (err instanceof MedicineSearchError) {
-    if (err.status === 504) return MSG_TIMEOUT;
-    if (err.status === 429) return "Too many lookups. Wait a minute and try again, or enter the details from the box.";
-    if (err.code && ACTIONABLE_CODES.has(err.code)) return err.message;
-    return MSG_FAILED;
+    if (err.code === "AI_TIMEOUT") return MSG_TIMEOUT;
+    if (err.code === "OFFLINE") return MSG_OFFLINE;
+    if (err.code === "RATE_LIMITED") return "Too many lookups. Wait a minute and try again, or enter the details from the box.";
+    return aiErrorText(err.error, MSG_FAILED);
   }
-  if (typeof navigator !== "undefined" && navigator.onLine === false) return MSG_OFFLINE;
   return MSG_FAILED;
 }
 
@@ -146,11 +145,6 @@ export function useMedicineLookup({ timeoutMs = LOOKUP_TIMEOUT_MS }: { timeoutMs
       const controller = new AbortController();
       ctrl.current = controller;
       const tok = token.current;
-      let timedOut = false;
-      const timer = setTimeout(() => {
-        timedOut = true;
-        controller.abort();
-      }, timeoutMs);
       setState((s) => ({
         ...s,
         asked: q,
@@ -160,7 +154,7 @@ export function useMedicineLookup({ timeoutMs = LOOKUP_TIMEOUT_MS }: { timeoutMs
         applied: null,
         open: true,
       }));
-      searchMedicine({ query: q, signal: controller.signal })
+      searchMedicine({ query: q, signal: controller.signal, timeoutMs })
         .then((raw) => {
           if (tok !== token.current) return;
           const result = normalizeLookupResult(raw, q);
@@ -175,15 +169,10 @@ export function useMedicineLookup({ timeoutMs = LOOKUP_TIMEOUT_MS }: { timeoutMs
           }));
         })
         .catch((err: unknown) => {
-          if (timedOut && tok === token.current) {
-            setState((s) => ({ ...s, status: "error", error: MSG_TIMEOUT }));
-            return;
-          }
           if (tok !== token.current || err instanceof MedicineSearchCancelledError) return;
           setState((s) => ({ ...s, status: "error", error: describeError(err) }));
         })
         .finally(() => {
-          clearTimeout(timer);
           if (ctrl.current === controller) ctrl.current = null;
         });
     },

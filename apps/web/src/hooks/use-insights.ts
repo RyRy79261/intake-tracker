@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { useLiveQuery } from "@/hooks/use-live-query";
 import { apiFetch } from "@/lib/api-fetch";
+import { aiClient } from "@/lib/ai-client";
 import {
   buildAnalyticsSnapshot,
   buildMedicationSummary,
@@ -139,40 +140,14 @@ export function useGenerateInsights() {
 
       await attachPreviousAssessment(snapshot, includePrevious);
 
-      const res = await apiFetch("/api/analytics/insights", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(snapshot),
-      });
-
-      let body: unknown = null;
-      try {
-        body = await res.json();
-      } catch {
-        // Non-JSON body — caught by the validation below.
-      }
-
-      if (!res.ok) {
-        const message =
-          body &&
-          typeof body === "object" &&
-          typeof (body as { error?: unknown }).error === "string"
-            ? (body as { error: string }).error
-            : "Failed to generate insights";
-        throw new Error(message);
-      }
+      const res = await aiClient.call("/api/analytics/insights", snapshot);
+      if (!res.ok) throw new Error(res.error.message);
 
       // A malformed 200 must fail loudly, not be cached as a blank insight.
-      if (
-        !body ||
-        typeof body !== "object" ||
-        typeof (body as InsightsResult).narrative !== "string" ||
-        !Array.isArray((body as InsightsResult).observations)
-      ) {
+      const result = res.data as Partial<InsightsResult>;
+      if (typeof result.narrative !== "string" || !Array.isArray(result.observations)) {
         throw new Error("The insights service returned a malformed response.");
       }
-
-      const result = body as InsightsResult;
       const insight: InsightsResult = {
         narrative: result.narrative,
         observations: result.observations,
@@ -477,25 +452,15 @@ export function useDeepInsightJob() {
         }
         await attachPreviousAssessment(snapshot, input.includePrevious);
 
-        const res = await apiFetch("/api/analytics/insights/deep", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify(snapshot),
-        });
-        const body = (await res.json().catch(() => null)) as {
-          jobId?: string;
-          startedAt?: number;
-          status?: string;
-          error?: string;
-        } | null;
-
-        if (!res.ok || !body?.jobId) {
-          throw new Error(body?.error ?? "Failed to start deep analysis.");
+        const res = await aiClient.call("/api/analytics/insights/deep", snapshot);
+        if (!res.ok) throw new Error(res.error.message);
+        if (typeof res.data.jobId !== "string" || res.data.jobId === "") {
+          throw new Error("Failed to start deep analysis.");
         }
 
         const stored: StoredPendingJob = {
-          jobId: body.jobId,
-          startedAt: body.startedAt ?? Date.now(),
+          jobId: res.data.jobId,
+          startedAt: res.data.startedAt ?? Date.now(),
         };
         writeStoredJob(stored);
         setState({

@@ -248,8 +248,8 @@ describe("interaction-check route handler", () => {
     );
 
     expect(res.status).toBe(502);
-    const body = (await res.json()) as { error: string };
-    expect(body.error).toBe("AI service unavailable");
+    const body = (await res.json()) as { code: string };
+    expect(body.code).toBe("AI_BAD_OUTPUT");
   });
 
   it("returns 502 when the tool output fails response-schema validation", async () => {
@@ -277,8 +277,8 @@ describe("interaction-check route handler", () => {
     );
 
     expect(res.status).toBe(502);
-    const body = (await res.json()) as { error: string };
-    expect(body.error).toBe("AI service unavailable");
+    const body = (await res.json()) as { code: string };
+    expect(body.code).toBe("AI_BAD_OUTPUT");
   });
 
   it("request: auto tool_choice, a strict result tool and explicit effort (Opus 5.5 400s on a forced tool)", async () => {
@@ -343,7 +343,7 @@ describe("interaction-check route handler", () => {
     expect(statuses[5]).toBe(429);
   });
 
-  it("AI-failure path: a thrown error from Claude yields a graceful 500, not a crash", async () => {
+  it("AI-failure path: a thrown error from Claude yields a graceful 502 AI_FAILED, not a crash", async () => {
     messagesCreate.mockRejectedValueOnce(new Error("upstream exploded"));
 
     const { POST } = await import("@/app/api/ai/interaction-check/route");
@@ -355,8 +355,9 @@ describe("interaction-check route handler", () => {
       }),
     );
 
-    expect(res.status).toBe(500);
-    const body = (await res.json()) as { error: string };
+    expect(res.status).toBe(502);
+    const body = (await res.json()) as { error: string; code: string };
+    expect(body.code).toBe("AI_FAILED");
     expect(body.error).toBe("Failed to check interactions");
   });
 });

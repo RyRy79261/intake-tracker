@@ -211,7 +211,7 @@ describe("POST /api/ai/parse", () => {
     expect(body.error).toBe("Failed to process request");
   });
 
-  it("AI-failure: no tool block on either turn → graceful 422 fallbackToManual", async () => {
+  it("AI-failure: no tool block on either turn → 502 AI_BAD_OUTPUT, fallbackToManual", async () => {
     // First turn returns text only → route runs a forced follow-up turn,
     // which also returns text only → route gives up with a 422.
     messagesCreate.mockResolvedValueOnce(textResponse());
@@ -220,14 +220,14 @@ describe("POST /api/ai/parse", () => {
     const { POST } = await import("@/app/api/ai/parse/route");
     const res = await POST(makeRequest({ input: "coffee" }));
 
-    expect(res.status).toBe(422);
-    const body = (await res.json()) as { error: string; fallbackToManual: boolean };
-    expect(body.error).toBe("AI response format invalid");
+    expect(res.status).toBe(502);
+    const body = (await res.json()) as { code: string; fallbackToManual: boolean };
+    expect(body.code).toBe("AI_BAD_OUTPUT");
     expect(body.fallbackToManual).toBe(true);
     expect(messagesCreate).toHaveBeenCalledTimes(2);
   });
 
-  it("AI-failure: tool result violates output schema (water out of range) → 422", async () => {
+  it("AI-failure: tool result violates output schema (water out of range) → 502 AI_BAD_OUTPUT", async () => {
     // 99999 exceeds AIParseResponseSchema's water max of 10000.
     messagesCreate.mockResolvedValueOnce(
       toolResponse({ water_ml: 99999, sodium_mg: 0, sugar_g: 0, potassium_mg: 0, reasoning: "bad" }),
@@ -236,9 +236,9 @@ describe("POST /api/ai/parse", () => {
     const { POST } = await import("@/app/api/ai/parse/route");
     const res = await POST(makeRequest({ input: "water" }));
 
-    expect(res.status).toBe(422);
-    const body = (await res.json()) as { error: string; fallbackToManual: boolean };
-    expect(body.error).toBe("AI response format invalid");
+    expect(res.status).toBe(502);
+    const body = (await res.json()) as { code: string; fallbackToManual: boolean };
+    expect(body.code).toBe("AI_BAD_OUTPUT");
     expect(body.fallbackToManual).toBe(true);
   });
 

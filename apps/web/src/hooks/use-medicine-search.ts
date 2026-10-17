@@ -1,35 +1,10 @@
 "use client";
 
 import { useMutation } from "@tanstack/react-query";
-import { apiFetch } from "@/lib/api-fetch";
+import { aiClient, type AiError, type MedicineSearchResult } from "@/lib/ai-client";
 import { useSettingsStore } from "@/stores/settings-store";
 
-export interface MedicineStrengthOption {
-  label: string;
-  compounds: { name: string; strength: number }[];
-}
-
-export interface MedicineSearchResult {
-  brandNames: string[];
-  localAlternatives: string[];
-  genericName: string;
-  dosageStrengths: string[];
-  /** Active ingredient names — length ≥ 2 marks a combination drug. */
-  activeIngredients: string[];
-  /** Per-marketed-strength breakdown of each active ingredient's mg. */
-  strengthOptions: MedicineStrengthOption[];
-  commonIndications: string[];
-  foodInstruction: "before" | "after" | "none";
-  foodNote?: string;
-  pillColor: string;
-  pillShape: string;
-  pillDescription: string;
-  drugClass: string;
-  visualIdentification?: string;
-  contraindications: string[];
-  warnings: string[];
-  isGenericFallback: boolean;
-}
+export type { MedicineSearchResult, MedicineStrengthOption } from "@/lib/ai-client";
 
 export class MedicineSearchCancelledError extends Error {
   constructor() {
@@ -38,15 +13,15 @@ export class MedicineSearchCancelledError extends Error {
   }
 }
 
-/** A non-2xx reply from the search route, with its status and error code. */
+/** A failed search, with the AI client's error (code, wording, manual fallback). */
 export class MedicineSearchError extends Error {
-  readonly status: number;
-  readonly code: string | undefined;
-  constructor(message: string, status: number, code?: string) {
-    super(message);
+  readonly code: AiError["code"];
+  readonly error: AiError;
+  constructor(error: AiError) {
+    super(error.message);
     this.name = "MedicineSearchError";
-    this.status = status;
-    this.code = code;
+    this.code = error.code;
+    this.error = error;
   }
 }
 
@@ -54,6 +29,8 @@ export interface MedicineSearchVariables {
   query: string;
   /** Aborting it rejects with MedicineSearchCancelledError. */
   signal?: AbortSignal;
+  /** Client time limit; defaults to the route's (see ai-client). */
+  timeoutMs?: number;
 }
 
 /** The region hint sent with every lookup, from the Medications settings. */
@@ -73,36 +50,17 @@ export function regionContext(): string | undefined {
 export async function searchMedicine({
   query,
   signal,
+  timeoutMs,
 }: MedicineSearchVariables): Promise<MedicineSearchResult> {
-  let response: Response;
-  try {
-    response = await apiFetch("/api/ai/medicine-search", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ query, country: regionContext() }),
-      ...(signal && { signal }),
-    });
-  } catch (err) {
-    if (signal?.aborted || (err instanceof Error && err.name === "AbortError")) {
-      throw new MedicineSearchCancelledError();
-    }
-    throw err;
-  }
-
-  if (!response) {
-    throw new MedicineSearchCancelledError();
-  }
-
-  if (!response.ok) {
-    const data = (await response.json().catch(() => ({}))) as { error?: string; code?: string };
-    throw new MedicineSearchError(
-      data.error || "Failed to search medication",
-      response.status,
-      data.code,
-    );
-  }
-
-  return response.json();
+  const country = regionContext();
+  const result = await aiClient.call(
+    "/api/ai/medicine-search",
+    { query, ...(country !== undefined && { country }) },
+    { ...(signal && { signal }), ...(timeoutMs !== undefined && { timeoutMs }) },
+  );
+  if (result.ok) return result.data;
+  if (result.error.code === "CANCELLED") throw new MedicineSearchCancelledError();
+  throw new MedicineSearchError(result.error);
 }
 
 export function useMedicineSearch() {
