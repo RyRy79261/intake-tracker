@@ -12,7 +12,8 @@ Two run modes, depending on whether a spec needs a real login:
 
 Two test projects, both Chromium: `phone` (390×844, touch) runs the feature
 specs against the phone shell; `desktop` (1440×900, mouse) runs
-`windows.spec.ts`, `a11y.spec.ts` and `desktop.spec.ts` against desktop mode
+`windows.spec.ts`, `a11y.spec.ts`, `desktop.spec.ts` and
+`drinks-desktop.spec.ts` against desktop mode
 (module windows, task strip, desk band). Run one with `--project=phone` or
 `--project=desktop`.
 
