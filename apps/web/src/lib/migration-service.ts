@@ -123,9 +123,15 @@ async function queueRejectedOps(res: Response, ops: PushOp[]): Promise<number> {
     .map((r) => opsByQueueId.get(r.queueId))
     .filter((op): op is PushOp => op != null);
   const tables = [...new Set(toQueue.map((op) => op.tableName))];
-  await syncedWrite(tables, async (w) => {
-    for (const op of toQueue) await w.requeue(op.tableName, op.row.id as string);
-  });
+  // No push now: the migration is still uploading these tables itself, and
+  // a push from the engine could retry or drop a row before it finishes.
+  await syncedWrite(
+    tables,
+    async (w) => {
+      for (const op of toQueue) await w.requeue(op.tableName, op.row.id as string);
+    },
+    { schedule: false },
+  );
   console.log(`[migration] ${rejected.length} row(s) rejected, queued for retry`);
   return rejected.length;
 }

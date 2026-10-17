@@ -138,13 +138,31 @@ describe("resolvePull agrees with resolvePush", () => {
     );
   });
 
-  it("a pulled server tombstone always beats a live local row", () => {
+  it("a pulled server tombstone beats a live local row that is not newer", () => {
     fc.assert(
       fc.property(rowArb, rowArb, fc.boolean(), (pulled, local, pending) => {
         fc.pre(pulled.deletedAt != null && local.deletedAt == null);
+        fc.pre((local.updatedAt ?? 0) <= (pulled.updatedAt ?? 0));
         const d = resolvePull({ tableName: "intakeRecords", pulled, local, hasPendingOp: pending });
         expect(d.write).toBe(pulled);
       }),
     );
+  });
+
+  it("a pulled server tombstone does not undo a newer local restore", () => {
+    // Delete at 1000 synced; the user undid it at 2000; a pull ran before the
+    // push. The server accepts the restore on push (rule 1), so the pull must
+    // keep it, or the queued upsert later sends the tombstone back.
+    const pulled = { id: "r1", updatedAt: 1000, deletedAt: 1000 };
+    const local = { id: "r1", updatedAt: 2000, deletedAt: null };
+    const d = resolvePull({ tableName: "intakeRecords", pulled, local, hasPendingOp: true });
+    expect(d.write).toBeNull();
+    const push = resolvePush({
+      tableName: "intakeRecords",
+      incoming: local,
+      server: pulled,
+      serverNow: 3000,
+    });
+    expect(push.kind).toBe("write");
   });
 });

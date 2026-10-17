@@ -168,7 +168,8 @@ export interface PullDecision {
 /**
  * Decide a pulled server row against the local copy, so the device converges
  * on what the server keeps (audit sync-engine#1):
- *   - a server tombstone beats a live local row (rule 1);
+ *   - a server tombstone beats a live local row unless that row is strictly
+ *     newer, which is a restore the server accepts (rule 1);
  *   - a server live row beats a local tombstone only when strictly newer
  *     (rule 2b: the tombstone wins ties);
  *   - otherwise the strictly newer `updatedAt` wins, and a tie goes to the
@@ -203,9 +204,12 @@ export function resolvePull(input: {
 }
 
 function pulledRowWins(pulled: SyncRow, local: SyncRow, hasPendingOp: boolean): boolean {
-  if (isTombstone(pulled) && !isTombstone(local)) return true;
   const pulledAt = pulled.updatedAt ?? 0;
   const localAt = local.updatedAt ?? 0;
+  // Rule 1 from the device's side: a server tombstone beats a live local row
+  // unless that row is strictly newer. That row is a restore (undo after the
+  // delete synced), which the server accepts on push.
+  if (isTombstone(pulled) && !isTombstone(local)) return localAt <= pulledAt;
   if (pulledAt !== localAt) return pulledAt > localAt;
   if (isTombstone(local) && !isTombstone(pulled)) return false;
   return !hasPendingOp;

@@ -191,6 +191,15 @@ describe("syncedWrite", () => {
     await syncedWrite(["intakeRecords"], async () => undefined);
     expect(schedulePush).not.toHaveBeenCalled();
   });
+
+  it("queues without scheduling a push when schedule is false", async () => {
+    await db.intakeRecords.add(makeIntakeRecord({ id: "m1" }));
+    await syncedWrite(["intakeRecords"], (w) => w.requeue("intakeRecords", "m1"), {
+      schedule: false,
+    });
+    expect(await queued()).toEqual([["intakeRecords", "m1", "upsert"]]);
+    expect(schedulePush).not.toHaveBeenCalled();
+  });
 });
 
 describe("retireChanges", () => {

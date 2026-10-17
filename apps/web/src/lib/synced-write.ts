@@ -345,12 +345,14 @@ function createWriter(now: number, onQueued: () => void): SyncedWriter {
  * or not at all; a push is scheduled after it commits if anything was queued.
  *
  * `opts.now` pins the write's timestamp, for a caller that stamps several
- * writes, or a field of its own, with one value.
+ * writes, or a field of its own, with one value. `opts.schedule: false` queues
+ * without scheduling a push, for a caller that sends the rows itself (the
+ * migration upload), so the engine cannot retry or drop them meanwhile.
  */
 export function syncedWrite<R>(
   tables: readonly SyncedTable[],
   body: (w: SyncedWriter) => Promise<R>,
-  opts?: { now?: number | undefined },
+  opts?: { now?: number | undefined; schedule?: boolean },
 ): Promise<R> {
   let queued = false;
   // An `async` function, not just one returning a promise: Dexie only keeps
@@ -362,7 +364,7 @@ export function syncedWrite<R>(
       }),
     );
   const afterCommit = (result: R): R => {
-    if (queued) schedulePush();
+    if (queued && opts?.schedule !== false) schedulePush();
     return result;
   };
 
