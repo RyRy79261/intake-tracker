@@ -170,3 +170,63 @@ test.describe('Synced writes', () => {
     expect((await queuedOps(page))['prescriptions:e2e-rx-1']).toBe('delete');
   });
 });
+
+test.describe('Synced writes: medications', () => {
+  test('adding a prescription and undoing an extra dose queue every row with its op', async ({ page }) => {
+    await page.goto('/medications');
+    const medsWindow = page.getByTestId('window');
+    await medsWindow.getByRole('tab', { name: 'Rx' }).click({ timeout: 30_000 });
+    await medsWindow.getByRole('button', { name: /Add your first prescription|Add prescription/ }).click();
+
+    // An as-needed prescription with 30 tablets, filled in by hand.
+    const wizard = page.getByRole('dialog');
+    await expect(wizard.getByTestId('wizard-step-label')).toHaveText('Search Medicine');
+    await wizard.getByPlaceholder('e.g. Aviolix', { exact: true }).fill('Lasix');
+    await wizard.getByPlaceholder('e.g. Clopidogrel', { exact: true }).fill('Furosemide');
+    await wizard.getByPlaceholder('e.g. 75mg', { exact: true }).fill('40mg');
+    await wizard.getByRole('button', { name: /^Next/ }).click(); // Appearance
+    await wizard.getByRole('button', { name: /^Next/ }).click(); // Indication
+    await wizard.getByRole('button', { name: /^Next/ }).click(); // Dosage
+    await expect(wizard.getByTestId('wizard-step-label')).toHaveText('Dosage');
+    await wizard.getByRole('switch').click(); // As needed: no schedule step
+    await wizard.getByRole('button', { name: /^Next/ }).click();
+    await wizard.getByPlaceholder('e.g. 36').fill('30');
+    await wizard.getByRole('button', { name: /Save Medication/ }).click();
+    await expect(page.getByRole('dialog')).toBeHidden();
+
+    // Everything the wizard wrote is queued as an upsert.
+    const rx = await readStore<{ id: string }>(page, 'prescriptions');
+    const items = await readStore<{ id: string }>(page, 'inventoryItems');
+    expect(rx).toHaveLength(1);
+    expect(items).toHaveLength(1);
+    let ops = await queuedOps(page);
+    expect(ops[`prescriptions:${rx[0]!.id}`]).toBe('upsert');
+    expect(ops[`inventoryItems:${items[0]!.id}`]).toBe('upsert');
+
+    // Log an extra dose, then undo it.
+    await medsWindow.getByRole('tab', { name: /^Schedule/ }).click();
+    await page.getByRole('button', { name: 'Log a dose' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Log a dose' });
+    await dialog.getByLabel('Dose').fill('80');
+    await dialog.getByRole('button', { name: 'Log dose' }).click();
+    await expect(dialog).toBeHidden();
+    await expect(medsWindow.getByText('Other doses today')).toBeVisible();
+
+    await medsWindow.getByRole('button', { name: /^Undo Furosemide at/ }).click();
+    await medsWindow.getByRole('button', { name: /^Confirm remove Furosemide at/ }).click();
+    await expect(medsWindow.getByText('Other doses today')).toBeHidden();
+
+    // The dose and the pills it took are tombstones queued as deletes; the
+    // stock change is an upsert of the inventory item.
+    const [dose] = await readStore<{ id: string; deletedAt: number | null }>(page, 'doseLogs');
+    const consumed = (
+      await readStore<{ id: string; type: string; deletedAt: number | null }>(page, 'inventoryTransactions')
+    ).filter((t) => t.type === 'consumed');
+    expect(dose?.deletedAt).not.toBeNull();
+    expect(consumed).toHaveLength(1);
+    ops = await queuedOps(page);
+    expect(ops[`doseLogs:${dose!.id}`]).toBe('delete');
+    expect(ops[`inventoryTransactions:${consumed[0]!.id}`]).toBe('delete');
+    expect(ops[`inventoryItems:${items[0]!.id}`]).toBe('upsert');
+  });
+});
