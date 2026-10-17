@@ -4,8 +4,7 @@ import { ok, err, unwrap } from "@intake/core/service";
 import type { ServiceResult } from "@intake/types/service";
 import { addBloodPressureRecord, addWeightRecord } from "@/lib/health-service";
 import { addIntakeRecord } from "@/lib/intake-service";
-import { addUrinationRecord } from "@/lib/urination-service";
-import { addDefecationRecord } from "@/lib/defecation-service";
+import { addEstimateRecord } from "@/lib/estimate-tracker-service";
 import { addEatingRecord } from "@/lib/eating-service";
 import { addSubstanceRecord } from "@/lib/substance-service";
 import { addComposableEntry, type ComposableEntryInput } from "@/lib/composable-entry-service";
@@ -288,13 +287,14 @@ export async function logParsedEntry(
         );
         return ok({ logged: "drink" });
       case "urination":
-        unwrap(
-          await addUrinationRecord(timestamp, entry.amountEstimate, entry.note, source),
-        );
-        return ok({ logged: "reading" });
       case "defecation":
         unwrap(
-          await addDefecationRecord(timestamp, entry.amountEstimate, entry.note, source),
+          await addEstimateRecord(entry.kind, {
+            timestamp,
+            source,
+            ...(entry.amountEstimate !== undefined && { amountEstimate: entry.amountEstimate }),
+            ...(entry.note !== undefined && { note: entry.note }),
+          }),
         );
         return ok({ logged: "reading" });
     }

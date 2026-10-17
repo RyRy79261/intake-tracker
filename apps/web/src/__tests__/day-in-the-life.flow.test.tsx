@@ -62,8 +62,7 @@ import { LiquidsCard } from "@/components/liquids-card";
 import { FoodSaltCard } from "@/components/food-salt-card";
 import { BloodPressureCard } from "@/components/blood-pressure-card";
 import { WeightCard } from "@/components/weight-card";
-import { UrinationCard } from "@/components/urination-card";
-import { DefecationCard } from "@/components/defecation-card";
+import { EstimateTrackerCard } from "@/components/estimate-tracker-card";
 import { renderWithFixtures } from "@/__tests__/react-test-utils";
 import { db } from "@/lib/db";
 
@@ -204,7 +203,7 @@ describe("Day-in-the-life — multi-card user simulation", () => {
 
       // ─── Action 5: afternoon urination ─────────────────────────────
       {
-        const { unmount } = await renderWithFixtures(<UrinationCard />);
+        const { unmount } = await renderWithFixtures(<EstimateTrackerCard tracker="urination" />);
         const mediumBtn = await screen.findByRole("button", { name: /Medium/i });
         await user.click(mediumBtn);
         unmount();
@@ -213,7 +212,7 @@ describe("Day-in-the-life — multi-card user simulation", () => {
 
       // ─── Action 6: afternoon defecation ────────────────────────────
       {
-        const { unmount } = await renderWithFixtures(<DefecationCard />);
+        const { unmount } = await renderWithFixtures(<EstimateTrackerCard tracker="defecation" />);
         const largeBtn = await screen.findByRole("button", { name: /Large/i });
         await user.click(largeBtn);
         unmount();

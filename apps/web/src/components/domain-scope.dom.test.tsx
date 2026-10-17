@@ -11,15 +11,14 @@ import { LiquidsCard } from "@/components/liquids-card";
 import { FoodSaltCard } from "@/components/food-salt-card";
 import { BloodPressureCard } from "@/components/blood-pressure-card";
 import { WeightCard } from "@/components/weight-card";
-import { UrinationCard } from "@/components/urination-card";
-import { DefecationCard } from "@/components/defecation-card";
+import { EstimateTrackerCard } from "@/components/estimate-tracker-card";
 import { EditWeightDialog } from "@/components/edit-weight-dialog";
 import { EditIntakeDialog } from "@/components/edit-intake-dialog";
-import { EditUrinationDialog } from "@/components/edit-urination-dialog";
+import { EditEstimateEntryDialog } from "@/components/edit-estimate-entry-dialog";
 import { ManualInputDialog } from "@/components/manual-input-dialog";
 import { FieldScope, Pip, SubToggle } from "@/components/domain-scope";
 import { renderWithFixtures } from "@/__tests__/react-test-utils";
-import { makeIntakeRecord, makeUrinationRecord, makeWeightRecord } from "@/__tests__/fixtures/db-fixtures";
+import { makeIntakeRecord, makeWeightRecord } from "@/__tests__/fixtures/db-fixtures";
 
 /*
  * The domain scope on the input screens. jsdom does not run the stylesheet
@@ -161,13 +160,10 @@ describe("home cards open a domain scope", () => {
     expect(within(card).getByText("kg", { selector: "label span" }).className).toContain("text-muted-foreground");
   });
 
-  it.each([
-    ["Urination", UrinationCard, "urination-card"],
-    ["Defecation", DefecationCard, "defecation-card"],
-  ] as const)("%s is bath: details and Record with details", async (_name, Card, testId) => {
+  it.each(["urination", "defecation"] as const)("%s is bath: details and Record with details", async (tracker) => {
     const user = userEvent.setup();
-    await renderWithFixtures(<Card />);
-    const card = await screen.findByTestId(testId);
+    await renderWithFixtures(<EstimateTrackerCard tracker={tracker} />);
+    const card = await screen.findByTestId(`${tracker}-card`);
     expect(card).toHaveAttribute("data-domain", "bath");
 
     await user.click(within(card).getByRole("button", { name: "Add details" }));
@@ -178,7 +174,7 @@ describe("home cards open a domain scope", () => {
   });
 
   it("labels the Recent list with a sub-heading in the card colour", async () => {
-    await renderWithFixtures(<UrinationCard />);
+    await renderWithFixtures(<EstimateTrackerCard tracker="urination" />);
     const card = await screen.findByTestId("urination-card");
     const recent = await within(card).findByRole("heading", { name: "Recent" });
     expect(recent.className).toContain("subhead");
@@ -234,10 +230,11 @@ describe("dialogs open their entry's scope (they render outside the card)", () =
     expectPrimary(within(dialog).getByRole("button", { name: "Save Changes" }));
   });
 
-  it("edit urination: bath", () => {
+  it.each(["urination", "defecation"] as const)("edit %s: bath", (tracker) => {
     render(
-      <EditUrinationDialog
-        record={makeUrinationRecord({})}
+      <EditEstimateEntryDialog
+        tracker={tracker}
+        open
         onClose={noop}
         onSubmit={noop}
         timestamp=""
