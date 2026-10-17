@@ -7,16 +7,14 @@
  * individually or in bulk.
  */
 
-export type VoiceItemKind =
-  | "blood_pressure"
-  | "weight"
-  | "water"
-  | "salt"
-  | "food"
-  | "caffeine"
-  | "alcohol"
-  | "urination"
-  | "defecation";
+import {
+  REFRESHABLE_KINDS,
+  type RefreshableKind,
+  type VoiceItemKind,
+  type VoiceItemOf,
+} from "@intake/core/voice-items";
+
+export { REFRESHABLE_KINDS, type RefreshableKind, type VoiceItemKind };
 
 /**
  * When an item happened, as the parser returns it: a local wall-clock
@@ -43,113 +41,25 @@ interface SpokenTiming {
   at?: string;
 }
 
-export interface BloodPressureItem extends SpokenTiming {
-  kind: "blood_pressure";
-  systolic: number;
-  diastolic: number;
-  heartRate?: number;
-  position?: "sitting" | "standing";
-  arm?: "left" | "right";
-  note?: string;
-}
-
-export interface WeightItem extends SpokenTiming {
-  kind: "weight";
-  weightKg: number;
-  note?: string;
-}
-
-export interface WaterItem extends SpokenTiming {
-  kind: "water";
-  ml: number;
-  note?: string;
-}
-
-export interface SaltItem extends SpokenTiming {
-  kind: "salt";
-  sodiumMg: number;
-  note?: string;
-}
-
-export interface FoodItem extends SpokenTiming {
-  kind: "food";
-  description: string;
-  grams?: number;
-  waterMl?: number;
-  sodiumMg?: number;
-  sugarG?: number;
-  potassiumMg?: number;
-}
-
 /**
- * A caffeinated or alcoholic drink is a COMPLETE drink: its `volumeMl` is the
- * fluid the user drank, and its dissolved solutes live on the same item.
- *
- * The solute fields exist so the model never has to pair a drink with a
- * companion `food` item just to record a latte's sugar — that pairing booked
- * the same fluid twice (issue #322), because `food.waterMl` and a drink's
- * `volumeMl` are both hydration.
+ * One item of each kind. The fields, their units and ranges come from the
+ * voice item contract (@intake/core/voice-items); this adds the timing the
+ * panel works with.
  */
-interface DrinkSolutes extends SpokenTiming {
-  /** Total sugars dissolved in the drink, in grams. */
-  sugarG?: number;
-  /** Sodium dissolved in the drink, in mg. */
-  sodiumMg?: number;
-  /** Potassium in the drink, in mg. */
-  potassiumMg?: number;
-}
+type Timed<K extends VoiceItemKind> = VoiceItemOf<K> & SpokenTiming;
 
-export interface CaffeineItem extends DrinkSolutes {
-  kind: "caffeine";
-  description: string;
-  caffeineMg: number;
-  /**
-   * Volume of the drink in ml. Optional only because dropping an otherwise
-   * valid item would lose the caffeine dose entirely; when absent no hydration
-   * is recorded (rather than invented) and the review row exposes the field so
-   * the user can fill it in.
-   */
-  volumeMl?: number;
-}
+export type BloodPressureItem = Timed<"blood_pressure">;
+export type WeightItem = Timed<"weight">;
+export type WaterItem = Timed<"water">;
+export type SaltItem = Timed<"salt">;
+export type FoodItem = Timed<"food">;
+export type CaffeineItem = Timed<"caffeine">;
+export type AlcoholItem = Timed<"alcohol">;
+export type UrinationItem = Timed<"urination">;
+export type DefecationItem = Timed<"defecation">;
 
-export interface AlcoholItem extends DrinkSolutes {
-  kind: "alcohol";
-  description: string;
-  /** Alcohol by volume % — the number on the bottle label. */
-  abvPercent: number;
-  /** Volume of the drink consumed, in millilitres. */
-  volumeMl: number;
-}
+export type VoiceParsedItem = { [K in VoiceItemKind]: Timed<K> }[VoiceItemKind];
 
-export interface UrinationItem extends SpokenTiming {
-  kind: "urination";
-  amountEstimate?: "small" | "medium" | "large";
-  note?: string;
-}
-
-export interface DefecationItem extends SpokenTiming {
-  kind: "defecation";
-  amountEstimate?: "small" | "medium" | "large";
-  note?: string;
-}
-
-export type VoiceParsedItem =
-  | BloodPressureItem
-  | WeightItem
-  | WaterItem
-  | SaltItem
-  | FoodItem
-  | CaffeineItem
-  | AlcoholItem
-  | UrinationItem
-  | DefecationItem;
-
-/**
- * Kinds a review row can re-look-up on its own. The row sends its edited
- * description with its `kind`, and the parser returns that one item again.
- */
-export const REFRESHABLE_KINDS = ["food", "caffeine", "alcohol"] as const;
-export type RefreshableKind = (typeof REFRESHABLE_KINDS)[number];
 export type RefreshableItem = Extract<VoiceParsedItem, { kind: RefreshableKind }>;
 
 export function isRefreshable(item: VoiceParsedItem): item is RefreshableItem {

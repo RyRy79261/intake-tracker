@@ -66,49 +66,32 @@ describe("composable-entry-service", () => {
       expect(intake?.groupId).toBe(result.data.groupId);
     });
 
-    it("Test 3: substance.volumeMl creates NO water intake (issue #322)", async () => {
-      const input: ComposableEntryInput = {
-        substance: {
-          type: "caffeine",
-          amountMg: 95,
-          volumeMl: 250,
-          description: "Black coffee",
-        },
-      };
-      const result = await addComposableEntry(input);
-      expect(result.success).toBe(true);
-      if (!result.success) return;
-
-      expect(result.data.eatingId).toBeUndefined();
-      expect(result.data.substanceId).toBeTruthy();
-
-      // `volumeMl` is data, not a request to book hydration. This branch used
-      // to write a water row from it, so a caller that also queued its own
-      // water intake double-counted the drink. It also made the singular and
-      // plural substance branches behave differently for identical input.
-      expect(result.data.intakeIds).toHaveLength(0);
-      const allWater = await db.intakeRecords.where("type").equals("water").toArray();
-      expect(allWater).toHaveLength(0);
-
-      // The volume is still stored on the substance.
-      const substance = await db.substanceRecords.get(result.data.substanceId!);
-      expect(substance?.volumeMl).toBe(250);
-      expect(substance?.groupId).toBe(result.data.groupId);
+    it("Test 3: refuses a drink, which only logDrink may write (issue #322)", async () => {
+      // A water row with no meal is a drink. Writing one here would skip the
+      // Drink module, which books a drink's fluid exactly once.
+      const drink = await addComposableEntry({
+        intakes: [
+          { type: "water", amount: 330, source: "beverage" },
+          { type: "sugar", amount: 20, source: "manual:sugar" },
+        ],
+        substance: { type: "caffeine", amountMg: 95, description: "Cola" },
+      });
+      expect(drink.success).toBe(false);
+      expect(await db.intakeRecords.count()).toBe(0);
+      expect(await db.substanceRecords.count()).toBe(0);
     });
 
-    it("Test 3b: singular and plural substance branches agree on water", async () => {
-      // The asymmetry between these two was the shape of the original bug.
-      const singular = await addComposableEntry({
-        substance: { type: "caffeine", amountMg: 95, volumeMl: 250, description: "Coffee" },
+    it("Test 3b: records a dose and its solutes, with no water", async () => {
+      const result = await addComposableEntry({
+        substance: { type: "caffeine", amountMg: 95, description: "Black coffee" },
+        intakes: [{ type: "sugar", amount: 5, source: "manual:sugar" }],
       });
-      const plural = await addComposableEntry({
-        substances: [
-          { type: "caffeine", amountMg: 95, volumeMl: 250, description: "Coffee" },
-        ],
-      });
-      expect(singular.success && plural.success).toBe(true);
-      if (!singular.success || !plural.success) return;
-      expect(singular.data.intakeIds).toEqual(plural.data.intakeIds);
+      expect(result.success).toBe(true);
+      if (!result.success) return;
+      expect(result.data.eatingId).toBeUndefined();
+      expect(await db.intakeRecords.where("type").equals("water").count()).toBe(0);
+      const substance = await db.substanceRecords.get(result.data.substanceId!);
+      expect(substance?.groupId).toBe(result.data.groupId);
     });
 
     it("Test 4: all records share the same timestamp", async () => {
@@ -456,106 +439,19 @@ describe("composable-entry-service", () => {
     });
   });
 
-  // ─── multi-substance entries ────────────────────────────────────────
+  // ─── doses ──────────────────────────────────────────────────────────
 
-  describe("multi-substance entries", () => {
-    it("creates 2 substance records + 1 water intake from substances array + intakes", async () => {
-      const input: ComposableEntryInput = {
-        substances: [
-          { type: "caffeine", amountMg: 126, description: "Don Pedro" },
-          { type: "alcohol", amountStandardDrinks: 0.9, description: "Don Pedro" },
-        ],
-        intakes: [{ type: "water", amount: 24 }],
-      };
-      const result = await addComposableEntry(input);
-      expect(result.success).toBe(true);
-      if (!result.success) return;
-
-      // substanceIds has 2 entries
-      expect(result.data.substanceIds).toHaveLength(2);
-      // intakeIds has 1 entry (the explicit water intake)
-      expect(result.data.intakeIds).toHaveLength(1);
-      // substanceId (singular) is undefined when using substances array
-      expect(result.data.substanceId).toBeUndefined();
-
-      // All records share the same groupId
-      for (const sid of result.data.substanceIds) {
-        const substance = await db.substanceRecords.get(sid);
-        expect(substance?.groupId).toBe(result.data.groupId);
-      }
-      const intake = await db.intakeRecords.get(result.data.intakeIds[0]!);
-      expect(intake?.groupId).toBe(result.data.groupId);
-
-      // Verify substance types and amounts
-      const caffeine = await db.substanceRecords.get(result.data.substanceIds[0]!);
-      expect(caffeine?.type).toBe("caffeine");
-      expect(caffeine?.amountMg).toBe(126);
-
-      const alcohol = await db.substanceRecords.get(result.data.substanceIds[1]!);
-      expect(alcohol?.type).toBe("alcohol");
-      expect(alcohol?.amountStandardDrinks).toBe(0.9);
-    });
-
-    it("backward compat: singular substance still populates substanceId and substanceIds has 1 element", async () => {
-      const input: ComposableEntryInput = {
-        substance: {
-          type: "caffeine",
-          amountMg: 95,
-          volumeMl: 250,
-          description: "Black coffee",
-        },
-      };
-      const result = await addComposableEntry(input);
+  describe("doses", () => {
+    it("a dose fills substanceId, and substanceIds has 1 element", async () => {
+      const result = await addComposableEntry({
+        substance: { type: "caffeine", amountMg: 95, description: "Black coffee" },
+      });
       expect(result.success).toBe(true);
       if (!result.success) return;
 
       expect(result.data.substanceId).toBeTruthy();
-      expect(result.data.substanceIds).toHaveLength(1);
-      expect(result.data.substanceIds[0]).toBe(result.data.substanceId);
-    });
-
-    it("substances + intakes with water and salt creates 4 total records", async () => {
-      const input: ComposableEntryInput = {
-        substances: [
-          { type: "caffeine", amountMg: 63, description: "Irish Coffee" },
-          { type: "alcohol", amountStandardDrinks: 1.0, description: "Irish Coffee" },
-        ],
-        intakes: [
-          { type: "water", amount: 180 },
-          { type: "salt", amount: 50 },
-        ],
-      };
-      const result = await addComposableEntry(input);
-      expect(result.success).toBe(true);
-      if (!result.success) return;
-
-      expect(result.data.substanceIds).toHaveLength(2);
-      expect(result.data.intakeIds).toHaveLength(2);
-
-      // All 4 records share same groupId
-      for (const sid of result.data.substanceIds) {
-        const rec = await db.substanceRecords.get(sid);
-        expect(rec?.groupId).toBe(result.data.groupId);
-      }
-      for (const iid of result.data.intakeIds) {
-        const rec = await db.intakeRecords.get(iid);
-        expect(rec?.groupId).toBe(result.data.groupId);
-      }
-    });
-
-    it("substances path does NOT auto-create water intake", async () => {
-      const input: ComposableEntryInput = {
-        substances: [
-          { type: "caffeine", amountMg: 95, volumeMl: 250, description: "Coffee" },
-        ],
-      };
-      const result = await addComposableEntry(input);
-      expect(result.success).toBe(true);
-      if (!result.success) return;
-
-      // No water intake auto-created — intakeIds should be empty
+      expect(result.data.substanceIds).toEqual([result.data.substanceId]);
       expect(result.data.intakeIds).toHaveLength(0);
-      expect(result.data.substanceIds).toHaveLength(1);
     });
   });
 

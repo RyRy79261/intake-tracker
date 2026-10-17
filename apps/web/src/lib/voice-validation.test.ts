@@ -58,6 +58,14 @@ describe("validateVoiceItem", () => {
     expect(validateVoiceItem({ kind: "weight", weightKg: 500 })).toBeNull();
   });
 
+  // The review uses the route's limits (@intake/core/voice-items), so the
+  // two cannot drift: an amount the route would drop cannot be saved by hand.
+  it("uses the route's limits", () => {
+    expect(validateVoiceItem({ kind: "water", ml: 0.5 })).toMatch(/between 1 and 10000/);
+    expect(validateVoiceItem({ kind: "food", description: "toast", grams: 0 })).toMatch(/grams/i);
+    expect(validateVoiceItem({ kind: "food", description: "x".repeat(201) })).toMatch(/200/);
+  });
+
   it("rejects an empty description", () => {
     expect(validateVoiceItem({ kind: "food", description: "  " })).not.toBeNull();
   });

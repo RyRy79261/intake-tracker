@@ -1,6 +1,5 @@
 import { z } from "zod";
-import { BP_RANGES, WEIGHT_RANGE_KG } from "@intake/core/record-schemas";
-import { REFRESHABLE_KINDS } from "@/lib/voice-types";
+import { REFRESHABLE_KINDS, voiceItemSchema, type VoiceItem } from "@intake/core/voice-items";
 
 /**
  * Schema + tool definition for /api/ai/voice-parse, kept separate from the
@@ -89,93 +88,17 @@ const timing = {
     .catch(undefined),
 };
 
-export const ItemSchema = z.discriminatedUnion("kind", [
-  z.object({
-    kind: z.literal("blood_pressure"),
-    ...timing,
-    // Ranges shared with the add/edit forms (@intake/core/record-schemas).
-    systolic: z.number().int().min(BP_RANGES.systolic.min).max(BP_RANGES.systolic.max),
-    diastolic: z.number().int().min(BP_RANGES.diastolic.min).max(BP_RANGES.diastolic.max),
-    heartRate: z
-      .number()
-      .int()
-      .min(BP_RANGES.heartRate.min)
-      .max(BP_RANGES.heartRate.max)
-      .optional(),
-    position: z.enum(["sitting", "standing"]).optional(),
-    arm: z.enum(["left", "right"]).optional(),
-    note: z.string().max(200).optional(),
-  }),
-  z.object({
-    kind: z.literal("weight"),
-    ...timing,
-    weightKg: z.number().min(WEIGHT_RANGE_KG.min).max(WEIGHT_RANGE_KG.max),
-    note: z.string().max(200).optional(),
-  }),
-  z.object({
-    kind: z.literal("water"),
-    ...timing,
-    ml: z.number().min(1).max(10000),
-    note: z.string().max(200).optional(),
-  }),
-  z.object({
-    kind: z.literal("salt"),
-    ...timing,
-    sodiumMg: z.number().min(1).max(20000),
-    note: z.string().max(200).optional(),
-  }),
-  z.object({
-    kind: z.literal("food"),
-    ...timing,
-    description: z.string().min(1).max(200),
-    grams: z.number().min(1).max(5000).optional(),
-    waterMl: z.number().min(0).max(5000).optional(),
-    sodiumMg: z.number().min(0).max(20000).optional(),
-    sugarG: z.number().min(0).max(1000).optional(),
-    potassiumMg: z.number().min(0).max(20000).optional(),
-  }),
-  // Drinks carry their own dissolved solutes so the model never needs to pair
-  // one with a `food` item to record a latte's sugar — that pairing booked the
-  // same fluid twice (issue #322).
-  z.object({
-    kind: z.literal("caffeine"),
-    ...timing,
-    description: z.string().min(1).max(200),
-    caffeineMg: z.number().min(0).max(2000),
-    volumeMl: z.number().min(0).max(5000).optional(),
-    sugarG: z.number().min(0).max(1000).optional(),
-    sodiumMg: z.number().min(0).max(20000).optional(),
-    potassiumMg: z.number().min(0).max(20000).optional(),
-  }),
-  z.object({
-    kind: z.literal("alcohol"),
-    ...timing,
-    description: z.string().min(1).max(200),
-    abvPercent: z.number().min(0).max(95),
-    volumeMl: z.number().min(1).max(5000),
-    sugarG: z.number().min(0).max(1000).optional(),
-    sodiumMg: z.number().min(0).max(20000).optional(),
-    potassiumMg: z.number().min(0).max(20000).optional(),
-  }),
-  z.object({
-    kind: z.literal("urination"),
-    ...timing,
-    amountEstimate: z.enum(["small", "medium", "large"]).optional(),
-    note: z.string().max(200).optional(),
-  }),
-  z.object({
-    kind: z.literal("defecation"),
-    ...timing,
-    amountEstimate: z.enum(["small", "medium", "large"]).optional(),
-    note: z.string().max(200).optional(),
-  }),
-]);
+/**
+ * One item as the model returns it. Kinds, fields and ranges come from the
+ * voice item contract (@intake/core/voice-items), the same one the review
+ * row checks before a save.
+ */
+export const ItemSchema = voiceItemSchema(timing);
 
-type ParsedItem = z.infer<typeof ItemSchema>;
-type ItemWhen = NonNullable<ParsedItem["when"]>;
+type ItemWhen = NonNullable<z.output<typeof timing.when>>;
 /** An item as the route returns it: `when` is present only when a time was said. */
-type WithWhen<T> = T extends unknown ? Omit<T, "when"> & { when?: ItemWhen } : never;
-export type VoiceParsedItem = WithWhen<ParsedItem>;
+type WithWhen<T> = T extends unknown ? T & { when?: ItemWhen } : never;
+export type VoiceParsedItem = WithWhen<VoiceItem>;
 
 export const MAX_ITEMS = 20;
 const MAX_REASONING_CHARS = 1000;
