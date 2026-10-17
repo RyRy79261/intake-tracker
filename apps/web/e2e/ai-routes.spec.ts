@@ -333,3 +333,55 @@ test.describe('Analytics insights (/api/analytics/insights)', () => {
     await expect(today.getByText('The AI declined to summarise this data.').first()).toBeVisible(SLOW);
   });
 });
+
+test.describe('Medicine search time limit', () => {
+  // #415 gave the lookup a 120 s deadline inside a 130 s function, but the
+  // panel still stopped waiting at 95 s, so a slow lookup the server would
+  // have answered showed "took too long".
+  test('waits past 95 s for a slow lookup and shows its answer', async ({ page }) => {
+    await signIn(page);
+    await page.clock.install();
+    let release: () => void = () => {};
+    const released = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let requested = false;
+    await page.route('**/api/ai/medicine-search', async (route) => {
+      requested = true;
+      await released;
+      await route.fulfill({
+        json: {
+          brandNames: ['Aviolix'],
+          localAlternatives: [],
+          genericName: 'Aviolix Compound',
+          dosageStrengths: ['75mg'],
+          activeIngredients: [],
+          strengthOptions: [],
+          commonIndications: ['Testing'],
+          foodInstruction: 'after',
+          pillColor: 'purple',
+          pillShape: 'round',
+          pillDescription: 'A purple reddish round pill',
+          drugClass: 'Test Class',
+          contraindications: [],
+          warnings: [],
+          isGenericFallback: false,
+          appearanceVerified: true,
+        },
+      });
+    });
+
+    await page.goto('/medications');
+    await page.getByRole('button', { name: 'Add a prescription' }).click();
+    await page.getByLabel('Medicine name or brand').fill('Aviolix 75mg');
+    await page.keyboard.press('Enter');
+    await expect.poll(() => requested).toBe(true);
+
+    // 110 s: past the old 95 s stop, inside the route's 130 s limit.
+    await page.clock.runFor(110_000);
+    await expect(page.getByText(/took too long/)).toHaveCount(0);
+
+    release();
+    await expect(page.getByText('Found: Aviolix Compound')).toBeVisible();
+  });
+});
