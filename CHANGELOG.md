@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.41.0](https://github.com/RyRy79261/intake-tracker/compare/v1.40.4...v1.41.0) (2026-10-18)
+
+
+### Features
+
+* **mcp:** log meals and drinks from Claude chat ([#440](https://github.com/RyRy79261/intake-tracker/issues/440)) ([19157af](https://github.com/RyRy79261/intake-tracker/commit/19157af1e0cdbe1e3268435165d16ac0f91abdee))
+
 ## [1.40.4](https://github.com/RyRy79261/intake-tracker/compare/v1.40.3...v1.40.4) (2026-10-17)
 
 
