@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.40.4](https://github.com/RyRy79261/intake-tracker/compare/v1.40.3...v1.40.4) (2026-10-17)
+
+
+### Bug Fixes
+
+* **voice:** one voice item contract and one parsed-entry logger; whole-number amounts ([#8](https://github.com/RyRy79261/intake-tracker/issues/8), [#6](https://github.com/RyRy79261/intake-tracker/issues/6)) ([#428](https://github.com/RyRy79261/intake-tracker/issues/428)) ([b079c4b](https://github.com/RyRy79261/intake-tracker/commit/b079c4b06a72a785dc003675cf369d93a12d101d))
+
 ## [1.40.3](https://github.com/RyRy79261/intake-tracker/compare/v1.40.2...v1.40.3) (2026-10-16)
 
 
