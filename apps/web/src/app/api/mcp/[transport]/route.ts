@@ -1,9 +1,9 @@
 /**
  * MCP endpoint — Streamable HTTP transport.
  *
- * Reached at `/api/mcp/mcp` and `/api/mcp/sse` (the latter disabled). The
- * `[transport]` dynamic segment is required by `mcp-handler` — it derives
- * the transport name from the path.
+ * Reached at `/api/mcp/mcp`, the URL claude.ai is configured with. mcp-handler
+ * 2 serves every request it gets and has no HTTP+SSE transport, so any other
+ * `[transport]` value (the old `/api/mcp/sse`) answers 404 here.
  *
  * Auth: every request is wrapped by `withMcpAuth`, which expects an
  * `Authorization: Bearer <token>` header. The token is looked up in
@@ -17,7 +17,7 @@
  * loses access immediately (no need to wait for token expiry).
  */
 import { createMcpHandler, withMcpAuth } from "mcp-handler";
-import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
+import type { AuthInfo } from "@modelcontextprotocol/server";
 import { eq } from "drizzle-orm";
 import { db } from "@intake/db/client";
 import { usersSync } from "@intake/db/schema";
@@ -35,10 +35,6 @@ const baseHandler = createMcpHandler(
   },
   {
     serverInfo: { name: "intake-tracker", version: "1.0.0" },
-  },
-  {
-    basePath: "/api/mcp",
-    disableSse: true,
     verboseLogs: process.env.NODE_ENV !== "production",
   },
 );
@@ -136,7 +132,13 @@ async function checkWhitelist(
   );
 }
 
-async function handle(request: Request) {
+type RouteContext = { params: Promise<{ transport: string }> };
+
+async function handle(request: Request, { params }: RouteContext) {
+  if ((await params).transport !== "mcp") {
+    return withCors(new NextResponse(null, { status: 404 }));
+  }
+
   const denied = await checkWhitelist(request);
   if (denied) return denied;
 

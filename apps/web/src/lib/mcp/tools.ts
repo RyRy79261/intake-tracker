@@ -3,7 +3,7 @@
  *
  * Each tool:
  *   - validates its input with Zod (date-range sanity, etc.)
- *   - extracts userId from request.auth (set by withMcpAuth → verifyToken)
+ *   - extracts userId from ctx.http.authInfo (set by withMcpAuth → verifyToken)
  *   - calls a query function in ./queries
  *   - writes an audit log row (fire-and-forget)
  *   - returns a `content: [{ type: "text", text: JSON }]` MCP response
@@ -12,8 +12,7 @@
  * state through this connector even if the model tries.
  */
 import { z } from "zod";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
+import type { McpServer, ServerContext } from "@modelcontextprotocol/server";
 import {
   getInventoryStatus,
   getTodaySummary,
@@ -77,12 +76,8 @@ const timezoneArg = z
     "The user's IANA time zone (e.g. 'Europe/Berlin'). Defaults to the zone the app last reported for the user, else UTC.",
   );
 
-interface AuthCtx {
-  authInfo?: AuthInfo;
-}
-
-function getAuth(ctx: AuthCtx): { userId: string; clientId: string } {
-  const info = ctx.authInfo;
+function getAuth(ctx: ServerContext): { userId: string; clientId: string } {
+  const info = ctx.http?.authInfo;
   if (!info?.extra || typeof info.extra !== "object") {
     throw new Error("Missing auth context");
   }
@@ -94,7 +89,7 @@ function getAuth(ctx: AuthCtx): { userId: string; clientId: string } {
 }
 
 async function runTool<TArgs extends Record<string, unknown>>(
-  ctx: AuthCtx,
+  ctx: ServerContext,
   tool: string,
   args: TArgs,
   argsForAudit: Record<string, unknown> | null,
@@ -157,7 +152,7 @@ export function registerReadOnlyTools(server: McpServer): void {
       title: "Today's summary",
       description:
         "Today so far, in the user's time zone. `intake` holds totals since the user's day-start hour: water_ml, sodium_mg (sodium, not table salt: 1 g salt is about 393 mg sodium, 1 g MSG about 123 mg), sugar_g and potassium_mg. Also the latest blood-pressure and weight readings. `doses` covers today's local calendar date (`scheduled_date`): each scheduled slot of the effective regimen with its status (taken / skipped / outstanding), the counts per status, and any other dose logs for the date (as-needed doses, or logs against a slot no longer in the regimen) under `unscheduled`.",
-      inputSchema: { timezone: timezoneArg },
+      inputSchema: z.object({ timezone: timezoneArg }),
     },
     async (args, ctx) =>
       runTool(
@@ -286,7 +281,7 @@ export function registerReadOnlyTools(server: McpServer): void {
       title: "List active medications",
       description:
         "All active prescriptions, each with its ONE effective phase (`phase`, null if none is active) and that phase's enabled schedules. While a titration plan runs, its titration phase overrides the maintenance phase, exactly as in the app's dose schedule; `titrationPlanId` names the plan. Each schedule's `time` is the canonical wall-clock HH:MM in its `anchorTimezone`; `scheduleTimeUTC` (minutes from UTC midnight) is derived from it. `dosage` is per dose, in the schedule's `unit` (or the phase's).",
-      inputSchema: {},
+      inputSchema: z.object({}),
     },
     async (_args, ctx) =>
       runTool(ctx, "list_medications", {}, null, (userId) =>
@@ -300,7 +295,7 @@ export function registerReadOnlyTools(server: McpServer): void {
       title: "Titration plans",
       description:
         "The user's medication titration plans (e.g. an 8-step GDMT up-titration) with title, condition, recommended start date, status, notes, and warnings — the clinical narrative behind phased dose changes.",
-      inputSchema: {},
+      inputSchema: z.object({}),
     },
     async (_args, ctx) =>
       runTool(ctx, "list_titration_plans", {}, null, (userId) =>
@@ -314,7 +309,7 @@ export function registerReadOnlyTools(server: McpServer): void {
       title: "Recent doses",
       description:
         "The most recent dose log entries joined with prescription names, newest first. `status` uses the app's rule: taken / skipped, or for a dose still owed (logged as pending or rescheduled) 'pending' on today's date and 'missed' on an earlier date, in the user's time zone; `loggedStatus` is the status as stored (taken / skipped / rescheduled / pending). Only logged doses are listed: a scheduled dose on a past day with no log at all is also missed but has no row here. `kind` is 'scheduled' (logged against `phaseId`/`scheduleId`) or 'prn' (an as-needed dose with no schedule). For the amount, prefer the snapshot frozen when the dose was logged (`doseAmount` in `doseUnit`, from `pillsConsumed` x `pillStrength`); else `doseMg` for a PRN dose; else `scheduleDosage` in `scheduleUnit` from the linked schedule as it is now. `inventoryItemId` names the stock the dose drew from. genericName resolves even for archived (soft-deleted) prescriptions; the `archived` field is true for those, false for active, and null if the prescription was hard-deleted.",
-      inputSchema: {
+      inputSchema: z.object({
         limit: z
           .number()
           .int()
@@ -323,7 +318,7 @@ export function registerReadOnlyTools(server: McpServer): void {
           .default(50)
           .describe("Number of rows to return (1-500, default 50)"),
         timezone: timezoneArg,
-      },
+      }),
     },
     async (args, ctx) =>
       runTool(ctx, "list_recent_doses", args, args, (userId) =>
@@ -337,7 +332,7 @@ export function registerReadOnlyTools(server: McpServer): void {
       title: "Inventory status",
       description:
         "Per-prescription pill stock and refill thresholds for active inventory items. `stock` is authoritative and can be fractional (half tablets), rounded to 4 decimals: the signed sum of the item's live inventory transactions (falling back to the legacy currentStock, then 0, when an item has no transactions). It can be negative if over-consumed. Includes strength/unit/compounds so you can do tablets-per-dose math.",
-      inputSchema: {},
+      inputSchema: z.object({}),
     },
     async (_args, ctx) =>
       runTool(ctx, "get_inventory_status", {}, null, (userId) =>
