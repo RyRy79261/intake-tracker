@@ -4,13 +4,10 @@ import type { ServiceResult } from "@intake/types/service";
 import { syncFields } from "@/lib/utils";
 import { localHHMMStringToUTCMinutes } from "@/lib/timezone";
 import { getScheduleAnchorTimezone, homeAnchorOrUndefined } from "@/lib/schedule-anchor";
-import { buildAuditEntry } from "@/lib/audit-service";
 import { buildPhase, buildInventory, buildSchedules, buildTransaction } from "@/lib/medication-builders";
-import { enqueueInsideTx } from "@/lib/sync-queue";
-import { schedulePush } from "@/lib/sync-engine";
 import { isLive } from "@intake/core/lifecycle";
 import { selectEffectivePhase } from "@intake/core/effective-phase";
-import { updateSyncedInsideTx, softDeleteInsideTx } from "@/lib/synced-update";
+import { syncedWrite } from "@/lib/synced-write";
 
 export interface AddMedicationToPrescriptionInput {
   prescriptionId: string;
@@ -90,32 +87,27 @@ export async function addMedicationToPrescription(input: AddMedicationToPrescrip
   try {
     const now = Date.now();
 
-    await db.transaction("rw", [db.inventoryItems, db.inventoryTransactions, db.auditLogs, db._syncQueue], async () => {
+    await syncedWrite(["inventoryItems", "inventoryTransactions"], async (w) => {
       const existingInventory = await db.inventoryItems.where("prescriptionId").equals(input.prescriptionId).toArray();
       const hasActiveBrand = existingInventory.some(
         (item) => item.isActive && !item.isArchived && isLive(item),
       );
 
       const inventory = { ...buildInventory(input.prescriptionId, input, now), isActive: !hasActiveBrand };
-      await db.inventoryItems.add(inventory);
-      await enqueueInsideTx("inventoryItems", inventory.id, "upsert");
+      await w.insert("inventoryItems", inventory);
 
       if (input.currentStock > 0) {
         const transaction = buildTransaction(inventory.id, input.currentStock, "initial", now, "Initial stock");
-        await db.inventoryTransactions.add(transaction);
-        await enqueueInsideTx("inventoryTransactions", transaction.id, "upsert");
+        await w.insert("inventoryTransactions", transaction);
       }
 
-      const audit = buildAuditEntry("prescription_updated", {
+      await w.audit("prescription_updated", {
         prescriptionId: input.prescriptionId,
         action: "medication_added",
         inventoryId: inventory.id,
         activatedImmediately: !hasActiveBrand,
       });
-      await db.auditLogs.add(audit);
-      await enqueueInsideTx("auditLogs", audit.id, "upsert");
     });
-    schedulePush();
 
     return ok(undefined);
   } catch (e) {
@@ -126,7 +118,7 @@ export async function addMedicationToPrescription(input: AddMedicationToPrescrip
 export async function activatePhase(id: string): Promise<ServiceResult<void>> {
   try {
     const now = Date.now();
-    await db.transaction("rw", [db.medicationPhases, db.auditLogs, db._syncQueue], async () => {
+    await syncedWrite(["medicationPhases"], async (w) => {
       const phase = await db.medicationPhases.get(id);
       if (!phase || !isLive(phase)) throw new Error("Phase not found");
 
@@ -137,27 +129,22 @@ export async function activatePhase(id: string): Promise<ServiceResult<void>> {
 
       const currentActive = activePhases.find(p => p.status === "active" && p.id !== id && isLive(p));
       if (currentActive) {
-        await updateSyncedInsideTx("medicationPhases", currentActive.id, {
+        await w.patch("medicationPhases", currentActive.id, {
           status: "completed",
           endDate: currentActive.endDate ?? now,
-        }, { now });
-        const completedAudit = buildAuditEntry("phase_completed", {
+        });
+        await w.audit("phase_completed", {
           phaseId: currentActive.id,
           prescriptionId: phase.prescriptionId,
         });
-        await db.auditLogs.add(completedAudit);
-        await enqueueInsideTx("auditLogs", completedAudit.id, "upsert");
       }
 
-      await updateSyncedInsideTx("medicationPhases", id, { status: "active", startDate: now }, { now });
-      const activatedAudit = buildAuditEntry("phase_activated", {
+      await w.patch("medicationPhases", id, { status: "active", startDate: now });
+      await w.audit("phase_activated", {
         phaseId: id,
         prescriptionId: phase.prescriptionId,
       });
-      await db.auditLogs.add(activatedAudit);
-      await enqueueInsideTx("auditLogs", activatedAudit.id, "upsert");
     });
-    schedulePush();
     return ok(undefined);
   } catch (e) {
     return err("Failed to activate phase", e);
@@ -168,7 +155,7 @@ export async function startNewPhase(input: CreatePhaseInput): Promise<ServiceRes
   try {
     const now = Date.now();
 
-    const result = await db.transaction("rw", [db.medicationPhases, db.phaseSchedules, db.auditLogs, db._syncQueue], async () => {
+    const result = await syncedWrite(["medicationPhases", "phaseSchedules"], async (w) => {
       const isFuture = input.startDate && input.startDate > now;
       const status = isFuture ? "pending" as const : "active" as const;
 
@@ -180,16 +167,14 @@ export async function startNewPhase(input: CreatePhaseInput): Promise<ServiceRes
 
         const currentActive = activePhases.find(p => p.status === "active" && isLive(p));
         if (currentActive) {
-          await updateSyncedInsideTx("medicationPhases", currentActive.id, {
+          await w.patch("medicationPhases", currentActive.id, {
             status: "completed",
             endDate: currentActive.endDate ?? now,
-          }, { now });
-          const completedAudit = buildAuditEntry("phase_completed", {
+          });
+          await w.audit("phase_completed", {
             phaseId: currentActive.id,
             prescriptionId: input.prescriptionId,
           });
-          await db.auditLogs.add(completedAudit);
-          await enqueueInsideTx("auditLogs", completedAudit.id, "upsert");
         }
       }
 
@@ -199,27 +184,20 @@ export async function startNewPhase(input: CreatePhaseInput): Promise<ServiceRes
         status,
       }, now);
 
-      await db.medicationPhases.add(phase);
-      await enqueueInsideTx("medicationPhases", phase.id, "upsert");
+      await w.insert("medicationPhases", phase);
 
       const schedules = buildSchedules(phase.id, input.schedules, now);
-      await db.phaseSchedules.bulkAdd(schedules);
-      for (const s of schedules) {
-        await enqueueInsideTx("phaseSchedules", s.id, "upsert");
-      }
+      for (const s of schedules) await w.insert("phaseSchedules", s);
 
-      const startedAudit = buildAuditEntry("phase_started", {
+      await w.audit("phase_started", {
         phaseId: phase.id,
         prescriptionId: input.prescriptionId,
         type: input.type,
         status,
       });
-      await db.auditLogs.add(startedAudit);
-      await enqueueInsideTx("auditLogs", startedAudit.id, "upsert");
 
       return phase;
     });
-    schedulePush();
 
     return ok(result);
   } catch (e) {
@@ -229,12 +207,11 @@ export async function startNewPhase(input: CreatePhaseInput): Promise<ServiceRes
 
 export async function updatePhase(input: UpdatePhaseInput): Promise<ServiceResult<void>> {
   try {
-    const now = Date.now();
-    await db.transaction("rw", [db.medicationPhases, db.phaseSchedules, db.auditLogs, db._syncQueue], async () => {
+    await syncedWrite(["medicationPhases", "phaseSchedules"], async (w) => {
       const { id, schedules, ...updates } = input;
 
       if (Object.keys(updates).length > 0) {
-        await updateSyncedInsideTx("medicationPhases", id, updates, { now });
+        await w.patch("medicationPhases", id, updates);
       }
 
       if (schedules) {
@@ -275,13 +252,10 @@ export async function updatePhase(input: UpdatePhaseInput): Promise<ServiceResul
         // the push to carry, so the server would keep the schedule live.
         const toDelete = existingSchedules.filter(s => !keptIds.has(s.id));
         for (const s of toDelete) {
-          await softDeleteInsideTx("phaseSchedules", s, now);
+          await w.tombstone("phaseSchedules", s.id);
         }
         if (toAdd.length > 0) {
-          await db.phaseSchedules.bulkAdd(toAdd);
-          for (const s of toAdd) {
-            await enqueueInsideTx("phaseSchedules", s.id, "upsert");
-          }
+          for (const s of toAdd) await w.insert("phaseSchedules", s);
         }
         for (const u of toUpdate) {
           // Re-encode only when the time changed, in the home zone when one
@@ -297,24 +271,21 @@ export async function updatePhase(input: UpdatePhaseInput): Promise<ServiceResul
                 scheduleTimeUTC: localHHMMStringToUTCMinutes(u.time, anchor),
                 anchorTimezone: anchor,
               };
-          await updateSyncedInsideTx("phaseSchedules", u.id, {
+          await w.patch("phaseSchedules", u.id, {
             ...timeFields,
             dosage: u.dosage,
             daysOfWeek: u.daysOfWeek,
-          }, { now });
+          });
         }
       }
 
-      const audit = buildAuditEntry("prescription_updated", {
+      await w.audit("prescription_updated", {
         phaseId: id,
         action: "phase_updated",
         updatedFields: Object.keys(updates),
         schedulesModified: !!schedules,
       });
-      await db.auditLogs.add(audit);
-      await enqueueInsideTx("auditLogs", audit.id, "upsert");
     });
-    schedulePush();
     return ok(undefined);
   } catch (e) {
     return err("Failed to update phase", e);
@@ -323,24 +294,20 @@ export async function updatePhase(input: UpdatePhaseInput): Promise<ServiceResul
 
 export async function deletePhase(id: string): Promise<ServiceResult<void>> {
   try {
-    const now = Date.now();
-    await db.transaction("rw", [db.medicationPhases, db.phaseSchedules, db.auditLogs, db._syncQueue], async () => {
+    await syncedWrite(["medicationPhases", "phaseSchedules"], async (w) => {
       const schedules = await db.phaseSchedules.where("phaseId").equals(id).toArray();
       for (const s of schedules.filter(isLive)) {
-        await softDeleteInsideTx("phaseSchedules", s, now);
+        await w.tombstone("phaseSchedules", s.id);
       }
 
       const phase = await db.medicationPhases.get(id);
-      if (phase) await softDeleteInsideTx("medicationPhases", phase, now);
+      if (phase) await w.tombstone("medicationPhases", phase.id);
 
-      const audit = buildAuditEntry("phase_completed", {
+      await w.audit("phase_completed", {
         phaseId: id,
         action: "phase_deleted",
       });
-      await db.auditLogs.add(audit);
-      await enqueueInsideTx("auditLogs", audit.id, "upsert");
     });
-    schedulePush();
     return ok(undefined);
   } catch (e) {
     return err("Failed to delete phase", e);

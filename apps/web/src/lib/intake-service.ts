@@ -2,11 +2,7 @@ import { db, type IntakeRecord } from "@/lib/db";
 import { ok, err } from "@intake/core/service";
 import type { ServiceResult, PaginatedResult } from "@intake/types/service";
 import { generateId, syncFields } from "@/lib/utils";
-import { writeWithSync, enqueueInsideTx } from "@/lib/sync-queue";
-import { schedulePush } from "@/lib/sync-engine";
-import { getDayStartTimestamp } from "@/lib/date-utils";
-
-const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
+import { syncedWrite, type SyncedChanges } from "@/lib/synced-write";
 
 export async function addIntakeRecord(
   type: "water" | "salt" | "sugar" | "potassium",
@@ -27,11 +23,7 @@ export async function addIntakeRecord(
       ...syncFields(),
     };
 
-    await writeWithSync("intakeRecords", "upsert", async () => {
-      await db.intakeRecords.add(record);
-      return record;
-    });
-    schedulePush();
+    await syncedWrite(["intakeRecords"], (w) => w.insert("intakeRecords", record));
     return ok(record);
   } catch (e) {
     return err("Failed to add intake record", e);
@@ -40,12 +32,7 @@ export async function addIntakeRecord(
 
 export async function deleteIntakeRecord(id: string): Promise<ServiceResult<void>> {
   try {
-    const now = Date.now();
-    await writeWithSync("intakeRecords", "delete", async () => {
-      await db.intakeRecords.update(id, { deletedAt: now, updatedAt: now });
-      return { id };
-    });
-    schedulePush();
+    await syncedWrite(["intakeRecords"], (w) => w.tombstone("intakeRecords", id));
     return ok(undefined);
   } catch (e) {
     return err("Failed to delete intake record", e);
@@ -54,12 +41,7 @@ export async function deleteIntakeRecord(id: string): Promise<ServiceResult<void
 
 export async function undoDeleteIntakeRecord(id: string): Promise<ServiceResult<void>> {
   try {
-    const now = Date.now();
-    await writeWithSync("intakeRecords", "upsert", async () => {
-      await db.intakeRecords.update(id, { deletedAt: null, updatedAt: now });
-      return { id };
-    });
-    schedulePush();
+    await syncedWrite(["intakeRecords"], (w) => w.restore("intakeRecords", id));
     return ok(undefined);
   } catch (e) {
     return err("Failed to undo delete intake record", e);
@@ -82,61 +64,18 @@ export async function updateIntakeRecord(
       (existing.sodiumSource !== undefined ||
         existing.sourceAmount !== undefined ||
         existing.sourceUnit !== undefined);
-    // Dexie's update deletes a key set to undefined, but
-    // exactOptionalPropertyTypes rejects that on the typed update spec.
-    const patch: Record<string, unknown> = { ...updates, updatedAt: Date.now() };
+    // A key set to undefined clears the field.
+    const patch: SyncedChanges<"intakeRecords"> = { ...updates };
     if (staleSource) {
       patch.sodiumSource = undefined;
       patch.sourceAmount = undefined;
       patch.sourceUnit = undefined;
     }
-    await writeWithSync("intakeRecords", "upsert", async () => {
-      await db.intakeRecords.update(id, patch);
-      return { id };
-    });
-    schedulePush();
+    await syncedWrite(["intakeRecords"], (w) => w.patch("intakeRecords", id, patch));
     return ok(undefined);
   } catch (e) {
     return err("Failed to update intake record", e);
   }
-}
-
-/**
- * "Today" / "last 24h" reads count records up to now only: a future-dated
- * record (a mistyped date) must not inflate the current day. The index range
- * stays open-ended and the upper bound is applied in memory, at query time:
- * a live query only re-runs for writes inside the index range it read, so a
- * `between(start, now)` range would miss a record stamped a moment later.
- */
-function isNotFuture(r: IntakeRecord): boolean {
-  return r.timestamp <= Date.now();
-}
-
-export async function getRecordsInLast24Hours(
-  type?: "water" | "salt" | "sugar" | "potassium"
-): Promise<IntakeRecord[]> {
-  const cutoffTime = Date.now() - TWENTY_FOUR_HOURS_MS;
-  const query = db.intakeRecords.where("timestamp").aboveOrEqual(cutoffTime);
-  const records = (await query.toArray()).filter(isNotFuture);
-  if (type) {
-    return records.filter((r) => r.type === type && r.deletedAt === null);
-  }
-  return records.filter((r) => r.deletedAt === null);
-}
-
-export async function getTotalInLast24Hours(type: "water" | "salt" | "sugar" | "potassium"): Promise<number> {
-  const records = await getRecordsInLast24Hours(type);
-  return records.reduce((sum, record) => sum + record.amount, 0);
-}
-
-export async function getDailyTotal(type: "water" | "salt" | "sugar" | "potassium", dayStartHour: number): Promise<number> {
-  const cutoffTime = getDayStartTimestamp(dayStartHour);
-  const records = await db.intakeRecords
-    .where("timestamp")
-    .aboveOrEqual(cutoffTime)
-    .filter((r) => r.type === type && r.deletedAt === null && isNotFuture(r))
-    .toArray();
-  return records.reduce((sum, r) => sum + r.amount, 0);
 }
 
 export async function getRecentRecords(type: "water" | "salt" | "sugar" | "potassium", limit: number = 3): Promise<IntakeRecord[]> {
@@ -237,19 +176,15 @@ export function getPotassiumTotalsByGroupIds(
 
 export async function clearAllData(): Promise<ServiceResult<void>> {
   try {
-    const now = Date.now();
     // Soft-delete + enqueue each row rather than a hard `.clear()`. A hard
     // clear leaves no tombstone and no sync-queue entry, so the next pull
     // cycle re-downloads every "deleted" record and resurrects it.
-    await db.transaction("rw", db.intakeRecords, db._syncQueue, async () => {
+    await syncedWrite(["intakeRecords"], async (w) => {
       const records = await db.intakeRecords.toArray();
       for (const record of records) {
-        if (record.deletedAt !== null) continue;
-        await db.intakeRecords.update(record.id, { deletedAt: now, updatedAt: now });
-        await enqueueInsideTx("intakeRecords", record.id, "delete");
+        await w.tombstone("intakeRecords", record.id);
       }
     });
-    schedulePush();
     return ok(undefined);
   } catch (e) {
     return err("Failed to clear all data", e);

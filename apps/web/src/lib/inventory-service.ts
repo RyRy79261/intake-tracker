@@ -15,10 +15,9 @@ import { ok, err } from "@intake/core/service";
 import { isLive } from "@intake/core/lifecycle";
 import type { ServiceResult } from "@intake/types/service";
 import { syncFields } from "@/lib/utils";
-import { buildAuditEntry, writeAuditLog } from "@/lib/audit-service";
+import { writeAuditLog } from "@/lib/audit-service";
 import { buildTransaction } from "@/lib/medication-builders";
-import { enqueueInsideTx } from "@/lib/sync-queue";
-import { schedulePush } from "@/lib/sync-engine";
+import { syncedWrite, type SyncedWriter, type SyncedChanges } from "@/lib/synced-write";
 
 /** A rule violation whose message is safe to show the user as-is. */
 class InventoryRuleError extends Error {}
@@ -113,19 +112,17 @@ export async function getCurrentStock(inventoryItemId: string): Promise<number> 
  * only when it differs, so an in-sync item keeps its `updatedAt` and isn't
  * re-pushed (a fresh `updatedAt` would win LWW over other devices).
  *
- * Must run inside an rw transaction over inventoryItems,
- * inventoryTransactions and _syncQueue.
+ * Runs inside a synced write over inventoryItems and inventoryTransactions.
  */
 async function refreshCachedStock(
+  w: SyncedWriter,
   item: InventoryItem,
-  now: number,
 ): Promise<{ stock: number; previous: number; changed: boolean }> {
   const stock = await deriveStock(item.id);
   const previous = item.currentStock ?? 0;
   const changed = item.currentStock === undefined || roundStock(previous) !== stock;
   if (changed) {
-    await db.inventoryItems.update(item.id, { currentStock: stock, updatedAt: now });
-    await enqueueInsideTx("inventoryItems", item.id, "upsert");
+    await w.patch("inventoryItems", item.id, { currentStock: stock });
   }
   return { stock, previous, changed };
 }
@@ -147,20 +144,16 @@ export async function addInventoryItem(input: Omit<InventoryItem, "id" | "create
       id: crypto.randomUUID(),
       ...syncFields(),
     };
-    await db.transaction("rw", [db.inventoryItems, db.auditLogs, db._syncQueue], async () => {
-      await db.inventoryItems.add(item);
-      await enqueueInsideTx("inventoryItems", item.id, "upsert");
+    await syncedWrite(["inventoryItems"], async (w) => {
+      await w.insert("inventoryItems", item);
 
-      const audit = buildAuditEntry("inventory_added", {
+      await w.audit("inventory_added", {
         inventoryItemId: item.id,
         prescriptionId: item.prescriptionId,
         brandName: item.brandName,
         strength: item.strength,
       });
-      await db.auditLogs.add(audit);
-      await enqueueInsideTx("auditLogs", audit.id, "upsert");
     });
-    schedulePush();
     return ok(item);
   } catch (e) {
     return err("Failed to add inventory item", e);
@@ -172,18 +165,14 @@ export async function updateInventoryItem(
   updates: Partial<Omit<InventoryItem, "id" | "createdAt" | "prescriptionId">>,
 ): Promise<ServiceResult<void>> {
   try {
-    await db.transaction("rw", [db.inventoryItems, db.auditLogs, db._syncQueue], async () => {
-      await db.inventoryItems.update(id, { ...updates, updatedAt: Date.now() });
-      await enqueueInsideTx("inventoryItems", id, "upsert");
+    await syncedWrite(["inventoryItems"], async (w) => {
+      await w.patch("inventoryItems", id, { ...updates });
 
-      const audit = buildAuditEntry("inventory_adjusted", {
+      await w.audit("inventory_adjusted", {
         inventoryItemId: id,
         updatedFields: Object.keys(updates),
       });
-      await db.auditLogs.add(audit);
-      await enqueueInsideTx("auditLogs", audit.id, "upsert");
     });
-    schedulePush();
     return ok(undefined);
   } catch (e) {
     return err("Failed to update inventory item", e);
@@ -192,19 +181,15 @@ export async function updateInventoryItem(
 
 export async function deleteInventoryItem(id: string): Promise<ServiceResult<void>> {
   try {
-    const now = Date.now();
-    await db.transaction("rw", [db.inventoryItems, db.auditLogs, db._syncQueue], async () => {
-      // A tombstone is never the active brand.
-      await db.inventoryItems.update(id, { deletedAt: now, updatedAt: now, isActive: false });
-      await enqueueInsideTx("inventoryItems", id, "delete");
+    await syncedWrite(["inventoryItems"], async (w) => {
+      // A tombstone is never the active brand: the synced write switches
+      // isActive off as it tombstones the row.
+      await w.tombstone("inventoryItems", id);
 
-      const audit = buildAuditEntry("inventory_deleted", {
+      await w.audit("inventory_deleted", {
         inventoryItemId: id,
       });
-      await db.auditLogs.add(audit);
-      await enqueueInsideTx("auditLogs", audit.id, "upsert");
     });
-    schedulePush();
     return ok(undefined);
   } catch (e) {
     return err("Failed to delete inventory item", e);
@@ -221,8 +206,7 @@ export async function setActiveBrand(
   itemId: string,
 ): Promise<ServiceResult<void>> {
   try {
-    const now = Date.now();
-    await db.transaction("rw", [db.inventoryItems, db.auditLogs, db._syncQueue], async () => {
+    await syncedWrite(["inventoryItems"], async (w) => {
       const siblings = await db.inventoryItems.where("prescriptionId").equals(prescriptionId).toArray();
       const target = siblings.find((i) => i.id === itemId);
       if (!target || !isLive(target)) throw new InventoryRuleError("Brand not found");
@@ -231,25 +215,20 @@ export async function setActiveBrand(
       const previous: string[] = [];
       for (const sibling of siblings) {
         if (sibling.id === itemId || !sibling.isActive) continue;
-        await db.inventoryItems.update(sibling.id, { isActive: false, updatedAt: now });
-        await enqueueInsideTx("inventoryItems", sibling.id, "upsert");
+        await w.patch("inventoryItems", sibling.id, { isActive: false });
         previous.push(sibling.id);
       }
       if (!target.isActive) {
-        await db.inventoryItems.update(itemId, { isActive: true, updatedAt: now });
-        await enqueueInsideTx("inventoryItems", itemId, "upsert");
+        await w.patch("inventoryItems", itemId, { isActive: true });
       }
 
-      const audit = buildAuditEntry("inventory_adjusted", {
+      await w.audit("inventory_adjusted", {
         inventoryItemId: itemId,
         prescriptionId,
         action: "active_brand_set",
         deactivated: previous,
       });
-      await db.auditLogs.add(audit);
-      await enqueueInsideTx("auditLogs", audit.id, "upsert");
     });
-    schedulePush();
     return ok(undefined);
   } catch (e) {
     return failure("Failed to set active brand", e);
@@ -268,9 +247,8 @@ export async function archiveInventoryItem(
   replacementId?: string,
 ): Promise<ServiceResult<{ promotedId: string | null }>> {
   try {
-    const now = Date.now();
     let promotedId: string | null = null;
-    await db.transaction("rw", [db.inventoryItems, db.auditLogs, db._syncQueue], async () => {
+    await syncedWrite(["inventoryItems"], async (w) => {
       const item = await getItemOrThrow(id);
       if (!isLive(item)) throw new InventoryRuleError("Brand not found");
 
@@ -293,25 +271,20 @@ export async function archiveInventoryItem(
           for (const other of candidates) {
             const shouldBeActive = other.id === replacement.id;
             if (other.isActive === shouldBeActive) continue;
-            await db.inventoryItems.update(other.id, { isActive: shouldBeActive, updatedAt: now });
-            await enqueueInsideTx("inventoryItems", other.id, "upsert");
+            await w.patch("inventoryItems", other.id, { isActive: shouldBeActive });
           }
           promotedId = replacement.id;
         }
       }
 
-      await db.inventoryItems.update(id, { isArchived: true, isActive: false, updatedAt: now });
-      await enqueueInsideTx("inventoryItems", id, "upsert");
+      await w.patch("inventoryItems", id, { isArchived: true, isActive: false });
 
-      const audit = buildAuditEntry("inventory_adjusted", {
+      await w.audit("inventory_adjusted", {
         inventoryItemId: id,
         action: "archived",
         promotedId,
       });
-      await db.auditLogs.add(audit);
-      await enqueueInsideTx("auditLogs", audit.id, "upsert");
     });
-    schedulePush();
     return ok({ promotedId });
   } catch (e) {
     return failure("Failed to archive inventory item", e);
@@ -351,29 +324,25 @@ export async function adjustStock(
     }
     let newStock = 0;
 
-    await db.transaction("rw", [db.inventoryItems, db.inventoryTransactions, db.auditLogs, db._syncQueue], async () => {
+    await syncedWrite(["inventoryItems", "inventoryTransactions"], async (w) => {
       const item = await getItemOrThrow(inventoryItemId);
 
       const transaction = {
         ...buildTransaction(inventoryItemId, delta, txType, now, note),
         timestamp: occurredAt ?? now,
       };
-      await db.inventoryTransactions.add(transaction);
-      await enqueueInsideTx("inventoryTransactions", transaction.id, "upsert");
+      await w.insert("inventoryTransactions", transaction);
 
       // Negative stock allowed per user decision — no Math.max(0, ...) clamp
-      newStock = (await refreshCachedStock(item, now)).stock;
+      newStock = (await refreshCachedStock(w, item)).stock;
 
-      const audit = buildAuditEntry("inventory_adjusted", {
+      await w.audit("inventory_adjusted", {
         inventoryItemId,
         delta,
         newStock,
         ...(note !== undefined && { note }),
       });
-      await db.auditLogs.add(audit);
-      await enqueueInsideTx("auditLogs", audit.id, "upsert");
     });
-    schedulePush();
 
     return ok(newStock);
   } catch (e) {
@@ -400,31 +369,27 @@ export async function setStockCount(
     const now = Date.now();
     let newStock = target;
 
-    await db.transaction("rw", [db.inventoryItems, db.inventoryTransactions, db.auditLogs, db._syncQueue], async () => {
+    await syncedWrite(["inventoryItems", "inventoryTransactions"], async (w) => {
       const item = await getItemOrThrow(inventoryItemId);
       const current = await deriveStock(inventoryItemId);
       const delta = roundStock(target - current);
 
       if (delta !== 0) {
         const transaction = buildTransaction(inventoryItemId, delta, "adjusted", now, note);
-        await db.inventoryTransactions.add(transaction);
-        await enqueueInsideTx("inventoryTransactions", transaction.id, "upsert");
+        await w.insert("inventoryTransactions", transaction);
       }
-      newStock = (await refreshCachedStock(item, now)).stock;
+      newStock = (await refreshCachedStock(w, item)).stock;
 
       if (delta !== 0) {
-        const audit = buildAuditEntry("inventory_adjusted", {
+        await w.audit("inventory_adjusted", {
           inventoryItemId,
           action: "stock_counted",
           delta,
           newStock,
           ...(note !== undefined && { note }),
         });
-        await db.auditLogs.add(audit);
-        await enqueueInsideTx("auditLogs", audit.id, "upsert");
       }
     });
-    schedulePush();
 
     return ok(newStock);
   } catch (e) {
@@ -441,39 +406,33 @@ export async function updateInventoryTransaction(
   updates: { amount?: number; note?: string },
 ): Promise<ServiceResult<void>> {
   try {
-    const now = Date.now();
 
-    await db.transaction("rw", [db.inventoryTransactions, db.inventoryItems, db.auditLogs, db._syncQueue], async () => {
+    await syncedWrite(["inventoryTransactions", "inventoryItems"], async (w) => {
       const tx = await db.inventoryTransactions.get(id);
       if (!tx) throw new Error(`Transaction ${id} not found`);
       if (updates.amount !== undefined) assertValidAmount(tx.type, updates.amount);
 
       const note = updates.note?.trim();
-      const changes: Partial<InventoryTransaction> = {
+      const changes: SyncedChanges<"inventoryTransactions"> = {
         ...(updates.amount !== undefined && { amount: updates.amount }),
-        updatedAt: now,
       };
       // Clear with "" rather than undefined: Dexie would drop the key, the
       // push would then omit the column, and the server (which maps "" to
       // NULL) would keep the old note and hand it back on the next pull.
       if (note !== undefined) changes.note = note;
 
-      await db.inventoryTransactions.update(id, changes);
-      await enqueueInsideTx("inventoryTransactions", id, "upsert");
+      await w.patch("inventoryTransactions", id, changes);
 
       const item = await db.inventoryItems.get(tx.inventoryItemId);
-      if (item) await refreshCachedStock(item, now);
+      if (item) await refreshCachedStock(w, item);
 
-      const audit = buildAuditEntry("inventory_adjusted", {
+      await w.audit("inventory_adjusted", {
         transactionId: id,
         inventoryItemId: tx.inventoryItemId,
         action: "transaction_updated",
         updatedFields: Object.keys(updates),
       });
-      await db.auditLogs.add(audit);
-      await enqueueInsideTx("auditLogs", audit.id, "upsert");
     });
-    schedulePush();
 
     return ok(undefined);
   } catch (e) {
@@ -483,28 +442,22 @@ export async function updateInventoryTransaction(
 
 export async function deleteInventoryTransaction(id: string): Promise<ServiceResult<void>> {
   try {
-    const now = Date.now();
 
-    await db.transaction("rw", [db.inventoryTransactions, db.inventoryItems, db.auditLogs, db._syncQueue], async () => {
+    await syncedWrite(["inventoryTransactions", "inventoryItems"], async (w) => {
       const tx = await db.inventoryTransactions.get(id);
       if (!tx) throw new Error(`Transaction ${id} not found`);
 
-      // Soft-delete
-      await db.inventoryTransactions.update(id, { deletedAt: now, updatedAt: now });
-      await enqueueInsideTx("inventoryTransactions", id, "delete");
+      await w.tombstone("inventoryTransactions", id);
 
       const item = await db.inventoryItems.get(tx.inventoryItemId);
-      if (item) await refreshCachedStock(item, now);
+      if (item) await refreshCachedStock(w, item);
 
-      const audit = buildAuditEntry("inventory_adjusted", {
+      await w.audit("inventory_adjusted", {
         transactionId: id,
         inventoryItemId: tx.inventoryItemId,
         action: "transaction_deleted",
       });
-      await db.auditLogs.add(audit);
-      await enqueueInsideTx("auditLogs", audit.id, "upsert");
     });
-    schedulePush();
 
     return ok(undefined);
   } catch (e) {
@@ -515,28 +468,23 @@ export async function deleteInventoryTransaction(id: string): Promise<ServiceRes
 /** Undo `deleteInventoryTransaction`: clear deletedAt and re-derive stock. */
 export async function restoreInventoryTransaction(id: string): Promise<ServiceResult<void>> {
   try {
-    const now = Date.now();
 
-    await db.transaction("rw", [db.inventoryTransactions, db.inventoryItems, db.auditLogs, db._syncQueue], async () => {
+    await syncedWrite(["inventoryTransactions", "inventoryItems"], async (w) => {
       const tx = await db.inventoryTransactions.get(id);
       if (!tx) throw new Error(`Transaction ${id} not found`);
       if (isLive(tx)) return;
 
-      await db.inventoryTransactions.update(id, { deletedAt: null, updatedAt: now });
-      await enqueueInsideTx("inventoryTransactions", id, "upsert");
+      await w.restore("inventoryTransactions", id);
 
       const item = await db.inventoryItems.get(tx.inventoryItemId);
-      if (item) await refreshCachedStock(item, now);
+      if (item) await refreshCachedStock(w, item);
 
-      const audit = buildAuditEntry("inventory_adjusted", {
+      await w.audit("inventory_adjusted", {
         transactionId: id,
         inventoryItemId: tx.inventoryItemId,
         action: "transaction_restored",
       });
-      await db.auditLogs.add(audit);
-      await enqueueInsideTx("auditLogs", audit.id, "upsert");
     });
-    schedulePush();
 
     return ok(undefined);
   } catch (e) {
@@ -563,11 +511,11 @@ export async function recalculateAllStock(): Promise<{
   const driftedItems: Array<{ id: string; brandName: string; oldStock: number; newStock: number }> = [];
 
   for (const { id } of allItems) {
-    await db.transaction("rw", [db.inventoryItems, db.inventoryTransactions, db._syncQueue], async () => {
+    await syncedWrite(["inventoryItems", "inventoryTransactions"], async (w) => {
       // Re-read inside the transaction so a concurrent write isn't clobbered.
       const item = await db.inventoryItems.get(id);
       if (!item || !isLive(item)) return;
-      const { stock, previous, changed } = await refreshCachedStock(item, Date.now());
+      const { stock, previous, changed } = await refreshCachedStock(w, item);
       if (changed) {
         driftedItems.push({ id, brandName: item.brandName, oldStock: previous, newStock: stock });
       }
@@ -575,7 +523,6 @@ export async function recalculateAllStock(): Promise<{
   }
 
   if (driftedItems.length > 0) {
-    schedulePush();
     await writeAuditLog("stock_recalculated", {
       totalItems: allItems.length,
       driftedCount: driftedItems.length,

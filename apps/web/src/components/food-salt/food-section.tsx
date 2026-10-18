@@ -29,18 +29,12 @@ import {
 } from "@intake/core/sodium";
 import { useAuthGate } from "@/components/auth-guard";
 import {
-  useAddComposableEntry,
   useSyncEatingGroup,
   fetchEntryGroup,
   eatingGroupNutrients,
-  type ComposableEntryInput,
 } from "@/hooks/use-composable-entry";
-import { useDrink } from "@/hooks/use-drink";
-import {
-  useEatingRecords,
-  useAddEating,
-  useDeleteEating,
-} from "@/hooks/use-eating-queries";
+import { useLogParsedEntry } from "@/hooks/use-parsed-entry";
+import { useEatingRecords, useDeleteEating } from "@/hooks/use-eating-queries";
 import { useDeleteWithToast } from "@/hooks/use-delete-with-toast";
 import {
   useSaltTotalsByGroupIds,
@@ -133,12 +127,9 @@ export function FoodSection() {
   const fid = useFieldId();
   const { toast } = useToast();
   const showAi = useAuthGate();
-  const addComposableEntry = useAddComposableEntry();
+  const logParsedEntry = useLogParsedEntry();
   const sugarEnabled = useOptionalTrackerEnabled("sugar");
   const potassiumEnabled = useOptionalTrackerEnabled("potassium");
-
-  // ─── Mutations ────────────────────────────────────────────────────
-  const addEatingMutation = useAddEating();
 
   // ─── Form state ───────────────────────────────────────────────────
   const [foodText, setFoodText] = useState("");
@@ -164,7 +155,6 @@ export function FoodSection() {
     caffeineMg: number | null;
     abvPercent: number | null;
   } | null>(null);
-  const logDrink = useDrink().log;
 
   // ─── Derived sodium calculation ───────────────────────────────────
   const sodiumMgNum = sodiumMg ? parseFloat(sodiumMg) : 0;
@@ -455,97 +445,42 @@ export function FoodSection() {
         ? dateTimeLocalToTimestamp(customTime)
         : Date.now();
       const grams = detailGrams ? parseInt(detailGrams, 10) : undefined;
-      const note = foodText.trim() || undefined;
-
-      if (saveAsDrink && parsedDrink) {
-        await logDrink({
-          volumeMl: calculatedWaterMl,
-          description: foodText.trim() || "Drink",
-          ...(parsedDrink.caffeineMg !== null && parsedDrink.caffeineMg > 0 && {
-            caffeineMg: parsedDrink.caffeineMg,
-          }),
-          ...(parsedDrink.abvPercent !== null && parsedDrink.abvPercent > 0 && {
-            abvPercent: parsedDrink.abvPercent,
-          }),
+      const description = foodText.trim();
+      // The logger decides what this becomes (a drink, a grouped meal, or a
+      // plain eating record), tags it, rounds it and applies the trackers.
+      const { logged } = await logParsedEntry(
+        {
+          kind: "food",
+          description,
+          ...(grams !== undefined && grams > 0 && { grams }),
+          ...(waterMlNumRaw > 0 && { waterMl: waterMlNumRaw }),
           ...(calculatedSodiumMg > 0 && {
-            saltMg: calculatedSodiumMg,
+            sodiumMg: calculatedSodiumMg,
             sodiumEntry: { source: sodiumSource, amount: sodiumMgNum, unit: sodiumUnit },
           }),
-          ...(sugarEnabled && calculatedSugarG > 0 && { sugarG: calculatedSugarG }),
-          ...(potassiumEnabled && calculatedPotassiumMg > 0 && {
-            potassiumMg: calculatedPotassiumMg,
+          ...(sugarGNum > 0 && { sugarG: sugarGNum }),
+          ...(potassiumMgNum > 0 && { potassiumMg: potassiumMgNum }),
+          ...(parsedDrink && {
+            drink: {
+              ...(parsedDrink.caffeineMg !== null && { caffeineMg: parsedDrink.caffeineMg }),
+              ...(parsedDrink.abvPercent !== null && { abvPercent: parsedDrink.abvPercent }),
+            },
           }),
-          groupSource: "ai_food_parse",
-          originalInputText: foodText.trim(),
-          timestamp,
-        });
+          ...(aiPopulated && { originalInputText: description }),
+        },
+        { timestamp, origin: "food_form" },
+      );
+
+      if (logged === "drink") {
         toast({ title: "Logged", description: "Drink recorded", variant: "success" });
         onLogged();
         resetForm();
         return;
       }
 
-      // Build intakes for composable entry
-      const intakes: ComposableEntryInput["intakes"] = [];
-      if (calculatedSodiumMg > 0) {
-        intakes.push({
-          type: "salt",
-          amount: calculatedSodiumMg,
-          source: `manual:${sodiumSource}`,
-          sodiumSource,
-          sourceAmount: sodiumMgNum,
-          sourceUnit: sodiumUnit,
-        });
-      }
-      if (sugarEnabled && calculatedSugarG > 0) {
-        intakes.push({
-          type: "sugar",
-          amount: calculatedSugarG,
-          source: "manual:sugar",
-        });
-      }
-      if (potassiumEnabled && calculatedPotassiumMg > 0) {
-        intakes.push({
-          type: "potassium",
-          amount: calculatedPotassiumMg,
-          source: "manual:potassium",
-        });
-      }
-      // Same derived value the save gate reads, so the two cannot diverge.
-      if (calculatedWaterMl > 0) {
-        const trimmedFood = foodText.trim();
-        intakes.push({
-          type: "water",
-          amount: calculatedWaterMl,
-          source: "manual:food_water_content",
-          ...(trimmedFood && { note: trimmedFood }),
-        });
-      }
-
-      // Use composable entry if we have intakes or AI-populated data
-      if (intakes.length > 0 || aiPopulated) {
-        const input: ComposableEntryInput = {
-          eating: {
-            ...(note !== undefined && { note }),
-            ...(grams !== undefined && grams > 0 && { grams }),
-          },
-          ...(intakes.length > 0 && { intakes }),
-          ...(aiPopulated && { originalInputText: foodText.trim() }),
-          groupSource: aiPopulated ? "ai_food_parse" : "manual_food_entry",
-        };
-        await addComposableEntry(input, timestamp);
-      } else {
-        // Plain eating record (no sodium/water)
-        await addEatingMutation.mutateAsync({
-          timestamp,
-          ...(note !== undefined && { note }),
-          ...(grams !== undefined && grams > 0 && { grams }),
-        });
-      }
-
       toast({
         title: "Logged",
-        description: note ? "Meal with details recorded" : "Eating event recorded",
+        description: description ? "Meal with details recorded" : "Eating event recorded",
         variant: "success",
       });
       onLogged();
@@ -563,25 +498,20 @@ export function FoodSection() {
     onLogged,
     isSubmitting,
     canSave,
-    saveAsDrink,
     parsedDrink,
-    logDrink,
+    logParsedEntry,
     foodText,
     detailGrams,
     calculatedSodiumMg,
     sodiumMgNum,
     sodiumSource,
     sodiumUnit,
-    calculatedSugarG,
-    calculatedPotassiumMg,
-    sugarEnabled,
-    potassiumEnabled,
-    calculatedWaterMl,
+    sugarGNum,
+    potassiumMgNum,
+    waterMlNumRaw,
     aiPopulated,
     showTimeInput,
     customTime,
-    addComposableEntry,
-    addEatingMutation,
     toast,
     resetForm,
   ]);
@@ -756,10 +686,10 @@ export function FoodSection() {
         {/* Record button — always visible */}
         <Button
           onClick={handleDetailSubmit}
-          disabled={addEatingMutation.isPending || isSubmitting || !canSave}
+          disabled={isSubmitting || !canSave}
           className="w-full"
         >
-          {addEatingMutation.isPending || isSubmitting ? (
+          {isSubmitting ? (
             <Spinner className="size-4" />
           ) : (
             "Record with details"

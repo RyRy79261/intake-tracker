@@ -66,12 +66,11 @@ import {
 import type { LiquidPreset } from "@/lib/constants";
 import { useSettingsStore, type Settings } from "@/stores/settings-store";
 import { useSyncStatusStore } from "@/stores/sync-status-store";
-import { writeWithSync } from "@/lib/sync-queue";
-import { schedulePush } from "@/lib/sync-engine";
 import { getSyncAccountId } from "@/lib/sync-account";
 import { generateId, getDeviceId } from "@/lib/utils";
 import { settingStamp, stampChangedSettings } from "@/lib/settings-merge";
 import { isWeekStartsOn } from "@/lib/week-start";
+import { syncedWrite } from "@/lib/synced-write";
 
 /** The settings that live in the synced `userSettings` row. */
 export const SYNCED_SETTING_KEYS = [
@@ -447,11 +446,7 @@ export function installSettingsSync(): () => void {
       fieldUpdatedAt,
     });
     lastSeen = versionOf(row);
-    await writeWithSync("userSettings", "upsert", async () => {
-      await db.userSettings.put(row);
-      return row;
-    });
-    schedulePush();
+    await syncedWrite(["userSettings"], (w) => w.put("userSettings", row));
   };
 
   /** Cloud-sync mode must see the cloud copy before writing anything. */

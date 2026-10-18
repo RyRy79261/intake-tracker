@@ -1,50 +1,14 @@
 /**
- * Parity + behaviour tests for `src/lib/sync-nullable-fields.ts`.
- *
- * `NULLABLE_SYNC_FIELDS` mirrors the Drizzle schema's nullable columns by hand
- * (the push loop runs in the browser and must not import drizzle-orm), so
- * PARITY-* derive the real list from `schemaByTableName` and fail the build
- * when a schema change is not mirrored — the `sync-column-types` arrangement.
+ * Behaviour tests for `src/lib/sync-nullable-fields.ts`. The nullable-column
+ * lists come from the generated sync manifest, whose freshness
+ * `sync-manifest.test.ts` checks.
  */
 import { describe, it, expect } from "vitest";
-import { getTableColumns } from "drizzle-orm";
-import { schemaByTableName, opSchema_ } from "@intake/db/sync-payload";
-import { TABLE_PUSH_ORDER, type TableName } from "@/lib/sync-topology";
+import { opSchema_ } from "@intake/db/sync-payload";
 import {
-  NULLABLE_SYNC_FIELDS,
   fillClearedFieldsForPush,
   normalizePulledRow,
 } from "@/lib/sync-nullable-fields";
-
-const SERVER_ONLY_COLUMNS = new Set(["userId", "serverUpdatedAt"]);
-
-function nullableColumns(tableName: TableName): string[] {
-  const columns = getTableColumns(schemaByTableName[tableName] as never) as Record<
-    string,
-    { notNull: boolean }
-  >;
-  return Object.entries(columns)
-    .filter(([name, col]) => !SERVER_ONLY_COLUMNS.has(name) && !col.notNull)
-    .map(([name]) => name)
-    .sort();
-}
-
-describe("sync nullable fields — parity with the Drizzle schema", () => {
-  it("PARITY-1: covers every syncable table", () => {
-    expect(Object.keys(NULLABLE_SYNC_FIELDS).sort()).toEqual(
-      [...TABLE_PUSH_ORDER].sort(),
-    );
-  });
-
-  it.each(TABLE_PUSH_ORDER)(
-    "PARITY-2: %s nullable fields match the schema's nullable columns",
-    (tableName) => {
-      expect([...NULLABLE_SYNC_FIELDS[tableName]].sort()).toEqual(
-        nullableColumns(tableName),
-      );
-    },
-  );
-});
 
 describe("fillClearedFieldsForPush (audit health-records-inputs#4)", () => {
   const cleared = {

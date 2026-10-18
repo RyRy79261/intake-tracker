@@ -24,9 +24,7 @@ import {
   scheduleWallClock,
 } from "@/lib/timezone";
 import { toLocalDateKey } from "@/lib/date-utils";
-import { buildAuditEntry } from "@/lib/audit-service";
-import { enqueueInsideTx } from "@/lib/sync-queue";
-import { schedulePush } from "@/lib/sync-engine";
+import { syncedWrite } from "@/lib/synced-write";
 
 // ---------------------------------------------------------------------------
 // Which schedules travel
@@ -149,41 +147,29 @@ export async function recalculateScheduleTimezones(
 ): Promise<number> {
   let updatedCount = 0;
 
-  await db.transaction(
-    "rw",
-    [db.phaseSchedules, db.medicationPhases, db.prescriptions, db.auditLogs, db._syncQueue],
-    async () => {
-      const toMove = (await loadTravelSchedules()).filter(
-        ({ schedule }) => schedule.anchorTimezone !== newTimezone,
-      );
+  await syncedWrite(["phaseSchedules", "medicationPhases", "prescriptions"], async (w) => {
+    const toMove = (await loadTravelSchedules()).filter(
+      ({ schedule }) => schedule.anchorTimezone !== newTimezone,
+    );
 
-      for (const { schedule } of toMove) {
-        const time = scheduleWallClock(schedule);
-        await db.phaseSchedules.update(schedule.id, {
-          time,
-          scheduleTimeUTC: localHHMMStringToUTCMinutes(time, newTimezone),
-          anchorTimezone: newTimezone,
-          updatedAt: Date.now(),
-        });
-        await enqueueInsideTx("phaseSchedules", schedule.id, "upsert");
+    for (const { schedule } of toMove) {
+      const time = scheduleWallClock(schedule);
+      await w.patch("phaseSchedules", schedule.id, {
+        time,
+        scheduleTimeUTC: localHHMMStringToUTCMinutes(time, newTimezone),
+        anchorTimezone: newTimezone,
+      });
 
-        updatedCount++;
-      }
+      updatedCount++;
+    }
 
-      if (updatedCount > 0) {
-        const auditEntry = buildAuditEntry("timezone_adjusted", {
-          newTimezone,
-          schedulesUpdated: updatedCount,
-        });
-        await db.auditLogs.add(auditEntry);
-        await enqueueInsideTx("auditLogs", auditEntry.id, "upsert");
-      }
-    },
-  );
-
-  if (updatedCount > 0) {
-    schedulePush();
-  }
+    if (updatedCount > 0) {
+      await w.audit("timezone_adjusted", {
+        newTimezone,
+        schedulesUpdated: updatedCount,
+      });
+    }
+  });
 
   return updatedCount;
 }

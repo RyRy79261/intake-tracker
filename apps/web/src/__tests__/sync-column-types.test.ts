@@ -1,12 +1,7 @@
 /**
- * Parity + behaviour tests for `src/lib/sync-column-types.ts`.
- *
- * `INTEGER_SYNC_FIELDS` / `FLOAT_SYNC_FIELDS` are hand-maintained mirrors of
- * the Drizzle schema's numeric columns — the push loop runs in the browser and
- * must not import drizzle-orm (see the module header). Hand-maintained means
- * drift-prone, so PARITY-* derive the real column types straight from
- * `schemaByTableName` and fail the build the moment a schema change is not
- * mirrored here. This is the same arrangement `sync-topology.ts` has.
+ * Behaviour tests for `src/lib/sync-column-types.ts`. The field lists come
+ * from the generated sync manifest, whose freshness `sync-manifest.test.ts`
+ * checks.
  *
  * NORMALIZE-* cover the behaviour itself, including the exact shape of
  * issue #354: a fractional `grams` on an EatingRecord made the record's push
@@ -14,69 +9,8 @@
  * could never sync.
  */
 import { describe, it, expect } from "vitest";
-import { getTableColumns } from "drizzle-orm";
-import { schemaByTableName, opSchema_ } from "@intake/db/sync-payload";
-import { TABLE_PUSH_ORDER, type TableName } from "@/lib/sync-topology";
-import {
-  INTEGER_SYNC_FIELDS,
-  FLOAT_SYNC_FIELDS,
-  normalizeRowForPush,
-} from "@/lib/sync-column-types";
-
-/** Postgres column types that reject a fractional value. */
-const INTEGER_COLUMN_TYPES = ["PgInteger", "PgSmallInt", "PgBigInt53"];
-/** Postgres column types that accept fractions but not NaN/Infinity. */
-const FLOAT_COLUMN_TYPES = ["PgReal", "PgDoublePrecision", "PgNumeric"];
-
-/**
- * Server-only columns: the client never sends them (the push schema omits
- * both), so they cannot carry a bad value and are not mirrored here.
- */
-const SERVER_ONLY_COLUMNS = new Set(["userId", "serverUpdatedAt"]);
-
-function columnsOfType(tableName: TableName, types: string[]): string[] {
-  const table = schemaByTableName[tableName];
-  const columns = getTableColumns(table as never) as Record<
-    string,
-    { columnType: string }
-  >;
-  return Object.entries(columns)
-    .filter(
-      ([name, col]) =>
-        !SERVER_ONLY_COLUMNS.has(name) && types.includes(col.columnType),
-    )
-    .map(([name]) => name)
-    .sort();
-}
-
-describe("sync column-type maps — parity with the Drizzle schema", () => {
-  it("PARITY-1: covers every syncable table", () => {
-    expect(Object.keys(INTEGER_SYNC_FIELDS).sort()).toEqual(
-      [...TABLE_PUSH_ORDER].sort(),
-    );
-    expect(Object.keys(FLOAT_SYNC_FIELDS).sort()).toEqual(
-      [...TABLE_PUSH_ORDER].sort(),
-    );
-  });
-
-  it.each(TABLE_PUSH_ORDER)(
-    "PARITY-2: %s integer fields match the schema's integer/bigint columns",
-    (tableName) => {
-      expect([...INTEGER_SYNC_FIELDS[tableName]].sort()).toEqual(
-        columnsOfType(tableName, INTEGER_COLUMN_TYPES),
-      );
-    },
-  );
-
-  it.each(TABLE_PUSH_ORDER)(
-    "PARITY-3: %s float fields match the schema's real columns",
-    (tableName) => {
-      expect([...FLOAT_SYNC_FIELDS[tableName]].sort()).toEqual(
-        columnsOfType(tableName, FLOAT_COLUMN_TYPES),
-      );
-    },
-  );
-});
+import { opSchema_ } from "@intake/db/sync-payload";
+import { normalizeRowForPush } from "@/lib/sync-column-types";
 
 describe("normalizeRowForPush", () => {
   const eatingRow = (

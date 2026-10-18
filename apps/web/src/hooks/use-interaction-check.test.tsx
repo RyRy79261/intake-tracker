@@ -152,6 +152,39 @@ describe("useInteractionCheck (timeout)", () => {
     }
   });
 
+  // The first check's abort used to land after the second check started, and
+  // showed "timed out" and cleared the loading state over the newer check.
+  it("lets a newer check supersede an older one without a timeout error", async () => {
+    apiFetchSpy.mockImplementation(
+      (_path: string, init?: RequestInit) =>
+        new Promise((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () =>
+            reject(new DOMException("aborted", "AbortError")),
+          );
+        }),
+    );
+    const { result } = renderHook(() => useInteractionCheck());
+    const params = {
+      mode: "conflict" as const,
+      newMedication: "ibuprofen",
+      activePrescriptions: [{ genericName: "bisoprolol" }],
+    };
+
+    let first: Promise<unknown> | undefined;
+    act(() => {
+      first = result.current.check(params);
+    });
+    act(() => {
+      void result.current.check(params);
+    });
+    await act(async () => {
+      await first;
+    });
+
+    expect(result.current.error).toBeNull();
+    expect(result.current.isLoading).toBe(true);
+  });
+
   it("does not abort before the server's own deadline", async () => {
     vi.useFakeTimers();
     try {

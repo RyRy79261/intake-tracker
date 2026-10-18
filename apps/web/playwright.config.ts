@@ -14,6 +14,7 @@ const DESKTOP_SPECS = [
   /a11y\.spec\.ts$/,
   /desktop\.spec\.ts$/,
   /drinks-desktop\.spec\.ts$/,
+  /daily-totals\.spec\.ts$/,
 ];
 
 /**

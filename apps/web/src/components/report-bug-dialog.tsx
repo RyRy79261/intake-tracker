@@ -29,7 +29,7 @@ import { Tog, flabelClass, plainboxClass } from "@/components/settings/settings-
 import { useApiKeyStatus } from "@/hooks/use-ai-keys";
 import { useSubmitBugReport } from "@/hooks/use-bug-report";
 import { useToast } from "@intake/ui/use-toast";
-import { apiFetch } from "@/lib/api-fetch";
+import { aiClient } from "@/lib/ai-client";
 import { domainStripeStyle } from "@/lib/domain-colors";
 import { cn } from "@/lib/utils";
 import {
@@ -109,16 +109,9 @@ export function ReportBugDialog({
       const form = new FormData();
       form.append("audio", new File([blob], "report.webm", { type: mimeType }));
       try {
-        const res = await apiFetch("/api/ai/voice-transcribe", {
-          method: "POST",
-          body: form,
-        });
-        const body = (await res.json().catch(() => ({}))) as {
-          text?: string;
-          error?: string;
-        };
-        if (!res.ok) throw new Error(body.error ?? "Transcription failed");
-        const text = (body.text ?? "").trim();
+        const res = await aiClient.call("/api/ai/voice-transcribe", form);
+        if (!res.ok) throw new Error(res.error.message);
+        const text = (res.data.text ?? "").trim();
         if (text) {
           setDescription((prev) => (prev ? `${prev}\n${text}` : text));
           setTranscript((prev) => (prev ? `${prev}\n${text}` : text));

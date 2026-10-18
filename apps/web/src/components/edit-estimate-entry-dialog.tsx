@@ -10,7 +10,8 @@ import {
   DialogTitle,
 } from "@intake/ui/dialog";
 import { Button } from "@intake/ui/button";
-import type { Domain } from "@/lib/domain-colors";
+import { CARD_THEMES } from "@/lib/card-themes";
+import { ESTIMATE_TRACKERS, type EstimateTrackerId } from "@/lib/estimate-trackers";
 import { Input } from "@intake/ui/input";
 import { Label } from "@intake/ui/label";
 import { Textarea } from "@intake/ui/textarea";
@@ -23,24 +24,11 @@ import {
 } from "@intake/ui/select";
 import { NO_ESTIMATE_VALUE as NONE_VALUE } from "@intake/core/record-schemas";
 
-export interface EstimateOption {
-  value: string;
-  label: string;
-}
-
 export interface EditEstimateEntryDialogProps {
+  /** Which tracker the entry belongs to: title, options, placeholder, colour and ids follow it. */
+  tracker: EstimateTrackerId;
   /** Whether the dialog is open (typically `record !== null`). */
   open: boolean;
-  title: string;
-  /** Options for the amount-estimate Select. */
-  amountOptions: readonly EstimateOption[];
-  /** When true, prepends a "No estimate" sentinel that maps to "". */
-  allowNoEstimate?: boolean;
-  notePlaceholder?: string;
-  /** The entry's domain: the dialog's stripe, Save button and focus rings take its colour. */
-  domain: Domain;
-  /** Prefix for the field element ids (e.g. "edit-urination"). */
-  idPrefix: string;
   onClose: () => void;
   onSubmit: (e: FormEvent) => void;
   timestamp: string;
@@ -53,18 +41,12 @@ export interface EditEstimateEntryDialogProps {
 }
 
 /**
- * Shared edit dialog for the "time + optional amount-estimate + note" record
- * pattern (urination, defecation). Domain dialogs wrap this with their title,
- * options, placeholder, accent colour and id prefix.
+ * Edit dialog for an estimate-tracker entry (urination, defecation): time,
+ * optional amount estimate ("No estimate" maps to "") and note.
  */
 export function EditEstimateEntryDialog({
+  tracker,
   open,
-  title,
-  amountOptions,
-  allowNoEstimate = false,
-  notePlaceholder,
-  domain,
-  idPrefix,
   onClose,
   onSubmit,
   timestamp,
@@ -75,11 +57,14 @@ export function EditEstimateEntryDialog({
   onNoteChange,
   onFocus,
 }: EditEstimateEntryDialogProps) {
+  const { label, amountOptions, notePlaceholder } = ESTIMATE_TRACKERS[tracker];
+  const domain = CARD_THEMES[tracker].domain;
+  const idPrefix = `edit-${tracker}`;
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="sm:max-w-md" data-domain={domain}>
         <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
+          <DialogTitle>Edit {label} Entry</DialogTitle>
           <DialogDescription>Update the time, amount estimate, or note</DialogDescription>
         </DialogHeader>
         <form onSubmit={onSubmit} className="space-y-4">
@@ -97,16 +82,16 @@ export function EditEstimateEntryDialog({
           <div className="space-y-2">
             <Label htmlFor={`${idPrefix}-amount`}>Amount (optional)</Label>
             <Select
-              value={allowNoEstimate ? amount || NONE_VALUE : amount}
+              value={amount || NONE_VALUE}
               onValueChange={(v) =>
-                onAmountChange(allowNoEstimate && v === NONE_VALUE ? "" : v)
+                onAmountChange(v === NONE_VALUE ? "" : v)
               }
             >
               <SelectTrigger id={`${idPrefix}-amount`}>
                 <SelectValue placeholder="Select estimate" />
               </SelectTrigger>
               <SelectContent>
-                {allowNoEstimate && <SelectItem value={NONE_VALUE}>No estimate</SelectItem>}
+                <SelectItem value={NONE_VALUE}>No estimate</SelectItem>
                 {amountOptions.map((opt) => (
                   <SelectItem key={opt.value} value={opt.value}>
                     {opt.label}

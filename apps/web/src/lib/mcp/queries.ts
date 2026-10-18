@@ -35,6 +35,7 @@ import {
   userSettings,
 } from "@intake/db/schema";
 import { resolveTimeZone, zonedDayWindow } from "@/lib/mcp/day-window";
+import { dailyTotals, totalsWindow, type MetricKey } from "@intake/core/daily-totals";
 import { resolveDoseStatus } from "@/lib/dose-status";
 
 const MAX_ROWS = 5000;
@@ -103,6 +104,14 @@ async function getStoredTimeZone(
 // Today summary
 // ─────────────────────────────────────────────────────────────────────────
 
+/** The Daily Totals metric of each stored intake type ("salt" is sodium mg). */
+const INTAKE_METRIC: Record<string, MetricKey | undefined> = {
+  water: "water",
+  salt: "sodium",
+  sugar: "sugar",
+  potassium: "potassium",
+};
+
 export async function getTodaySummary(
   userId: string,
   opts: { timezone?: string | undefined; now?: number } = {},
@@ -116,24 +125,32 @@ export async function getTodaySummary(
   // The server runs in UTC; the day boundary has to be the user's.
   const timezone = resolveTimeZone(opts.timezone, storedTz);
   const window = zonedDayWindow(nowTs, timezone, dayStartHour);
-  const startTs = window.start;
 
-  const intake = await db
+  // Today's totals come from the Daily Totals module, as in the app: the
+  // same logical day, and a record dated after now does not count yet.
+  const intakeRows = await db
     .select({
       type: intakeRecords.type,
-      total: sql<number>`sum(${intakeRecords.amount})`.as("total"),
-      count: sql<number>`count(*)`.as("count"),
+      amount: intakeRecords.amount,
+      timestamp: intakeRecords.timestamp,
     })
     .from(intakeRecords)
     .where(
       and(
         eq(intakeRecords.userId, userId),
-        gte(intakeRecords.timestamp, startTs),
-        lte(intakeRecords.timestamp, nowTs),
+        gte(intakeRecords.timestamp, totalsWindow(nowTs, timezone, dayStartHour).dayStart),
         isNull(intakeRecords.deletedAt),
       ),
-    )
-    .groupBy(intakeRecords.type);
+    );
+  const totals = dailyTotals({
+    now: nowTs,
+    tz: timezone,
+    dayStartHour,
+    rows: intakeRows.flatMap((r) => {
+      const metric = INTAKE_METRIC[r.type];
+      return metric ? [{ metric, amount: Number(r.amount) || 0, timestamp: Number(r.timestamp) }] : [];
+    }),
+  });
 
   const latestBp = await db
     .select({
@@ -173,21 +190,15 @@ export async function getTodaySummary(
   // salt is converted on entry). Label it as sodium so a reader doesn't take
   // 1400 mg sodium for 1.4 g of salt.
   const intakeTotals = {
-    water_ml: 0,
-    sodium_mg: 0,
-    sugar_g: 0,
-    potassium_mg: 0,
+    water_ml: totals.metrics.water.today.value,
+    sodium_mg: totals.metrics.sodium.today.value,
+    sugar_g: totals.metrics.sugar.today.value,
+    potassium_mg: totals.metrics.potassium.today.value,
   };
-  for (const row of intake) {
-    if (row.type === "water") intakeTotals.water_ml = Number(row.total) || 0;
-    else if (row.type === "salt") intakeTotals.sodium_mg = Number(row.total) || 0;
-    else if (row.type === "sugar") intakeTotals.sugar_g = Number(row.total) || 0;
-    else if (row.type === "potassium") intakeTotals.potassium_mg = Number(row.total) || 0;
-  }
 
   return {
     timezone,
-    day_started_at: startTs,
+    day_started_at: totals.dayStart,
     now: nowTs,
     intake: intakeTotals,
     latest_blood_pressure: latestBp[0] ?? null,

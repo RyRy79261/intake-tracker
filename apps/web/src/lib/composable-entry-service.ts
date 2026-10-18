@@ -9,15 +9,24 @@ import type {
 import { ok, err } from "@intake/core/service";
 import type { ServiceResult } from "@intake/types/service";
 import { syncFields } from "@/lib/utils";
-import { enqueueInsideTx } from "@/lib/sync-queue";
-import { schedulePush } from "@/lib/sync-engine";
+import { syncedWrite, type SyncedChanges, type SyncedWriter } from "@/lib/synced-write";
 import { roundGrams } from "@/lib/eating-service";
 import { isLive } from "@intake/core/lifecycle";
 
-export const COMPOSABLE_TABLES = [db.intakeRecords, db.eatingRecords, db.substanceRecords] as const;
+/** The tables a composable entry (a meal or a drink) writes to. */
+export const COMPOSABLE_TABLES = ["intakeRecords", "eatingRecords", "substanceRecords"] as const;
 
 // ─── Input / Output types ─────────────────────────────────────────────
 
+/**
+ * A meal (an eating record with its water content and nutrients) or a dose
+ * (a caffeine or alcohol record with its solutes and no fluid).
+ *
+ * Not a drink. A drink is a water row with no meal, and only the Drink module
+ * (`logDrink`) writes one: it derives the water row from the volume, so the
+ * fluid is booked exactly once. This input has no volume field, and
+ * {@link addComposableEntry} refuses a water intake without a meal.
+ */
 export interface ComposableEntryInput {
   eating?: { note?: string; grams?: number };
   intakes?: Array<{
@@ -30,22 +39,13 @@ export interface ComposableEntryInput {
     sourceAmount?: number;
     sourceUnit?: SodiumSourceUnit;
   }>;
+  /** A dose with no fluid of its own (a caffeine pill, coffee in a cake). */
   substance?: {
     type: "caffeine" | "alcohol";
     amountMg?: number;
     amountStandardDrinks?: number;
-    abvPercent?: number;
-    volumeMl?: number;
     description: string;
   };
-  substances?: Array<{
-    type: "caffeine" | "alcohol";
-    amountMg?: number;
-    amountStandardDrinks?: number;
-    abvPercent?: number;
-    volumeMl?: number;
-    description: string;
-  }>;
   originalInputText?: string;
   groupSource?: string;
 }
@@ -54,8 +54,8 @@ export interface ComposableEntryResult {
   groupId: string;
   eatingId?: string;
   intakeIds: string[];
-  substanceId?: string;    // kept for backward compat (single substance)
-  substanceIds: string[];  // all substance record IDs
+  substanceId?: string;
+  substanceIds: string[];
 }
 
 export interface EntryGroup {
@@ -73,6 +73,9 @@ export async function addComposableEntry(
   input: ComposableEntryInput,
   timestamp?: number,
 ): Promise<ServiceResult<ComposableEntryResult>> {
+  if (!input.eating && input.intakes?.some((i) => i.type === "water")) {
+    return err("A drink goes through logDrink, not addComposableEntry");
+  }
   try {
     const groupId = crypto.randomUUID();
     const ts = timestamp ?? Date.now();
@@ -82,7 +85,7 @@ export async function addComposableEntry(
     let eatingId: string | undefined;
     let substanceId: string | undefined;
 
-    await db.transaction("rw", [...COMPOSABLE_TABLES, db._syncQueue], async () => {
+    await syncedWrite(COMPOSABLE_TABLES, async (w) => {
       // ── Eating record ──
       if (input.eating) {
         const id = crypto.randomUUID();
@@ -98,8 +101,7 @@ export async function addComposableEntry(
           ...(input.groupSource !== undefined && { groupSource: input.groupSource }),
           ...fields,
         };
-        await db.eatingRecords.add(record);
-        await enqueueInsideTx("eatingRecords", id, "upsert");
+        await w.insert("eatingRecords", record);
       }
 
       // ── Intake records ──
@@ -127,18 +129,11 @@ export async function addComposableEntry(
             ...(input.groupSource !== undefined && { groupSource: input.groupSource }),
             ...fields,
           };
-          await db.intakeRecords.add(record);
-          await enqueueInsideTx("intakeRecords", id, "upsert");
+          await w.insert("intakeRecords", record);
         }
       }
 
-      // ── Substance record (singular — backward compat) ──
-      // `volumeMl` is recorded as data only. This branch used to also write a
-      // water IntakeRecord from it, which double-counted the fluid whenever
-      // the caller had already queued its own water intake (issue #322) and
-      // left the plural `substances` branch below behaving differently for
-      // identical input. Drinks now go through `logDrink`, the single owner of
-      // liquid volume; this path records substances and nothing more.
+      // ── Substance record (a dose) ──
       if (input.substance) {
         const id = crypto.randomUUID();
         substanceId = id;
@@ -148,8 +143,6 @@ export async function addComposableEntry(
           type: input.substance.type,
           ...(input.substance.amountMg !== undefined && { amountMg: input.substance.amountMg }),
           ...(input.substance.amountStandardDrinks !== undefined && { amountStandardDrinks: input.substance.amountStandardDrinks }),
-          ...(input.substance.type === "alcohol" && input.substance.abvPercent !== undefined && { abvPercent: input.substance.abvPercent }),
-          ...(input.substance.volumeMl !== undefined && { volumeMl: input.substance.volumeMl }),
           description: input.substance.description,
           source: "standalone" as const,
           aiEnriched: false,
@@ -159,37 +152,10 @@ export async function addComposableEntry(
           ...(input.groupSource !== undefined && { groupSource: input.groupSource }),
           ...fields,
         };
-        await db.substanceRecords.add(record);
-        await enqueueInsideTx("substanceRecords", id, "upsert");
-      }
-
-      // ── Substance records (plural — multi-substance presets, per D-11) ──
-      if (input.substances) {
-        for (const sub of input.substances) {
-          const id = crypto.randomUUID();
-          substanceIds.push(id);
-          const record: SubstanceRecord = {
-            id,
-            type: sub.type,
-            ...(sub.amountMg !== undefined && { amountMg: sub.amountMg }),
-            ...(sub.amountStandardDrinks !== undefined && { amountStandardDrinks: sub.amountStandardDrinks }),
-            ...(sub.type === "alcohol" && sub.abvPercent !== undefined && { abvPercent: sub.abvPercent }),
-            ...(sub.volumeMl !== undefined && { volumeMl: sub.volumeMl }),
-            description: sub.description,
-            source: "standalone" as const,
-            aiEnriched: false,
-            timestamp: ts,
-            groupId,
-            ...(input.groupSource !== undefined && { groupSource: input.groupSource }),
-            ...fields,
-          };
-          await db.substanceRecords.add(record);
-          await enqueueInsideTx("substanceRecords", id, "upsert");
-        }
+        await w.insert("substanceRecords", record);
       }
     });
 
-    schedulePush();
     const result: ComposableEntryResult = { groupId, intakeIds, substanceIds };
     if (eatingId !== undefined) result.eatingId = eatingId;
     if (substanceId !== undefined) result.substanceId = substanceId;
@@ -204,19 +170,21 @@ export async function addComposableEntry(
 // A composable entry (a meal, or a drink) is every live row sharing one
 // groupId across the three record tables. Delete, undo and time edits have to
 // act on all of those rows together — acting on one of them left the rest
-// counting toward daily totals, or stranded on another day. These helpers must
-// run inside a caller's `rw` transaction over COMPOSABLE_TABLES + _syncQueue.
+// counting toward daily totals, or stranded on another day. These helpers run
+// inside a caller's synced write over COMPOSABLE_TABLES.
 
-/** Tombstone every live row in the group with the `now` stamp. */
-async function tombstoneGroupInTx(groupId: string, now: number): Promise<number> {
+type GroupRow = { id: string; timestamp: number; deletedAt: number | null };
+
+function groupRows(table: RecordTable, groupId: string): Promise<GroupRow[]> {
+  return db.table<GroupRow, string>(table).where("groupId").equals(groupId).toArray();
+}
+
+/** Tombstone every live row in the group with the write's `now` stamp. */
+async function tombstoneGroup(w: SyncedWriter, groupId: string): Promise<number> {
   let count = 0;
   for (const table of COMPOSABLE_TABLES) {
-    const records = await table.where("groupId").equals(groupId).toArray();
-    for (const record of records) {
-      if (!isLive(record)) continue;
-      await table.update(record.id, { deletedAt: now, updatedAt: now });
-      await enqueueInsideTx(table.name as RecordTable, record.id, "upsert");
-      count++;
+    for (const record of await groupRows(table, groupId)) {
+      if (await w.tombstone(table, record.id)) count++;
     }
   }
   return count;
@@ -228,39 +196,34 @@ async function tombstoneGroupInTx(groupId: string, now: number): Promise<number>
  * caffeine, a duplicate was reconciled away) carry a different stamp and stay
  * deleted; restoring "every deleted row in the group" resurrected them.
  */
-async function restoreGroupInTx(
+async function restoreGroup(
+  w: SyncedWriter,
   groupId: string,
   deletedAt: number,
-  now: number,
 ): Promise<number> {
   let count = 0;
   for (const table of COMPOSABLE_TABLES) {
-    const records = await table.where("groupId").equals(groupId).toArray();
-    for (const record of records) {
+    for (const record of await groupRows(table, groupId)) {
       if (record.deletedAt !== deletedAt) continue;
-      await table.update(record.id, { deletedAt: null, updatedAt: now });
-      await enqueueInsideTx(table.name as RecordTable, record.id, "upsert");
-      count++;
+      if (await w.restore(table, record.id)) count++;
     }
   }
   return count;
 }
 
 /**
- * Move every live row in the group to `timestamp`. Must run inside a `rw`
- * transaction over COMPOSABLE_TABLES + _syncQueue.
+ * Move every live row in the group to `timestamp`. Runs inside a caller's
+ * synced write over COMPOSABLE_TABLES.
  */
-export async function retimeGroupInTx(
+export async function retimeGroup(
+  w: SyncedWriter,
   groupId: string,
   timestamp: number,
-  now: number,
 ): Promise<void> {
   for (const table of COMPOSABLE_TABLES) {
-    const records = await table.where("groupId").equals(groupId).toArray();
-    for (const record of records) {
+    for (const record of await groupRows(table, groupId)) {
       if (!isLive(record) || record.timestamp === timestamp) continue;
-      await table.update(record.id, { timestamp, updatedAt: now });
-      await enqueueInsideTx(table.name as RecordTable, record.id, "upsert");
+      await w.patch(table, record.id, { timestamp });
     }
   }
 }
@@ -275,15 +238,11 @@ export async function deleteEntryGroup(
   groupId: string,
 ): Promise<ServiceResult<{ deletedCount: number; deletedAt: number }>> {
   try {
-    let deletedCount = 0;
-    const now = Date.now();
-
-    await db.transaction("rw", [...COMPOSABLE_TABLES, db._syncQueue], async () => {
-      deletedCount = await tombstoneGroupInTx(groupId, now);
-    });
-
-    schedulePush();
-    return ok({ deletedCount, deletedAt: now });
+    const { deletedCount, deletedAt } = await syncedWrite(COMPOSABLE_TABLES, async (w) => ({
+      deletedCount: await tombstoneGroup(w, groupId),
+      deletedAt: w.now,
+    }));
+    return ok({ deletedCount, deletedAt });
   } catch (e) {
     return err("Failed to delete entry group", e);
   }
@@ -300,14 +259,9 @@ export async function undoDeleteEntryGroup(
   deletedAt: number,
 ): Promise<ServiceResult<{ restoredCount: number }>> {
   try {
-    let restoredCount = 0;
-    const now = Date.now();
-
-    await db.transaction("rw", [...COMPOSABLE_TABLES, db._syncQueue], async () => {
-      restoredCount = await restoreGroupInTx(groupId, deletedAt, now);
-    });
-
-    schedulePush();
+    const restoredCount = await syncedWrite(COMPOSABLE_TABLES, (w) =>
+      restoreGroup(w, groupId, deletedAt),
+    );
     return ok({ restoredCount });
   } catch (e) {
     return err("Failed to undo delete entry group", e);
@@ -326,24 +280,16 @@ export async function deleteEatingEntry(
   eatingId: string,
 ): Promise<ServiceResult<{ deletedCount: number; deletedAt: number }>> {
   try {
-    let deletedCount = 0;
-    const now = Date.now();
-
-    await db.transaction("rw", [...COMPOSABLE_TABLES, db._syncQueue], async () => {
+    const { deletedCount, deletedAt } = await syncedWrite(COMPOSABLE_TABLES, async (w) => {
       const eating = await db.eatingRecords.get(eatingId);
       if (!eating) throw new Error("Eating record not found");
 
-      if (eating.groupId) {
-        deletedCount = await tombstoneGroupInTx(eating.groupId, now);
-      } else if (isLive(eating)) {
-        await db.eatingRecords.update(eatingId, { deletedAt: now, updatedAt: now });
-        await enqueueInsideTx("eatingRecords", eatingId, "upsert");
-        deletedCount = 1;
-      }
+      let count = 0;
+      if (eating.groupId) count = await tombstoneGroup(w, eating.groupId);
+      else if (await w.tombstone("eatingRecords", eatingId)) count = 1;
+      return { deletedCount: count, deletedAt: w.now };
     });
-
-    schedulePush();
-    return ok({ deletedCount, deletedAt: now });
+    return ok({ deletedCount, deletedAt });
   } catch (e) {
     return err("Failed to delete eating entry", e);
   }
@@ -355,23 +301,14 @@ export async function undoDeleteEatingEntry(
   deletedAt: number,
 ): Promise<ServiceResult<{ restoredCount: number }>> {
   try {
-    let restoredCount = 0;
-    const now = Date.now();
-
-    await db.transaction("rw", [...COMPOSABLE_TABLES, db._syncQueue], async () => {
+    const restoredCount = await syncedWrite(COMPOSABLE_TABLES, async (w) => {
       const eating = await db.eatingRecords.get(eatingId);
       if (!eating) throw new Error("Eating record not found");
 
-      if (eating.groupId) {
-        restoredCount = await restoreGroupInTx(eating.groupId, deletedAt, now);
-      } else if (eating.deletedAt === deletedAt) {
-        await db.eatingRecords.update(eatingId, { deletedAt: null, updatedAt: now });
-        await enqueueInsideTx("eatingRecords", eatingId, "upsert");
-        restoredCount = 1;
-      }
+      if (eating.groupId) return restoreGroup(w, eating.groupId, deletedAt);
+      if (eating.deletedAt !== deletedAt) return 0;
+      return (await w.restore("eatingRecords", eatingId)) ? 1 : 0;
     });
-
-    schedulePush();
     return ok({ restoredCount });
   } catch (e) {
     return err("Failed to undo delete eating entry", e);
@@ -390,30 +327,25 @@ export async function updateEatingEntry(
   updates: { timestamp?: number; note?: string | undefined; grams?: number },
 ): Promise<ServiceResult<void>> {
   try {
-    const now = Date.now();
-
-    await db.transaction("rw", [...COMPOSABLE_TABLES, db._syncQueue], async () => {
+    await syncedWrite(COMPOSABLE_TABLES, async (w) => {
       const eating = await db.eatingRecords.get(eatingId);
       if (!eating) throw new Error("Eating record not found");
 
-      // Dexie's update accepts undefined to clear optional fields, but
-      // exactOptionalPropertyTypes rejects that on Partial<EatingRecord>.
-      const eatingUpdates: Record<string, unknown> = { updatedAt: now };
+      const eatingUpdates: SyncedChanges<"eatingRecords"> = {};
       if (updates.timestamp !== undefined) eatingUpdates.timestamp = updates.timestamp;
+      // An `undefined` note clears it.
       if ("note" in updates) eatingUpdates.note = updates.note;
       if (updates.grams !== undefined) {
         const wholeGrams = roundGrams(updates.grams);
         if (wholeGrams !== undefined) eatingUpdates.grams = wholeGrams;
       }
-      await db.eatingRecords.update(eatingId, eatingUpdates);
-      await enqueueInsideTx("eatingRecords", eatingId, "upsert");
+      await w.patch("eatingRecords", eatingId, eatingUpdates);
 
       if (eating.groupId && updates.timestamp !== undefined) {
-        await retimeGroupInTx(eating.groupId, updates.timestamp, now);
+        await retimeGroup(w, eating.groupId, updates.timestamp);
       }
     });
 
-    schedulePush();
     return ok(undefined);
   } catch (e) {
     return err("Failed to update eating entry", e);
@@ -511,22 +443,16 @@ export async function syncEatingGroup(
 ): Promise<ServiceResult<void>> {
   try {
     const fields = syncFields();
-    const now = fields.updatedAt;
 
-    await db.transaction("rw", [...COMPOSABLE_TABLES, db._syncQueue], async () => {
-      // Every intake row this function writes has to reach the sync engine.
-      // Without that, a food-card edit stayed local: a later full pull would
-      // silently revert the amounts and resurrect the duplicate rows the
-      // reconciliation below tombstones.
-      const touchedIntakeIds = new Set<string>();
-      const addIntake = async (record: IntakeRecord) => {
-        await db.intakeRecords.add(record);
-        touchedIntakeIds.add(record.id);
-      };
-      const patchIntake = async (id: string, updates: Record<string, unknown>) => {
-        await db.intakeRecords.update(id, updates);
-        touchedIntakeIds.add(id);
-      };
+    await syncedWrite(COMPOSABLE_TABLES, async (w) => {
+      // Every intake row this function writes goes through the synced write.
+      // A food-card edit that stayed local was reverted by a later full pull,
+      // which also resurrected the duplicate rows the reconciliation below
+      // tombstones.
+      const addIntake = (record: IntakeRecord) => w.insert("intakeRecords", record);
+      const patchIntake = (id: string, updates: SyncedChanges<"intakeRecords">) =>
+        w.patch("intakeRecords", id, updates);
+      const removeIntake = (id: string) => w.tombstone("intakeRecords", id);
 
       const eating = await db.eatingRecords.get(eatingId);
       if (!eating) throw new Error("Eating record not found");
@@ -543,17 +469,14 @@ export async function syncEatingGroup(
       }
 
       // ── Update the eating record itself ──
-      // Note: Dexie's update accepts undefined to clear optional fields,
-      // but exactOptionalPropertyTypes rejects that on Partial<EatingRecord>.
-      const eatingUpdates: Record<string, unknown> = {
+      // An `undefined` note or grams clears the field.
+      const eatingUpdates: SyncedChanges<"eatingRecords"> = {
         timestamp: patch.timestamp,
         note: patch.note,
         grams: roundGrams(patch.grams),
-        updatedAt: now,
       };
       if (!eating.groupId && groupId) eatingUpdates.groupId = groupId;
-      await db.eatingRecords.update(eatingId, eatingUpdates);
-      await enqueueInsideTx("eatingRecords", eatingId, "upsert");
+      await w.patch("eatingRecords", eatingId, eatingUpdates);
 
       if (!groupId) return; // Nothing else to sync
 
@@ -591,10 +514,9 @@ export async function syncEatingGroup(
         : undefined;
       if (patch.sodiumMg > 0) {
         if (existingSalt) {
-          const sodiumUpdates: Record<string, unknown> = {
+          const sodiumUpdates: SyncedChanges<"intakeRecords"> = {
             amount: patch.sodiumMg,
             timestamp: patch.timestamp,
-            updatedAt: now,
           };
           if (entryFields) {
             sodiumUpdates.source = sodiumSource;
@@ -624,16 +546,10 @@ export async function syncEatingGroup(
           await addIntake(record);
         }
       } else if (existingSalt) {
-        await patchIntake(existingSalt.id, {
-          deletedAt: now,
-          updatedAt: now,
-        });
+        await removeIntake(existingSalt.id);
       }
       for (const dup of extraSalts) {
-        await patchIntake(dup.id, {
-          deletedAt: now,
-          updatedAt: now,
-        });
+        await removeIntake(dup.id);
       }
 
       // ── Water content intake ──
@@ -641,10 +557,9 @@ export async function syncEatingGroup(
         const waterNote = patch.note;
         if (existingWater) {
           // Don't clear an existing note when the patch doesn't carry one.
-          const waterUpdates: Record<string, unknown> = {
+          const waterUpdates: SyncedChanges<"intakeRecords"> = {
             amount: patch.waterMl,
             timestamp: patch.timestamp,
-            updatedAt: now,
             ...(waterNote !== undefined && { note: waterNote }),
           };
           await patchIntake(existingWater.id, waterUpdates);
@@ -663,16 +578,10 @@ export async function syncEatingGroup(
           await addIntake(record);
         }
       } else if (existingWater) {
-        await patchIntake(existingWater.id, {
-          deletedAt: now,
-          updatedAt: now,
-        });
+        await removeIntake(existingWater.id);
       }
       for (const dup of extraWaters) {
-        await patchIntake(dup.id, {
-          deletedAt: now,
-          updatedAt: now,
-        });
+        await removeIntake(dup.id);
       }
 
       // ── Sugar intake ──
@@ -684,7 +593,6 @@ export async function syncEatingGroup(
             await patchIntake(existingSugar.id, {
               amount: patch.sugarG,
               timestamp: patch.timestamp,
-              updatedAt: now,
             });
           } else {
             const record: IntakeRecord = {
@@ -700,16 +608,10 @@ export async function syncEatingGroup(
             await addIntake(record);
           }
         } else if (existingSugar) {
-          await patchIntake(existingSugar.id, {
-            deletedAt: now,
-            updatedAt: now,
-          });
+          await removeIntake(existingSugar.id);
         }
         for (const dup of extraSugars) {
-          await patchIntake(dup.id, {
-            deletedAt: now,
-            updatedAt: now,
-          });
+          await removeIntake(dup.id);
         }
       }
 
@@ -721,7 +623,6 @@ export async function syncEatingGroup(
             await patchIntake(existingPotassium.id, {
               amount: patch.potassiumMg,
               timestamp: patch.timestamp,
-              updatedAt: now,
             });
           } else {
             const record: IntakeRecord = {
@@ -737,29 +638,18 @@ export async function syncEatingGroup(
             await addIntake(record);
           }
         } else if (existingPotassium) {
-          await patchIntake(existingPotassium.id, {
-            deletedAt: now,
-            updatedAt: now,
-          });
+          await removeIntake(existingPotassium.id);
         }
         for (const dup of extraPotassiums) {
-          await patchIntake(dup.id, {
-            deletedAt: now,
-            updatedAt: now,
-          });
+          await removeIntake(dup.id);
         }
-      }
-
-      for (const id of touchedIntakeIds) {
-        await enqueueInsideTx("intakeRecords", id, "upsert");
       }
 
       // Rows the patch didn't address (a sugar row while the tracker is off,
       // a substance logged with the meal) still move with it.
-      await retimeGroupInTx(groupId, patch.timestamp, now);
+      await retimeGroup(w, groupId, patch.timestamp);
     });
 
-    schedulePush();
     return ok(undefined);
   } catch (e) {
     return err("Failed to sync eating group", e);

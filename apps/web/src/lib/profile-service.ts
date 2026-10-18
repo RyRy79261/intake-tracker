@@ -7,7 +7,7 @@
  * data clinically.
  *
  * The table is treated as a singleton — `getUserProfile` returns the most
- * recently updated active row — but every write goes through `writeWithSync`
+ * recently updated active row — but every write is a synced write
  * so the profile backs up and cloud-syncs like any other record.
  */
 
@@ -15,11 +15,10 @@ import { db, type UserProfile } from "@/lib/db";
 import { ok, err } from "@intake/core/service";
 import type { ServiceResult } from "@intake/types/service";
 import { generateId, getDeviceId } from "@/lib/utils";
-import { writeWithSync } from "@/lib/sync-queue";
-import { schedulePush } from "@/lib/sync-engine";
 import { getSyncAccountId } from "@/lib/sync-account";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useSyncStatusStore } from "@/stores/sync-status-store";
+import { syncedWrite } from "@/lib/synced-write";
 
 /** Maximum number of conditions a profile can hold. */
 export const MAX_CONDITIONS = 20;
@@ -119,11 +118,7 @@ export async function saveUserProfile(
       }),
       updatedAt: Date.now(),
     };
-    await writeWithSync("userProfile", "upsert", async () => {
-      await db.userProfile.put(next);
-      return next;
-    });
-    schedulePush();
+    await syncedWrite(["userProfile"], (w) => w.put("userProfile", next));
     return ok(next);
   } catch (e) {
     return err("Failed to save profile", e);
