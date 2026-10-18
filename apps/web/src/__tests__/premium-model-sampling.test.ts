@@ -27,6 +27,13 @@
  * the defaults differ (Opus 5.5 `medium`, Sonnet 5.5 `high`), so every
  * request on those tiers sets `output_config.effort` itself.
  *
+ * The nine AI task routes no longer build requests themselves: the AI task
+ * module (`app/api/ai/_shared/ai-task.ts`) builds one request literal for all
+ * of them from the tier policy, and `ai-tier-policy.test.ts` checks what it
+ * really sends, per route. This scan still covers that one literal (as a
+ * `CLAUDE_MODELS[tier]` request on the quality/premium tiers) and every
+ * request built elsewhere: deep insights and the bug report.
+ *
  * A source scan rather than a per-route runtime test: the failure mode is
  * "someone adds `temperature` back to a request", and that is a property of
  * the source. It parses with the TypeScript compiler rather than matching
@@ -66,9 +73,18 @@ function sourceFiles(dir: string): string[] {
   return out;
 }
 
+/** Tier name for a `CLAUDE_MODELS[spec.tier]` request: an AI task's tier. */
+const TASK_TIER = "task";
+
+/** Tiers whose requests must follow the Opus 5.5 / Sonnet 5.5 rules. */
+const isStrictTier = (tier: string) =>
+  tier === "quality" || tier === "premium" || tier === TASK_TIER;
+
 /**
  * `model: CLAUDE_MODELS.<tier>` — the property that marks a request. Returns
  * the tier, or null when the property doesn't name a registry model.
+ * `CLAUDE_MODELS[<expr>]` is the AI task module's request, whose tier is
+ * always quality or premium (`AiTier`); it is reported as {@link TASK_TIER}.
  */
 function modelTier(prop: ts.ObjectLiteralElementLike): string | null {
   if (!ts.isPropertyAssignment(prop)) return null;
@@ -80,6 +96,13 @@ function modelTier(prop: ts.ObjectLiteralElementLike): string | null {
     value.expression.text === "CLAUDE_MODELS"
   ) {
     return value.name.text;
+  }
+  if (
+    ts.isElementAccessExpression(value) &&
+    ts.isIdentifier(value.expression) &&
+    value.expression.text === "CLAUDE_MODELS"
+  ) {
+    return TASK_TIER;
   }
   return null;
 }
@@ -168,28 +191,20 @@ describe("Claude requests only pass parameters the pinned models accept", () => 
   });
 
   it("finds the call sites it is meant to guard", () => {
-    const all = parsed.flatMap(({ source }) => requestLiterals(source));
     // A rename that silently empties this scan would make the suite pass
-    // while guarding nothing.
-    const files = parsed
-      .filter(({ source }) => requestLiterals(source).some((r) => r.tier === "premium"))
-      .map(({ file }) => path.relative(SRC, file));
-    expect(files).toContain(path.join("app", "api", "ai", "medicine-about", "route.ts"));
-    expect(all.filter((r) => r.tier === "premium").length).toBeGreaterThanOrEqual(5);
-    expect(all.filter((r) => r.tier === "quality").length).toBeGreaterThanOrEqual(4);
-    const qualityFiles = parsed
-      .filter(({ source }) => requestLiterals(source).some((r) => r.tier === "quality"))
-      .map(({ file }) => path.relative(SRC, file))
+    // while guarding nothing. Every request site, by tier: a new one has to
+    // be added here, and a moved one can't drop out of the scans below
+    // unnoticed.
+    const sites = parsed
+      .flatMap(({ file, source }) =>
+        requestLiterals(source).map((r) => `${r.tier} ${path.relative(SRC, file)}`),
+      )
       .sort();
-    // Every quality-tier route, by name: a new one has to be added here, and
-    // a moved one can't drop out of the scans below unnoticed.
-    expect(qualityFiles).toEqual(
+    expect(sites).toEqual(
       [
-        path.join("app", "api", "ai", "nutrient-analysis", "route.ts"),
-        path.join("app", "api", "ai", "parse", "route.ts"),
-        path.join("app", "api", "ai", "substance-lookup", "route.ts"),
-        path.join("app", "api", "ai", "voice-parse", "route.ts"),
-        path.join("app", "api", "analytics", "insights", "route.ts"),
+        `${TASK_TIER} ${path.join("app", "api", "ai", "_shared", "ai-task.ts")}`,
+        `premium ${path.join("lib", "server", "deep-insight-request.ts")}`,
+        `fast ${path.join("app", "api", "bug-report", "route.ts")}`,
       ].sort(),
     );
   });
@@ -234,7 +249,7 @@ describe("Claude requests only pass parameters the pinned models accept", () => 
 
     for (const { file, source } of parsed) {
       for (const { literal, tier } of requestLiterals(source)) {
-        if (tier !== "quality" && tier !== "premium") continue;
+        if (!isStrictTier(tier)) continue;
         for (const prop of literal.properties) {
           if (propertyName(prop) !== "tool_choice") continue;
           const type = toolChoiceType(prop);
@@ -260,7 +275,7 @@ describe("Claude requests only pass parameters the pinned models accept", () => 
 
     for (const { file, source } of parsed) {
       for (const { literal, tier } of requestLiterals(source)) {
-        if (tier !== "quality" && tier !== "premium") continue;
+        if (!isStrictTier(tier)) continue;
         const line = source.getLineAndCharacterOfPosition(literal.getStart()).line + 1;
         const where = `${path.relative(SRC, file)}:${line}`;
 
@@ -302,7 +317,7 @@ describe("Claude requests only pass parameters the pinned models accept", () => 
 
     for (const { file, source } of parsed) {
       for (const { literal, tier } of requestLiterals(source)) {
-        if (tier !== "quality" && tier !== "premium") continue;
+        if (!isStrictTier(tier)) continue;
         for (const prop of literal.properties) {
           if (propertyName(prop) !== "max_tokens" || !ts.isPropertyAssignment(prop)) continue;
           // Only a literal budget is checkable; a computed one is left alone.

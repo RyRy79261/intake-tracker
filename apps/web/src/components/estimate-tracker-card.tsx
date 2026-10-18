@@ -20,15 +20,21 @@ import { RecentEntriesList, InlineEditFormShell } from "@/components/recent-entr
 import { useDeleteWithToast } from "@/hooks/use-delete-with-toast";
 import { useEditRecord } from "@/hooks/use-edit-record";
 import { useToast } from "@intake/ui/use-toast";
-import { type DefecationRecord } from "@/lib/db";
-import { useDefecationRecords, useDefecationRecordsByDateRange, useAddDefecation, useDeleteDefecation, useUpdateDefecation } from "@/hooks/use-defecation-queries";
+import {
+  useEstimateRecords,
+  useEstimateRecordsBetween,
+  useAddEstimateRecord,
+  useDeleteEstimateRecord,
+  useUpdateEstimateRecord,
+  removeQuickLoggedEstimate,
+} from "@/hooks/use-estimate-tracker";
+import { ESTIMATE_TRACKERS, type EstimateRecord, type EstimateTrackerId } from "@/lib/estimate-trackers";
 import {
   getCurrentDateTimeLocal,
   dateTimeLocalToTimestamp,
 } from "@/lib/date-utils";
-import { DEFECATION_AMOUNT_OPTIONS } from "@/lib/constants";
 import { useSettings } from "@/hooks/use-settings";
-import { useQuickLogGuard, removeQuickLoggedRecord } from "@/hooks/use-quick-log-guard";
+import { useQuickLogGuard } from "@/hooks/use-quick-log-guard";
 import { showUndoToast } from "@/components/medications/undo-toast";
 import {
   NO_ESTIMATE_VALUE,
@@ -37,29 +43,33 @@ import {
 } from "@intake/core/record-schemas";
 import { useFieldId, useOnLogged } from "@/components/log-form-scope";
 
-const AMOUNT_OPTIONS = DEFECATION_AMOUNT_OPTIONS;
-
-const theme = CARD_THEMES.defecation;
-
-export function DefecationCard() {
+/**
+ * The Home card of one estimate tracker (urination or defecation): one-tap
+ * logging by amount, a details form (amount, note, time), and the recent
+ * entries with inline edit and delete.
+ */
+export function EstimateTrackerCard({ tracker }: { tracker: EstimateTrackerId }) {
+  const { label, amountOptions: AMOUNT_OPTIONS, notePlaceholder, defaultAmountKey } = ESTIMATE_TRACKERS[tracker];
+  const theme = CARD_THEMES[tracker];
   const onLogged = useOnLogged();
   const fid = useFieldId();
   const { toast } = useToast();
   const settings = useSettings();
+  const defaultAmount: string = settings[defaultAmountKey] || "";
   const [showDetails, setShowDetails] = useState(false);
-  const [amount, setAmount] = useState<string>(settings.defecationDefaultAmount || "");
+  const [amount, setAmount] = useState<string>(defaultAmount);
   const [note, setNote] = useState("");
   const [detailTime, setDetailTime] = useState(getCurrentDateTimeLocal());
   const [submittingAmount, setSubmittingAmount] = useState<string | null>(null);
   const [detailError, setDetailError] = useState<string | null>(null);
   const quickLogGuard = useQuickLogGuard();
-  const recentRecords = useDefecationRecords(5);
+  const recentRecords = useEstimateRecords(tracker, 5);
   const [todayStart, todayEnd] = useLogicalTodayRange();
-  const todayCount = useDefecationRecordsByDateRange(todayStart, todayEnd).length;
-  const addMutation = useAddDefecation();
-  const deleteMutation = useDeleteDefecation();
-  const updateMutation = useUpdateDefecation();
-  const { deletingId, handleDelete } = useDeleteWithToast(deleteMutation, "Defecation record removed", { undoToast: true });
+  const todayCount = useEstimateRecordsBetween(tracker, todayStart, todayEnd).length;
+  const addMutation = useAddEstimateRecord(tracker);
+  const deleteMutation = useDeleteEstimateRecord(tracker);
+  const updateMutation = useUpdateEstimateRecord(tracker);
+  const { deletingId, handleDelete } = useDeleteWithToast(deleteMutation, `${label} record removed`, { undoToast: true });
 
   // Extra edit field (amountEstimate is record-specific)
   const [editAmountEstimate, setEditAmountEstimate] = useState("");
@@ -73,7 +83,7 @@ export function DefecationCard() {
     openEdit,
     closeEdit,
     handleEditSubmit,
-  } = useEditRecord<DefecationRecord>({
+  } = useEditRecord<EstimateRecord>({
     onOpen: (record) => setEditAmountEstimate(record.amountEstimate || ""),
     // `null` clears the estimate / note (and the clear syncs).
     buildUpdates: (timestamp, note) => ({
@@ -100,10 +110,10 @@ export function DefecationCard() {
       // One tap commits immediately, so offer Undo for a mis-tap.
       showUndoToast({
         title: "Logged",
-        description: `Defecation (${amountValue}) recorded`,
+        description: `${label} (${amountValue}) recorded`,
         onUndo: () => {
           quickLogGuard.reset();
-          void removeQuickLoggedRecord("defecation", record.id);
+          void removeQuickLoggedEstimate(tracker, record.id);
         },
       });
       onLogged();
@@ -153,12 +163,12 @@ export function DefecationCard() {
       });
       toast({
         title: "Logged",
-        description: "Defecation recorded",
+        description: `${label} recorded`,
         variant: "success",
       });
       onLogged();
       setShowDetails(false);
-      setAmount(settings.defecationDefaultAmount || "");
+      setAmount(defaultAmount);
       setNote("");
       setDetailTime(getCurrentDateTimeLocal());
     } catch {
@@ -175,7 +185,7 @@ export function DefecationCard() {
       domain={theme.domain}
       icon={theme.icon}
       title={theme.label}
-      data-testid="defecation-card"
+      data-testid={`${tracker}-card`}
       right={
         latestRecord ? (
           <>
@@ -226,19 +236,19 @@ export function DefecationCard() {
             </Select>
           </div>
           <div className="space-y-1">
-            <Label htmlFor={fid("defecation-note")} className="text-[0.8125rem] text-muted-foreground">Note (optional)</Label>
+            <Label htmlFor={fid(`${tracker}-note`)} className="text-[0.8125rem] text-muted-foreground">Note (optional)</Label>
             <Textarea
-              id={fid("defecation-note")}
-              placeholder="e.g. consistency, urgency"
+              id={fid(`${tracker}-note`)}
+              placeholder={notePlaceholder}
               value={note}
               onChange={(e) => setNote(e.target.value)}
               className="min-h-[60px]"
             />
           </div>
           <div className="space-y-1">
-            <Label htmlFor={fid("defecation-time")} className="text-[0.8125rem] text-muted-foreground">When</Label>
+            <Label htmlFor={fid(`${tracker}-time`)} className="text-[0.8125rem] text-muted-foreground">When</Label>
             <Input
-              id={fid("defecation-time")}
+              id={fid(`${tracker}-time`)}
               type="datetime-local"
               value={detailTime}
               onChange={(e) => setDetailTime(e.target.value)}

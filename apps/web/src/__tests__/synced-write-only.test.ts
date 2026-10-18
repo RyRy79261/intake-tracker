@@ -23,9 +23,6 @@ const ALLOWED: Record<string, string> = {
     "caches a deep report the server already holds; queueing it would push it back",
   "lib/audit.ts": "local retention purge of audit rows (not called by the app)",
   "components/debug-panel.tsx": "Debug panel: clear the local audit log",
-  // Still on writeWithSync; the estimate-tracker refactor replaces both.
-  "lib/urination-service.ts": "not yet moved",
-  "lib/defecation-service.ts": "not yet moved",
 };
 
 const SYNCED_TABLES = [

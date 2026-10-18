@@ -25,7 +25,7 @@ import {
 } from "@/lib/voice-time";
 import { getDeviceTimezone } from "@/lib/timezone";
 import { useSettingsStore } from "@/stores/settings-store";
-import { apiFetch } from "@/lib/api-fetch";
+import { aiClient } from "@/lib/ai-client";
 import { useQueryClient } from "@tanstack/react-query";
 
 type RowState = {
@@ -154,41 +154,20 @@ export function VoicePanel({ onCommitted, initialClip }: VoicePanelProps) {
         const form = new FormData();
         form.append("audio", blob, `clip.${ext}`);
 
-        const transcribeRes = await apiFetch("/api/ai/voice-transcribe", {
-          method: "POST",
-          body: form,
-        });
-        if (!transcribeRes) {
-          setStage("idle");
-          return;
-        }
-        if (!transcribeRes.ok) {
-          const j = await transcribeRes.json().catch(() => ({}));
-          throw new Error(j.error || `Transcribe failed (${transcribeRes.status})`);
-        }
-        const { text } = (await transcribeRes.json()) as { text: string };
+        const transcribed = await aiClient.call("/api/ai/voice-transcribe", form);
+        if (!transcribed.ok) throw new Error(transcribed.error.message);
+        const { text } = transcribed.data;
         setTranscript(text);
 
         setStage("parsing");
-        const parseRes = await apiFetch("/api/ai/voice-parse", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          // The device's clock goes with the transcript: the parser cannot
-          // date "yesterday at 8pm" without knowing what today is here.
-          body: JSON.stringify({
-            transcript: text,
-            now: clientNowForParse(spokenAt, timeZone),
-          }),
+        // The device's clock goes with the transcript: the parser cannot
+        // date "yesterday at 8pm" without knowing what today is here.
+        const parsed = await aiClient.call("/api/ai/voice-parse", {
+          transcript: text,
+          now: clientNowForParse(spokenAt, timeZone),
         });
-        if (!parseRes) {
-          setStage("idle");
-          return;
-        }
-        if (!parseRes.ok) {
-          const j = await parseRes.json().catch(() => ({}));
-          throw new Error(j.error || `Parse failed (${parseRes.status})`);
-        }
-        const data = (await parseRes.json()) as VoiceParseResponse;
+        if (!parsed.ok) throw new Error(parsed.error.message);
+        const data = parsed.data;
         // Collapse a drink the parser split into two items before the review
         // list is built, so the user approves one row per drink instead of
         // having a correction applied invisibly at save time (issue #322).
@@ -276,20 +255,12 @@ export function VoicePanel({ onCommitted, initialClip }: VoicePanelProps) {
       if (!isRefreshable(item) || item.description.trim() === "") return;
       patchRowById(row.id, { refreshing: true });
       try {
-        const res = await apiFetch("/api/ai/voice-parse", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ transcript: refreshText(item), kind: item.kind }),
+        const res = await aiClient.call("/api/ai/voice-parse", {
+          transcript: refreshText(item),
+          kind: item.kind,
         });
-        if (!res) {
-          patchRowById(row.id, { refreshing: false });
-          return;
-        }
-        if (!res.ok) {
-          const j = await res.json().catch(() => ({}));
-          throw new Error(j.error || `Refresh failed (${res.status})`);
-        }
-        const data = (await res.json()) as VoiceParseResponse;
+        if (!res.ok) throw new Error(res.error.message);
+        const data = res.data;
         const found = data.items.find((i) => i.kind === item.kind);
         if (!found) throw new Error("The AI found no matching item. Check the description.");
         // The row keeps the time it already has — a refresh fixes what the

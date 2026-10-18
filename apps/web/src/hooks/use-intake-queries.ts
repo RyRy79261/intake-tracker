@@ -8,8 +8,6 @@ import {
   updateIntakeRecord,
   deleteIntakeRecord,
   undoDeleteIntakeRecord,
-  getTotalInLast24Hours,
-  getDailyTotal,
   getRecentRecords,
   getRecordsByDateRange,
   getSaltTotalsByGroupIds,
@@ -19,34 +17,8 @@ import {
 import { unwrap } from "@intake/core/service";
 import { withDbRecovery } from "@/lib/db-recovery";
 import { useUndoDeleteMutation } from "@/hooks/use-undo-delete-mutation";
-import { useSettingsStore } from "@/stores/settings-store";
+import { useDailyTotals, intakeMetric } from "@/hooks/use-daily-totals";
 import { useNowTick } from "@intake/ui/use-now-tick";
-
-// Re-exported from the canonical home in date-utils so existing consumers
-// (e.g. text-metrics) keep importing it from the intake hooks module.
-export { getDayStartTimestamp } from "@/lib/date-utils";
-
-
-/**
- * Hook to get the total intake for a type in the last 24 hours.
- * Uses useLiveQuery for reactive updates. Re-runs every 60s via tick dep
- * to handle rolling 24h window boundary.
- */
-export function useIntakeTotal(type: "water" | "salt" | "sugar" | "potassium") {
-  const tick = useNowTick();
-  return useLiveQuery(() => getTotalInLast24Hours(type), [type, tick], 0);
-}
-
-/**
- * Hook to get the total intake for a type since the configured day start.
- * Uses the dayStartHour from settings (default 2am).
- * Re-runs every 60s via tick dep.
- */
-export function useDailyIntakeTotal(type: "water" | "salt" | "sugar" | "potassium") {
-  const dayStartHour = useSettingsStore((state) => state.dayStartHour);
-  const tick = useNowTick();
-  return useLiveQuery(() => getDailyTotal(type, dayStartHour), [type, dayStartHour, tick], 0);
-}
 
 /**
  * Hook to get recent records for a type (last 3 entries).
@@ -108,8 +80,11 @@ export function useDeleteIntake() {
  * Drop-in replacement for the old useIntake hook.
  */
 export function useIntake(type: "water" | "salt" | "sugar" | "potassium") {
-  const rollingTotal = useIntakeTotal(type);
-  const dailyTotal = useDailyIntakeTotal(type);
+  // Totals come from the Daily Totals module, so every card agrees with the
+  // Today gadget on what counts as today.
+  const totals = useDailyTotals().metrics[intakeMetric(type)];
+  const dailyTotal = totals.today.value;
+  const rollingTotal = totals.rolling24h;
   const addMutation = useAddIntake();
   const deleteMutation = useDeleteIntake();
 
@@ -129,11 +104,11 @@ export function useIntake(type: "water" | "salt" | "sugar" | "potassium") {
 
   return {
     // Daily total (since day start) - primary metric for budget tracking
-    dailyTotal: dailyTotal ?? 0,
+    dailyTotal,
     // Rolling 24h total - secondary metric for safety/pacing
-    rollingTotal: rollingTotal ?? 0,
+    rollingTotal,
     // Legacy: keep 'total' pointing to daily for backward compat, but prefer explicit names
-    total: dailyTotal ?? 0,
+    total: dailyTotal,
     addRecord,
     removeRecord,
   };

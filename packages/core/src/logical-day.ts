@@ -86,11 +86,27 @@ export function logicalDayKey(ts: number, dayStartHour: number, tz: string): str
   return w.hour < dayStartHour ? shiftDayKey(key, -1) : key;
 }
 
-/** The instant a logical day starts: `dayStartHour`:00 on `key`'s date in `tz`. */
+/**
+ * The instant a logical day starts: `dayStartHour`:00 on `key`'s date in `tz`.
+ *
+ * On a fall-back day that wall time happens twice; the day starts at the
+ * first one, so it agrees with `logicalDayKey` (which puts the whole repeated
+ * hour on the new day) and no record falls between two days. On a
+ * spring-forward day that skips the hour, it starts when the clock jumps.
+ */
 export function logicalDayStart(key: string, dayStartHour: number, tz: string): number {
   const [y, m, d] = key.split("-").map(Number);
   const wall = Date.UTC(y!, m! - 1, d!, dayStartHour);
-  // Two passes settle the offset either side of a DST change.
+  // Each offset in force near the wall time gives one candidate; a candidate
+  // is real when the zone has that offset at it. Take the earliest real one.
+  let start = Infinity;
+  for (const probe of [wall - 12 * 3_600_000, wall, wall + 12 * 3_600_000]) {
+    const offset = tzOffset(probe, tz);
+    const candidate = wall - offset;
+    if (tzOffset(candidate, tz) === offset && candidate < start) start = candidate;
+  }
+  if (start !== Infinity) return start;
+  // A skipped wall time: two passes settle on the instant the clock jumps.
   const guess = wall - tzOffset(wall, tz);
   return wall - tzOffset(guess, tz);
 }

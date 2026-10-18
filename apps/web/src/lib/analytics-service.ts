@@ -4,9 +4,8 @@ import {
   getWeightRecordsByDateRange,
   getBloodPressureRecordsByDateRange,
 } from "@/lib/health-service";
-import { getUrinationRecordsByDateRange } from "@/lib/urination-service";
+import { getEstimateRecordsBetween } from "@/lib/estimate-tracker-service";
 import { getEatingRecordsByDateRange } from "@/lib/eating-service";
-import { getDefecationRecordsByDateRange } from "@/lib/defecation-service";
 import { getSubstanceRecordsByDateRange as querySubstanceRecordsByDateRange } from "@/lib/substance-service";
 import { getDoseScheduleForDateRange } from "@/lib/dose-schedule-service";
 import type { SubstanceRecord } from "@/lib/db";
@@ -150,7 +149,7 @@ export async function getRecordsByDomain(
       }));
     }
     case "urination": {
-      const records = await getUrinationRecordsByDateRange(start, end);
+      const records = await getEstimateRecordsBetween("urination", start, end);
       return records.map((r) => ({
         timestamp: r.timestamp,
         value: URINATION_ESTIMATE_ML[r.amountEstimate ?? "medium"] ?? 300,
@@ -164,7 +163,7 @@ export async function getRecordsByDomain(
       }));
     }
     case "defecation": {
-      const records = await getDefecationRecordsByDateRange(start, end);
+      const records = await getEstimateRecordsBetween("defecation", start, end);
       return records.map((r) => ({
         timestamp: r.timestamp,
         value: 1,

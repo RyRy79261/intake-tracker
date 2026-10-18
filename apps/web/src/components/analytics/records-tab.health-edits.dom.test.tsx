@@ -7,9 +7,10 @@ import { RecordsTab } from "@/components/analytics/records-tab";
 import { renderWithFixtures } from "@/__tests__/react-test-utils";
 import {
   makeBloodPressureRecord,
-  makeDefecationRecord,
   makeWeightRecord,
 } from "@/__tests__/fixtures/db-fixtures";
+import { estimateSeed, estimateTable, makeEstimateRecord } from "@/__tests__/fixtures/estimate-tracker-fixtures";
+import { ESTIMATE_TRACKERS, ESTIMATE_TRACKER_IDS } from "@/lib/estimate-trackers";
 /* eslint-disable-next-line no-restricted-imports -- test asserts the stored rows */
 import { db } from "@/lib/db";
 import type { TimeRange } from "@intake/types/analytics";
@@ -87,22 +88,24 @@ describe("RecordsTab health record edits", () => {
     );
   });
 
-  it("defecation edit 'No estimate' clears the stored estimate", async () => {
+  it.each(ESTIMATE_TRACKER_IDS)("%s edit 'No estimate' clears the stored estimate and keeps the time", async (tracker) => {
     const user = userEvent.setup();
-    const seed = makeDefecationRecord({ amountEstimate: "large", timestamp: TS });
-    await renderWithFixtures(<RecordsTab range={RANGE} />, {
-      seed: { defecationRecords: [seed] },
-    });
+    const seed = makeEstimateRecord(tracker, { amountEstimate: "large", note: "x", timestamp: TS });
+    await renderWithFixtures(<RecordsTab range={RANGE} />, { seed: estimateSeed(tracker, [seed]) });
 
     await user.click(await screen.findByRole("button", { name: "Edit entry" }));
     const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByRole("heading", { name: `Edit ${ESTIMATE_TRACKERS[tracker].label} Entry` })).toBeInTheDocument();
     await user.click(within(dialog).getByRole("combobox"));
     await user.click(await screen.findByRole("option", { name: "No estimate" }));
     await user.click(within(dialog).getByRole("button", { name: "Save Changes" }));
 
-    await waitFor(async () =>
-      expect((await db.defecationRecords.get(seed.id))?.amountEstimate).toBeNull(),
-    );
+    await waitFor(async () => {
+      const stored = await estimateTable(tracker).get(seed.id);
+      expect(stored?.amountEstimate).toBeNull();
+      expect(stored?.note).toBe("x");
+      expect(stored?.timestamp).toBe(TS);
+    });
   });
 
   it("deleting a weight offers Undo", async () => {

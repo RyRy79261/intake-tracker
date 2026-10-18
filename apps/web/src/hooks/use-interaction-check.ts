@@ -1,54 +1,29 @@
 import { useState, useCallback, useRef, useSyncExternalStore } from "react";
 import { createKeyedTaskStore } from "@/lib/keyed-task-store";
-import { apiFetch } from "@/lib/api-fetch";
+import {
+  aiClient,
+  type InteractionCheckBody,
+  type InteractionResult,
+} from "@/lib/ai-client";
 import {
   getCachedEntry,
   setCache,
   interactionCacheKey,
 } from "@/lib/interaction-cache";
-import { readAiErrorMessage } from "@/lib/ai-error-message";
 import { useUpdatePrescription } from "@/hooks/use-medication-queries";
 import { buildInteractionCheck, legacyInteractionFields } from "@/lib/medicine-about";
 
 // --- Types ---
 
-export interface InteractionItem {
-  substance: string;
-  medication: string;
-  severity: "AVOID" | "CAUTION" | "OK";
-  description: string;
-}
+export type { InteractionItem, InteractionResult } from "@/lib/ai-client";
 
-export interface InteractionResult {
-  interactions: InteractionItem[];
-  drugClass?: string;
-  summary?: string;
-}
-
-interface ActivePrescription {
-  genericName: string;
-  drugClass?: string;
-}
-
-type CheckParams =
-  | {
-      mode: "conflict";
-      newMedication: string;
-      activePrescriptions: ActivePrescription[];
-    }
-  | {
-      mode: "lookup";
-      substance: string;
-      activePrescriptions: ActivePrescription[];
-    };
+type CheckParams = InteractionCheckBody;
+type ActivePrescription = CheckParams["activePrescriptions"][number];
 
 // --- useInteractionCheck ---
-
-/**
- * Client-side ceiling for one interaction check: the route's maxDuration
- * (60 s). Its own deadline (50 s) returns a JSON 504 before this fires.
- */
-const INTERACTION_CHECK_TIMEOUT_MS = 60_000;
+// The client stops a check at the route's maxDuration plus a grace (the
+// adapter's default); the route's own deadline (50 s) answers with a JSON
+// 504 before that.
 
 export function useInteractionCheck() {
   const [data, setData] = useState<InteractionResult | null>(null);
@@ -99,61 +74,36 @@ export function useInteractionCheck() {
     const controller = new AbortController();
     abortRef.current = controller;
 
-    // Armed before the request, so it covers the whole round trip: a timer
-    // started only once headers arrived never fired for a request the server
-    // did not answer. The route answers a slow model with a JSON 504 at its
-    // own 50 s deadline, so this only catches a request that got no answer.
-    const timeoutId = setTimeout(() => controller.abort(), INTERACTION_CHECK_TIMEOUT_MS);
-
     setIsLoading(true);
     setError(null);
     setData(null);
     setCachedAt(null);
 
-    try {
-      const response = await apiFetch("/api/ai/interaction-check", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(params),
-        signal: controller.signal,
-      });
+    const response = await aiClient.call("/api/ai/interaction-check", params, {
+      signal: controller.signal,
+    });
+    // Superseded by a newer check (or reset): that one owns the state now.
+    if (!response.ok && response.error.code === "CANCELLED") return null;
+    if (abortRef.current === controller) abortRef.current = null;
 
-      if (!response) {
-        // User dismissed sign-in
-        setIsLoading(false);
-        return null;
-      }
-
-      if (!response.ok) {
-        const body = await response.json().catch(() => ({}));
-        const msg = body.error ?? `Request failed (${response.status})`;
-        setError(msg);
-        setIsLoading(false);
-        return null;
-      }
-
-      const result: InteractionResult = await response.json();
-      setData(result);
-      setIsLoading(false);
-
-      // Cache lookup results
-      if (cacheKey) {
-        setCache(cacheKey, result);
-      }
-
-      return result;
-    } catch (err) {
-      if (err instanceof DOMException && err.name === "AbortError") {
-        setError("Interaction check timed out");
-      } else {
-        setError(err instanceof Error ? err.message : "Unknown error");
-      }
-
+    if (!response.ok) {
+      setError(
+        response.error.code === "AI_TIMEOUT" ? "Interaction check timed out" : response.error.message,
+      );
       setIsLoading(false);
       return null;
-    } finally {
-      clearTimeout(timeoutId);
     }
+
+    const result = response.data;
+    setData(result);
+    setIsLoading(false);
+
+    // Cache lookup results
+    if (cacheKey) {
+      setCache(cacheKey, result);
+    }
+
+    return result;
   }, []);
 
   return { check, data, isLoading, error, cachedAt, reset };
@@ -207,43 +157,26 @@ export function useRefreshInteractions(prescriptionId: string) {
       }
       const controller = new AbortController();
       refreshes.controllers.set(prescriptionId, controller);
-      let timedOut = false;
-      const timeoutId = setTimeout(() => {
-        timedOut = true;
-        controller.abort();
-      }, INTERACTION_CHECK_TIMEOUT_MS);
       set({ isRefreshing: true });
 
       try {
-        const response = await apiFetch("/api/ai/interaction-check", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            mode: "conflict" as const,
-            newMedication: genericName,
-            activePrescriptions,
-          }),
-          signal: controller.signal,
-        });
-
-        if (!response) {
-          // User dismissed sign-in
-          set({ isRefreshing: false });
-          return null;
-        }
+        const response = await aiClient.call(
+          "/api/ai/interaction-check",
+          { mode: "conflict", newMedication: genericName, activePrescriptions },
+          { signal: controller.signal },
+        );
+        // Superseded by a newer check: say nothing, it owns the state now.
+        if (controller.signal.aborted) return null;
         if (!response.ok) {
-          const msg =
-            response.status === 504
-              ? MSG_TIMEOUT
-              : await readAiErrorMessage(
-                  response,
-                  `Interaction check failed (${response.status})`,
-                );
-          set({ error: msg, isRefreshing: false });
+          const { code, message } = response.error;
+          set({
+            error: code === "AI_TIMEOUT" ? MSG_TIMEOUT : code === "OFFLINE" ? MSG_OFFLINE : message,
+            isRefreshing: false,
+          });
           return null;
         }
 
-        const result: InteractionResult = await response.json();
+        const result = response.data;
         const interactionCheck = buildInteractionCheck(
           result,
           activePrescriptions.map((p) => p.genericName),
@@ -260,23 +193,13 @@ export function useRefreshInteractions(prescriptionId: string) {
         set({ isRefreshing: false });
         return result;
       } catch (err) {
-        if (controller.signal.aborted) {
-          // Superseded by a newer check: say nothing, it owns the state now.
-          // A timeout says so.
-          if (timedOut) set({ error: MSG_TIMEOUT, isRefreshing: false });
-          return null;
-        }
-        if (typeof navigator !== "undefined" && navigator.onLine === false) {
-          set({ error: MSG_OFFLINE, isRefreshing: false });
-        } else {
-          set({
-            error: err instanceof Error ? err.message : "Interaction check failed",
-            isRefreshing: false,
-          });
-        }
+        // The prescription update failed.
+        set({
+          error: err instanceof Error ? err.message : "Interaction check failed",
+          isRefreshing: false,
+        });
         return null;
       } finally {
-        clearTimeout(timeoutId);
         if (refreshes.controllers.get(prescriptionId) === controller) {
           refreshes.controllers.delete(prescriptionId);
         }
