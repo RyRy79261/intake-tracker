@@ -3,8 +3,7 @@ import { db, type HealthRecordSource } from "@/lib/db";
 import { ok, err } from "@intake/core/service";
 import type { ServiceResult } from "@intake/types/service";
 import { generateId, syncFields } from "@/lib/utils";
-import { writeWithSync } from "@/lib/sync-queue";
-import { schedulePush } from "@/lib/sync-engine";
+import { syncedWrite } from "@/lib/synced-write";
 import {
   getActiveRecords,
   getRecordsBetween,
@@ -55,7 +54,7 @@ export async function addEstimateRecord(
   tracker: EstimateTrackerId,
   input: AddEstimateInput = {},
 ): Promise<ServiceResult<EstimateRecord>> {
-  const { name, table } = tableOf(tracker);
+  const { name } = tableOf(tracker);
   try {
     const amount = input.amountEstimate?.trim();
     const note = input.note?.trim();
@@ -67,11 +66,7 @@ export async function addEstimateRecord(
       ...(input.source !== undefined && { source: input.source }),
       ...syncFields(),
     };
-    await writeWithSync(name, "upsert", async () => {
-      await table.add(record);
-      return record;
-    });
-    schedulePush();
+    await syncedWrite([name], (w) => w.insert(name, record));
     return ok(record);
   } catch (e) {
     return err(`Failed to add ${noun(tracker)} record`, e);

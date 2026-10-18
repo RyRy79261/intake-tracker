@@ -3,7 +3,7 @@
  *
  * Each generated "AI Insights" summary is persisted here, giving the user a
  * history of past assessments and letting a fresh analysis optionally compare
- * against the previous one. Every write goes through `writeWithSync` so the
+ * against the previous one. Every write is a synced write (lib/synced-write.ts) so the
  * reports back up and cloud-sync like any other record.
  */
 
@@ -11,8 +11,7 @@ import { db, type InsightReport } from "@/lib/db";
 import { ok, err } from "@intake/core/service";
 import type { ServiceResult } from "@intake/types/service";
 import { generateId, getDeviceId } from "@/lib/utils";
-import { writeWithSync } from "@/lib/sync-queue";
-import { schedulePush } from "@/lib/sync-engine";
+import { syncedWrite } from "@/lib/synced-write";
 import type {
   AnalyticsInsightsRequest,
   PriorAssessment,
@@ -126,11 +125,7 @@ export async function saveInsightReport(
       deletedAt: null,
       deviceId: getDeviceId(),
     };
-    await writeWithSync("insightReports", "upsert", async () => {
-      await db.insightReports.put(record);
-      return record;
-    });
-    schedulePush();
+    await syncedWrite(["insightReports"], (w) => w.put("insightReports", record));
     return ok(record);
   } catch (e) {
     return err("Failed to save insight report", e);
@@ -195,18 +190,7 @@ export async function deleteInsightReport(
   id: string,
 ): Promise<ServiceResult<void>> {
   try {
-    const existing = await db.insightReports.get(id);
-    if (!existing || existing.deletedAt !== null) return ok(undefined);
-    const next: InsightReport = {
-      ...existing,
-      deletedAt: Date.now(),
-      updatedAt: Date.now(),
-    };
-    await writeWithSync("insightReports", "upsert", async () => {
-      await db.insightReports.put(next);
-      return next;
-    });
-    schedulePush();
+    await syncedWrite(["insightReports"], (w) => w.tombstone("insightReports", id));
     return ok(undefined);
   } catch (e) {
     return err("Failed to delete insight report", e);

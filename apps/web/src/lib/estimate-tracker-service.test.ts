@@ -4,7 +4,8 @@ import {
   makeEstimateRecord,
   otherTracker,
 } from "@/__tests__/fixtures/estimate-tracker-fixtures";
-import { ESTIMATE_TRACKER_IDS } from "@/lib/estimate-trackers";
+import { db } from "@/lib/db";
+import { ESTIMATE_TRACKERS, ESTIMATE_TRACKER_IDS } from "@/lib/estimate-trackers";
 import {
   addEstimateRecord,
   getEstimateRecords,
@@ -66,6 +67,15 @@ describe.each(ESTIMATE_TRACKER_IDS)("estimate-tracker-service (%s)", (tracker) =
       await addEstimateRecord(tracker, { timestamp: 1000 });
       expect(await getEstimateRecords(tracker)).toHaveLength(1);
       expect(await getEstimateRecords(otherTracker(tracker))).toHaveLength(0);
+    });
+
+    it("queues the new row for sync as an upsert on its own table", async () => {
+      const result = await addEstimateRecord(tracker, { timestamp: 1000 });
+      if (!result.success) throw new Error("add failed");
+      const queued = await db._syncQueue.toArray();
+      expect(queued.map((q) => [q.tableName, q.recordId, q.op])).toEqual([
+        [ESTIMATE_TRACKERS[tracker].table, result.data.id, "upsert"],
+      ]);
     });
   });
 

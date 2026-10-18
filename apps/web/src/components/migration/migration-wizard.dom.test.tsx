@@ -1,5 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { TABLE_PUSH_ORDER } from "@/lib/sync-topology";
+import { tableLabel } from "@/components/migration/dialog-kit";
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
@@ -32,9 +34,11 @@ function seedUploading() {
   act(() => {
     const s = useMigrationStore.getState();
     s.setPhase("uploading");
-    s.setTableProgress("prescriptions", { total: 4, uploaded: 4, lastBatchIndex: 0 });
-    s.setTableProgress("titrationPlans", { total: 6, uploaded: 2, lastBatchIndex: 0 });
-    s.setTableProgress("medicationPhases", { total: 10, uploaded: 0, lastBatchIndex: -1 });
+    // The first three tables in push order: one done, one uploading, one pending.
+    const [done, uploading, pending] = TABLE_PUSH_ORDER;
+    s.setTableProgress(done, { total: 4, uploaded: 4, lastBatchIndex: 0 });
+    s.setTableProgress(uploading, { total: 6, uploaded: 2, lastBatchIndex: 0 });
+    s.setTableProgress(pending, { total: 10, uploaded: 0, lastBatchIndex: -1 });
     s.setCurrentTableIndex(1);
   });
 }
@@ -79,7 +83,7 @@ describe("MigrationWizard", () => {
     renderWizard();
     seedUploading();
 
-    expect(screen.getByText("Uploading Titration Plans…")).toBeInTheDocument();
+    expect(screen.getByText(`Uploading ${tableLabel(TABLE_PUSH_ORDER[1])}…`)).toBeInTheDocument();
     expect(screen.getByText("6 / 20 records (30%)")).toBeInTheDocument();
     expect(screen.getByRole("progressbar", { name: "Upload progress" })).toHaveAttribute(
       "aria-valuenow",
@@ -97,7 +101,7 @@ describe("MigrationWizard", () => {
     );
 
     const list = screen.getByTestId("migration-table-list");
-    expect(list.querySelector("[data-status]")).toHaveTextContent("Prescriptions4 / 4");
+    expect(list.querySelector("[data-status]")).toHaveTextContent(`${tableLabel(TABLE_PUSH_ORDER[0])}4 / 4`);
     const statuses = [...list.querySelectorAll("[data-status]")].map((r) =>
       r.getAttribute("data-status"),
     );

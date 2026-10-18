@@ -2,12 +2,12 @@ import { db } from "@/lib/db";
 import { TABLE_PUSH_ORDER, type TableName } from "@/lib/sync-topology";
 import { normalizeRowForPush } from "@/lib/sync-column-types";
 import { fillClearedFieldsForPush } from "@/lib/sync-nullable-fields";
-import { enqueueInsideTx } from "@/lib/sync-queue";
 import type { PushOp } from "@intake/db/sync-payload";
 import { apiFetch } from "@/lib/api-fetch";
 import { useMigrationStore, type TableProgress } from "@/stores/migration-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useSyncStatusStore } from "@/stores/sync-status-store";
+import { syncedWrite } from "@/lib/synced-write";
 
 const BATCH_SIZE = 100;
 const PROGRESS_KEY = "intake-tracker-migration-progress";
@@ -122,15 +122,16 @@ async function queueRejectedOps(res: Response, ops: PushOp[]): Promise<number> {
   const toQueue = rejected
     .map((r) => opsByQueueId.get(r.queueId))
     .filter((op): op is PushOp => op != null);
-  await db.transaction("rw", db._syncQueue, async () => {
-    for (const op of toQueue) {
-      await enqueueInsideTx(
-        op.tableName,
-        op.row.id as string,
-        op.row.deletedAt != null ? "delete" : "upsert",
-      );
-    }
-  });
+  const tables = [...new Set(toQueue.map((op) => op.tableName))];
+  // No push now: the migration is still uploading these tables itself, and
+  // a push from the engine could retry or drop a row before it finishes.
+  await syncedWrite(
+    tables,
+    async (w) => {
+      for (const op of toQueue) await w.requeue(op.tableName, op.row.id as string);
+    },
+    { schedule: false },
+  );
   console.log(`[migration] ${rejected.length} row(s) rejected, queued for retry`);
   return rejected.length;
 }
@@ -147,21 +148,11 @@ async function queueRejectedOps(res: Response, ops: PushOp[]): Promise<number> {
 export async function queueLocalDataForSync(): Promise<number> {
   let queued = 0;
   for (const tableName of TABLE_PUSH_ORDER) {
-    const rows = (await db.table(tableName).toArray()) as Array<{
-      id: string;
-      deletedAt?: number | null;
-    }>;
-    if (rows.length === 0) continue;
-    await db.transaction("rw", db._syncQueue, async () => {
-      for (const row of rows) {
-        await enqueueInsideTx(
-          tableName,
-          row.id,
-          row.deletedAt != null ? "delete" : "upsert",
-        );
-      }
+    queued += await syncedWrite([tableName], async (w) => {
+      const ids = (await db.table(tableName).toCollection().primaryKeys()) as string[];
+      for (const id of ids) await w.requeue(tableName, id);
+      return ids.length;
     });
-    queued += rows.length;
   }
   if (queued > 0) {
     useSyncStatusStore.setState({ queueDepth: await db._syncQueue.count() });

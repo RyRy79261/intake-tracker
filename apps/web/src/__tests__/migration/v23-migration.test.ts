@@ -92,9 +92,9 @@ function queuedIds(): Promise<string[]> {
 }
 
 describe("v23 schema", () => {
-  it("is superseded only by v24 (adds a table) and v25 (data repair), which change no v23 store", () => {
-    expect(DB_SCHEMA_VERSION).toBe(26);
-    expect(db.verno).toBe(26);
+  it("is superseded only by v24 (adds a table) and data repairs (v25-v27), which change no v23 store", () => {
+    expect(DB_SCHEMA_VERSION).toBe(27);
+    expect(db.verno).toBe(27);
   });
 
   it("indexes doseLogs by [scheduleId+scheduledDate] and keeps scheduledTime", () => {
@@ -260,7 +260,9 @@ describe("v23 migration: tombstone lifecycle-flag repair", () => {
     expect(await queuedIds()).toEqual(["ph-del", "rx-del"]);
     const rxOp = (await db._syncQueue.toArray()).find((r) => r.recordId === "rx-del")!;
     expect(rxOp.tableName).toBe("prescriptions");
-    expect(rxOp.op).toBe("upsert");
+    // v23 queued it as an upsert; v27, which runs right after on open, turns
+    // a queued upsert that stands for a tombstone into a delete.
+    expect(rxOp.op).toBe("delete");
     expect((await db.prescriptions.get("rx-ok"))!.updatedAt).toBe(SYNC.updatedAt);
   });
 

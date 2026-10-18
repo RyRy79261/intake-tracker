@@ -234,9 +234,13 @@ describe("sync-engine correctness (audit 2026-09)", () => {
     expect((await db.intakeRecords.get("r2"))?.amount).toBe(50);
   });
 
-  it("pull applies a server tombstone over a live local row even when older (server rule 1)", async () => {
+  it("pull applies a server tombstone over a live local row that is not newer (server rule 1)", async () => {
     installDom();
-    await db.intakeRecords.add(makeIntake({ id: "r1", updatedAt: 5000 }));
+    await db.intakeRecords.add(makeIntake({ id: "r1", updatedAt: 2000 }));
+    await db.intakeRecords.add(makeIntake({ id: "r2", updatedAt: 3000 }));
+    // r3 was restored (undo) after the delete synced: strictly newer, so the
+    // server accepts it on push, and the pull must not undo it.
+    await db.intakeRecords.add(makeIntake({ id: "r3", updatedAt: 5000 }));
 
     vi.stubGlobal(
       "fetch",
@@ -244,7 +248,11 @@ describe("sync-engine correctness (audit 2026-09)", () => {
         jsonResponse({
           result: {
             intakeRecords: {
-              rows: [makeIntake({ id: "r1", updatedAt: 3000, deletedAt: 3000 })],
+              rows: [
+                makeIntake({ id: "r1", updatedAt: 3000, deletedAt: 3000 }),
+                makeIntake({ id: "r2", updatedAt: 3000, deletedAt: 3000 }),
+                makeIntake({ id: "r3", updatedAt: 3000, deletedAt: 3000 }),
+              ],
               hasMore: false,
             },
           },
@@ -256,6 +264,8 @@ describe("sync-engine correctness (audit 2026-09)", () => {
     await runPullCycle();
 
     expect((await db.intakeRecords.get("r1"))?.deletedAt).toBe(3000);
+    expect((await db.intakeRecords.get("r2"))?.deletedAt).toBe(3000);
+    expect((await db.intakeRecords.get("r3"))?.deletedAt ?? null).toBeNull();
   });
 
   it("pull keeps a local tombstone over an older or equal live server row (server rule 2b)", async () => {

@@ -1,64 +1,17 @@
 /**
- * Sync topology — static FK parent-before-child ordering for the 19 Dexie/Neon
- * data tables (Phase 43 D-02).
+ * Sync topology — the synced tables in foreign-key order (parents before
+ * children), so every FK parent lands on the server before a child that
+ * references it.
  *
- * Derived from src/db/schema.ts FK declarations. The push loop (Plan 06) groups
- * queued ops by table and flushes in this order so every FK parent lands on
- * the server before any child that references it.
- *
- * Canonical refs:
- * - `.planning/phases/43-sync-engine-core/43-CONTEXT.md` §D-02 — static topo sort
- * - `.planning/phases/43-sync-engine-core/43-PATTERNS.md` §"src/lib/sync-topology.ts"
- * - Covered by `src/__tests__/sync-topology.test.ts`
- *
- * FK graph (parent → child), derived verbatim from src/db/schema.ts:
- *   prescriptions   → medicationPhases, inventoryItems, doseLogs, dailyNotes
- *   titrationPlans  → medicationPhases
- *   medicationPhases → phaseSchedules, doseLogs
- *   phaseSchedules  → doseLogs
- *   inventoryItems  → doseLogs, inventoryTransactions
- *   doseLogs        → inventoryTransactions, dailyNotes
- *   intakeRecords   → substanceRecords
- *
- * IMPORTANT: any FK addition/change in src/db/schema.ts MUST be reflected here.
- * The parity test "every FK pair … satisfies parent-before-child" fails fast
- * if this array drifts out of sync with the Drizzle schema.
+ * Generated from the Drizzle schema into `@intake/db/sync-manifest`
+ * (`pnpm db:generate`); this module only re-exports it under the names the
+ * client code uses. Per-table facts (numeric and nullable columns, FK
+ * parents, timezone column) are in `SYNC_TABLES` there.
  */
 
-export const TABLE_PUSH_ORDER = [
-  // Tier 1 — roots (no inner FKs)
-  "prescriptions",
-  "titrationPlans",
-  // Tier 2 — children of tier 1
-  "medicationPhases",
-  // Tier 3 — children of medicationPhases
-  "phaseSchedules",
-  "inventoryItems",
-  // Tier 4 — doseLogs needs prescriptions, medicationPhases, phaseSchedules, inventoryItems
-  "doseLogs",
-  // Tier 5 — needs inventoryItems + doseLogs (and dailyNotes needs doseLogs)
-  "inventoryTransactions",
-  "dailyNotes",
-  // Health records graph
-  "intakeRecords",
-  "substanceRecords",
-  // Remaining leaf tables (no inner FKs)
-  "weightRecords",
-  "bloodPressureRecords",
-  "eatingRecords",
-  "urinationRecords",
-  "defecationRecords",
-  "auditLogs",
-  // Standalone — only FK is user_id, no app-table parents.
-  "userProfile",
-  "insightReports",
-  "userSettings",
-] as const;
+import { TABLE_PUSH_ORDER, type SyncTableName } from "@intake/db/sync-manifest";
 
-/** Literal union of the 19 valid table names. */
-export type TableName = (typeof TABLE_PUSH_ORDER)[number];
+export { TABLE_PUSH_ORDER };
 
-// Note: `userProfile` was added in Phase 18-equivalent (medical profile) and
-// `insightReports` in Dexie v19 (cached AI insight reports). Neither has an
-// app-table FK parent, so their push position is unconstrained. The same holds
-// for `userSettings` (Dexie v24, synced user settings).
+/** Literal union of the synced table names. */
+export type TableName = SyncTableName;

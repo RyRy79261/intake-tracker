@@ -138,13 +138,10 @@ describe("migration-service", () => {
         (c) => (c.body as { ops: { tableName: string }[] }).ops[0]!.tableName,
       );
 
-      const rxIdx = uploadedTables.indexOf("prescriptions");
-      const irIdx = uploadedTables.indexOf("intakeRecords");
-      expect(rxIdx).toBeLessThan(irIdx);
-
-      const rxOrderIdx = TABLE_PUSH_ORDER.indexOf("prescriptions");
-      const irOrderIdx = TABLE_PUSH_ORDER.indexOf("intakeRecords");
-      expect(rxOrderIdx).toBeLessThan(irOrderIdx);
+      const expected = TABLE_PUSH_ORDER.filter(
+        (t) => t === "prescriptions" || t === "intakeRecords",
+      );
+      expect(uploadedTables.filter((t) => expected.includes(t as never))).toEqual(expected);
     });
   });
 

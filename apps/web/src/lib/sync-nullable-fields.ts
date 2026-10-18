@@ -20,97 +20,21 @@
  *   slips through. `normalizePulledRow` drops those keys so a pulled row has
  *   the same shape as one written locally.
  *
- * `NULLABLE_SYNC_FIELDS` is hand-maintained for the same reason as
- * `sync-column-types.ts`: importing `@intake/db/schema` would drag drizzle into
- * the client bundle. `src/__tests__/sync-nullable-fields.test.ts` derives the
- * real nullable columns from the Drizzle schema and fails if this drifts.
+ * `NULLABLE_SYNC_FIELDS` comes from the generated sync manifest
+ * (`@intake/db/sync-manifest`, built from the Drizzle schema), as plain data
+ * so drizzle stays out of the client bundle.
  */
 
-import type { TableName } from "@/lib/sync-topology";
+import { SYNC_TABLES } from "@intake/db/sync-manifest";
+import { TABLE_PUSH_ORDER, type TableName } from "@/lib/sync-topology";
 
 /**
  * Nullable (no `NOT NULL`) columns per synced table, excluding the
  * server-only `userId` / `serverUpdatedAt`.
  */
-export const NULLABLE_SYNC_FIELDS: Record<TableName, readonly string[]> = {
-  prescriptions: [
-    "indication",
-    "notes",
-    "contraindications",
-    "warnings",
-    "compounds",
-    "medicineInfo",
-    "interactionCheck",
-    "deletedAt",
-  ],
-  titrationPlans: ["recommendedStartDate", "notes", "warnings", "deletedAt"],
-  medicationPhases: [
-    "endDate",
-    "foodNote",
-    "notes",
-    "titrationPlanId",
-    "deletedAt",
-  ],
-  phaseSchedules: ["unit", "deletedAt"],
-  inventoryItems: [
-    "currentStock",
-    "compounds",
-    "visualIdentification",
-    "refillAlertDays",
-    "refillAlertPills",
-    "isArchived",
-    "deletedAt",
-  ],
-  doseLogs: [
-    "phaseId",
-    "scheduleId",
-    "inventoryItemId",
-    "doseMg",
-    "doseAmount",
-    "doseUnit",
-    "pillsConsumed",
-    "pillStrength",
-    "actionTimestamp",
-    "rescheduledTo",
-    "skipReason",
-    "note",
-    "deletedAt",
-  ],
-  inventoryTransactions: ["note", "doseLogId", "deletedAt"],
-  dailyNotes: ["prescriptionId", "doseLogId", "deletedAt"],
-  intakeRecords: [
-    "source",
-    "note",
-    "groupId",
-    "originalInputText",
-    "groupSource",
-    "sodiumSource",
-    "sourceAmount",
-    "sourceUnit",
-    "deletedAt",
-  ],
-  substanceRecords: [
-    "amountMg",
-    "amountStandardDrinks",
-    "abvPercent",
-    "volumeMl",
-    "sourceRecordId",
-    "aiEnriched",
-    "groupId",
-    "originalInputText",
-    "groupSource",
-    "deletedAt",
-  ],
-  weightRecords: ["note", "source", "deletedAt"],
-  bloodPressureRecords: ["heartRate", "irregularHeartbeat", "note", "source", "deletedAt"],
-  eatingRecords: ["grams", "note", "groupId", "originalInputText", "groupSource", "deletedAt"],
-  urinationRecords: ["amountEstimate", "note", "source", "deletedAt"],
-  defecationRecords: ["amountEstimate", "note", "source", "deletedAt"],
-  auditLogs: ["details", "deletedAt"],
-  userProfile: ["aiInsightsConsentAt", "deletedAt"],
-  insightReports: ["sources", "mode", "deletedAt"],
-  userSettings: ["homeTimezone", "homeTimezoneConfirmedAt", "fieldUpdatedAt", "deletedAt"],
-};
+export const NULLABLE_SYNC_FIELDS = Object.fromEntries(
+  TABLE_PUSH_ORDER.map((t) => [t, SYNC_TABLES[t].nullableFields]),
+) as Record<TableName, readonly string[]>;
 
 /**
  * Fields the record interfaces type as `T | null` (not `T?`). A pulled `null`

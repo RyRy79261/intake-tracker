@@ -1,16 +1,13 @@
 import { db, type DoseLog, type DoseStatus } from "@/lib/db";
-import type { UpdateSpec } from "dexie";
 import { ok, err } from "@intake/core/service";
 import { isCleanFraction, isValidPillStrength } from "@intake/core/compound";
 import type { ServiceResult } from "@intake/types/service";
 import { syncFields } from "@/lib/utils";
 import { getDeviceTimezone } from "@/lib/timezone";
-import { buildAuditEntry } from "@/lib/audit-service";
-import { enqueueInsideTx } from "@/lib/sync-queue";
-import { schedulePush } from "@/lib/sync-engine";
 import { getActiveInventoryForPrescription } from "@/lib/inventory-service";
 import { toLocalDateKey } from "@/lib/date-utils";
 import { isLive } from "@intake/core/lifecycle";
+import { syncedWrite, type SyncedWriter } from "@/lib/synced-write";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -210,32 +207,27 @@ interface SlotRef {
 
 /**
  * Write the slot's log: update `prev` in place, or create it under `id`.
- * Used inside transactions. A patch key set to `undefined` clears the field.
+ * Runs inside a caller's synced write. A patch key set to `undefined` clears
+ * the field.
  */
 async function writeSlotLog(
+  w: SyncedWriter,
   prev: DoseLog | undefined,
   id: string,
   slot: SlotRef,
   status: DoseStatus,
   patch: DoseLogPatch = {},
 ): Promise<DoseLog> {
-  const now = Date.now();
+  const now = w.now;
 
   if (prev) {
-    const updates = {
+    const written = await w.patch("doseLogs", prev.id, {
       status,
       actionTimestamp: now,
       timezone: getDeviceTimezone(),
-      updatedAt: now,
       ...patch,
-    };
-    // Dexie deletes a key whose update value is `undefined`.
-    await db.doseLogs.update(prev.id, updates as UpdateSpec<DoseLog>);
-    const next: Record<string, unknown> = { ...prev, ...updates };
-    for (const [key, value] of Object.entries(patch)) {
-      if (value === undefined) delete next[key];
-    }
-    return next as unknown as DoseLog;
+    });
+    return written!;
   }
 
   const defined = Object.fromEntries(
@@ -253,8 +245,7 @@ async function writeSlotLog(
     ...defined,
     ...syncFields(),
   };
-  await db.doseLogs.add(log);
-  return log;
+  return w.insert("doseLogs", log);
 }
 
 /**
@@ -263,7 +254,11 @@ async function writeSlotLog(
  * caller's current dose and the item's current strength. Returns the pills
  * restored. Used inside transactions.
  */
-async function restoreTakenStock(prev: DoseLog | undefined, dosageMg: number): Promise<number> {
+async function restoreTakenStock(
+  w: SyncedWriter,
+  prev: DoseLog | undefined,
+  dosageMg: number,
+): Promise<number> {
   if (prev?.status !== "taken" || !prev.inventoryItemId) return 0;
   const inventory = await db.inventoryItems.get(prev.inventoryItemId);
   if (!inventory) return 0;
@@ -272,15 +267,13 @@ async function restoreTakenStock(prev: DoseLog | undefined, dosageMg: number): P
   if (!(pills > 0)) return 0;
 
   const newStock = (inventory.currentStock ?? 0) + pills;
-  await db.inventoryItems.update(inventory.id, {
+  await w.patch("inventoryItems", inventory.id, {
     currentStock: Math.round(newStock * 10000) / 10000,
-    updatedAt: Date.now(),
   });
-  await enqueueInsideTx("inventoryItems", inventory.id, "upsert");
 
   const sf = syncFields();
   const invTxId = crypto.randomUUID();
-  await db.inventoryTransactions.add({
+  await w.insert("inventoryTransactions", {
     id: invTxId,
     inventoryItemId: inventory.id,
     timestamp: Date.now(),
@@ -293,7 +286,6 @@ async function restoreTakenStock(prev: DoseLog | undefined, dosageMg: number): P
     deviceId: sf.deviceId,
     timezone: sf.timezone,
   });
-  await enqueueInsideTx("inventoryTransactions", invTxId, "upsert");
   return pills;
 }
 
@@ -409,105 +401,91 @@ export async function takeDose(input: TakeDoseInput): Promise<ServiceResult<Dose
       }
     }
 
-    const log = await db.transaction(
-      "rw",
-      [
-        db.doseLogs, db.inventoryItems, db.inventoryTransactions, db.medicationPhases,
-        db.phaseSchedules, db.auditLogs, db._syncQueue,
-      ],
-      async () => {
-        const prev = await getDoseLogRaw(scheduleId, date);
-        // Resolve the log id first so the consumed transaction can link to it.
-        const logId = prev?.id ?? (await newScheduledDoseLogId(scheduleId, date));
-        const wasTaken = prev?.status === "taken";
+    const log = await syncedWrite(["doseLogs", "inventoryItems", "inventoryTransactions", "medicationPhases", "phaseSchedules"], async (w) => {
+      const prev = await getDoseLogRaw(scheduleId, date);
+      // Resolve the log id first so the consumed transaction can link to it.
+      const logId = prev?.id ?? (await newScheduledDoseLogId(scheduleId, date));
+      const wasTaken = prev?.status === "taken";
 
-        let inventoryItemId: string | undefined = prev?.inventoryItemId;
-        let pillsConsumed = 0;
-        // A taken dose has no skip reason; clear one left by an earlier skip.
-        const patch: DoseLogPatch = { skipReason: undefined };
-        let invalidStrength = false;
+      let inventoryItemId: string | undefined = prev?.inventoryItemId;
+      let pillsConsumed = 0;
+      // A taken dose has no skip reason; clear one left by an earlier skip.
+      const patch: DoseLogPatch = { skipReason: undefined };
+      let invalidStrength = false;
 
-        if (!wasTaken) {
-          // Find active inventory for this prescription. `isActive` is a
-          // boolean and IndexedDB cannot index booleans, so a
-          // `.where({ isActive: 1 })` equality match never hits — the shared
-          // helper filters in memory the same way every other call site does.
-          const inventory = await getActiveInventoryForPrescription(prescriptionId);
-          const pills = inventory && calculatePillsConsumed(dosageMg, inventory.strength);
-          if (inventory && pills === undefined) invalidStrength = true;
+      if (!wasTaken) {
+        // Find active inventory for this prescription. `isActive` is a
+        // boolean and IndexedDB cannot index booleans, so a
+        // `.where({ isActive: 1 })` equality match never hits — the shared
+        // helper filters in memory the same way every other call site does.
+        const inventory = await getActiveInventoryForPrescription(prescriptionId);
+        const pills = inventory && calculatePillsConsumed(dosageMg, inventory.strength);
+        if (inventory && pills === undefined) invalidStrength = true;
 
-          // Snapshot what is being taken, so later schedule or inventory edits
-          // cannot rewrite this dose. The item id is only the one debited now:
-          // a stale id from an earlier take would let the next undo restore
-          // pills that were never taken out.
-          const [phase, schedule] = await Promise.all([
-            db.medicationPhases.get(phaseId),
-            db.phaseSchedules.get(scheduleId),
-          ]);
-          patch.doseAmount = dosageMg;
-          patch.doseUnit = schedule?.unit ?? phase?.unit;
-          // An invalid strength debits nothing, so no item is recorded.
-          inventoryItemId = pills !== undefined ? inventory?.id : undefined;
-          patch.inventoryItemId = inventoryItemId;
-          patch.pillsConsumed = 0;
-          patch.pillStrength = inventory?.strength;
+        // Snapshot what is being taken, so later schedule or inventory edits
+        // cannot rewrite this dose. The item id is only the one debited now:
+        // a stale id from an earlier take would let the next undo restore
+        // pills that were never taken out.
+        const [phase, schedule] = await Promise.all([
+          db.medicationPhases.get(phaseId),
+          db.phaseSchedules.get(scheduleId),
+        ]);
+        patch.doseAmount = dosageMg;
+        patch.doseUnit = schedule?.unit ?? phase?.unit;
+        // An invalid strength debits nothing, so no item is recorded.
+        inventoryItemId = pills !== undefined ? inventory?.id : undefined;
+        patch.inventoryItemId = inventoryItemId;
+        patch.pillsConsumed = 0;
+        patch.pillStrength = inventory?.strength;
 
-          if (inventory && pills !== undefined) {
-            pillsConsumed = pills;
-            patch.pillsConsumed = pillsConsumed;
-            const newStock = (inventory.currentStock ?? 0) - pillsConsumed;
+        if (inventory && pills !== undefined) {
+          pillsConsumed = pills;
+          patch.pillsConsumed = pillsConsumed;
+          const newStock = (inventory.currentStock ?? 0) - pillsConsumed;
 
-            // Update stock (negative allowed per user decision)
-            await db.inventoryItems.update(inventory.id, {
-              currentStock: Math.round(newStock * 10000) / 10000,
-              updatedAt: Date.now(),
-            });
-            await enqueueInsideTx("inventoryItems", inventory.id, "upsert");
+          // Update stock (negative allowed per user decision)
+          await w.patch("inventoryItems", inventory.id, {
+            currentStock: Math.round(newStock * 10000) / 10000,
+          });
 
-            // Record inventory transaction
-            const sf = syncFields();
-            const invTxId = crypto.randomUUID();
-            await db.inventoryTransactions.add({
-              id: invTxId,
-              inventoryItemId: inventory.id,
-              timestamp: Date.now(),
-              amount: -pillsConsumed,
-              type: "consumed" as const,
-              doseLogId: logId,
-              createdAt: sf.createdAt,
-              updatedAt: sf.updatedAt,
-              deletedAt: null,
-              deviceId: sf.deviceId,
-              timezone: sf.timezone,
-            });
-            await enqueueInsideTx("inventoryTransactions", invTxId, "upsert");
-          }
+          // Record inventory transaction
+          const sf = syncFields();
+          const invTxId = crypto.randomUUID();
+          await w.insert("inventoryTransactions", {
+            id: invTxId,
+            inventoryItemId: inventory.id,
+            timestamp: Date.now(),
+            amount: -pillsConsumed,
+            type: "consumed" as const,
+            doseLogId: logId,
+            createdAt: sf.createdAt,
+            updatedAt: sf.updatedAt,
+            deletedAt: null,
+            deviceId: sf.deviceId,
+            timezone: sf.timezone,
+          });
         }
+      }
 
-        if (actionTimestampOverride !== undefined) patch.actionTimestamp = actionTimestampOverride;
+      if (actionTimestampOverride !== undefined) patch.actionTimestamp = actionTimestampOverride;
 
-        // Upsert dose log
-        const doseLog = await writeSlotLog(
-          prev, logId, { prescriptionId, phaseId, scheduleId, date, time }, "taken", patch,
-        );
-        await enqueueInsideTx("doseLogs", doseLog.id, "upsert");
+      // Upsert dose log
+      const doseLog = await writeSlotLog(
+        w, prev, logId, { prescriptionId, phaseId, scheduleId, date, time }, "taken", patch,
+      );
 
-        // Audit log
-        const auditDetails: Record<string, unknown> = {
-          prescriptionId, date, time, dosageMg, pillsConsumed, inventoryItemId,
-        };
-        if (pillsConsumed > 0 && !isCleanFraction(pillsConsumed)) {
-          auditDetails.warning = "odd_fraction";
-        }
-        if (invalidStrength) auditDetails.warning = "invalid_strength";
-        const auditEntry = buildAuditEntry("dose_taken", auditDetails);
-        await db.auditLogs.add(auditEntry);
-        await enqueueInsideTx("auditLogs", auditEntry.id, "upsert");
+      // Audit log
+      const auditDetails: Record<string, unknown> = {
+        prescriptionId, date, time, dosageMg, pillsConsumed, inventoryItemId,
+      };
+      if (pillsConsumed > 0 && !isCleanFraction(pillsConsumed)) {
+        auditDetails.warning = "odd_fraction";
+      }
+      if (invalidStrength) auditDetails.warning = "invalid_strength";
+      await w.audit("dose_taken", auditDetails);
 
-        return doseLog;
-      },
-    );
-    schedulePush();
+      return doseLog;
+    });
 
     return ok(log);
   } catch (e) {
@@ -538,86 +516,75 @@ export async function logPrnDose(
     // actionTimestamp is always a finite number.
     const actionTimestamp = Number.isFinite(parsed) ? parsed : Date.now();
 
-    const log = await db.transaction(
-      "rw",
-      [db.doseLogs, db.inventoryItems, db.inventoryTransactions, db.auditLogs, db._syncQueue],
-      async () => {
-        const sf = syncFields();
-        const doseLogId = crypto.randomUUID();
+    const log = await syncedWrite(["doseLogs", "inventoryItems", "inventoryTransactions"], async (w) => {
+      const sf = syncFields();
+      const doseLogId = crypto.randomUUID();
 
-        let inventoryItemId: string | undefined;
-        let pillsConsumed = 0;
-        if (dosageMg !== undefined && dosageMg > 0) {
-          const inventory = await getActiveInventoryForPrescription(prescriptionId);
-          const pills = inventory && calculatePillsConsumed(dosageMg, inventory.strength);
-          if (inventory && pills !== undefined) {
-            inventoryItemId = inventory.id;
-            pillsConsumed = pills;
-            const newStock = (inventory.currentStock ?? 0) - pillsConsumed;
-            await db.inventoryItems.update(inventory.id, {
-              currentStock: Math.round(newStock * 10000) / 10000,
-              updatedAt: Date.now(),
-            });
-            await enqueueInsideTx("inventoryItems", inventory.id, "upsert");
+      let inventoryItemId: string | undefined;
+      let pillsConsumed = 0;
+      if (dosageMg !== undefined && dosageMg > 0) {
+        const inventory = await getActiveInventoryForPrescription(prescriptionId);
+        const pills = inventory && calculatePillsConsumed(dosageMg, inventory.strength);
+        if (inventory && pills !== undefined) {
+          inventoryItemId = inventory.id;
+          pillsConsumed = pills;
+          const newStock = (inventory.currentStock ?? 0) - pillsConsumed;
+          await w.patch("inventoryItems", inventory.id, {
+            currentStock: Math.round(newStock * 10000) / 10000,
+          });
 
-            const invTxId = crypto.randomUUID();
-            await db.inventoryTransactions.add({
-              id: invTxId,
-              inventoryItemId: inventory.id,
-              timestamp: Date.now(),
-              amount: -pillsConsumed,
-              type: "consumed" as const,
-              doseLogId,
-              createdAt: sf.createdAt,
-              updatedAt: sf.updatedAt,
-              deletedAt: null,
-              deviceId: sf.deviceId,
-              timezone: sf.timezone,
-            });
-            await enqueueInsideTx("inventoryTransactions", invTxId, "upsert");
-          }
+          const invTxId = crypto.randomUUID();
+          await w.insert("inventoryTransactions", {
+            id: invTxId,
+            inventoryItemId: inventory.id,
+            timestamp: Date.now(),
+            amount: -pillsConsumed,
+            type: "consumed" as const,
+            doseLogId,
+            createdAt: sf.createdAt,
+            updatedAt: sf.updatedAt,
+            deletedAt: null,
+            deviceId: sf.deviceId,
+            timezone: sf.timezone,
+          });
         }
+      }
 
-        // kind='prn' with NO phase/schedule satisfies the DB
-        // dose_logs_kind_fields_check (which only requires phase+schedule for
-        // scheduled doses). The client must construct this valid shape because
-        // the CHECK is not reflected into the drizzle-zod sync insert schema.
-        const doseLog: DoseLog = {
-          id: doseLogId,
-          prescriptionId,
-          kind: "prn",
-          scheduledDate: date,
-          scheduledTime: time,
-          status: "taken",
-          actionTimestamp,
-          timezone: sf.timezone,
-          createdAt: sf.createdAt,
-          updatedAt: sf.updatedAt,
-          deletedAt: null,
-          deviceId: sf.deviceId,
-          ...(inventoryItemId !== undefined && { inventoryItemId }),
-          ...(doseMg !== undefined && { doseMg }),
-          ...(note !== undefined && note.trim() !== "" && { note: note.trim() }),
-        };
-        await db.doseLogs.add(doseLog);
-        await enqueueInsideTx("doseLogs", doseLogId, "upsert");
+      // kind='prn' with NO phase/schedule satisfies the DB
+      // dose_logs_kind_fields_check (which only requires phase+schedule for
+      // scheduled doses). The client must construct this valid shape because
+      // the CHECK is not reflected into the drizzle-zod sync insert schema.
+      const doseLog: DoseLog = {
+        id: doseLogId,
+        prescriptionId,
+        kind: "prn",
+        scheduledDate: date,
+        scheduledTime: time,
+        status: "taken",
+        actionTimestamp,
+        timezone: sf.timezone,
+        createdAt: sf.createdAt,
+        updatedAt: sf.updatedAt,
+        deletedAt: null,
+        deviceId: sf.deviceId,
+        ...(inventoryItemId !== undefined && { inventoryItemId }),
+        ...(doseMg !== undefined && { doseMg }),
+        ...(note !== undefined && note.trim() !== "" && { note: note.trim() }),
+      };
+      await w.insert("doseLogs", doseLog);
 
-        const auditEntry = buildAuditEntry("dose_taken", {
-          prescriptionId,
-          date,
-          time,
-          kind: "prn",
-          doseMg,
-          pillsConsumed,
-          inventoryItemId,
-        });
-        await db.auditLogs.add(auditEntry);
-        await enqueueInsideTx("auditLogs", auditEntry.id, "upsert");
+      await w.audit("dose_taken", {
+        prescriptionId,
+        date,
+        time,
+        kind: "prn",
+        doseMg,
+        pillsConsumed,
+        inventoryItemId,
+      });
 
-        return doseLog;
-      },
-    );
-    schedulePush();
+      return doseLog;
+    });
 
     return ok(log);
   } catch (e) {
@@ -637,33 +604,25 @@ export async function untakeDose(input: UntakeDoseInput): Promise<ServiceResult<
   try {
     const { prescriptionId, phaseId, scheduleId, date, time, dosageMg } = input;
 
-    const log = await db.transaction(
-      "rw",
-      [db.doseLogs, db.inventoryItems, db.inventoryTransactions, db.auditLogs, db._syncQueue],
-      async () => {
-        const prev = await getDoseLogRaw(scheduleId, date);
-        const logId = prev?.id ?? (await newScheduledDoseLogId(scheduleId, date));
-        const pillsConsumed = await restoreTakenStock(prev, dosageMg);
+    const log = await syncedWrite(["doseLogs", "inventoryItems", "inventoryTransactions"], async (w) => {
+      const prev = await getDoseLogRaw(scheduleId, date);
+      const logId = prev?.id ?? (await newScheduledDoseLogId(scheduleId, date));
+      const pillsConsumed = await restoreTakenStock(w, prev, dosageMg);
 
-        const doseLog = await writeSlotLog(
-          prev, logId, { prescriptionId, phaseId, scheduleId, date, time },
-          prev?.rescheduledTo ? "rescheduled" : "pending",
-          // Clear a reason left by an earlier skip: the slot is no longer skipped.
-          { pillsConsumed: 0, skipReason: undefined },
-        );
-        await enqueueInsideTx("doseLogs", doseLog.id, "upsert");
+      const doseLog = await writeSlotLog(
+        w, prev, logId, { prescriptionId, phaseId, scheduleId, date, time },
+        prev?.rescheduledTo ? "rescheduled" : "pending",
+        // Clear a reason left by an earlier skip: the slot is no longer skipped.
+        { pillsConsumed: 0, skipReason: undefined },
+      );
 
-        const auditEntry = buildAuditEntry("dose_untaken", {
-          prescriptionId, date, time, dosageMg, pillsConsumed,
-          inventoryItemId: prev?.inventoryItemId,
-        });
-        await db.auditLogs.add(auditEntry);
-        await enqueueInsideTx("auditLogs", auditEntry.id, "upsert");
+      await w.audit("dose_untaken", {
+        prescriptionId, date, time, dosageMg, pillsConsumed,
+        inventoryItemId: prev?.inventoryItemId,
+      });
 
-        return doseLog;
-      },
-    );
-    schedulePush();
+      return doseLog;
+    });
 
     return ok(log);
   } catch (e) {
@@ -683,48 +642,37 @@ export async function skipDose(input: SkipDoseInput): Promise<ServiceResult<Dose
       return err("Cannot skip a dose scheduled for a future date");
     }
 
-    const log = await db.transaction(
-      "rw",
-      [
-        db.doseLogs, db.inventoryItems, db.inventoryTransactions, db.medicationPhases,
-        db.phaseSchedules, db.auditLogs, db._syncQueue,
-      ],
-      async () => {
-        const prev = await getDoseLogRaw(scheduleId, date);
-        const logId = prev?.id ?? (await newScheduledDoseLogId(scheduleId, date));
+    const log = await syncedWrite(["doseLogs", "inventoryItems", "inventoryTransactions", "medicationPhases", "phaseSchedules"], async (w) => {
+      const prev = await getDoseLogRaw(scheduleId, date);
+      const logId = prev?.id ?? (await newScheduledDoseLogId(scheduleId, date));
 
-        // Reverse stock if previously taken
-        const pillsConsumed = await restoreTakenStock(prev, dosageMg);
+      // Reverse stock if previously taken
+      const pillsConsumed = await restoreTakenStock(w, prev, dosageMg);
 
-        // Snapshot the dose that was skipped.
-        const [phase, schedule] = await Promise.all([
-          db.medicationPhases.get(phaseId),
-          db.phaseSchedules.get(scheduleId),
-        ]);
-        const patch: DoseLogPatch = {
-          doseAmount: dosageMg,
-          doseUnit: schedule?.unit ?? phase?.unit,
-          pillsConsumed: 0,
-          // Always written: a skip without a reason clears an older one.
-          skipReason: reason,
-        };
+      // Snapshot the dose that was skipped.
+      const [phase, schedule] = await Promise.all([
+        db.medicationPhases.get(phaseId),
+        db.phaseSchedules.get(scheduleId),
+      ]);
+      const patch: DoseLogPatch = {
+        doseAmount: dosageMg,
+        doseUnit: schedule?.unit ?? phase?.unit,
+        pillsConsumed: 0,
+        // Always written: a skip without a reason clears an older one.
+        skipReason: reason,
+      };
 
-        const doseLog = await writeSlotLog(
-          prev, logId, { prescriptionId, phaseId, scheduleId, date, time }, "skipped", patch,
-        );
-        await enqueueInsideTx("doseLogs", doseLog.id, "upsert");
+      const doseLog = await writeSlotLog(
+        w, prev, logId, { prescriptionId, phaseId, scheduleId, date, time }, "skipped", patch,
+      );
 
-        const auditEntry = buildAuditEntry("dose_skipped", {
-          prescriptionId, date, time, dosageMg, pillsConsumed, reason,
-          inventoryItemId: prev?.inventoryItemId,
-        });
-        await db.auditLogs.add(auditEntry);
-        await enqueueInsideTx("auditLogs", auditEntry.id, "upsert");
+      await w.audit("dose_skipped", {
+        prescriptionId, date, time, dosageMg, pillsConsumed, reason,
+        inventoryItemId: prev?.inventoryItemId,
+      });
 
-        return doseLog;
-      },
-    );
-    schedulePush();
+      return doseLog;
+    });
 
     return ok(log);
   } catch (e) {
@@ -742,34 +690,26 @@ export async function rescheduleDose(input: RescheduleDoseInput): Promise<Servic
   try {
     const { prescriptionId, phaseId, scheduleId, date, time, newTime, dosageMg } = input;
 
-    const log = await db.transaction(
-      "rw",
-      [db.doseLogs, db.inventoryItems, db.inventoryTransactions, db.auditLogs, db._syncQueue],
-      async () => {
-        const prev = await getDoseLogRaw(scheduleId, date);
-        const logId = prev?.id ?? (await newScheduledDoseLogId(scheduleId, date));
+    const log = await syncedWrite(["doseLogs", "inventoryItems", "inventoryTransactions"], async (w) => {
+      const prev = await getDoseLogRaw(scheduleId, date);
+      const logId = prev?.id ?? (await newScheduledDoseLogId(scheduleId, date));
 
-        // Reverse stock if previously taken
-        const pillsConsumed = await restoreTakenStock(prev, dosageMg);
+      // Reverse stock if previously taken
+      const pillsConsumed = await restoreTakenStock(w, prev, dosageMg);
 
-        const doseLog = await writeSlotLog(
-          prev, logId, { prescriptionId, phaseId, scheduleId, date, time }, "rescheduled",
-          // Clear a reason left by an earlier skip: the slot is no longer skipped.
-          { rescheduledTo: newTime, pillsConsumed: 0, skipReason: undefined },
-        );
-        await enqueueInsideTx("doseLogs", doseLog.id, "upsert");
+      const doseLog = await writeSlotLog(
+        w, prev, logId, { prescriptionId, phaseId, scheduleId, date, time }, "rescheduled",
+        // Clear a reason left by an earlier skip: the slot is no longer skipped.
+        { rescheduledTo: newTime, pillsConsumed: 0, skipReason: undefined },
+      );
 
-        const auditEntry = buildAuditEntry("dose_rescheduled", {
-          prescriptionId, date, time, newTime, dosageMg, pillsConsumed,
-          inventoryItemId: prev?.inventoryItemId,
-        });
-        await db.auditLogs.add(auditEntry);
-        await enqueueInsideTx("auditLogs", auditEntry.id, "upsert");
+      await w.audit("dose_rescheduled", {
+        prescriptionId, date, time, newTime, dosageMg, pillsConsumed,
+        inventoryItemId: prev?.inventoryItemId,
+      });
 
-        return doseLog;
-      },
-    );
-    schedulePush();
+      return doseLog;
+    });
 
     return ok(log);
   } catch (e) {
@@ -859,29 +799,20 @@ export async function editDoseTime(input: EditDoseTimeInput): Promise<ServiceRes
       return err("Cannot record a dose as taken at a future time");
     }
 
-    const log = await db.transaction(
-      "rw",
-      [db.doseLogs, db.auditLogs, db._syncQueue],
-      async () => {
-        const prev = await getDoseLogRaw(scheduleId, date);
-        if (!prev || prev.status !== "taken") {
-          throw new Error("Dose is not logged as taken");
-        }
+    const log = await syncedWrite(["doseLogs"], async (w) => {
+      const prev = await getDoseLogRaw(scheduleId, date);
+      if (!prev || prev.status !== "taken") {
+        throw new Error("Dose is not logged as taken");
+      }
 
-        const now = Date.now();
-        await db.doseLogs.update(prev.id, { actionTimestamp: newTimestamp, updatedAt: now });
-        await enqueueInsideTx("doseLogs", prev.id, "upsert");
+      const written = await w.patch("doseLogs", prev.id, { actionTimestamp: newTimestamp });
 
-        const auditEntry = buildAuditEntry("dose_time_edited", {
-          prescriptionId, date, time, newTime,
-        });
-        await db.auditLogs.add(auditEntry);
-        await enqueueInsideTx("auditLogs", auditEntry.id, "upsert");
+      await w.audit("dose_time_edited", {
+        prescriptionId, date, time, newTime,
+      });
 
-        return { ...prev, actionTimestamp: newTimestamp, updatedAt: now };
-      },
-    );
-    schedulePush();
+      return written!;
+    });
 
     return ok(log);
   } catch (e) {
