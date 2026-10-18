@@ -433,6 +433,7 @@ export function registerWriteTools(server: McpServer): void {
     tool("log_food"),
     {
       title: "Log food",
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
       description:
         "Log a meal or snack the user ate, as one food entry. Give the amounts for the portion the user actually ate, not for the whole recipe: if a recipe makes 4 servings and the user ate 1, log a quarter of the recipe's grams and nutrients. `water_ml` is the water content of the food itself (soup, stew, fruit), which counts toward the user's fluid intake; leave it out for dry food. For a drink (water, coffee, tea, juice, beer, wine), use log_drink instead, so its volume counts as fluid once. Before logging, tell the user the values you will log; call this once per meal, never twice for the same meal. Returns `group_id`; pass it to delete_logged_entry to undo a mistake. The entry appears in the app the next time the app syncs.",
       inputSchema: z.object({
@@ -469,6 +470,7 @@ export function registerWriteTools(server: McpServer): void {
     tool("log_drink"),
     {
       title: "Log drink",
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
       description:
         "Log a drink the user had. `volume_ml` is the amount drunk; all of it counts as fluid intake. Add caffeine (mg) for coffee, tea, energy drinks; add `abv_percent` (the number on the label) for alcohol, and the app works out the standard drinks. Give sodium, sugar and potassium for the volume drunk. Before logging, tell the user the values you will log; call this once per drink. Returns `group_id`; pass it to delete_logged_entry to undo a mistake. The entry appears in the app the next time the app syncs.",
       inputSchema: z.object({
@@ -507,6 +509,7 @@ export function registerWriteTools(server: McpServer): void {
     tool("delete_logged_entry"),
     {
       title: "Delete a logged entry",
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
       description:
         "Remove a meal or drink that this connector logged, by the `group_id` that log_food or log_drink returned. Use it to undo a wrong or duplicate entry, and only when the user asks. Entries the user logged in the app can't be removed here; the user removes those in the app.",
       inputSchema: z.object({

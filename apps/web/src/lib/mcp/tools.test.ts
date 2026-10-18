@@ -309,4 +309,12 @@ describe("MCP tools — log tools", () => {
     expect(textOf(res)).toMatch(/not granted read access/);
     expect(queries.getTodaySummary).not.toHaveBeenCalled();
   });
+
+  it("marks logging as additive and delete as destructive", async () => {
+    const { tools } = await client.listTools();
+    const hints = Object.fromEntries(tools.map((t) => [t.name, t.annotations]));
+    expect(hints.log_food).toMatchObject({ readOnlyHint: false, destructiveHint: false });
+    expect(hints.log_drink).toMatchObject({ readOnlyHint: false, destructiveHint: false });
+    expect(hints.delete_logged_entry).toMatchObject({ destructiveHint: true, idempotentHint: true });
+  });
 });
