@@ -126,7 +126,7 @@ export function McpConnectionsSection() {
         </div>
       )}
       <p className={helpClass}>
-        Connected clients get read-only access to your synced data.
+        Connected clients can read your synced data. Clients you approved for logging can also add meals and drinks, and remove only the ones they added.
       </p>
     </div>
   );

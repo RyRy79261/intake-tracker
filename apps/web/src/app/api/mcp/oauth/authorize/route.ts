@@ -39,9 +39,9 @@ import { db } from "@intake/db/client";
 import { usersSync } from "@intake/db/schema";
 import { sql } from "drizzle-orm";
 import { getClient, issueAuthCode } from "@/lib/mcp/oauth";
-import { parseScopeString, serialiseScopes } from "@/lib/mcp/scopes";
+import { hasScope, parseScopeString, serialiseScopes, WRITE_SCOPE } from "@/lib/mcp/scopes";
 import { isEmailAllowed } from "@/lib/mcp/whitelist";
-import { consentDataCategories } from "@/lib/mcp/tool-catalog";
+import { consentDataCategories, consentWriteActions } from "@/lib/mcp/tool-catalog";
 import { getPublicOrigin } from "@/lib/mcp/origin";
 
 export const dynamic = "force-dynamic";
@@ -359,6 +359,8 @@ export async function GET(req: NextRequest) {
 
   await ensureUserInSync(user.userId, user.email);
 
+  const canWrite = hasScope(scope, WRITE_SCOPE);
+
   // Render consent page. Form POSTs back to the same URL with the same
   // search params (encoded in hidden inputs) plus `confirm=yes`.
   const html = `<!doctype html>
@@ -378,12 +380,22 @@ export async function GET(req: NextRequest) {
 <body>
   <div class="card">
     <h1>Connect to intake-tracker</h1>
-    <p><strong>${escapeHtml(client.clientName)}</strong> is requesting read-only access to your intake-tracker data:</p>
+    <p><strong>${escapeHtml(client.clientName)}</strong> is requesting ${canWrite ? "access" : "read-only access"} to your intake-tracker data. It can read:</p>
     <ul>
       ${consentDataCategories()
         .map((line) => `<li>${escapeHtml(line)}</li>`)
         .join("\n      ")}
     </ul>
+    ${
+      canWrite
+        ? `<p>It can also:</p>
+    <ul>
+      ${consentWriteActions()
+        .map((line) => `<li>${escapeHtml(line)}</li>`)
+        .join("\n      ")}
+    </ul>`
+        : ""
+    }
     <p class="meta">Signed in as ${escapeHtml(user.email ?? user.userId)}. Scope: ${escapeHtml(scope)}.</p>
     <form method="POST" class="actions">
       ${Array.from(req.nextUrl.searchParams.entries())

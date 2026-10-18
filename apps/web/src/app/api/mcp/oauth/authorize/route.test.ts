@@ -219,6 +219,34 @@ describe("authorize GET — signed in", () => {
     }
   });
 
+  it("lists what Claude can log when no scope is named", async () => {
+    getSessionMock.mockResolvedValue({
+      data: { user: { id: "user-1", email: "user@example.test" } },
+    });
+
+    const body = await (await GET(makeRequest(authorizeParams()))).text();
+
+    const { consentWriteActions } = await import("@/lib/mcp/tool-catalog");
+    for (const line of consentWriteActions()) {
+      expect(body).toContain(line.replaceAll("'", "&#39;"));
+    }
+    expect(body).toContain("intake-tracker:write");
+  });
+
+  it("stays read-only when the client asks for read alone", async () => {
+    getSessionMock.mockResolvedValue({
+      data: { user: { id: "user-1", email: "user@example.test" } },
+    });
+
+    const body = await (
+      await GET(makeRequest(authorizeParams({ scope: "intake-tracker:read" })))
+    ).text();
+
+    expect(body).toContain("read-only access");
+    expect(body).not.toContain("Log meals");
+    expect(body).not.toContain("intake-tracker:write");
+  });
+
   it("renders consent and retires the marker after a successful sign-in", async () => {
     getSessionMock.mockResolvedValue({
       data: { user: { id: "user-1", email: "user@example.test" } },

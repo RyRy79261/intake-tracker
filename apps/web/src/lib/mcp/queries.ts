@@ -100,6 +100,19 @@ async function getStoredTimeZone(
   return rows[0]?.timezone ?? synced?.homeTimezone ?? null;
 }
 
+/**
+ * The zone a tool acts in: the explicit tool arg, else the zone the app last
+ * reported for the user, else UTC.
+ */
+export async function getUserTimeZone(
+  userId: string,
+  explicit: string | undefined,
+): Promise<string> {
+  if (explicit) return resolveTimeZone(explicit, null);
+  const synced = await getSyncedSettings(userId);
+  return resolveTimeZone(null, await getStoredTimeZone(userId, synced));
+}
+
 // ─────────────────────────────────────────────────────────────────────────
 // Today summary
 // ─────────────────────────────────────────────────────────────────────────

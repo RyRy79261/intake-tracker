@@ -22,7 +22,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@intake/db/client";
 import { usersSync } from "@intake/db/schema";
 import { lookupAccessToken } from "@/lib/mcp/oauth";
-import { registerReadOnlyTools } from "@/lib/mcp/tools";
+import { registerReadOnlyTools, registerWriteTools } from "@/lib/mcp/tools";
 import { isEmailAllowed } from "@/lib/mcp/whitelist";
 import { withCors } from "@/lib/mcp/cors";
 import { NextResponse } from "next/server";
@@ -32,6 +32,7 @@ export const maxDuration = 60;
 const baseHandler = createMcpHandler(
   (server) => {
     registerReadOnlyTools(server);
+    registerWriteTools(server);
   },
   {
     serverInfo: { name: "intake-tracker", version: "1.0.0" },
