@@ -26,6 +26,20 @@ import { recordUsage, tokensFromAnthropic } from "@/app/api/ai/_shared/usage-tra
  */
 
 type MessageParams = Anthropic.Messages.MessageCreateParamsNonStreaming;
+
+/**
+ * The one part of the Anthropic SDK client these helpers use. The real SDK
+ * client satisfies it, and so does the fake in `claude-port.ts`, which is
+ * what lets a test run a whole AI task without the network.
+ */
+export interface ClaudeClient {
+  messages: {
+    create(
+      params: MessageParams,
+      options?: { timeout?: number; maxRetries?: number },
+    ): Promise<Anthropic.Message>;
+  };
+}
 type ToolUseBlock = Extract<Anthropic.Messages.ContentBlock, { type: "tool_use" }>;
 
 /** The model declined the request (HTTP 200, `stop_reason: "refusal"`). */
@@ -124,7 +138,7 @@ function retryDelayMs(error: unknown, attempt: number): number {
  * it as the assistant turn of a follow-up) exactly as if it were one reply.
  */
 export async function createMessage(
-  client: Anthropic,
+  client: ClaudeClient,
   params: MessageParams,
   opts: CallOptions,
 ): Promise<Anthropic.Message> {
@@ -265,7 +279,7 @@ export interface ToolCallResult {
  * history.
  */
 export async function requestToolCall(
-  client: Anthropic,
+  client: ClaudeClient,
   params: MessageParams,
   opts: ToolCallOptions,
 ): Promise<ToolCallResult> {

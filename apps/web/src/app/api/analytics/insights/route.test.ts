@@ -222,8 +222,8 @@ describe("POST /api/analytics/insights", () => {
     const res = await POST(makeRequest(validBody()));
 
     expect(res.status).toBe(502);
-    const body = (await res.json()) as { error: string };
-    expect(body.error).toBe("AI response format invalid");
+    const body = (await res.json()) as { code: string };
+    expect(body.code).toBe("AI_BAD_OUTPUT");
     // One unforced retry, then give up.
     expect(messagesCreateCalls).toHaveLength(2);
   });
@@ -311,8 +311,8 @@ describe("POST /api/analytics/insights", () => {
     const res = await POST(makeRequest(validBody()));
 
     expect(res.status).toBe(502);
-    const body = (await res.json()) as { error: string };
-    expect(body.error).toBe("AI response format invalid");
+    const body = (await res.json()) as { code: string };
+    expect(body.code).toBe("AI_BAD_OUTPUT");
   });
 
   it("returns a clear 502 / RESPONSE_TRUNCATED when stop_reason is max_tokens", async () => {

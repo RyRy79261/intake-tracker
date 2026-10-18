@@ -84,24 +84,26 @@ describe("TodayGadget", () => {
 
     await waitFor(() => expect(screen.getByTestId("today-water-value")).toHaveTextContent("1,200"));
 
-    // Over target: hatched fill, bold "over target" line.
+    // Over target, inside the buffer: hatched fill, bold line with the
+    // buffer used against its size.
     const water = screen.getByTestId("today-row-water");
-    expect(water).toHaveAttribute("data-status", "over");
-    expect(screen.getByTestId("today-water-status")).toHaveTextContent("200 ml over target");
+    expect(water).toHaveAttribute("data-status", "extended");
+    expect(screen.getByTestId("today-water-status")).toHaveTextContent("200 / 500 ml extra");
     expect(screen.getByTestId("today-water-status")).toHaveClass("over");
     const today = todayCell("water");
-    expect(today).toHaveAttribute("data-status", "over");
+    expect(today).toHaveAttribute("data-status", "extended");
     expect(today.querySelector("b")).toHaveClass("h");
 
     // Over the limit on an earlier day: solid fill with the ink cap.
     const wed = cellFor("water", "2026-09-23");
-    expect(wed).toHaveAttribute("data-status", "lim");
+    expect(wed).toHaveAttribute("data-status", "over");
     expect(wed.querySelector("b")).toHaveClass("x");
 
-    // Over the limit today: an inverse "▲ over limit" block.
-    expect(screen.getByTestId("today-row-sodium")).toHaveAttribute("data-status", "lim");
+    // Over the limit today: an inverse "▲" block, still measured from the
+    // target against the buffer (#309).
+    expect(screen.getByTestId("today-row-sodium")).toHaveAttribute("data-status", "over");
     const sodiumStatus = screen.getByTestId("today-sodium-status");
-    expect(within(sodiumStatus).getByText("▲ 100 mg over limit")).toHaveClass("wc-inv");
+    expect(within(sodiumStatus).getByText("▲ 600 / 500 mg extra")).toHaveClass("wc-inv");
     expect(todayCell("sodium").querySelector("b")).toHaveClass("x");
 
     // Later days this week have no bar yet.
@@ -109,6 +111,48 @@ describe("TodayGadget", () => {
     expect(fri).toHaveAttribute("data-status", "future");
     expect(fri).toHaveClass("fut");
     expect(fri.querySelector("b")).toBeNull();
+  });
+
+  it("past the target, reads the buffer used against the buffer's size, from the target (#309)", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 8, 24, 18, 0));
+    await renderWithFixtures(<TodayGadget />, {
+      settings: { waterLimit: 1500, waterExtendedBuffer: 500, saltLimit: 1500, saltExtendedBuffer: 0 },
+      seed: {
+        intakeRecords: [
+          makeIntakeRecord({ type: "water", amount: 2501, timestamp: at(24, 9) }),
+          makeIntakeRecord({ type: "salt", amount: 1700, timestamp: at(24, 12) }),
+        ],
+      },
+    });
+
+    // The total against the configured target, then 1,001 into a 500 buffer
+    // (not 501 / 500 against target + buffer, the reading #309 removed).
+    await waitFor(() => expect(screen.getByTestId("today-water-value")).toHaveTextContent("2,501"));
+    expect(screen.getByTestId("today-row-water")).toHaveTextContent("2,501 / 1,500");
+    expect(screen.getByTestId("today-water-status")).toHaveTextContent("▲ 1,001 / 500 ml extra");
+    expect(screen.getByTestId("today-row-water")).toHaveAccessibleName(
+      /1,001 ml over the target, past the 500 ml buffer/,
+    );
+    // No buffer: how far over the target.
+    expect(screen.getByTestId("today-sodium-status")).toHaveTextContent("▲ 200 mg over");
+  });
+
+  it("leaves out a record dated later today, as the Liquids header does", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 8, 24, 18, 0));
+    await renderWithFixtures(<TodayGadget />, {
+      settings: { waterLimit: 1000, waterExtendedBuffer: 500 },
+      seed: {
+        intakeRecords: [
+          makeIntakeRecord({ type: "water", amount: 400, timestamp: at(24, 9) }),
+          makeIntakeRecord({ type: "water", amount: 500, timestamp: at(24, 20) }),
+        ],
+      },
+    });
+
+    await waitFor(() => expect(screen.getByTestId("today-water-value")).toHaveTextContent(/^400$/));
+    expect(screen.getByTestId("today-water-status")).toHaveTextContent("600 ml left");
   });
 
   it("starts the week on Sunday when chosen", async () => {

@@ -9,8 +9,6 @@ import { makeTestQueryClient } from "@/__tests__/react-test-utils";
 import { seedDatabase } from "@/__tests__/fixtures/scenarios";
 import { makeIntakeRecord } from "@/__tests__/fixtures/db-fixtures";
 import {
-  useIntakeTotal,
-  useDailyIntakeTotal,
   useRecentIntakeRecords,
   useIntakeRecordsByDateRange,
   useSaltTotalsByGroupIds,
@@ -36,7 +34,7 @@ describe("use-intake-queries read hooks", () => {
     vi.useRealTimers();
   });
 
-  it("useIntakeTotal sums non-deleted records of a type within 24h", async () => {
+  it("useIntake's rolling total sums non-deleted records of a type within 24h", async () => {
     const now = Date.now();
     await seedDatabase({
       intakeRecords: [
@@ -55,14 +53,14 @@ describe("use-intake-queries read hooks", () => {
       ],
     });
 
-    const { result } = renderHook(() => useIntakeTotal("water"), {
+    const { result } = renderHook(() => useIntake("water").rollingTotal, {
       wrapper: makeWrapper(),
     });
 
     await waitFor(() => expect(result.current).toBe(750));
   });
 
-  it("useDailyIntakeTotal counts only records since the configured day start", async () => {
+  it("useIntake's daily total counts only records since the configured day start", async () => {
     // Pin the clock to local midday so a record "1 hour ago" is unambiguously
     // within the current day-start window (default day start is 2am). Without
     // this, the test is wall-clock flaky: when it runs between the day-start
@@ -82,7 +80,7 @@ describe("use-intake-queries read hooks", () => {
       ],
     });
 
-    const { result } = renderHook(() => useDailyIntakeTotal("salt"), {
+    const { result } = renderHook(() => useIntake("salt").dailyTotal, {
       wrapper: makeWrapper(),
     });
 
