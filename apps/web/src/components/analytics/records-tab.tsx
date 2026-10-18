@@ -9,8 +9,7 @@ import { EditIntakeDialog } from "@/components/edit-intake-dialog";
 import { EditWeightDialog } from "@/components/edit-weight-dialog";
 import { EditBloodPressureDialog, validateBloodPressureEdit } from "@/components/edit-blood-pressure-dialog";
 import { EditEatingDialog } from "@/components/edit-eating-dialog";
-import { EditUrinationDialog } from "@/components/edit-urination-dialog";
-import { EditDefecationDialog } from "@/components/edit-defecation-dialog";
+import { EditEstimateEntryDialog } from "@/components/edit-estimate-entry-dialog";
 import { EditSubstanceDialog } from "@/components/edit-substance-dialog";
 import { EditDrinkDialog } from "@/components/edit-drink-dialog";
 import {
@@ -23,8 +22,6 @@ import {
   type WeightRecord,
   type BloodPressureRecord,
   type EatingRecord,
-  type UrinationRecord,
-  type DefecationRecord,
   type SubstanceRecord,
 } from "@/lib/db";
 import {
@@ -42,8 +39,8 @@ import { useUpdateWeight, useUpdateBloodPressure, useDeleteWeight, useDeleteBloo
 import { resolveEditedTimestamp } from "@/hooks/use-edit-record";
 import { parseWeightForm, normalizeAmountEstimate } from "@intake/core/record-schemas";
 import { useUpdateEating, useDeleteEating } from "@/hooks/use-eating-queries";
-import { useUpdateUrination, useDeleteUrination } from "@/hooks/use-urination-queries";
-import { useUpdateDefecation, useDeleteDefecation } from "@/hooks/use-defecation-queries";
+import { useUpdateEstimateRecord, useDeleteEstimateRecord } from "@/hooks/use-estimate-tracker";
+import { ESTIMATE_TRACKER_IDS, type EstimateRecord, type EstimateTrackerId } from "@/lib/estimate-trackers";
 import { useUpdateSubstance } from "@/hooks/use-substance-queries";
 import {
   useDeleteSubstanceWithUndo,
@@ -162,10 +159,10 @@ export function RecordsTab({ range, filter: filterProp, onFilterChange }: Record
   const deleteBPMutation = useDeleteBloodPressure();
   const updateEatingMutation = useUpdateEating();
   const deleteEatingMutation = useDeleteEating();
-  const updateUrinationMutation = useUpdateUrination();
-  const deleteUrinationMutation = useDeleteUrination();
-  const updateDefecationMutation = useUpdateDefecation();
-  const deleteDefecationMutation = useDeleteDefecation();
+  const updateUrinationMutation = useUpdateEstimateRecord("urination");
+  const deleteUrinationMutation = useDeleteEstimateRecord("urination");
+  const updateDefecationMutation = useUpdateEstimateRecord("defecation");
+  const deleteDefecationMutation = useDeleteEstimateRecord("defecation");
   const updateSubstanceMutation = useUpdateSubstance();
 
   // Edit dialog states
@@ -174,8 +171,7 @@ export function RecordsTab({ range, filter: filterProp, onFilterChange }: Record
   const [editingWeight, setEditingWeight] = useState<WeightRecord | null>(null);
   const [editingBP, setEditingBP] = useState<BloodPressureRecord | null>(null);
   const [editingEating, setEditingEating] = useState<EatingRecord | null>(null);
-  const [editingUrination, setEditingUrination] = useState<UrinationRecord | null>(null);
-  const [editingDefecation, setEditingDefecation] = useState<DefecationRecord | null>(null);
+  const [editingEstimate, setEditingEstimate] = useState<{ tracker: EstimateTrackerId; record: EstimateRecord } | null>(null);
   const [editingSubstance, setEditingSubstance] = useState<SubstanceRecord | null>(null);
 
   // Edit form states
@@ -189,8 +185,7 @@ export function RecordsTab({ range, filter: filterProp, onFilterChange }: Record
   const [editPosition, setEditPosition] = useState<"sitting" | "standing">("sitting");
   const [editArm, setEditArm] = useState<"left" | "right">("left");
   const [editIrregularHeartbeat, setEditIrregularHeartbeat] = useState(false);
-  const [editAmountUrination, setEditAmountUrination] = useState("");
-  const [editAmountDefecation, setEditAmountDefecation] = useState("");
+  const [editAmountEstimate, setEditAmountEstimate] = useState("");
   const [editDescription, setEditDescription] = useState("");
   const [editSubstanceAmount, setEditSubstanceAmount] = useState("");
   const [editSubstanceVolume, setEditSubstanceVolume] = useState("");
@@ -288,12 +283,9 @@ export function RecordsTab({ range, filter: filterProp, onFilterChange }: Record
       setEditIrregularHeartbeat(unified.record.irregularHeartbeat === true);
     } else if (unified.type === "eating") {
       setEditingEating(unified.record);
-    } else if (unified.type === "urination") {
-      setEditingUrination(unified.record);
-      setEditAmountUrination(unified.record.amountEstimate || "");
-    } else if (unified.type === "defecation") {
-      setEditingDefecation(unified.record);
-      setEditAmountDefecation(unified.record.amountEstimate || "");
+    } else if (unified.type === "urination" || unified.type === "defecation") {
+      setEditingEstimate({ tracker: unified.type, record: unified.record });
+      setEditAmountEstimate(unified.record.amountEstimate || "");
     } else if (unified.type === "caffeine" || unified.type === "alcohol") {
       setEditingSubstance(unified.record);
       setEditDescription(unified.record.description);
@@ -383,32 +375,23 @@ export function RecordsTab({ range, filter: filterProp, onFilterChange }: Record
     } catch { toast({ title: "Error", description: "Could not update", variant: "destructive" }); }
   }, [editingEating, editTimestamp, editNote, toast, updateEatingMutation]);
 
-  const handleEditUrinationSubmit = useCallback(async (e: React.FormEvent) => {
+  const handleEditEstimateSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingUrination) return;
-    const ts = resolveEditedTimestamp(editingUrination.timestamp, editTimestamp);
+    if (!editingEstimate) return;
+    const { tracker, record } = editingEstimate;
+    const ts = resolveEditedTimestamp(record.timestamp, editTimestamp);
     if (!ts.ok) { toast({ title: ts.message, variant: "destructive" }); return; }
     try {
-      // `null` clears; the update types predate explicit clears.
-      const updates = { timestamp: ts.timestamp, amountEstimate: normalizeAmountEstimate(editAmountUrination), note: editNote.trim() || null };
-      await updateUrinationMutation.mutateAsync({ id: editingUrination.id, updates: updates as { timestamp: number; amountEstimate?: string; note?: string } });
-      setEditingUrination(null);
+      const update = tracker === "urination" ? updateUrinationMutation : updateDefecationMutation;
+      await update.mutateAsync({
+        id: record.id,
+        // `null` clears the estimate / note.
+        updates: { timestamp: ts.timestamp, amountEstimate: normalizeAmountEstimate(editAmountEstimate), note: editNote.trim() || null },
+      });
+      setEditingEstimate(null);
       toast({ title: "Entry updated" });
     } catch { toast({ title: "Error", description: "Could not update", variant: "destructive" }); }
-  }, [editingUrination, editTimestamp, editAmountUrination, editNote, toast, updateUrinationMutation]);
-
-  const handleEditDefecationSubmit = useCallback(async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingDefecation) return;
-    const ts = resolveEditedTimestamp(editingDefecation.timestamp, editTimestamp);
-    if (!ts.ok) { toast({ title: ts.message, variant: "destructive" }); return; }
-    try {
-      const updates = { timestamp: ts.timestamp, amountEstimate: normalizeAmountEstimate(editAmountDefecation), note: editNote.trim() || null };
-      await updateDefecationMutation.mutateAsync({ id: editingDefecation.id, updates: updates as { timestamp: number; amountEstimate?: string; note?: string } });
-      setEditingDefecation(null);
-      toast({ title: "Entry updated" });
-    } catch { toast({ title: "Error", description: "Could not update", variant: "destructive" }); }
-  }, [editingDefecation, editTimestamp, editAmountDefecation, editNote, toast, updateDefecationMutation]);
+  }, [editingEstimate, editTimestamp, editAmountEstimate, editNote, toast, updateUrinationMutation, updateDefecationMutation]);
 
   const handleEditSubstanceSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
@@ -585,30 +568,22 @@ export function RecordsTab({ range, filter: filterProp, onFilterChange }: Record
         onNoteChange={setEditNote}
         onFocus={scrollOnFocus}
       />
-      <EditUrinationDialog
-        record={editingUrination}
-        onClose={() => setEditingUrination(null)}
-        onSubmit={handleEditUrinationSubmit}
-        timestamp={editTimestamp}
-        onTimestampChange={setEditTimestamp}
-        amount={editAmountUrination}
-        onAmountChange={setEditAmountUrination}
-        note={editNote}
-        onNoteChange={setEditNote}
-        onFocus={scrollOnFocus}
-      />
-      <EditDefecationDialog
-        record={editingDefecation}
-        onClose={() => setEditingDefecation(null)}
-        onSubmit={handleEditDefecationSubmit}
-        timestamp={editTimestamp}
-        onTimestampChange={setEditTimestamp}
-        amount={editAmountDefecation}
-        onAmountChange={setEditAmountDefecation}
-        note={editNote}
-        onNoteChange={setEditNote}
-        onFocus={scrollOnFocus}
-      />
+      {ESTIMATE_TRACKER_IDS.map((tracker) => (
+        <EditEstimateEntryDialog
+          key={tracker}
+          tracker={tracker}
+          open={editingEstimate?.tracker === tracker}
+          onClose={() => setEditingEstimate(null)}
+          onSubmit={handleEditEstimateSubmit}
+          timestamp={editTimestamp}
+          onTimestampChange={setEditTimestamp}
+          amount={editAmountEstimate}
+          onAmountChange={setEditAmountEstimate}
+          note={editNote}
+          onNoteChange={setEditNote}
+          onFocus={scrollOnFocus}
+        />
+      ))}
       <EditSubstanceDialog
         record={editingSubstance}
         onClose={() => setEditingSubstance(null)}

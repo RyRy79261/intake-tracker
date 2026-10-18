@@ -11,8 +11,7 @@ import {
   deleteBloodPressureRecord,
 } from "@/lib/health-service";
 import { getEatingRecordsByDateRange } from "@/lib/eating-service";
-import { getUrinationRecordsByDateRange } from "@/lib/urination-service";
-import { getDefecationRecordsByDateRange } from "@/lib/defecation-service";
+import { getEstimateRecordsBetween } from "@/lib/estimate-tracker-service";
 import {
   getSubstanceRecordsByDateRange,
   deleteSubstanceRecord,
@@ -33,8 +32,8 @@ export function useRecordsTabData(range: TimeRange) {
           getWeightRecordsByDateRange(range.start, range.end),
           getBloodPressureRecordsByDateRange(range.start, range.end),
           getEatingRecordsByDateRange(range.start, range.end),
-          getUrinationRecordsByDateRange(range.start, range.end),
-          getDefecationRecordsByDateRange(range.start, range.end),
+          getEstimateRecordsBetween("urination", range.start, range.end),
+          getEstimateRecordsBetween("defecation", range.start, range.end),
           getSubstanceRecordsByDateRange(range.start, range.end),
         ]);
 

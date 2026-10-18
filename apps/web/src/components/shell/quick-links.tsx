@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { ShellIcon } from "@/components/shell/shell-icon";
+import { DESK_MODULES, MODULE_IDS } from "@/lib/desk-modules";
 import type { Domain } from "@/lib/domain-colors";
 import type { ShellIconName } from "@/lib/nav-routes";
 import { cn } from "@/lib/utils";
@@ -10,22 +11,18 @@ import { cn } from "@/lib/utils";
 export const QUICK_LINKS_HEIGHT_PX = 48;
 
 interface QuickLink {
-  /** The id of the Home section it scrolls to (home-page-body.tsx). */
+  /** The id of the Home section it scrolls to (the module's `sectionId`). */
   section: string;
   label: string;
   icon: ShellIconName;
   domain: Domain;
 }
 
-/** Home's module cards, in the order they appear on Home. */
-export const QUICK_LINKS: readonly QuickLink[] = [
-  { section: "section-water", label: "Liquids", icon: "drop", domain: "water" },
-  { section: "section-food-salt", label: "Food", icon: "food", domain: "sodium" },
-  { section: "section-bp", label: "BP", icon: "bp", domain: "bp" },
-  { section: "section-weight", label: "Weight", icon: "weight", domain: "weight" },
-  { section: "section-urination", label: "Urine", icon: "wee", domain: "bath" },
-  { section: "section-defecation", label: "Bowel", icon: "bowel", domain: "bath" },
-];
+/** Home's module cards, in the order they appear on Home (the module list's order). */
+export const QUICK_LINKS: readonly QuickLink[] = MODULE_IDS.flatMap((id) => {
+  const { sectionId, linkLabel, icon, domain } = DESK_MODULES[id];
+  return sectionId && linkLabel && domain ? [{ section: sectionId, label: linkLabel, icon, domain }] : [];
+});
 
 /**
  * The section in view: the last one whose top has passed the line under the

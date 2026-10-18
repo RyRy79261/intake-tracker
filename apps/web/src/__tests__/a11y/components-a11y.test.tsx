@@ -73,8 +73,7 @@ import { LiquidsCard } from "@/components/liquids-card";
 import { FoodSaltCard } from "@/components/food-salt-card";
 import { BloodPressureCard } from "@/components/blood-pressure-card";
 import { WeightCard } from "@/components/weight-card";
-import { UrinationCard } from "@/components/urination-card";
-import { DefecationCard } from "@/components/defecation-card";
+import { EstimateTrackerCard } from "@/components/estimate-tracker-card";
 // Medications-page components (round 2 — see file-level history).
 import { WeekDaySelector } from "@/components/medications/week-day-selector";
 import { WardMedTabs, wardMedTabId } from "@/components/medications/med-tabs";
@@ -156,8 +155,8 @@ const COMPONENTS: { label: string; element: () => React.ReactElement }[] = [
   { label: "FoodSaltCard", element: () => <FoodSaltCard /> },
   { label: "BloodPressureCard", element: () => <BloodPressureCard /> },
   { label: "WeightCard", element: () => <WeightCard /> },
-  { label: "UrinationCard", element: () => <UrinationCard /> },
-  { label: "DefecationCard", element: () => <DefecationCard /> },
+  { label: "EstimateTrackerCard (urination)", element: () => <EstimateTrackerCard tracker="urination" /> },
+  { label: "EstimateTrackerCard (defecation)", element: () => <EstimateTrackerCard tracker="defecation" /> },
   // Medications-page components (round 2)
   {
     label: "WeekDaySelector",
