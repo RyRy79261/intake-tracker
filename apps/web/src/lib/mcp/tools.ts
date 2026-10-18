@@ -1,15 +1,18 @@
 /**
- * MCP tool registry — read-only.
+ * MCP tool registry.
  *
  * Each tool:
  *   - validates its input with Zod (date-range sanity, etc.)
  *   - extracts userId from ctx.http.authInfo (set by withMcpAuth → verifyToken)
- *   - calls a query function in ./queries
+ *   - calls a query function in ./queries, or a write in ./writes
  *   - writes an audit log row (fire-and-forget)
  *   - returns a `content: [{ type: "text", text: JSON }]` MCP response
  *
- * No write/delete/update tools are registered — claude.ai cannot mutate
- * state through this connector even if the model tries.
+ * The read tools need no more than a valid token. The log tools also need
+ * the `intake-tracker:write` scope, which the user grants on the consent
+ * screen; a token granted before that scope existed is refused with a
+ * message to reconnect. The log tools add meals and drinks and remove only
+ * entries the connector itself logged — nothing else can be changed.
  */
 import { z } from "zod";
 import type { McpServer, ServerContext } from "@modelcontextprotocol/server";
@@ -26,9 +29,13 @@ import {
   queryUrinationHistory,
   queryWeightHistory,
 } from "@/lib/mcp/queries";
+import { deleteLoggedEntry, logDrink, logFood } from "@/lib/mcp/writes";
 import { writeMcpAudit } from "@/lib/mcp/audit";
 import { isValidTimeZone } from "@/lib/mcp/day-window";
-import type { McpToolName } from "@/lib/mcp/tool-catalog";
+import { WRITE_SCOPE } from "@/lib/mcp/scopes";
+import type { McpReadToolName, McpWriteToolName } from "@/lib/mcp/tool-catalog";
+import { VOICE_ITEM_SPEC } from "@intake/core/voice-items";
+import { isFutureTimestamp } from "@intake/core/record-schemas";
 
 const ONE_YEAR_MS = 365 * 24 * 60 * 60_000;
 
@@ -76,7 +83,11 @@ const timezoneArg = z
     "The user's IANA time zone (e.g. 'Europe/Berlin'). Defaults to the zone the app last reported for the user, else UTC.",
   );
 
-function getAuth(ctx: ServerContext): { userId: string; clientId: string } {
+function getAuth(ctx: ServerContext): {
+  userId: string;
+  clientId: string;
+  scopes: string[];
+} {
   const info = ctx.http?.authInfo;
   if (!info?.extra || typeof info.extra !== "object") {
     throw new Error("Missing auth context");
@@ -85,7 +96,7 @@ function getAuth(ctx: ServerContext): { userId: string; clientId: string } {
   if (!extra.userId || !extra.clientId) {
     throw new Error("Missing userId/clientId in auth context");
   }
-  return { userId: extra.userId, clientId: extra.clientId };
+  return { userId: extra.userId, clientId: extra.clientId, scopes: info.scopes ?? [] };
 }
 
 async function runTool<TArgs extends Record<string, unknown>>(
@@ -94,9 +105,30 @@ async function runTool<TArgs extends Record<string, unknown>>(
   args: TArgs,
   argsForAudit: Record<string, unknown> | null,
   body: (userId: string) => Promise<unknown>,
+  opts: { write?: boolean } = {},
 ) {
   const started = Date.now();
-  const { userId, clientId } = getAuth(ctx);
+  const { userId, clientId, scopes } = getAuth(ctx);
+  if (opts.write && !scopes.includes(WRITE_SCOPE)) {
+    void writeMcpAudit({
+      userId,
+      clientId,
+      tool,
+      argsForAudit,
+      status: "error",
+      errorMessage: "missing write scope",
+      durationMs: Date.now() - started,
+    });
+    return {
+      content: [
+        {
+          type: "text" as const,
+          text: "This connection can only read. To let Claude log entries, remove the intake-tracker connector in Claude's settings and connect it again, then approve the new access.",
+        },
+      ],
+      isError: true,
+    };
+  }
   try {
     const result = await body(userId);
     void writeMcpAudit({
@@ -144,7 +176,7 @@ async function runTool<TArgs extends Record<string, unknown>>(
 export function registerReadOnlyTools(server: McpServer): void {
   // Names are typed against the consent catalog, so every tool registered
   // here is one the OAuth consent screen describes.
-  const tool = (name: McpToolName) => name;
+  const tool = (name: McpReadToolName) => name;
 
   server.registerTool(
     tool("get_today_summary"),
@@ -337,6 +369,164 @@ export function registerReadOnlyTools(server: McpServer): void {
     async (_args, ctx) =>
       runTool(ctx, "get_inventory_status", {}, null, (userId) =>
         getInventoryStatus(userId),
+      ),
+  );
+}
+
+// ─── Log tools ────────────────────────────────────────────────────────
+
+const FOOD = VOICE_ITEM_SPEC.food;
+const DRINK = VOICE_ITEM_SPEC.alcohol;
+
+function bounded(
+  spec: { min: number; max: number; unit: string },
+  description: string,
+) {
+  return z.number().min(spec.min).max(spec.max).describe(`${description} (${spec.unit})`);
+}
+
+const entryDescription = z
+  .string()
+  .trim()
+  .min(1)
+  .max(FOOD.description.maxLength)
+  .describe(
+    `What it was, as the user would name it in the app (max ${FOOD.description.maxLength} characters), e.g. 'Chicken laksa, 1 bowl'`,
+  );
+
+const soluteShape = {
+  sodium_mg: bounded(
+    FOOD.sodiumMg,
+    "Sodium in the portion consumed. Sodium, not table salt: 1 g salt is about 393 mg sodium, 1 g MSG about 123 mg",
+  ).optional(),
+  sugar_g: bounded(FOOD.sugarG, "Sugar in the portion consumed").optional(),
+  potassium_mg: bounded(FOOD.potassiumMg, "Potassium in the portion consumed").optional(),
+};
+
+const consumedAt = z
+  .number()
+  .int()
+  .refine((ts) => !isFutureTimestamp(ts, Date.now()), {
+    message: "consumed_at_ms can't be in the future",
+  })
+  .refine((ts) => ts >= Date.now() - ONE_YEAR_MS, {
+    message: "consumed_at_ms must be within the last year",
+  })
+  .optional()
+  .describe("When the user ate or drank it, unix milliseconds. Defaults to now.");
+
+/** Numbers only: the free-text description never reaches the audit log. */
+function auditNumbers(args: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(args).filter(([, v]) => typeof v === "number"),
+  );
+}
+
+export function registerWriteTools(server: McpServer): void {
+  const tool = (name: McpWriteToolName) => name;
+
+  server.registerTool(
+    tool("log_food"),
+    {
+      title: "Log food",
+      description:
+        "Log a meal or snack the user ate, as one food entry. Give the amounts for the portion the user actually ate, not for the whole recipe: if a recipe makes 4 servings and the user ate 1, log a quarter of the recipe's grams and nutrients. `water_ml` is the water content of the food itself (soup, stew, fruit), which counts toward the user's fluid intake; leave it out for dry food. For a drink (water, coffee, tea, juice, beer, wine), use log_drink instead, so its volume counts as fluid once. Before logging, tell the user the values you will log; call this once per meal, never twice for the same meal. Returns `group_id`; pass it to delete_logged_entry to undo a mistake. The entry appears in the app the next time the app syncs.",
+      inputSchema: z.object({
+        description: entryDescription,
+        grams: bounded(FOOD.grams, "Weight of the portion eaten").optional(),
+        water_ml: bounded(FOOD.waterMl, "Water content of the portion eaten").optional(),
+        ...soluteShape,
+        consumed_at_ms: consumedAt,
+        timezone: timezoneArg,
+      }),
+    },
+    async (args, ctx) =>
+      runTool(
+        ctx,
+        "log_food",
+        args,
+        auditNumbers(args),
+        (userId) =>
+          logFood(userId, {
+            description: args.description,
+            grams: args.grams,
+            waterMl: args.water_ml,
+            sodiumMg: args.sodium_mg,
+            sugarG: args.sugar_g,
+            potassiumMg: args.potassium_mg,
+            timestamp: args.consumed_at_ms ?? Date.now(),
+            timezone: args.timezone,
+          }),
+        { write: true },
+      ),
+  );
+
+  server.registerTool(
+    tool("log_drink"),
+    {
+      title: "Log drink",
+      description:
+        "Log a drink the user had. `volume_ml` is the amount drunk; all of it counts as fluid intake. Add caffeine (mg) for coffee, tea, energy drinks; add `abv_percent` (the number on the label) for alcohol, and the app works out the standard drinks. Give sodium, sugar and potassium for the volume drunk. Before logging, tell the user the values you will log; call this once per drink. Returns `group_id`; pass it to delete_logged_entry to undo a mistake. The entry appears in the app the next time the app syncs.",
+      inputSchema: z.object({
+        description: entryDescription,
+        volume_ml: bounded(DRINK.volumeMl, "Volume drunk"),
+        caffeine_mg: bounded(VOICE_ITEM_SPEC.caffeine.caffeineMg, "Caffeine in the volume drunk").optional(),
+        abv_percent: bounded(DRINK.abvPercent, "Alcohol by volume").optional(),
+        ...soluteShape,
+        consumed_at_ms: consumedAt,
+        timezone: timezoneArg,
+      }),
+    },
+    async (args, ctx) =>
+      runTool(
+        ctx,
+        "log_drink",
+        args,
+        auditNumbers(args),
+        (userId) =>
+          logDrink(userId, {
+            description: args.description,
+            volumeMl: args.volume_ml,
+            caffeineMg: args.caffeine_mg,
+            abvPercent: args.abv_percent,
+            sodiumMg: args.sodium_mg,
+            sugarG: args.sugar_g,
+            potassiumMg: args.potassium_mg,
+            timestamp: args.consumed_at_ms ?? Date.now(),
+            timezone: args.timezone,
+          }),
+        { write: true },
+      ),
+  );
+
+  server.registerTool(
+    tool("delete_logged_entry"),
+    {
+      title: "Delete a logged entry",
+      description:
+        "Remove a meal or drink that this connector logged, by the `group_id` that log_food or log_drink returned. Use it to undo a wrong or duplicate entry, and only when the user asks. Entries the user logged in the app can't be removed here; the user removes those in the app.",
+      inputSchema: z.object({
+        group_id: z.string().uuid().describe("The group_id returned by log_food or log_drink"),
+      }),
+    },
+    async (args, ctx) =>
+      runTool(
+        ctx,
+        "delete_logged_entry",
+        args,
+        { group_id: args.group_id },
+        async (userId) => {
+          const result = await deleteLoggedEntry(userId, args.group_id);
+          if (result.deleted) return result;
+          return {
+            ...result,
+            message:
+              result.reason === "not_found"
+                ? "No live entry has this group_id. It may already be deleted."
+                : "This entry was logged in the app, not by Claude. The user can remove it in the app.",
+          };
+        },
+        { write: true },
       ),
   );
 }

@@ -3,18 +3,20 @@
 ## Goal
 
 Connect the user's claude.ai web account (Pro/Max/Team/Enterprise) to their
-intake-tracker data as a **read-only** custom connector, so they can ask
-Claude questions like "what was my average BP last week?" or "how many doses
-of X did I take this month?".
+intake-tracker data as a custom connector, so they can ask Claude questions
+like "what was my average BP last week?" or "how many doses of X did I take
+this month?", and have Claude log a meal or drink it already knows about
+(a recipe researched in the chat, say) without retyping it in the app.
 
 Authentication reuses the existing **Neon Auth + Google social** login — no
 new credentials, no second account, no static tokens.
 
 ## Non-goals
 
-- **No writes.** No `log_*`, `delete_*`, or mutation tools in this iteration.
-  The MCP server will not register any handler that mutates state. Writes are
-  a separate, future iteration.
+- **Narrow writes only.** The connector can log meals and drinks and remove
+  entries it logged itself (see [Log tools](#log-tools)). It cannot edit or
+  delete anything the user logged, and has no tools for medications, doses,
+  weight, blood pressure or settings.
 - **No new identity provider.** Identity stays in Neon Auth. We are not
   adding Better Auth or any second auth library.
 - **No Claude Desktop / Claude Code path.** This iteration targets
@@ -327,6 +329,32 @@ Each tool's Zod input schema enforces date-range sanity (`end >= start`,
 range ≤ 1 year, etc.) so a malformed claude.ai call can't run an unbounded
 scan.
 
+### Log tools
+
+Registered by `registerWriteTools` (`src/lib/mcp/tools.ts`), backed by
+`src/lib/mcp/writes.ts`, and gated on the `intake-tracker:write` scope.
+
+| Tool | Writes | Same shape as |
+|------|--------|---------------|
+| `log_food` | one eating record (`grams`, `note`) + its water content and sodium/sugar/potassium intakes, one `groupId`, `groupSource='mcp_food'` | the Food card (`addComposableEntry`) |
+| `log_drink` | the water row (full volume) + solutes + caffeine/alcohol substances, one `groupId`, `groupSource='mcp_drink'` | the Drink module (`logDrink`) |
+| `delete_logged_entry` | tombstones every live row of a group, only when every row's `groupSource` starts `mcp_` | — |
+
+The tools write straight to the server mirror tables. Each row carries
+`deviceId='mcp-connector'` and a fresh `serverUpdatedAt`, so the app's next
+pull (on start, on focus, when the device comes online) brings it down like a
+row another device pushed. The rows of one entry go in atomically (a Neon HTTP
+batch). Field ranges come from the voice item contract (`VOICE_ITEM_SPEC` in
+`@intake/core/voice-items`), so a value the app refuses can't come in here;
+the time must not be in the future or more than a year back. The tool
+descriptions tell the model to log the portion eaten, not the whole recipe,
+and to state the values before logging. The audit row keeps the numeric
+arguments only, never the free-text description.
+
+A token granted before the write scope existed stays read-only: the log
+tools answer with a message to reconnect the connector, and the user approves
+the new access on the consent screen.
+
 ### 4. Audit logging
 
 Every successful `tools/call` writes a server-side audit row (a new
@@ -355,13 +383,16 @@ If the refresh token is stolen and used, the legitimate client's next
 refresh fails — surfacing the compromise immediately. The user can then
 revoke from settings.
 
-## Scopes (single value for now)
+## Scopes
 
 - `intake-tracker:read` — read access to all user-scoped tables listed
   above.
+- `intake-tracker:write` — the log tools.
 
-Single scope keeps the consent screen simple. Future write tools would add
-`intake-tracker:write` and the consent screen would surface both.
+A request that names no scope (claude.ai sends none) gets both, and the
+consent screen lists what Claude can read and what it can log. A client that
+asks for `intake-tracker:read` alone gets a read-only grant, and the screen
+says so. Refresh keeps the scope of the original grant.
 
 ## Failure modes & edge cases
 
@@ -410,7 +441,7 @@ Single scope keeps the consent screen simple. Future write tools would add
    MCP routes are additive).
 3. Manual: add `https://intake-tracker.vercel.app/api/mcp` as a custom
    connector in claude.ai → Google sign-in flow completes → claude.ai
-   lists 11 tools → `get_today_summary` returns sensible JSON.
+   lists 14 tools → `get_today_summary` returns sensible JSON.
 4. Manual: revoke connector in claude.ai → next request returns 401.
 5. Audit log shows every tool invocation with redacted args.
 

@@ -42,6 +42,12 @@ vi.mock("@/lib/mcp/queries", () => ({
   getInventoryStatus: vi.fn(),
 }));
 vi.mock("@/lib/mcp/audit", () => ({ writeMcpAudit: vi.fn() }));
+const logFood = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/mcp/writes", () => ({
+  logFood,
+  logDrink: vi.fn(),
+  deleteLoggedEntry: vi.fn(),
+}));
 
 import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
 import { GET, POST, DELETE } from "@/app/api/mcp/[transport]/route";
@@ -93,13 +99,14 @@ beforeEach(() => {
       ? {
           userId: "user-1",
           clientId: "client-1",
-          scope: "mcp:read",
+          scope: "intake-tracker:read",
           expiresAt: Date.now() + 60 * 60_000,
         }
       : null,
   );
   isEmailAllowed.mockReset().mockReturnValue(true);
   getTodaySummary.mockReset().mockResolvedValue({ water_ml: 1200 });
+  logFood.mockReset().mockResolvedValue({ group_id: "g-1" });
 });
 
 describe("MCP route — gates", () => {
@@ -144,7 +151,7 @@ describe("MCP route — 2025-era Streamable HTTP client (legacy fallback)", () =
     expect(msg.result.serverInfo.name).toBe("intake-tracker");
   });
 
-  it("lists exactly the read-only tools", async () => {
+  it("lists exactly the tools the consent screen describes", async () => {
     const res = await rpc({ id: 2, method: "tools/list", params: {} });
     expect(res.status).toBe(200);
     const names = (await message(res)).result.tools.map((t) => t.name);
@@ -162,6 +169,36 @@ describe("MCP route — 2025-era Streamable HTTP client (legacy fallback)", () =
     expect(msg.result.isError).toBeFalsy();
     expect(getTodaySummary).toHaveBeenCalledWith("user-1", { timezone: "Europe/Berlin" });
     expect(msg.result.content[0]?.text).toContain("1200");
+  });
+});
+
+describe("MCP route — write scope", () => {
+  const logCall = {
+    id: 4,
+    method: "tools/call",
+    params: { name: "log_food", arguments: { description: "Toast" } },
+  };
+
+  it("refuses to log for a token granted read access only", async () => {
+    const msg = await message(await rpc(logCall));
+    expect(msg.result.isError).toBe(true);
+    expect(msg.result.content[0]?.text).toMatch(/connect it again/);
+    expect(logFood).not.toHaveBeenCalled();
+  });
+
+  it("logs for a token granted write access", async () => {
+    lookupAccessToken.mockResolvedValue({
+      userId: "user-1",
+      clientId: "client-1",
+      scope: "intake-tracker:read intake-tracker:write",
+      expiresAt: Date.now() + 60 * 60_000,
+    });
+    const msg = await message(await rpc(logCall));
+    expect(msg.result.isError).toBeFalsy();
+    expect(logFood).toHaveBeenCalledWith(
+      "user-1",
+      expect.objectContaining({ description: "Toast" }),
+    );
   });
 });
 
