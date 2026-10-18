@@ -79,7 +79,7 @@ const server = setupServer(
   ),
 );
 
-beforeAll(() => server.listen({ onUnhandledRequest: "bypass" }));
+beforeAll(() => server.listen({ onUnhandledFrame: "bypass" }));
 
 /** Override the parse response for the rest of the current test. */
 function parseResponse(body: Record<string, unknown>) {

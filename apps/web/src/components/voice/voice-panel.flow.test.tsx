@@ -66,7 +66,7 @@ const server = setupServer(
 /** Body of the most recent parse request the panel sent. */
 let lastParseRequest: unknown = null;
 
-beforeAll(() => server.listen({ onUnhandledRequest: "bypass" }));
+beforeAll(() => server.listen({ onUnhandledFrame: "bypass" }));
 afterEach(() => {
   server.resetHandlers();
   parsedItems = [];
