@@ -151,6 +151,9 @@ test.describe('History / Analytics', () => {
     const defecationCard = page.locator('#section-defecation');
     await defecationCard.scrollIntoViewIfNeeded();
     await defecationCard.locator('button', { hasText: 'Large' }).click();
+    // Wait for the save before navigating away, as for every metric above;
+    // a reload mid-write drops the row.
+    await expect(page.getByText('Defecation (large) recorded', { exact: true })).toBeVisible();
 
     // Step 2: on the Records tab, every domain filter must surface a row.
     await page.goto('/analytics');
