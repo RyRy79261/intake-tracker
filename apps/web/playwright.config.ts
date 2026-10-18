@@ -9,7 +9,13 @@ import { defineConfig, devices } from '@playwright/test';
 loadEnvConfig(process.cwd());
 
 /** Specs for desktop mode, or that pick their own viewport per describe. */
-const DESKTOP_SPECS = [/windows\.spec\.ts$/, /a11y\.spec\.ts$/, /desktop\.spec\.ts$/, /daily-totals\.spec\.ts$/];
+const DESKTOP_SPECS = [
+  /windows\.spec\.ts$/,
+  /a11y\.spec\.ts$/,
+  /desktop\.spec\.ts$/,
+  /drinks-desktop\.spec\.ts$/,
+  /daily-totals\.spec\.ts$/,
+];
 
 /**
  * See https://playwright.dev/docs/test-configuration.
