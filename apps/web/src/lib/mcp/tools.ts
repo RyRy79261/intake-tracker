@@ -8,10 +8,10 @@
  *   - writes an audit log row (fire-and-forget)
  *   - returns a `content: [{ type: "text", text: JSON }]` MCP response
  *
- * The read tools need no more than a valid token. The log tools also need
- * the `intake-tracker:write` scope, which the user grants on the consent
- * screen; a token granted before that scope existed is refused with a
- * message to reconnect. The log tools add meals and drinks and remove only
+ * The read tools need the `intake-tracker:read` scope and the log tools the
+ * `intake-tracker:write` scope, both granted on the consent screen; a token
+ * granted before the write scope existed is refused with a message to
+ * reconnect. The log tools add meals and drinks and remove only
  * entries the connector itself logged — nothing else can be changed.
  */
 import { z } from "zod";
@@ -32,7 +32,7 @@ import {
 import { deleteLoggedEntry, logDrink, logFood } from "@/lib/mcp/writes";
 import { writeMcpAudit } from "@/lib/mcp/audit";
 import { isValidTimeZone } from "@/lib/mcp/day-window";
-import { WRITE_SCOPE } from "@/lib/mcp/scopes";
+import { READ_SCOPE, WRITE_SCOPE } from "@/lib/mcp/scopes";
 import type { McpReadToolName, McpWriteToolName } from "@/lib/mcp/tool-catalog";
 import { VOICE_ITEM_SPEC } from "@intake/core/voice-items";
 import { isFutureTimestamp } from "@intake/core/record-schemas";
@@ -109,21 +109,25 @@ async function runTool<TArgs extends Record<string, unknown>>(
 ) {
   const started = Date.now();
   const { userId, clientId, scopes } = getAuth(ctx);
-  if (opts.write && !scopes.includes(WRITE_SCOPE)) {
+  // Each tool needs its own scope: a write-only grant must not read.
+  const required = opts.write ? WRITE_SCOPE : READ_SCOPE;
+  if (!scopes.includes(required)) {
     void writeMcpAudit({
       userId,
       clientId,
       tool,
       argsForAudit,
       status: "error",
-      errorMessage: "missing write scope",
+      errorMessage: `missing ${required} scope`,
       durationMs: Date.now() - started,
     });
     return {
       content: [
         {
           type: "text" as const,
-          text: "This connection can only read. To let Claude log entries, remove the intake-tracker connector in Claude's settings and connect it again, then approve the new access.",
+          text: opts.write
+            ? "This connection can only read. To let Claude log entries, remove the intake-tracker connector in Claude's settings and connect it again, then approve the new access."
+            : "This connection was not granted read access to intake-tracker data.",
         },
       ],
       isError: true,

@@ -301,4 +301,12 @@ describe("MCP tools — log tools", () => {
     const res = await readOnly.callTool({ name: "get_today_summary", arguments: {} });
     expect(res.isError).toBeFalsy();
   });
+
+  it("refuses to read for a write-only grant", async () => {
+    const writeOnly = await connect(["intake-tracker:write"]);
+    const res = await writeOnly.callTool({ name: "get_today_summary", arguments: {} });
+    expect(res.isError).toBe(true);
+    expect(textOf(res)).toMatch(/not granted read access/);
+    expect(queries.getTodaySummary).not.toHaveBeenCalled();
+  });
 });
