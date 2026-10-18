@@ -86,7 +86,7 @@ const server = setupServer(
     }),
   ),
 );
-beforeAll(() => server.listen({ onUnhandledRequest: "bypass" }));
+beforeAll(() => server.listen({ onUnhandledFrame: "bypass" }));
 afterEach(() => server.resetHandlers());
 afterAll(() => server.close());
 
