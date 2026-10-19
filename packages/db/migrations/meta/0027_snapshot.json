@@ -1276,7 +1276,7 @@
         },
         "dose_logs_medicine_check": {
           "name": "dose_logs_medicine_check",
-          "value": "\"dose_logs\".\"prescription_id\" IS NOT NULL OR (\"dose_logs\".\"kind\" = 'prn' AND \"dose_logs\".\"medicine_name\" IS NOT NULL)"
+          "value": "\"dose_logs\".\"prescription_id\" IS NOT NULL OR (\"dose_logs\".\"kind\" = 'prn' AND \"dose_logs\".\"medicine_name\" IS NOT NULL AND btrim(\"dose_logs\".\"medicine_name\") <> '')"
         }
       },
       "isRLSEnabled": false

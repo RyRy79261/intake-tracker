@@ -218,6 +218,16 @@ describe("dose_logs unlisted medicine (migration 0027, real Postgres)", () => {
     );
   });
 
+  it("rejects a blank name with no prescription (medicine_check)", async () => {
+    await expectConstraintViolation(
+      () =>
+        ctx.db
+          .insert(schema.doseLogs)
+          .values({ ...unlisted(), id: "dose-blank-name", medicineName: "   " }),
+      "dose_logs_medicine_check",
+    );
+  });
+
   it("rejects a scheduled dose with a name but no prescription (medicine_check)", async () => {
     await expectConstraintViolation(
       () =>

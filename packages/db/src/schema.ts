@@ -664,7 +664,7 @@ export const doseLogs = pgTable(
     // name of its own.
     medicineCheck: check(
       "dose_logs_medicine_check",
-      sql`${t.prescriptionId} IS NOT NULL OR (${t.kind} = 'prn' AND ${t.medicineName} IS NOT NULL)`,
+      sql`${t.prescriptionId} IS NOT NULL OR (${t.kind} = 'prn' AND ${t.medicineName} IS NOT NULL AND btrim(${t.medicineName}) <> '')`,
     ),
     userUpdatedIdx: index("idx_dose_logs_user_updated").on(
       t.userId,
