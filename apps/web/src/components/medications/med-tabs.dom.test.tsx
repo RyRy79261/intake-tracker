@@ -10,12 +10,18 @@ import {
   makeMedicationPhase,
   makePhaseSchedule,
 } from "@/__tests__/fixtures/db-fixtures";
+import { getDeviceTimezone } from "@/lib/timezone";
 
 function regimen(name: string) {
   const prescription = makePrescription({ genericName: name });
   const phase = makeMedicationPhase(prescription.id);
-  // 23:59 UTC: still open whatever the test machine's clock says.
-  const schedule = makePhaseSchedule(phase.id, { dosage: 50, scheduleTimeUTC: 1439 });
+  // 00:00 on the device's clock: already due and still open whatever the
+  // test machine's clock says (the pip counts only doses that are due).
+  const schedule = makePhaseSchedule(phase.id, {
+    dosage: 50,
+    time: "00:00",
+    anchorTimezone: getDeviceTimezone(),
+  });
   return { prescription, phase, schedule };
 }
 

@@ -169,6 +169,55 @@ test.describe("Voice: the late window and the bulk rule", () => {
     expect(log).toMatchObject({ status: "taken", actionTimestamp: berlin("08:30") });
   });
 
+  test("the time choice's Skip saves the open doses as skipped and leaves a taken one", async ({ page }) => {
+    await prepare(page, "10:00");
+    const doses = await seedSlot(page, 3, [{ status: "taken", at: "08:35" }]);
+    await mockParse(page, [{ kind: "scheduled_dose", slotTime: "08:30", action: "taken" }]);
+    await page.goto("/");
+    await holdToTalk(page);
+
+    const row = voiceRow(page, 0);
+    await row.getByTestId("voice-item-0-time-choice").getByRole("button", { name: "Skip" }).click();
+    const plan = row.getByTestId("voice-item-0-plan");
+    await expect(plan).toContainText("Generic2 50 mg: mark skipped");
+    await expect(plan).toContainText("Generic3 50 mg: mark skipped");
+    await row.getByRole("button", { name: "Approve Dose" }).click();
+    await page.getByRole("button", { name: /^Save 1$/ }).click();
+    await expect(page.getByText("Saved 1 of 1", { exact: true })).toBeVisible();
+
+    const logs = await doseLogs(page);
+    expect(logs.get(doses[0]!.scheduleId)).toMatchObject({ status: "taken", actionTimestamp: berlin("08:35") });
+    expect(logs.get(doses[1]!.scheduleId)).toMatchObject({ status: "skipped" });
+    expect(logs.get(doses[2]!.scheduleId)).toMatchObject({ status: "skipped" });
+    expect(await stocks(page, doses)).toEqual([29, 30, 30]);
+  });
+
+  test("a stated taken time after now saves with a warning", async ({ page }) => {
+    await prepare(page, "09:00");
+    const [dose] = await seedSlot(page, 1);
+    await mockParse(page, [
+      {
+        kind: "scheduled_dose",
+        slotTime: "08:30",
+        action: "taken",
+        when: { kind: "absolute", localDateTime: `${DAY}T09:30` },
+      },
+    ]);
+    await page.goto("/");
+    await holdToTalk(page);
+
+    const row = voiceRow(page, 0);
+    await expect(row.getByTestId("voice-item-0-future")).toHaveText("This time is in the future.");
+    await expect(row.getByRole("alert")).toHaveCount(0);
+    await row.getByRole("button", { name: "Approve Dose" }).click();
+    await page.getByRole("button", { name: /^Save 1$/ }).click();
+    await expect(page.getByText("Saved 1 of 1", { exact: true })).toBeVisible();
+    expect((await doseLogs(page)).get(dose!.scheduleId)).toMatchObject({
+      status: "taken",
+      actionTimestamp: berlin("09:30"),
+    });
+  });
+
   test("at 08:45 a take with no time said records now, with no choice", async ({ page }) => {
     await prepare(page, "08:45");
     const [dose] = await seedSlot(page, 1);

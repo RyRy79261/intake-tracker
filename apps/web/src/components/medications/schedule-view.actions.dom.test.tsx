@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterEach, vi } from "vitest";
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
@@ -134,14 +134,12 @@ describe('"Mark all doses" modal: buttons per slot state', () => {
     expect(bar(modal)).toEqual(["Unskip all", "Untake all"]);
   });
 
-  it("a future day: no bulk action, and no Take on the rows", async () => {
+  it("a future day: no Mark all doses button (Reschedule comes in PR 2), and no Take on the rows", async () => {
     const future = new Date();
     future.setDate(future.getDate() + 3);
     await renderSlot([regimen("A"), regimen("B")], [], future);
     expect(screen.queryByRole("button", { name: /^Take / })).not.toBeInTheDocument();
-    const { modal } = await openModal();
-    expect(bar(modal)).toEqual([]);
-    expect(within(modal).getByText("These doses are not due yet.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Mark all doses" })).not.toBeInTheDocument();
   });
 
   it("shows the date under the time on a day that is not today, and the late warning", async () => {
@@ -177,6 +175,43 @@ describe('"Mark all doses" actions', () => {
     });
     // The result shows in the modal (and in the Undo toast).
     expect((await screen.findAllByText("2 meds taken")).length).toBeGreaterThan(0);
+  });
+
+  it("Take all, then the sheet's Skip: skips the five open doses, leaves the taken one, asks why", async () => {
+    const regs = ["A", "B", "C", "D", "E", "F"].map(regimen);
+    const d = yesterday();
+    const at0835 = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 8, 35).getTime();
+    const taken = { ...logFor(regs[0]!, d, "taken"), actionTimestamp: at0835 };
+    await renderSlot(regs, [taken]);
+    const { user, modal } = await openModal();
+    await user.click(within(modal).getByRole("button", { name: "Take all" }));
+    await screen.findByText("When did you take your meds?");
+    await user.click(screen.getByRole("button", { name: "Skip" }));
+
+    await waitFor(async () => {
+      expect((await db.doseLogs.toArray()).filter((l) => l.status === "skipped")).toHaveLength(5);
+    });
+    expect(await db.doseLogs.get(taken.id)).toMatchObject({ status: "taken", actionTimestamp: at0835 });
+    expect((await db.inventoryItems.get(regs[0]!.inventory.id))?.currentStock).toBe(30);
+    expect(await screen.findByText("Why are you skipping this dose?")).toBeInTheDocument();
+  });
+
+  it("the sheet's Skip on a dose that is already skipped leaves its reason and time", async () => {
+    const r = regimen("A");
+    const skipped = logFor(r, yesterday(), "skipped");
+    await renderSlot([r], [skipped]);
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Take A brand" }));
+    await screen.findByText(/^When did you take/);
+    await user.click(screen.getByRole("button", { name: "Skip" }));
+
+    await waitFor(() => expect(screen.queryByText(/^When did you take/)).not.toBeInTheDocument());
+    expect(await db.doseLogs.get(skipped.id)).toMatchObject({
+      status: "skipped",
+      skipReason: "Cost",
+      actionTimestamp: skipped.actionTimestamp,
+    });
+    expect(screen.queryByText("Why are you skipping this dose?")).not.toBeInTheDocument();
   });
 
   it("Skip all skips only the open doses, then asks why; the reason goes on all of them", async () => {
@@ -273,5 +308,27 @@ describe('"Mark all doses" actions', () => {
       expect(logs[0]?.status).toBe("pending");
     });
     expect((await db.inventoryItems.get(r.inventory.id))?.currentStock).toBe(30);
+  });
+});
+
+describe("Take now records the current time", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("Take all, then Take now at 09:30, records 09:30 on every open dose", async () => {
+    const today = new Date();
+    const nineThirty = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 9, 30).getTime();
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(nineThirty);
+    await renderSlot([regimen("A"), regimen("B")]);
+    const { user, modal } = await openModal();
+    await user.click(within(modal).getByRole("button", { name: "Take all" }));
+    await user.click(await screen.findByRole("button", { name: /^Take now/ }));
+    await waitFor(async () => {
+      const logs = await db.doseLogs.toArray();
+      expect(logs).toHaveLength(2);
+      for (const log of logs) expect(log).toMatchObject({ status: "taken", actionTimestamp: nineThirty });
+    });
   });
 });

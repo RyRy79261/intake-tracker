@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { db } from "@/lib/db";
 import {
+  makeDoseLog,
   makeInventoryItem,
   makeInventoryTransaction,
   makeMedicationPhase,
@@ -8,6 +9,7 @@ import {
   makePrescription,
 } from "@/__tests__/fixtures/db-fixtures";
 import {
+  rescheduleDose,
   revertDoseChanges,
   setSkipReason,
   skipDoses,
@@ -277,5 +279,72 @@ describe("Missed during the day", () => {
     const [after] = withLiveStatus(await getDailyDoseSchedule(TODAY), Date.now(), 30)!;
     expect(after?.status).toBe("taken");
     expect(doseStatusLine(after!)).toMatch(/^Taken at /);
+  });
+});
+
+describe("a rescheduled dose is still open", () => {
+  it("Take all takes a dose rescheduled to 10:00 with the other open doses", async () => {
+    const [d1, d2] = await seedSlot(2);
+    setNow(at(8, 0));
+    expect((await rescheduleDose({ ...d1!, newTime: "10:00" })).success).toBe(true);
+
+    setNow(at(9, 0));
+    const result = await takeDoses([d1!, d2!]);
+    expect(result.success && result.data.map((c) => c.key.scheduleId)).toEqual([d1!.scheduleId, d2!.scheduleId]);
+    expect(await logOf(d1!)).toMatchObject({ status: "taken", actionTimestamp: at(9, 0) });
+    expect(await stockOf(d1!)).toBe(29);
+  });
+});
+
+describe("a late take never moves a later dose", () => {
+  it("the 08:30 dose taken late at a stated time leaves the 20:00 dose at 20:00", async () => {
+    const [morning] = await seedSlot(1);
+    const evening = makePhaseSchedule(morning!.phaseId, {
+      time: "20:00",
+      anchorTimezone: TZ,
+      dosage: 50,
+      createdAt: at(0, 0, -30),
+    });
+    await db.phaseSchedules.add(evening);
+    const eveningBefore = (await getDailyDoseSchedule(TODAY)).find((s) => s.scheduleId === evening.id);
+    expect(eveningBefore).toMatchObject({ status: "pending", localTime: "20:00" });
+
+    setNow(at(11, 0));
+    expect((await takeDoses([morning!], { takenAt: at(10, 45) })).success).toBe(true);
+
+    const eveningAfter = (await getDailyDoseSchedule(TODAY)).find((s) => s.scheduleId === evening.id);
+    expect(eveningAfter).toMatchObject({ status: "pending", localTime: "20:00", dueAt: eveningBefore!.dueAt });
+    expect(eveningAfter?.dueAt).toBe(at(20, 0));
+    expect(eveningAfter?.existingLog).toBeUndefined();
+  });
+});
+
+describe("undo of an untake on a legacy log", () => {
+  it("debits the pills the untake refunded when the log has no pillsConsumed", async () => {
+    const [key] = await seedSlot(1);
+    // An old taken log: stock was debited, but no pills snapshot was stored.
+    await db.inventoryItems.update(key!.inventoryId, { currentStock: 29 });
+    await db.doseLogs.add(
+      makeDoseLog(key!.prescriptionId, key!.phaseId, key!.scheduleId, {
+        scheduledDate: TODAY,
+        scheduledTime: "08:30",
+        status: "taken",
+        actionTimestamp: at(8, 35),
+        inventoryItemId: key!.inventoryId,
+      }),
+    );
+
+    const untake = await untakeDoses([key!]);
+    const changes = untake.success ? untake.data : [];
+    expect(changes).toHaveLength(1);
+    expect(await stockOf(key!)).toBe(30);
+
+    await revertDoseChanges(changes);
+    expect(await logOf(key!)).toMatchObject({ status: "taken", actionTimestamp: at(8, 35) });
+    expect(await stockOf(key!)).toBe(29);
+
+    // A second untake refunds once more, back to where it started.
+    await untakeDoses([key!]);
+    expect(await stockOf(key!)).toBe(30);
   });
 });

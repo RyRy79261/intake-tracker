@@ -94,10 +94,11 @@ export function MarkAllDosesSheet({
       <DrawerContent
         data-domain="meds"
         data-testid="mark-all-doses"
-        className="max-h-[92dvh] bg-panel"
+        // Full height on a phone; a centred panel of normal width on a wide screen.
+        className="h-[92dvh] bg-panel md:mx-auto md:h-auto md:max-h-[85dvh] md:w-full md:max-w-lg"
         {...(day === "today" && { "aria-describedby": undefined })}
       >
-        <div className="relative flex min-h-0 flex-col px-4 pb-[calc(20px+env(safe-area-inset-bottom,0px))] pt-3">
+        <div className="relative flex min-h-0 flex-1 flex-col px-4 pb-[calc(20px+env(safe-area-inset-bottom,0px))] pt-3">
           <div className="mb-3 flex items-start justify-between gap-2">
             <div>
               <DrawerTitle className="font-mono text-lg font-semibold">{formatDoseTime(time)}</DrawerTitle>
@@ -123,7 +124,7 @@ export function MarkAllDosesSheet({
             </p>
           )}
 
-          <div className="mb-3 min-h-0 overflow-y-auto border border-line bg-background">
+          <div className="mb-3 min-h-0 overflow-y-auto border border-line bg-background max-md:flex-1">
             {slots.map((slot) => (
               <DoseRow key={slot.scheduleId} slot={slot} isFuture={day === "future"} onOpen={onOpenDose} />
             ))}

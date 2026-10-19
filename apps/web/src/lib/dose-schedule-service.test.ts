@@ -5,6 +5,7 @@ import {
   getDailyDoseSchedule,
   getDoseScheduleForDateRange,
 } from "@/lib/dose-schedule-service";
+import { withLiveStatus } from "@/hooks/use-medication-queries";
 import {
   makePrescription,
   makeMedicationPhase,
@@ -292,6 +293,30 @@ describe("getDailyDoseSchedule", () => {
     expect(slots[0]!.status).toBe("missed");
     expect(slots[0]!.localTime).toBe("14:00");
     expect(slots[0]!.existingLog?.id).toBe(log.id);
+  });
+
+  it("a reschedule restarts the missed period: due at the new time, missed 30 minutes after it", async () => {
+    const { rx, phase, schedule } = await seedPrescription({ daysOfWeek: [2], time: "08:30", anchorTimezone: "UTC" });
+    await db.doseLogs.add(
+      makeDoseLog(rx.id, phase.id, schedule.id, {
+        scheduledDate: TUESDAY,
+        scheduledTime: "08:30",
+        status: "rescheduled",
+        rescheduledTo: "10:00",
+      }),
+    );
+    // The new time is on the device's clock.
+    const tenOClock = new Date(`${TUESDAY}T10:00:00`).getTime();
+    vi.useFakeTimers({ toFake: ["Date"], now: tenOClock - 60 * 60_000 });
+    try {
+      const [slot] = await getDailyDoseSchedule(TUESDAY, "UTC");
+      expect(slot?.dueAt).toBe(tenOClock);
+      expect(withLiveStatus([slot!], tenOClock + 20 * 60_000, 30)![0]!.status).toBe("pending");
+      expect(withLiveStatus([slot!], tenOClock + 30 * 60_000, 30)![0]!.status).toBe("pending");
+      expect(withLiveStatus([slot!], tenOClock + 31 * 60_000, 30)![0]!.status).toBe("missed");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("does not return slots for dates before prescription was created", async () => {

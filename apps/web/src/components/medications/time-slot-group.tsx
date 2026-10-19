@@ -32,8 +32,9 @@ const slotButton =
 /**
  * One card per dose time. The header shows the time (primary when it is
  * within an hour of now, the missed colour when a dose in it is missed) and,
- * for two or more doses, "Mark all doses". A slot with one dose has no
- * header button: its row does the work.
+ * for two or more doses, "Mark all doses" (not on a future day: its only
+ * bulk action is Reschedule, which is not built yet). A slot with one dose
+ * has no header button: its row does the work.
  */
 export function TimeSlotGroup({
   time,
@@ -73,7 +74,8 @@ export function TimeSlotGroup({
         >
           {formatDoseTime(time)}
         </h3>
-        {slots.length >= 2 && (
+        {/* A future day has no bulk action until Reschedule ships (PR 2). */}
+        {slots.length >= 2 && !isFuture && (
           <Button
             variant="outline"
             size="sm"

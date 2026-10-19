@@ -268,6 +268,26 @@ async function restoreTakenStock(
 }
 
 /**
+ * Take a taken dose's pills out of stock again (undo of an untake or a skip).
+ * The exact mirror of restoreTakenStock: the same pills, with the same
+ * fallback for a legacy log that has no `pillsConsumed` snapshot, so undo
+ * never leaves stock higher than before.
+ */
+async function debitTakenStock(
+  w: SyncedWriter,
+  prev: DoseLog,
+  dosageMg: number,
+  doseLogId: string,
+): Promise<void> {
+  if (prev.status !== "taken" || !prev.inventoryItemId) return;
+  const inventory = await db.inventoryItems.get(prev.inventoryItemId);
+  if (!inventory) return;
+  const pills = prev.pillsConsumed ?? calculatePillsConsumed(dosageMg, inventory.strength) ?? 0;
+  if (!(pills > 0)) return;
+  await moveStock(w, inventory.id, -pills, doseLogId);
+}
+
+/**
  * Slack for a "taken at" time: the picked minute has no seconds, and the
  * check runs a moment after the user tapped.
  */
@@ -883,9 +903,7 @@ export async function revertDoseChanges(
           continue;
         }
         if (current.status === "taken") await restoreTakenStock(w, current, key.dosageMg);
-        if (before?.status === "taken" && before.inventoryItemId && (before.pillsConsumed ?? 0) > 0) {
-          await moveStock(w, before.inventoryItemId, -(before.pillsConsumed ?? 0), current.id);
-        }
+        if (before?.status === "taken") await debitTakenStock(w, before, key.dosageMg, current.id);
         await w.patch("doseLogs", current.id, before
           ? {
               status: before.status,
@@ -922,6 +940,19 @@ export async function revertDoseChanges(
   }
 }
 
+/** Rewrite when a taken dose was taken, inside a synced write. */
+async function editTimeInTx(w: SyncedWriter, input: EditDoseTimeInput): Promise<DoseLog> {
+  const { prescriptionId, scheduleId, date, time, takenAt } = input;
+  if (!Number.isFinite(takenAt)) throw new Error("Invalid time");
+  const prev = await getDoseLogRaw(scheduleId, date);
+  if (!prev || prev.status !== "taken") {
+    throw new Error("Dose is not logged as taken");
+  }
+  const written = await w.patch("doseLogs", prev.id, { actionTimestamp: takenAt });
+  await w.audit("dose_time_edited", { prescriptionId, date, time, takenAt });
+  return written!;
+}
+
 /**
  * Change the recorded time of an already-taken dose. Only `actionTimestamp`
  * changes; stock is untouched since the dose itself is unchanged. Any
@@ -929,22 +960,54 @@ export async function revertDoseChanges(
  */
 export async function editDoseTime(input: EditDoseTimeInput): Promise<ServiceResult<DoseLog>> {
   try {
-    const { prescriptionId, scheduleId, date, time, takenAt } = input;
-    if (!Number.isFinite(takenAt)) return err("Invalid time");
-
-    const log = await syncedWrite(["doseLogs"], async (w) => {
-      const prev = await getDoseLogRaw(scheduleId, date);
-      if (!prev || prev.status !== "taken") {
-        throw new Error("Dose is not logged as taken");
-      }
-
-      const written = await w.patch("doseLogs", prev.id, { actionTimestamp: takenAt });
-      await w.audit("dose_time_edited", { prescriptionId, date, time, takenAt });
-      return written!;
-    });
-
+    if (!Number.isFinite(input.takenAt)) return err("Invalid time");
+    const log = await syncedWrite(["doseLogs"], (w) => editTimeInTx(w, input));
     return ok(log);
   } catch (e) {
     return err("Failed to edit dose time", e);
+  }
+}
+
+/** One change of a mixed dose write (a voice row): what to do to one dose. */
+export type DoseStep =
+  | { type: "take"; key: DoseKey; takenAt?: number }
+  | { type: "retime"; key: DoseKey; takenAt: number }
+  | { type: "skip"; key: DoseKey; reason?: string }
+  | { type: "untake"; key: DoseKey };
+
+/**
+ * Apply several dose changes of different kinds in ONE synced write: all of
+ * them are saved or none is (a voice row that takes some doses and corrects
+ * the time of another). Each step acts on its dose as planned; a take of a
+ * dose that is already taken changes nothing.
+ */
+export async function applyDoseSteps(steps: readonly DoseStep[]): Promise<ServiceResult<number>> {
+  try {
+    const changed = await syncedWrite(DOSE_TABLES, async (w) => {
+      let n = 0;
+      for (const step of steps) {
+        switch (step.type) {
+          case "take":
+            if (await takeInTx(w, { ...step.key, ...(step.takenAt !== undefined && { takenAt: step.takenAt }) })) n++;
+            break;
+          case "retime":
+            await editTimeInTx(w, { ...step.key, takenAt: step.takenAt });
+            n++;
+            break;
+          case "skip":
+            await skipInTx(w, { ...step.key, ...(step.reason !== undefined && { reason: step.reason }) });
+            n++;
+            break;
+          case "untake":
+            await untakeInTx(w, step.key);
+            n++;
+            break;
+        }
+      }
+      return n;
+    });
+    return ok(changed);
+  } catch (e) {
+    return err(e instanceof Error && e.message.startsWith("Cannot") ? e.message : "Could not save. No dose changed.", e);
   }
 }

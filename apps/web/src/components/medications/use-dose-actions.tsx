@@ -13,7 +13,7 @@ import {
   type DoseKey,
   type DoseSlot,
 } from "@/hooks/use-medication-queries";
-import { bulkDoseTargets, needsTakenTimePrompt } from "@intake/core/dose-rules";
+import { bulkDoseTargets, isOpenDoseStatus, needsTakenTimePrompt } from "@intake/core/dose-rules";
 import { useSettingsStore } from "@/stores/settings-store";
 import { toast } from "@intake/ui/use-toast";
 import { showUndoToast } from "@/components/medications/undo-toast";
@@ -171,7 +171,13 @@ export function useDoseActions() {
           retime: false,
         });
         if (!choice) return "cancelled";
-        if (choice.kind === "skip") return skip(targets, opts.single ? { single: true } : {});
+        if (choice.kind === "skip") {
+          // Only open doses are skipped: a dose that is already skipped keeps
+          // its reason and its time.
+          const open = targets.filter((t) => isOpenDoseStatus(t.status));
+          if (open.length === 0) return { changed: 0, verb: "skipped" };
+          return skip(open, opts.single ? { single: true } : {});
+        }
         if (choice.kind === "at") takenAt = choice.at;
       }
 

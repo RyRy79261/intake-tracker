@@ -70,16 +70,28 @@ export function clientNowForParse(now: number, timeZone: string): VoiceParseClie
 }
 
 /**
+ * True for an item whose stated time may be after now: a scheduled dose
+ * marked taken. The user can mark a dose taken at any time he states (only a
+ * dose of a future day is refused, when the row is planned). Every other item
+ * logs what already happened, so its time is never in the future.
+ */
+export function allowsFutureTime(item: { kind?: unknown; action?: unknown }): boolean {
+  return item.kind === "scheduled_dose" && item.action === "taken";
+}
+
+/**
  * Turn the parser's `when` into an item's `at`, or `undefined` for "now".
  *
  * `now` is the moment the request was made — what the model was told, and
- * what "an hour ago" counts back from. A time the model put in the future, a
- * string that is not a date, and the current minute itself all mean "now".
+ * what "an hour ago" counts back from. A string that is not a date and the
+ * current minute itself mean "now". So does a time the model put in the
+ * future, unless `allowFuture` (see {@link allowsFutureTime}).
  */
 export function resolveSpokenWhen(
   when: SpokenWhen | null | undefined,
   now: number,
   timeZone: string,
+  { allowFuture = false }: { allowFuture?: boolean } = {},
 ): string | undefined {
   if (!when) return undefined;
   let timestamp: number | null;
@@ -91,7 +103,7 @@ export function resolveSpokenWhen(
   } else {
     return undefined;
   }
-  if (timestamp === null || timestamp > now) return undefined;
+  if (timestamp === null || (timestamp > now && !allowFuture)) return undefined;
   const at = formatLocalDateTime(timestamp, timeZone);
   return at === formatLocalDateTime(now, timeZone) ? undefined : at;
 }
@@ -107,36 +119,49 @@ export function normalizeSpokenTiming<T extends VoiceParsedItem>(
 ): T {
   if (item.when === undefined) return item;
   const { when, ...rest } = item;
-  const at = resolveSpokenWhen(when, now, timeZone);
+  const at = resolveSpokenWhen(when, now, timeZone, { allowFuture: allowsFutureTime(item) });
   return (at === undefined ? rest : { ...rest, at }) as T;
 }
 
 /**
  * The timestamp an item is saved with: its `at` on the device's wall clock,
- * or `now` when it has none. A time that is not a date, or is later than
- * `now`, also saves as `now` — nobody logs what they are about to drink.
+ * or `now` when it has none. A time that is not a date also saves as `now`.
+ * So does one later than `now` — nobody logs what they are about to drink —
+ * except for a dose marked taken (see {@link allowsFutureTime}).
  */
 export function spokenTimestamp(
-  item: Pick<VoiceParsedItem, "at">,
+  item: Pick<VoiceParsedItem, "at"> & { kind?: unknown; action?: unknown },
   now: number,
   timeZone: string,
 ): number {
   if (item.at === undefined) return now;
   const timestamp = parseLocalDateTime(item.at, timeZone);
-  return timestamp === null || timestamp > now ? now : timestamp;
+  if (timestamp === null) return now;
+  return timestamp > now && !allowsFutureTime(item) ? now : timestamp;
 }
 
-/** Why an edited `at` cannot be saved, or null. */
+/**
+ * Why an edited `at` cannot be saved, or null. A time after `now` is refused
+ * unless `allowFuture` (a dose marked taken: the row warns instead).
+ */
 export function spokenTimeError(
   at: string | undefined,
   now: number,
   timeZone: string,
+  { allowFuture = false }: { allowFuture?: boolean } = {},
 ): string | null {
   if (at === undefined) return null;
   const timestamp = parseLocalDateTime(at, timeZone);
   if (timestamp === null) return "Time must be a valid date and time.";
-  if (timestamp > now) return "Time cannot be in the future.";
+  if (timestamp > now && !allowFuture) return "Time cannot be in the future.";
   return null;
+}
+
+/** True when `at` is a real date-time after `now`: the row shows a warning. */
+export function isFutureTime(at: string | undefined, now: number, timeZone: string): boolean {
+  if (at === undefined) return false;
+  const timestamp = parseLocalDateTime(at, timeZone);
+  return timestamp !== null && timestamp > now;
 }
 
 /** True when `at` is more than {@link REVIEW_AFTER_DAYS} days before `now`. */

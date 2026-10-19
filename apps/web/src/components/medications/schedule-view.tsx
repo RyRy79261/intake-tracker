@@ -204,6 +204,9 @@ export function ScheduleView({ selectedDate, onAddMed, onOpenInfo }: ScheduleVie
           </button>
         </div>
       )}
+      {/* Room below the chip, so at the end of the list it sits under the
+          last row instead of being lifted over it. */}
+      {unmarkedOffScreen && <div aria-hidden="true" className="h-20" data-testid="unmarked-spacer" />}
 
       <MarkAllDosesSheet
         open={!!markAllGroup}

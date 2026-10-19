@@ -110,6 +110,8 @@ export async function seedSlot(
   page: Page,
   count: number,
   states: (DoseState | undefined)[] = [],
+  /** Each medicine's dose time; default 08:30. */
+  times: string[] = [],
 ): Promise<SeededDose[]> {
   await page.goto("/medications");
   await expect(page.getByTestId("window")).toBeVisible({ timeout: 30_000 });
@@ -146,11 +148,14 @@ export async function seedSlot(
       status: "active",
       ...sync,
     });
+    const time = times[i] ?? "08:30";
+    const [hh = 0, mm = 0] = time.split(":").map(Number);
     rows.phaseSchedules!.push({
       id: ids.scheduleId,
       phaseId: ids.phaseId,
-      time: "08:30",
-      scheduleTimeUTC: 390,
+      time,
+      // Berlin is UTC+2 on the test day.
+      scheduleTimeUTC: (hh * 60 + mm - 120 + 1440) % 1440,
       anchorTimezone: ZONE,
       dosage: 50,
       daysOfWeek: [0, 1, 2, 3, 4, 5, 6],
@@ -201,7 +206,7 @@ export async function seedSlot(
         phaseId: ids.phaseId,
         scheduleId: ids.scheduleId,
         scheduledDate: DAY,
-        scheduledTime: "08:30",
+        scheduledTime: time,
         status: state.status,
         actionTimestamp: berlin(state.at),
         timezone: ZONE,

@@ -66,7 +66,7 @@ export function SkipReasonPicker({
   return (
     // A drawer, so it stacks over the dose dialog and the modal (drawers too).
     <Drawer open={open} onOpenChange={onOpenChange}>
-      <DrawerContent data-domain="meds" className="bg-panel" aria-describedby={undefined}>
+      <DrawerContent data-domain="meds" className="bg-panel md:mx-auto md:w-full md:max-w-lg" aria-describedby={undefined}>
         <div className="grid gap-3 px-4 pb-[calc(20px+env(safe-area-inset-bottom,0px))] pt-3">
           <DrawerTitle className="text-base font-semibold">Why are you skipping this dose?</DrawerTitle>
 

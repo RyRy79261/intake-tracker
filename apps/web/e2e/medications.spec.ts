@@ -558,6 +558,107 @@ test.describe('Today: Mark all doses and the late window', () => {
     await expect.poll(() => stocks(page, doses)).toEqual([30, 30, 30]);
   });
 
+  test("at 09:30, Take all then the sheet's Skip skips the five open doses, keeps the 08:35 one, and asks why", async ({ page }) => {
+    await prepare(page, '09:30');
+    const doses = await seedSlot(page, 6, [{ status: 'taken', at: '08:35' }]);
+
+    await openMarkAll(page);
+    await modal(page).getByRole('button', { name: 'Take all', exact: true }).click();
+    await sheet(page).getByRole('button', { name: 'Skip', exact: true }).click();
+
+    await expect(page.getByText('Why are you skipping this dose?')).toBeVisible();
+    await expect.poll(() => takenMinutes(page, doses)).toEqual([5, 'skipped', 'skipped', 'skipped', 'skipped', 'skipped']);
+    expect(await stocks(page, doses)).toEqual([29, 30, 30, 30, 30, 30]);
+  });
+
+  test('Take all, then Take now at 09:30, records 09:30', async ({ page }) => {
+    await prepare(page, '09:30');
+    const doses = await seedSlot(page, 2);
+
+    await openMarkAll(page);
+    await modal(page).getByRole('button', { name: 'Take all', exact: true }).click();
+    const takeNow = sheet(page).getByRole('button', { name: /^Take now/ });
+    // The button shows the time it records: 09:30 and the minute or so the test ran.
+    const [, hh, mm] = /\((\d{2}):(\d{2})\)/.exec((await takeNow.textContent()) ?? '')!;
+    const shown = Number(hh) * 60 + Number(mm) - (8 * 60 + 30);
+    expect(shown).toBeGreaterThanOrEqual(60);
+    expect(shown).toBeLessThanOrEqual(62);
+    await takeNow.click();
+    await expect.poll(() => takenMinutes(page, doses)).toEqual([shown, shown]);
+  });
+
+  test('modal, dose dialog, then the time sheet: Cancel keeps both open, and Back closes them one at a time', async ({ page }) => {
+    await prepare(page, '10:00');
+    await seedSlot(page, 3);
+    const dialog = page.getByRole('dialog').filter({ hasText: /Scheduled for 08:30/ });
+    const timeSheet = page.getByRole('dialog').filter({ hasText: /^When did you take/ });
+
+    await openMarkAll(page);
+    await modal(page).getByRole('button', { name: /Open dose/ }).first().click();
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole('button', { name: 'Take', exact: true }).click();
+    await expect(timeSheet).toBeVisible();
+    await timeSheet.getByRole('button', { name: 'Cancel' }).click();
+
+    await expect(timeSheet).toHaveCount(0);
+    await expect(dialog).toBeVisible();
+    await expect(modal(page)).toBeVisible();
+
+    await page.goBack();
+    await expect(dialog).toHaveCount(0);
+    await expect(modal(page)).toBeVisible();
+
+    await page.goBack();
+    await expect(modal(page)).toHaveCount(0);
+    await expect(win(page)).toBeVisible();
+  });
+
+  test('the modal fills a phone and is a centred panel of normal width on a wide screen', async ({ page }) => {
+    await prepare(page, '09:00');
+    await seedSlot(page, 2);
+    await openMarkAll(page);
+    const phone = page.viewportSize()!;
+    const box = (await modal(page).boundingBox())!;
+    expect(box.width).toBe(phone.width);
+    expect(box.height).toBeGreaterThan(phone.height * 0.85);
+    await modal(page).getByRole('button', { name: 'Close' }).click();
+    await expect(modal(page)).toHaveCount(0);
+
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await openMarkAll(page);
+    await expect(modal(page)).toBeVisible();
+    await expect
+      .poll(async () => (await modal(page).boundingBox())!.width)
+      .toBeLessThanOrEqual(512);
+    const wide = (await modal(page).boundingBox())!;
+    expect(Math.abs(wide.x + wide.width / 2 - 720)).toBeLessThan(2);
+    await expect(modal(page).getByRole('button', { name: 'Take all', exact: true })).toBeVisible();
+  });
+
+  test('at the end of the list, the "Unmarked meds" chip does not cover the last dose', async ({ page }) => {
+    await prepare(page, '21:00');
+    const times = ['08:30', '08:30', '13:00', '13:00', '20:00', '20:00', '22:00', '22:00'];
+    await seedSlot(page, 8, [], times);
+
+    const chip = win(page).getByRole('button', { name: 'Unmarked meds' });
+    const lastRow = win(page).getByTestId('dose-row').last();
+    await lastRow.scrollIntoViewIfNeeded();
+    await expect(chip).toBeVisible();
+    // Scroll every container to its end: the chip sits under the last row.
+    await page.evaluate(() => {
+      for (const el of document.querySelectorAll<HTMLElement>('*')) {
+        if (el.scrollHeight > el.clientHeight) el.scrollTop = el.scrollHeight;
+      }
+    });
+    await expect(chip).toBeVisible();
+    const c = (await chip.boundingBox())!;
+    const r = (await lastRow.boundingBox())!;
+    expect(c.y).toBeGreaterThanOrEqual(r.y + r.height);
+
+    await chip.click();
+    await expect(win(page).locator('#time-slot-08\\:30')).toBeInViewport();
+  });
+
   test('Unskip all shows once every dose is skipped and opens them again', async ({ page }) => {
     await prepare(page, '10:00');
     const all = Array.from({ length: 6 }, () => ({ status: 'skipped' as const, at: '08:40', reason: 'Cost' }));

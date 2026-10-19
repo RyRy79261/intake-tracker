@@ -82,7 +82,7 @@ export function TakenTimeSheet({
     // A drawer, not a dialog: it opens over the dose dialog and the "Mark all
     // doses" modal, which are drawers too, so their focus traps stack.
     <Drawer open={open} onOpenChange={(next) => !next && onCancel()}>
-      <DrawerContent data-domain="meds" className="bg-panel" aria-describedby={undefined}>
+      <DrawerContent data-domain="meds" className="bg-panel md:mx-auto md:w-full md:max-w-lg" aria-describedby={undefined}>
         <div className="grid gap-3 px-4 pb-[calc(20px+env(safe-area-inset-bottom,0px))] pt-3">
           <DrawerTitle className="text-base font-semibold">{title}</DrawerTitle>
 

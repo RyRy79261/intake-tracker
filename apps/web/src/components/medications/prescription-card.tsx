@@ -28,6 +28,7 @@ import {
 } from "@/hooks/use-medication-queries";
 import { computeRefillStatus } from "@/lib/refill-status";
 import { selectEffectivePhase } from "@intake/core/effective-phase";
+import { isOpenDoseStatus } from "@intake/core/dose-rules";
 import { useTodayKey } from "@/hooks/use-today-key";
 import { useToast } from "@intake/ui/use-toast";
 import { cn } from "@/lib/utils";
@@ -102,7 +103,9 @@ export function PrescriptionCard({ prescription, expanded: controlledExpanded, o
   const dosageMg = firstSlot?.dosageMg;
   const unit = effectivePhase?.unit ?? "mg";
 
-  const pendingSlots = prescriptionSlots.filter((s) => s.status === "pending");
+  // Open = not taken or skipped yet. A missed dose is still owed, so it is
+  // not "All done".
+  const pendingSlots = prescriptionSlots.filter((s) => isOpenDoseStatus(s.status));
   const allHandled = prescriptionSlots.length > 0 && pendingSlots.length === 0;
   const firstPending = pendingSlots.length > 0 ? pendingSlots[0] : undefined;
   const nextDoseTime = firstPending?.localTime ?? null;

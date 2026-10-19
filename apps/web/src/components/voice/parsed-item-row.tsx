@@ -24,8 +24,10 @@ import { useOptionalTrackerEnabled } from "@/lib/optional-trackers";
 import { validateVoiceItem } from "@/lib/voice-validation";
 import {
   REVIEW_AFTER_DAYS,
+  allowsFutureTime,
   describeSpokenTime,
   formatLocalDateTime,
+  isFutureTime,
   isLongAgo,
 } from "@/lib/voice-time";
 import { getDeviceTimezone } from "@/lib/timezone";
@@ -730,7 +732,7 @@ function TimeField({
             aria-label="Time"
             className="h-9 w-[13.5rem]"
             disabled={disabled}
-            max={formatLocalDateTime(now, timeZone)}
+            {...(!allowsFutureTime(item) && { max: formatLocalDateTime(now, timeZone) })}
             value={item.at ?? ""}
             onChange={(e) => setAt(e.target.value)}
           />
@@ -768,6 +770,15 @@ function TimeField({
         <p className="flex items-start gap-1.5 text-[11px] leading-snug text-amber-700 dark:text-amber-400">
           <AlertTriangle className="mt-px h-3 w-3 shrink-0" />
           <span>More than {REVIEW_AFTER_DAYS} days ago. Check the date.</span>
+        </p>
+      )}
+      {allowsFutureTime(item) && isFutureTime(item.at, now, timeZone) && (
+        <p
+          className="flex items-start gap-1.5 text-[11px] leading-snug text-amber-700 dark:text-amber-400"
+          data-testid={`voice-item-${index}-future`}
+        >
+          <AlertTriangle className="mt-px h-3 w-3 shrink-0" />
+          <span>This time is in the future.</span>
         </p>
       )}
     </div>
