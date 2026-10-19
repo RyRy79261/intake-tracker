@@ -12,10 +12,12 @@ import {
   takeAllDoses,
   skipAllDoses,
   logPrnDose,
+  logUnlistedDose,
   editDoseTime,
   scheduledDoseLogId,
 } from "@/lib/dose-log-service";
 import { toLocalDateKey } from "@/lib/date-utils";
+import { undoPrnDose } from "@/lib/dose-action-service";
 import {
   makePrescription,
   makeMedicationPhase,
@@ -245,6 +247,66 @@ describe("logPrnDose", () => {
       // Never persist NaN — a bad time falls back to now.
       expect(Number.isFinite(result.data.actionTimestamp)).toBe(true);
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// logUnlistedDose (a medicine not on the list, by name only)
+// ---------------------------------------------------------------------------
+
+describe("logUnlistedDose", () => {
+  const takenAt = new Date(2026, 8, 1, 9, 5).getTime();
+
+  it("logs a named PRN dose with no prescription and moves no stock", async () => {
+    const { inv } = await seedFullPrescription({ initialStock: 30 });
+
+    const result = await logUnlistedDose({
+      medicineName: "  Paracetamol ",
+      takenAt,
+      amount: 1,
+      unit: "tablet",
+      note: " headache ",
+    });
+
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data).toMatchObject({
+      medicineName: "Paracetamol",
+      kind: "prn",
+      status: "taken",
+      actionTimestamp: takenAt,
+      scheduledDate: toLocalDateKey(takenAt),
+      scheduledTime: "09:05",
+      doseAmount: 1,
+      doseUnit: "tablet",
+      note: "headache",
+    });
+    expect(result.data.prescriptionId).toBeUndefined();
+    expect(result.data.inventoryItemId).toBeUndefined();
+    // A tablet has no known strength, so no mg is invented.
+    expect(result.data.doseMg).toBeUndefined();
+    expect(await db.prescriptions.count()).toBe(1);
+    expect((await db.inventoryItems.get(inv.id))?.currentStock).toBe(30);
+  });
+
+  it("records the mg of a dose said in mg", async () => {
+    const result = await logUnlistedDose({ medicineName: "Ibuprofen", takenAt, amount: 400, unit: "mg" });
+    expect(result.success && result.data.doseMg).toBe(400);
+  });
+
+  it("refuses a blank name, a bad time and a future time", async () => {
+    expect((await logUnlistedDose({ medicineName: "  ", takenAt })).success).toBe(false);
+    expect((await logUnlistedDose({ medicineName: "Paracetamol", takenAt: NaN })).success).toBe(false);
+    const future = await logUnlistedDose({ medicineName: "Paracetamol", takenAt: Date.now() + 60 * 60_000 });
+    expect(future.success).toBe(false);
+    expect(await db.doseLogs.count()).toBe(0);
+  });
+
+  it("can be undone like any PRN dose", async () => {
+    const result = await logUnlistedDose({ medicineName: "Paracetamol", takenAt });
+    if (!result.success) throw new Error("expected success");
+    expect((await undoPrnDose(result.data.id)).success).toBe(true);
+    expect((await db.doseLogs.get(result.data.id))?.deletedAt).not.toBeNull();
   });
 });
 
