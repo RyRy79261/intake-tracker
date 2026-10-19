@@ -311,7 +311,10 @@ function planScheduledDose(
     }
   });
   if (changes.every((c) => c.type === "none")) {
-    return fail(`Nothing to change: ${changes.map((c) => `${c.slot.prescription.genericName} ${(c as { reason: string }).reason}`).join(", ")}.`);
+    const reasons = changes
+      .map((c) => `${c.slot.prescription.genericName} ${(c as { reason: string }).reason}`)
+      .sort((a, b) => a.localeCompare(b));
+    return fail(`Nothing to change: ${reasons.join(", ")}.`);
   }
   const takes = changes.filter((c) => c.type === "take");
   const now = opts.now ?? takenAt;
