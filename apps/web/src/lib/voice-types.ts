@@ -8,13 +8,23 @@
  */
 
 import {
+  MEDICATION_KINDS,
+  isMedicationKind,
+  type MedicationKind,
   REFRESHABLE_KINDS,
   type RefreshableKind,
   type VoiceItemKind,
   type VoiceItemOf,
 } from "@intake/core/voice-items";
 
-export { REFRESHABLE_KINDS, type RefreshableKind, type VoiceItemKind };
+export {
+  MEDICATION_KINDS,
+  isMedicationKind,
+  REFRESHABLE_KINDS,
+  type MedicationKind,
+  type RefreshableKind,
+  type VoiceItemKind,
+};
 
 /**
  * When an item happened, as the parser returns it: a local wall-clock
@@ -57,10 +67,18 @@ export type CaffeineItem = Timed<"caffeine">;
 export type AlcoholItem = Timed<"alcohol">;
 export type UrinationItem = Timed<"urination">;
 export type DefecationItem = Timed<"defecation">;
+export type ScheduledDoseItem = Timed<"scheduled_dose">;
+export type StockRefillItem = Timed<"stock_refill">;
+export type ExtraMedicineItem = Timed<"extra_medicine">;
+export type MedicationItem = ScheduledDoseItem | StockRefillItem | ExtraMedicineItem;
 
 export type VoiceParsedItem = { [K in VoiceItemKind]: Timed<K> }[VoiceItemKind];
 
 export type RefreshableItem = Extract<VoiceParsedItem, { kind: RefreshableKind }>;
+
+export function isMedicationItem(item: VoiceParsedItem): item is MedicationItem {
+  return isMedicationKind(item.kind);
+}
 
 export function isRefreshable(item: VoiceParsedItem): item is RefreshableItem {
   return (REFRESHABLE_KINDS as readonly string[]).includes(item.kind);
@@ -87,6 +105,9 @@ export const VOICE_ITEM_COLOR: Record<VoiceItemKind, string> = {
   alcohol: "alcohol",
   urination: "urination",
   defecation: "defecation",
+  scheduled_dose: "meds",
+  stock_refill: "meds",
+  extra_medicine: "meds",
 };
 
 export const VOICE_ITEM_LABEL: Record<VoiceItemKind, string> = {
@@ -99,4 +120,7 @@ export const VOICE_ITEM_LABEL: Record<VoiceItemKind, string> = {
   alcohol: "Alcohol",
   urination: "Urination",
   defecation: "Defecation",
+  scheduled_dose: "Doses",
+  stock_refill: "Refill",
+  extra_medicine: "Medicine",
 };

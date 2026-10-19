@@ -499,7 +499,8 @@ describe("VoicePanel commit — timing", () => {
       await user.click(screen.getByRole("button", { name: "mock-record" }));
       await screen.findByText(/Items \(/);
 
-      // The request carried the device's clock, and nothing else new.
+      // The request carried the device's clock and the (empty) medication
+      // list, and nothing else new.
       const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
       expect(lastParseRequest).toEqual({
         transcript: "dictated transcript",
@@ -508,6 +509,7 @@ describe("VoicePanel commit — timing", () => {
           timeZone: tz,
           utcOffsetMinutes: -NOW.getTimezoneOffset() + 0, // + 0 turns -0 into 0 (UTC)
         },
+        medications: [],
       });
 
       // Each row shows its parsed time before anything is saved.

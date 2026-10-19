@@ -1,5 +1,5 @@
 import type { SodiumSource, SodiumSourceUnit } from "@/lib/db";
-import type { VoiceItem, VoiceItemOf } from "@intake/core/voice-items";
+import type { MedicationKind, VoiceItem, VoiceItemOf } from "@intake/core/voice-items";
 import { ok, err, unwrap } from "@intake/core/service";
 import type { ServiceResult } from "@intake/types/service";
 import { addBloodPressureRecord, addWeightRecord } from "@/lib/health-service";
@@ -43,8 +43,14 @@ export type ParsedFood = VoiceItemOf<"food"> & {
   originalInputText?: string;
 };
 
-/** Anything the logger can write. Extra keys (a voice row's time) are ignored. */
-export type ParsedEntry = Exclude<VoiceItem, { kind: "food" }> | ParsedFood;
+/**
+ * Anything the logger can write. Extra keys (a voice row's time) are ignored.
+ * Medication items act on the user's own medications instead and are saved by
+ * lib/voice-medication.ts.
+ */
+export type ParsedEntry =
+  | Exclude<VoiceItem, { kind: "food" | MedicationKind }>
+  | ParsedFood;
 
 /** The optional trackers the user has turned on. */
 export interface Trackers {

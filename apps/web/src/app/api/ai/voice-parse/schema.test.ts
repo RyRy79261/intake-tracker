@@ -313,3 +313,43 @@ describe("ParseRequestSchema", () => {
     }
   });
 });
+
+describe("medication items", () => {
+  it("keeps a dose, a refill and an extra medicine", () => {
+    const result = extractVoiceItems({
+      items: [
+        { kind: "scheduled_dose", slotTime: "08:30", action: "taken", when: null },
+        { kind: "stock_refill", medicine: "Vymada", pills: 100, when: null },
+        { kind: "extra_medicine", medicine: "Paracetamol", amount: 1, unit: "tablet", when: null },
+      ],
+    });
+    expect(result.ok && result.items.map((i) => i.kind)).toEqual([
+      "scheduled_dose",
+      "stock_refill",
+      "extra_medicine",
+    ]);
+  });
+
+  it("drops a dose time that is not HH:MM and a refill of no pills", () => {
+    const result = extractVoiceItems({
+      items: [
+        { kind: "scheduled_dose", slotTime: "8:30", action: "taken" },
+        { kind: "stock_refill", medicine: "Vymada", pills: 0 },
+        water,
+      ],
+    });
+    expect(result.ok && result.dropped).toBe(2);
+  });
+
+  it("accepts the medication list and refuses a malformed dose time in it", () => {
+    const base = { transcript: "I took my 8:30 meds" };
+    const medications = [{ name: "Furosemide", brands: ["Lasix"], doseTimes: ["08:30"] }];
+    expect(ParseRequestSchema.safeParse({ ...base, medications }).success).toBe(true);
+    expect(
+      ParseRequestSchema.safeParse({
+        ...base,
+        medications: [{ name: "Furosemide", brands: [], doseTimes: ["8:30"] }],
+      }).success,
+    ).toBe(false);
+  });
+});

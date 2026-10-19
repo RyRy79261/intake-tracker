@@ -3,6 +3,7 @@ import { apiFetch } from "@/lib/api-fetch";
 import type { SubstanceLookupResponse } from "@/lib/substance-lookup-schema";
 import type { VoiceParseResponse } from "@/lib/voice-types";
 import type { AnalyticsInsightsRequest } from "@intake/ai-prompts/analytics-insights";
+import type { VoiceMedication } from "@intake/ai-prompts/voice-parse";
 
 /**
  * The one client adapter for the app's AI routes.
@@ -184,7 +185,12 @@ export interface AiRoutes {
   "/api/ai/titration-warnings": { body: TitrationWarningsBody; result: { warnings: string[] } };
   "/api/ai/nutrient-analysis": { body: NutrientAnalysisBody; result: NutrientAnalysisResult };
   "/api/ai/voice-parse": {
-    body: { transcript: string; now?: unknown; kind?: "food" | "caffeine" | "alcohol" };
+    body: {
+      transcript: string;
+      now?: unknown;
+      kind?: "food" | "caffeine" | "alcohol";
+      medications?: VoiceMedication[];
+    };
     result: VoiceParseResponse;
   };
   "/api/ai/voice-transcribe": { body: FormData; result: { text: string } };

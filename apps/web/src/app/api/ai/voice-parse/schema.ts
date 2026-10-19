@@ -53,6 +53,17 @@ export const ClientNowSchema = z.object({
 
 export const MAX_REQUEST_CHARS = 8000;
 
+/**
+ * The user's medications and today's dose times, so the parser can map "my
+ * 8:30 meds" and a spoken name to what is on the list. Names go into the
+ * prompt, so they are short and sanitised in the task.
+ */
+const MedicationSchema = z.object({
+  name: z.string().min(1).max(100),
+  brands: z.array(z.string().max(100)).max(10),
+  doseTimes: z.array(z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/)).max(24),
+});
+
 export const ParseRequestSchema = z.object({
   transcript: z.string().min(1).max(MAX_REQUEST_CHARS),
   // Optional: a cached client from before this field existed still sends the
@@ -62,6 +73,9 @@ export const ParseRequestSchema = z.object({
   now: ClientNowSchema.optional(),
   /** Set by a review row's refresh: re-look-up one item of this kind. */
   kind: z.enum(REFRESHABLE_KINDS).optional(),
+  // Optional: an older client sends none, and medication items then name
+  // nothing the device can find (the review row says so).
+  medications: z.array(MedicationSchema).max(50).optional(),
 });
 
 /** A relative time further back than this is not a slip of the tongue. */

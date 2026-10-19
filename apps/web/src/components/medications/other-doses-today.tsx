@@ -25,7 +25,8 @@ interface OtherDosesTodayProps {
 /**
  * Doses outside the schedule on the selected day: the extra doses logged with
  * the window's "+" button and as-needed doses from the Rx tab (both are
- * kind='prn' dose logs). Undo arms first ("Remove?"), then removes the log
+ * kind='prn' dose logs), and unlisted medicines logged by voice (a PRN log
+ * with a name and no prescription). Undo arms first ("Remove?"), then removes the log
  * and puts its pills back in stock.
  */
 export function OtherDosesToday({ dateKey, isToday }: OtherDosesTodayProps) {
@@ -67,17 +68,20 @@ export function OtherDosesToday({ dateKey, isToday }: OtherDosesTodayProps) {
       </h3>
       <ul className="border border-line bg-background">
         {rows.map((log) => {
-          const rx = prescriptions.find((p) => p.id === log.prescriptionId);
+          const rx = log.prescriptionId
+            ? prescriptions.find((p) => p.id === log.prescriptionId)
+            : undefined;
           const inv = log.inventoryItemId ? inventory.find((i) => i.id === log.inventoryItemId) : undefined;
-          const name = rx?.genericName ?? "Medication";
+          const name = rx?.genericName ?? log.medicineName ?? "Medication";
           const unit = inv?.unit || "mg";
           const time = clock(log.actionTimestamp ?? log.createdAt);
           const pills =
             inv && log.doseMg != null && inv.strength > 0
               ? Math.round((log.doseMg / inv.strength) * 10000) / 10000
               : null;
-          const sub =
-            pills != null && inv
+          const sub = !log.prescriptionId
+            ? "Not on your medication list"
+            : pills != null && inv
               ? `Extra dose · ${formatPillCount(pills)} of ${inv.brandName}`
               : "Extra dose · no stock deducted";
           const isArmed = armed === log.id;
@@ -90,11 +94,18 @@ export function OtherDosesToday({ dateKey, isToday }: OtherDosesTodayProps) {
               <span className="min-w-0">
                 <span className="block text-sm font-semibold leading-snug">
                   {name}
-                  {log.doseMg != null && (
+                  {log.doseMg != null ? (
                     <span className="font-mono text-[0.8125rem] font-normal text-muted-foreground">
                       {" "}
                       {log.doseMg} {unit}
                     </span>
+                  ) : (
+                    log.doseAmount != null && (
+                      <span className="font-mono text-[0.8125rem] font-normal text-muted-foreground">
+                        {" "}
+                        {log.doseAmount} {log.doseUnit ?? ""}
+                      </span>
+                    )
                   )}
                 </span>
                 <span className="block text-xs leading-snug text-muted-foreground">

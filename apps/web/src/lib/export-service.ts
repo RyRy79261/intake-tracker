@@ -253,7 +253,9 @@ function doseRows(
     row: [
       l.scheduledDate,
       l.scheduledTime,
-      medNames.get(l.prescriptionId) ?? l.prescriptionId,
+      l.prescriptionId
+        ? (medNames.get(l.prescriptionId) ?? l.prescriptionId)
+        : (l.medicineName ?? ""),
       l.kind === "prn" ? l.status : resolveDoseStatus(l.status, l.scheduledDate, todayKey),
       l.kind ?? "scheduled",
       l.actionTimestamp != null ? new Date(l.actionTimestamp).toISOString() : undefined,

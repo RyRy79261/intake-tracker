@@ -9,6 +9,7 @@ import { VoiceRecorder } from "@/components/voice/voice-recorder";
 import { ParsedItemRow, type ParsedItemNote } from "@/components/voice/parsed-item-row";
 import { useLogParsedEntry } from "@/hooks/use-parsed-entry";
 import {
+  isMedicationItem,
   isRefreshable,
   type RefreshableItem,
   type VoiceParsedItem,
@@ -24,6 +25,21 @@ import {
   spokenTimestamp,
 } from "@/lib/voice-time";
 import { getDeviceTimezone } from "@/lib/timezone";
+import { toLocalDateKey } from "@/lib/date-utils";
+import {
+  loadVoiceMedicationContext,
+  useVoiceMedicationContext,
+} from "@/hooks/use-voice-medication";
+import {
+  describePlan,
+  medicationDates,
+  medicationsForParse,
+  planMedicationItem,
+  saveMedicationPlan,
+  type PlanResult,
+  type VoiceMedicationContext,
+} from "@/lib/voice-medication";
+import type { MedicationRowState } from "@/components/voice/parsed-item-row";
 import { useSettingsStore } from "@/stores/settings-store";
 import { aiClient } from "@/lib/ai-client";
 import { useQueryClient } from "@tanstack/react-query";
@@ -84,6 +100,21 @@ function parseNotices(data: VoiceParseResponse): string[] {
   return notices;
 }
 
+/**
+ * What saving a medication row would do, against the loaded list, with the
+ * row's own time or `now`. Not a medication row → null.
+ */
+function planRow(
+  item: VoiceParsedItem,
+  ctx: VoiceMedicationContext | undefined,
+  now: number,
+  timeZone: string,
+): PlanResult | null | undefined {
+  if (!isMedicationItem(item)) return null;
+  if (!ctx) return undefined;
+  return planMedicationItem(item, ctx, spokenTimestamp(item, now, timeZone), item.at !== undefined);
+}
+
 interface VoicePanelProps {
   /** Called once a save commit succeeds so the host can close the modal. */
   onCommitted?: () => void;
@@ -111,6 +142,25 @@ export function VoicePanel({ onCommitted, initialClip }: VoicePanelProps) {
   const [reasoning, setReasoning] = useState<string | null>(null);
   const [notices, setNotices] = useState<string[]>([]);
   const nextRowId = useRef(0);
+
+  // The medication list and the dose slots of the days medication rows may
+  // mean (today, yesterday, and each row's own day), for planning those rows
+  // and for telling the parser what is on the list.
+  const medicationDays = medicationDates(
+    rows
+      .filter((r) => isMedicationItem(r.item) && r.item.at !== undefined)
+      .map((r) => spokenTimestamp(r.item, Date.now(), getDeviceTimezone())),
+  );
+  const medicationContext = useVoiceMedicationContext(medicationDays);
+  const medicationContextRef = useRef(medicationContext);
+  medicationContextRef.current = medicationContext;
+  const medicineNames = useMemo(
+    () =>
+      medicationContext
+        ? [...new Set(medicationContext.prescriptions.filter((p) => p.isActive).map((p) => p.genericName))]
+        : [],
+    [medicationContext],
+  );
 
   const pendingCount = useMemo(
     () => rows.filter((r) => r.approved === null).length,
@@ -162,9 +212,15 @@ export function VoicePanel({ onCommitted, initialClip }: VoicePanelProps) {
         setStage("parsing");
         // The device's clock goes with the transcript: the parser cannot
         // date "yesterday at 8pm" without knowing what today is here.
+        // The list is usually loaded by now; a very quick first recording
+        // reads it directly rather than telling the parser it is empty.
+        const ctx =
+          medicationContextRef.current ??
+          (await loadVoiceMedicationContext(medicationDates([], spokenAt)));
         const parsed = await aiClient.call("/api/ai/voice-parse", {
           transcript: text,
           now: clientNowForParse(spokenAt, timeZone),
+          medications: medicationsForParse(ctx, toLocalDateKey(spokenAt)),
         });
         if (!parsed.ok) throw new Error(parsed.error.message);
         const data = parsed.data;
@@ -299,6 +355,8 @@ export function VoicePanel({ onCommitted, initialClip }: VoicePanelProps) {
         !r.flagged &&
         !r.refreshing &&
         validateVoiceItem(r.item, now, timeZone) === null &&
+        planRow(r.item, medicationContextRef.current, now, timeZone)?.ok !== false &&
+        !(isMedicationItem(r.item) && !medicationContextRef.current) &&
         !isLongAgo(r.item.at, now, timeZone)
           ? { ...r, approved: true }
           : r,
@@ -344,7 +402,15 @@ export function VoicePanel({ onCommitted, initialClip }: VoicePanelProps) {
       try {
         // The logger owns what records an item becomes; the hook reopens a
         // closed database and retries once (issue #287).
-        await logParsedEntry(item, { timestamp: timestampFor(item), origin: "voice" });
+        if (isMedicationItem(item)) {
+          // Planned again now, against the list as it is at save time.
+          const planned = planRow(item, medicationContextRef.current, batchNow, timeZone);
+          if (!planned) throw new Error("Your medications have not loaded yet");
+          if (!planned.ok) throw new Error(planned.problem);
+          await saveMedicationPlan(planned.plan);
+        } else {
+          await logParsedEntry(item, { timestamp: timestampFor(item), origin: "voice" });
+        }
         successCount++;
         savedIndices.push(index);
       } catch (saveError) {
@@ -384,6 +450,18 @@ export function VoicePanel({ onCommitted, initialClip }: VoicePanelProps) {
     }
   }, [rows, toast, reset, queryClient, logParsedEntry, onCommitted]);
 
+  const medicationRowProps = (item: VoiceParsedItem) => {
+    const planned = planRow(item, medicationContext, Date.now(), getDeviceTimezone());
+    if (planned === null) return {};
+    const medication: MedicationRowState | undefined =
+      planned === undefined
+        ? undefined
+        : planned.ok
+          ? { ok: true, lines: describePlan(planned.plan) }
+          : { ok: false, problem: planned.problem };
+    return { ...(medication && { medication }), medicineNames };
+  };
+
   const hasItems = rows.length > 0;
 
   return (
@@ -403,7 +481,7 @@ export function VoicePanel({ onCommitted, initialClip }: VoicePanelProps) {
             <CardContent className="space-y-4 pt-6">
               <p className="text-xs text-muted-foreground">
                 Tap record and describe everything in one go — blood pressure, heart rate,
-                food, drinks, weight, anything. Stop, review the extracted items, then
+                food, drinks, weight, the doses you took, a refill, anything. Stop, review the extracted items, then
                 approve or reject each one.
               </p>
               <VoiceRecorder
@@ -478,6 +556,7 @@ export function VoicePanel({ onCommitted, initialClip }: VoicePanelProps) {
                     {...(isRefreshable(row.item) && {
                       onRefresh: () => void refreshRow(row),
                     })}
+                    {...medicationRowProps(row.item)}
                     onChange={(next) => updateRow(i, { item: next })}
                     onApprove={() =>
                       updateRow(i, {

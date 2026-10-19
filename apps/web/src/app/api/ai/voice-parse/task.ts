@@ -13,7 +13,7 @@ import {
 /**
  * Parse a voice transcript into a heterogeneous list of health record items
  * (BP, HR, weight, water, sodium, food, caffeine, alcohol, urination,
- * defecation), checked item by item (see schema.ts). Quality tier. The tool
+ * defecation, and doses, refills and extra medicines of the user's own list), checked item by item (see schema.ts). Quality tier. The tool
  * is not strict: the API can't compile its schema (see PARSE_TOOL), so the
  * items are checked with Zod instead.
  *
@@ -45,6 +45,15 @@ function sanitizeTranscript(transcript: string) {
   };
 }
 
+/** A medicine's names as typed by the user, redacted like the transcript. */
+function sanitizeMedication(m: NonNullable<Request["medications"]>[number]) {
+  return {
+    name: sanitizeForAI(m.name, 100),
+    brands: m.brands.map((b) => sanitizeForAI(b, 100)).filter((b) => b !== ""),
+    doseTimes: m.doseTimes,
+  };
+}
+
 export const voiceParseTask = {
   route: "/api/ai/voice-parse",
   rateLimit: 20,
@@ -65,7 +74,7 @@ export const voiceParseTask = {
             "Could not check this item against a web source. Try again, or enter the values yourself.",
         }
       : { mode: "off" },
-  prompt: ({ transcript, now, kind }) => {
+  prompt: ({ transcript, now, kind, medications }) => {
     const sanitized = sanitizeTranscript(transcript).text;
     if (!sanitized) return reply(400, { error: "Empty input after sanitization" });
     // The client's clock (local time, zone, offset) leads the user turn, so
@@ -75,7 +84,9 @@ export const voiceParseTask = {
     // for relative times only.
     return {
       system: SYSTEM_PROMPT,
-      user: kind ? buildRefreshMessage(sanitized, kind) : buildUserMessage(sanitized, now),
+      user: kind
+        ? buildRefreshMessage(sanitized, kind)
+        : buildUserMessage(sanitized, now, medications?.map(sanitizeMedication)),
     };
   },
   output: (toolInput, req) => {
