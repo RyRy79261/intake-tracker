@@ -8,7 +8,8 @@
  * Settings that describe the USER are synced (SYNCED_SETTING_KEYS): daily
  * limits and extended buffers, optional trackers, the day-start hour, the
  * week start, liquid presets, medication regions, reminder follow-up
- * count/interval and the home timezone. They decide what is recorded and how a day is counted, so every
+ * count/interval, the dose rules (late window, reminder period, ask for a
+ * skip reason) and the home timezone. They decide what is recorded and how a day is counted, so every
  * device has to agree on them, and a backup has to carry them.
  *
  * Settings that describe the DEVICE stay in localStorage only: theme
@@ -70,6 +71,7 @@ import { getSyncAccountId } from "@/lib/sync-account";
 import { generateId, getDeviceId } from "@/lib/utils";
 import { settingStamp, stampChangedSettings } from "@/lib/settings-merge";
 import { isWeekStartsOn } from "@/lib/week-start";
+import { isLateWindowMinutes, isReminderPeriodMinutes } from "@intake/core/dose-rules";
 import { syncedWrite } from "@/lib/synced-write";
 
 /** The settings that live in the synced `userSettings` row. */
@@ -89,6 +91,9 @@ export const SYNCED_SETTING_KEYS = [
   "secondaryRegion",
   "reminderFollowUpCount",
   "reminderFollowUpInterval",
+  "lateWindowMinutes",
+  "reminderPeriodMinutes",
+  "askSkipReason",
   "homeTimezone",
   "homeTimezoneConfirmedAt",
 ] as const satisfies ReadonlyArray<keyof Settings & keyof UserSettings>;
@@ -101,7 +106,12 @@ export type SyncedSettingKey = (typeof SYNCED_SETTING_KEYS)[number];
  * for it is a default, not an edit. (Nullable settings are not listed: a
  * pulled row drops null columns, so their absence proves nothing.)
  */
-const SETTINGS_ADDED_AFTER_ROWS: readonly SyncedSettingKey[] = ["weekStartsOn"];
+const SETTINGS_ADDED_AFTER_ROWS: readonly SyncedSettingKey[] = [
+  "weekStartsOn",
+  "lateWindowMinutes",
+  "reminderPeriodMinutes",
+  "askSkipReason",
+];
 export type SyncedSettings = Pick<Settings, SyncedSettingKey>;
 
 /**
@@ -203,6 +213,11 @@ export function settingsFromRow(
     out.dayStartHour = r.dayStartHour;
   }
   if (isWeekStartsOn(r.weekStartsOn)) out.weekStartsOn = r.weekStartsOn;
+  if (isLateWindowMinutes(r.lateWindowMinutes)) out.lateWindowMinutes = r.lateWindowMinutes;
+  if (isReminderPeriodMinutes(r.reminderPeriodMinutes)) {
+    out.reminderPeriodMinutes = r.reminderPeriodMinutes;
+  }
+  if (typeof r.askSkipReason === "boolean") out.askSkipReason = r.askSkipReason;
   const trackers = r.optionalTrackers as Record<string, unknown> | undefined;
   if (
     trackers &&

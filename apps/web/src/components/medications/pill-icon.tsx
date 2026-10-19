@@ -63,7 +63,7 @@ export function PillIcon({ shape, color, size = 32, className }: PillIconProps) 
 }
 
 interface PillIconWithBadgeProps extends PillIconProps {
-  status?: "taken" | "skipped" | "rescheduled" | "pending";
+  status?: "taken" | "skipped" | "rescheduled" | "pending" | "missed";
 }
 
 export function PillIconWithBadge({ status, size = 32, ...props }: PillIconWithBadgeProps) {
@@ -76,7 +76,8 @@ export function PillIconWithBadge({ status, size = 32, ...props }: PillIconWithB
             "absolute -bottom-0.5 -right-0.5 rounded-full flex items-center justify-center text-on-domain",
             status === "taken" && "bg-meds",
             status === "skipped" && "bg-muted-foreground",
-            status === "rescheduled" && "bg-sodium"
+            status === "rescheduled" && "bg-meds",
+            status === "missed" && "bg-sodium"
           )}
           style={{ width: size * 0.45, height: size * 0.45 }}
         >
@@ -88,6 +89,12 @@ export function PillIconWithBadge({ status, size = 32, ...props }: PillIconWithB
           {status === "skipped" && (
             <svg width={size * 0.28} height={size * 0.28} viewBox="0 0 12 12" fill="none">
               <path d="M3 3L9 9M9 3L3 9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+            </svg>
+          )}
+          {status === "missed" && (
+            <svg width={size * 0.28} height={size * 0.28} viewBox="0 0 12 12" fill="none">
+              <path d="M6 2.5V7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+              <circle cx="6" cy="9.5" r="1" fill="currentColor" />
             </svg>
           )}
           {status === "rescheduled" && (

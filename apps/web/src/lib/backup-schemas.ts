@@ -295,6 +295,10 @@ export const userSettingsSchema = baseRecordNoTz
     dayStartHour: finiteNumber,
     // Absent on rows from before the week-start setting existed.
     weekStartsOn: z.number().int().min(0).max(6).optional(),
+    // Dose rules; absent on rows from before they existed.
+    lateWindowMinutes: z.number().int().min(-1).max(1440).optional(),
+    reminderPeriodMinutes: z.number().int().min(1).max(1440).optional(),
+    askSkipReason: z.boolean().optional(),
     liquidPresets: z.array(z.object({ id: z.string(), name: z.string() }).passthrough()),
     // Per-setting change stamps; absent on rows from older app versions.
     fieldUpdatedAt: z.record(z.string(), finiteNumber).nullable().optional(),

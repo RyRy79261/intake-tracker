@@ -18,7 +18,7 @@ vi.mock("@/components/auth-guard", () => ({
   useAuth: () => auth,
 }));
 
-let slots: Array<{ status: string }> | undefined = [];
+let slots: Array<{ status: string; dueAt?: number }> | undefined = [];
 vi.mock("@/hooks/use-medication-queries", () => ({
   useDailyDoseSchedule: () => slots,
 }));
@@ -46,12 +46,15 @@ describe("SysBar", () => {
     }
   });
 
-  it("counts only today's open doses on the Medications pip", () => {
+  it("counts only today's open doses that are due now on the Medications pip", () => {
+    const past = Date.now() - 60_000;
     slots = [
-      { status: "pending" },
-      { status: "taken" },
-      { status: "pending" },
-      { status: "skipped" },
+      { status: "pending", dueAt: past },
+      { status: "taken", dueAt: past },
+      { status: "missed", dueAt: past - 3_600_000 },
+      { status: "skipped", dueAt: past },
+      // Tonight's dose is not due yet.
+      { status: "pending", dueAt: Date.now() + 3_600_000 },
     ];
     render(<SysBar />);
     const meds = screen.getByRole("button", { name: "Medications, 2 open" });

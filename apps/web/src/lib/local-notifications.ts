@@ -1,3 +1,4 @@
+import { reminderRepeatCount } from "@intake/core/dose-rules";
 import { Capacitor } from "@capacitor/core";
 import { LocalNotifications } from "@capacitor/local-notifications";
 import {
@@ -96,8 +97,10 @@ async function buildNotifications(now: number): Promise<NativeNotification[]> {
   });
   const handled = await loadHandledSlots(occurrences);
 
-  const { reminderFollowUpCount, reminderFollowUpInterval } = useSettingsStore.getState();
-  const followUps = Math.max(0, reminderFollowUpCount);
+  // Repeat reminders run through the reminder period: one every interval
+  // (08:30, 08:40, 08:50, 09:00 with the defaults), never before the dose.
+  const { reminderPeriodMinutes, reminderFollowUpInterval } = useSettingsStore.getState();
+  const followUps = reminderRepeatCount(reminderFollowUpInterval, reminderPeriodMinutes);
   const intervalMs = Math.max(1, reminderFollowUpInterval) * 60_000;
   const followUpEnd = now + NATIVE_FOLLOW_UP_HORIZON_DAYS * 24 * 60 * 60 * 1000;
 

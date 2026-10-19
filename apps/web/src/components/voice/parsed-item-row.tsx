@@ -62,8 +62,17 @@ interface ParsedItemRowProps {
   medicineNames?: string[];
 }
 
-/** What a medication row shows: the planned changes, or the problem. */
-export type MedicationRowState = { ok: true; lines: string[] } | { ok: false; problem: string };
+/**
+ * What a medication row shows: the planned changes, or the problem. A late
+ * dose with no time said also asks when it was taken (`timeChoice`).
+ */
+export type MedicationRowState =
+  | {
+      ok: true;
+      lines: string[];
+      timeChoice?: { onTakeNow: () => void; onPickTime: () => void; onSkip: () => void };
+    }
+  | { ok: false; problem: string };
 
 type ColorClass = { bar: string; ring: string; chip: string };
 
@@ -802,7 +811,9 @@ export function ParsedItemRow({
     : medication === undefined
       ? "Loading your medications…"
       : medication.ok
-        ? null
+        ? medication.timeChoice
+          ? "Pick when you took them."
+          : null
         : medication.problem;
   const invalid = approved === null ? (validateVoiceItem(item) ?? medicationProblem) : null;
   const medicineListId = isMedication && medicineNames?.length ? `voice-medicines-${index}` : undefined;
@@ -859,6 +870,22 @@ export function ParsedItemRow({
                 </li>
               ))}
             </ul>
+          )}
+          {medication?.ok && medication.timeChoice && approved === null && (
+            <div className="space-y-1.5" data-testid={`voice-item-${index}-time-choice`}>
+              <p className="text-xs font-medium">When did you take your meds?</p>
+              <div className="flex flex-wrap gap-1.5">
+                <Button type="button" size="sm" className="h-8" disabled={disabled} onClick={medication.timeChoice.onTakeNow}>
+                  Take now
+                </Button>
+                <Button type="button" size="sm" variant="outline" className="h-8" disabled={disabled} onClick={medication.timeChoice.onPickTime}>
+                  Take at a specific time
+                </Button>
+                <Button type="button" size="sm" variant="outline" className="h-8" disabled={disabled} onClick={medication.timeChoice.onSkip}>
+                  Skip
+                </Button>
+              </div>
+            </div>
           )}
           <TimeField
             item={item}

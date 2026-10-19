@@ -1,6 +1,7 @@
 "use client";
 
 import { useLiveQuery } from "@/hooks/use-live-query";
+import { useMemo } from "react";
 import { useMutation } from "@tanstack/react-query";
 import {
   getPrescriptions,
@@ -43,11 +44,21 @@ import {
   logPrnDose,
   untakeDose,
   skipDose,
+  unskipDose,
   rescheduleDose,
   editDoseTime,
+  takeDoses,
+  skipDoses,
+  untakeDoses,
+  unskipDoses,
+  setSkipReason,
+  revertDoseChanges,
+  type DoseChange,
+  type DoseKey,
   type TakeDoseInput,
   type LogPrnDoseInput,
   type UntakeDoseInput,
+  type UnskipDoseInput,
   type SkipDoseInput,
   type RescheduleDoseInput,
   type EditDoseTimeInput,
@@ -64,17 +75,19 @@ import {
   deleteInventoryTransaction,
 } from "@/lib/medication-service";
 import {
-  getDoseLogById,
+  getLastTakenDose,
   getPrnDoseLogs,
   undoPrnDose,
 } from "@/lib/dose-action-service";
 import type { Prescription, PhaseSchedule, InventoryItem, DoseLog } from "@/lib/db";
-import type { ServiceResult } from "@intake/types/service";
 import { unwrap } from "@intake/core/service";
+import { resolveLiveDoseStatus } from "@intake/core/dose-rules";
 import { useTodayKey } from "@/hooks/use-today-key";
+import { useNow } from "@/hooks/use-now";
+import { useSettingsStore } from "@/stores/settings-store";
 
 // Re-export types so components import from hooks, not services
-export type { DoseSlot, CreatePhaseInput, CreateTitrationPlanInput, DoseLog, UntakeDoseInput };
+export type { DoseSlot, CreatePhaseInput, CreateTitrationPlanInput, DoseLog, UntakeDoseInput, DoseChange, DoseKey };
 
 // ============================================================================
 // Read Hooks — useLiveQuery (no invalidation needed)
@@ -84,11 +97,35 @@ export function usePrescriptions() {
   return useLiveQuery(() => getPrescriptions(), [], []);
 }
 
+/**
+ * The dose slots of a day, with each slot's LIVE status: an open dose turns
+ * Missed as soon as its reminder period ends, on the same day
+ * (resolveLiveDoseStatus), and the screen updates on its own while open.
+ */
 export function useDailyDoseSchedule(dateStr: string) {
-  // A slot's pending/missed status depends on "today", which the query reads
-  // when it runs; re-run it when the day rolls over, not only on DB writes.
+  // Re-run the query when the day rolls over, not only on DB writes.
   const todayKey = useTodayKey();
-  return useLiveQuery(() => getDailyDoseSchedule(dateStr), [dateStr, todayKey]);
+  const slots = useLiveQuery(() => getDailyDoseSchedule(dateStr), [dateStr, todayKey]);
+  const now = useNow();
+  const period = useSettingsStore((s) => s.reminderPeriodMinutes);
+  return useMemo(() => withLiveStatus(slots, now, period), [slots, now, period]);
+}
+
+/** Slots with the live status at `now`; the same array when nothing changed. */
+export function withLiveStatus<S extends DoseSlot>(
+  slots: S[] | undefined,
+  now: number,
+  reminderPeriodMinutes: number,
+): S[] | undefined {
+  if (!slots) return slots;
+  let changed = false;
+  const out = slots.map((slot) => {
+    const status = resolveLiveDoseStatus(slot.existingLog?.status, slot.dueAt, now, reminderPeriodMinutes);
+    if (status === slot.status) return slot;
+    changed = true;
+    return { ...slot, status };
+  });
+  return changed ? out : slots;
 }
 
 /** Live as-needed (PRN) dose logs for a prescription since `sinceDate`, newest first. */
@@ -97,6 +134,14 @@ export function usePrnDoseLogs(prescriptionId: string, sinceDate: string) {
     () => getPrnDoseLogs(prescriptionId, sinceDate),
     [prescriptionId, sinceDate],
     [],
+  );
+}
+
+/** The latest taken dose of a prescription, other than `excludeId`. */
+export function useLastTakenDose(prescriptionId: string | undefined, excludeId?: string) {
+  return useLiveQuery(
+    () => (prescriptionId ? getLastTakenDose(prescriptionId, excludeId) : Promise.resolve(undefined)),
+    [prescriptionId, excludeId],
   );
 }
 
@@ -267,72 +312,59 @@ export function useRescheduleDose() {
   });
 }
 
-// ----------------------------------------------------------------------------
-// Bulk dose actions. Each slot is its own transaction, so a batch can
-// partially succeed: the outcome lists every slot that was written (with the
-// log it wrote, for undo) and every slot that failed, instead of throwing
-// after the earlier slots have already been committed.
-// ----------------------------------------------------------------------------
-
-export interface BulkDoseOutcome<E> {
-  succeeded: { entry: E; log: DoseLog }[];
-  failed: { entry: E; error: string }[];
-}
-
-type SlotKey = { prescriptionId: string; phaseId: string; scheduleId: string };
-type BulkDoseEntry = SlotKey & { dosageMg: number };
-
-/** Pick only the slot identity, so callers can pass whole DoseSlots as entries. */
-function slotKey(e: SlotKey): SlotKey {
-  return { prescriptionId: e.prescriptionId, phaseId: e.phaseId, scheduleId: e.scheduleId };
-}
-
-async function runPerSlot<E>(
-  entries: E[],
-  run: (entry: E) => Promise<ServiceResult<DoseLog>>,
-): Promise<BulkDoseOutcome<E>> {
-  const outcome: BulkDoseOutcome<E> = { succeeded: [], failed: [] };
-  for (const entry of entries) {
-    const result = await run(entry);
-    if (result.success) outcome.succeeded.push({ entry, log: result.data });
-    else outcome.failed.push({ entry, error: result.error });
-  }
-  return outcome;
-}
-
-export function useTakeAllDoses<E extends BulkDoseEntry = BulkDoseEntry>() {
+export function useUnskipDose() {
   return useMutation({
-    mutationFn: (args: { entries: E[]; date: string; time: string; takenAtTime?: string }) =>
-      runPerSlot(args.entries, (e) =>
-        takeDose({
-          ...slotKey(e),
-          dosageMg: e.dosageMg,
-          date: args.date,
-          time: args.time,
-          ...(args.takenAtTime ? { takenAtTime: args.takenAtTime } : {}),
+    mutationFn: async (input: UnskipDoseInput) => unwrap(await unskipDose(input)),
+  });
+}
+
+// ----------------------------------------------------------------------------
+// Bulk dose actions ("Mark all doses"). One synced write per action: all the
+// doses change or none do. Each returns the doses it changed, with their
+// log before, so Undo can restore them exactly.
+// ----------------------------------------------------------------------------
+
+export function useTakeDoses<K extends DoseKey = DoseKey>() {
+  return useMutation({
+    mutationFn: async (args: { entries: K[]; takenAt?: number; onlyOpen?: boolean }) =>
+      unwrap(
+        await takeDoses(args.entries, {
+          ...(args.takenAt !== undefined && { takenAt: args.takenAt }),
+          ...(args.onlyOpen !== undefined && { onlyOpen: args.onlyOpen }),
         }),
       ),
   });
 }
 
-export function useSkipAllDoses<E extends BulkDoseEntry = BulkDoseEntry>() {
+export function useSkipDoses<K extends DoseKey = DoseKey>() {
   return useMutation({
-    mutationFn: (args: { entries: E[]; date: string; time: string; reason?: string }) =>
-      runPerSlot(args.entries, (e) =>
-        skipDose({
-          ...slotKey(e),
-          dosageMg: e.dosageMg,
-          date: args.date,
-          time: args.time,
+    mutationFn: async (args: { entries: K[]; reason?: string; onlyOpen?: boolean }) =>
+      unwrap(
+        await skipDoses(args.entries, {
           ...(args.reason !== undefined && { reason: args.reason }),
+          ...(args.onlyOpen !== undefined && { onlyOpen: args.onlyOpen }),
         }),
       ),
   });
 }
 
-export function useUntakeAllDoses() {
+export function useUntakeDoses<K extends DoseKey = DoseKey>() {
   return useMutation({
-    mutationFn: (entries: UntakeDoseInput[]) => runPerSlot(entries, (e) => untakeDose(e)),
+    mutationFn: async (entries: K[]) => unwrap(await untakeDoses(entries)),
+  });
+}
+
+export function useUnskipDoses<K extends DoseKey = DoseKey>() {
+  return useMutation({
+    mutationFn: async (entries: K[]) => unwrap(await unskipDoses(entries)),
+  });
+}
+
+/** Give skipped doses the reason picked after the skip. */
+export function useSetSkipReason() {
+  return useMutation({
+    mutationFn: async (args: { logIds: string[]; reason: string }) =>
+      unwrap(await setSkipReason(args.logIds, args.reason)),
   });
 }
 
@@ -342,46 +374,15 @@ export function useEditDoseTime() {
   });
 }
 
-export function useEditAllDoseTimes<E extends SlotKey = SlotKey>() {
-  return useMutation({
-    mutationFn: (args: { entries: E[]; date: string; time: string; newTime: string }) =>
-      runPerSlot(args.entries, (e) =>
-        editDoseTime({ ...slotKey(e), date: args.date, time: args.time, newTime: args.newTime }),
-      ),
-  });
-}
-
 /**
- * Undo for a take/skip toast. Each target is bound to the log the action
- * wrote: it is reverted (back to pending) only while that log is still live
- * and unchanged — same status, actionTimestamp and skipReason. A dose the
- * user has since changed some other way (skipped with a reason, re-timed,
- * synced from another device) is left alone and counted as stale.
- * updatedAt is deliberately not compared: the sync push ack re-stamps it
- * with the server clock a few seconds after every write, inside the undo
- * window, without changing the dose.
+ * Undo for a dose toast: each changed dose goes back to exactly its state
+ * before the action, while it is still as the action left it (see
+ * revertDoseChanges). Returns how many were reverted and how many had
+ * changed since (stale).
  */
-export function useRevertDoseActions() {
+export function useRevertDoseChanges() {
   return useMutation({
-    mutationFn: async (targets: { input: UntakeDoseInput; log: DoseLog }[]) => {
-      const counts = { reverted: 0, stale: 0, failed: 0 };
-      for (const { input, log } of targets) {
-        const current = await getDoseLogById(log.id);
-        if (
-          !current ||
-          current.status !== log.status ||
-          current.actionTimestamp !== log.actionTimestamp ||
-          current.skipReason !== log.skipReason
-        ) {
-          counts.stale++;
-          continue;
-        }
-        const result = await untakeDose(input);
-        if (result.success) counts.reverted++;
-        else counts.failed++;
-      }
-      return counts;
-    },
+    mutationFn: async (changes: DoseChange[]) => unwrap(await revertDoseChanges(changes)),
   });
 }
 

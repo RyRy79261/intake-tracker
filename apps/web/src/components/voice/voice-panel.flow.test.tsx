@@ -820,7 +820,17 @@ describe("VoicePanel — medications", () => {
       '"Atorvastatin" is not on your medication list.',
     );
 
+    // 14:00 is past the 08:30 dose's late window and no time was said: the
+    // row asks when, and Approve all leaves it for the user.
+    const doseRow = screen.getByTestId("voice-item-0");
+    expect(within(doseRow).getByTestId("voice-item-0-time-choice")).toBeInTheDocument();
+    expect(within(doseRow).getByRole("alert")).toHaveTextContent("Pick when you took them.");
     await user.click(screen.getByRole("button", { name: /Approve all/i }));
+    expect(screen.getByText(/Items \(2 approved · 2 pending\)/)).toBeInTheDocument();
+
+    await user.click(within(doseRow).getByRole("button", { name: "Take now" }));
+    expect(within(doseRow).queryByTestId("voice-item-0-time-choice")).not.toBeInTheDocument();
+    await user.click(within(doseRow).getByRole("button", { name: /^Approve/ }));
     expect(screen.getByText(/Items \(3 approved · 1 pending\)/)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /^Save/ }));
 
@@ -828,7 +838,12 @@ describe("VoicePanel — medications", () => {
       expect(await db.doseLogs.count()).toBe(2);
     });
     const logs = await db.doseLogs.toArray();
-    expect(logs.find((l) => l.kind !== "prn")).toMatchObject({ status: "taken", scheduledTime: "08:30" });
+    // "Take now": the save time.
+    expect(logs.find((l) => l.kind !== "prn")).toMatchObject({
+      status: "taken",
+      scheduledTime: "08:30",
+      actionTimestamp: NOW.getTime(),
+    });
     expect(logs.find((l) => l.kind === "prn")).toMatchObject({ medicineName: "Paracetamol", doseUnit: "tablet" });
     // 30 − 1 pill for the dose + 60 refilled. Nothing was added for Atorvastatin.
     await waitFor(async () => {

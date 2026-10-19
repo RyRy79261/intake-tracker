@@ -24,6 +24,7 @@ import {
   SEED_UPDATED_AT,
   PRE_SYNC_SETTINGS_BACKUP_KEY,
   SETTINGS_EDITED_AT_KEY,
+  settingsFromRow,
 } from "@/lib/settings-sync";
 
 function settle(ms = 60): Promise<void> {
@@ -55,6 +56,9 @@ function remoteRow(overrides: Partial<UserSettings> = {}): UserSettings {
     secondaryRegion: initial.secondaryRegion,
     reminderFollowUpCount: initial.reminderFollowUpCount,
     reminderFollowUpInterval: initial.reminderFollowUpInterval,
+    lateWindowMinutes: initial.lateWindowMinutes,
+    reminderPeriodMinutes: initial.reminderPeriodMinutes,
+    askSkipReason: initial.askSkipReason,
     homeTimezone: null,
     homeTimezoneConfirmedAt: null,
     createdAt: now,
@@ -214,6 +218,7 @@ describe("settings-sync (audit state-settings-cache#2)", () => {
         "waterExtendedBuffer", "saltExtendedBuffer", "sugarExtendedBuffer",
         "optionalTrackers", "dayStartHour", "weekStartsOn", "liquidPresets", "primaryRegion",
         "secondaryRegion", "reminderFollowUpCount", "reminderFollowUpInterval",
+        "lateWindowMinutes", "reminderPeriodMinutes", "askSkipReason",
         "homeTimezone", "homeTimezoneConfirmedAt",
       ].sort(),
     );
@@ -281,6 +286,66 @@ describe("settings-sync (audit state-settings-cache#2)", () => {
     expect(row.fieldUpdatedAt!.weekStartsOn).toBe(row.updatedAt);
     const stamps = JSON.parse(localStorage.getItem(SETTINGS_EDITED_AT_KEY)!);
     expect(stamps.weekStartsOn).toBeGreaterThan(0);
+  });
+
+  it("syncs the dose rules and applies them from another device", async () => {
+    dispose = installSettingsSync();
+    await settle();
+
+    useSettingsStore.getState().setLateWindowMinutes(60);
+    useSettingsStore.getState().setReminderPeriodMinutes(45);
+    useSettingsStore.getState().setAskSkipReason(false);
+    await settle();
+
+    const row = (await getActiveUserSettings())!;
+    expect(row).toMatchObject({ lateWindowMinutes: 60, reminderPeriodMinutes: 45, askSkipReason: false });
+    expect(row.fieldUpdatedAt!.lateWindowMinutes).toBeGreaterThan(SEED_UPDATED_AT);
+
+    await db.userSettings.put(
+      remoteRow({
+        id: row.id,
+        lateWindowMinutes: -1,
+        reminderPeriodMinutes: 90,
+        askSkipReason: true,
+        updatedAt: row.updatedAt + 10_000,
+      }),
+    );
+    await settle();
+    expect(useSettingsStore.getState()).toMatchObject({
+      lateWindowMinutes: -1,
+      reminderPeriodMinutes: 90,
+      askSkipReason: true,
+    });
+  });
+
+  it("does not let untouched dose-rule defaults outrank another device's choice", async () => {
+    const { lateWindowMinutes: _a, reminderPeriodMinutes: _b, askSkipReason: _c, ...legacy } = remoteRow({
+      updatedAt: Date.now() - 60_000,
+    });
+    void _a;
+    void _b;
+    void _c;
+    await db.userSettings.put(legacy as UserSettings);
+    dispose = installSettingsSync();
+    await settle();
+
+    useSettingsStore.getState().setWaterLimit(1500);
+    await settle();
+
+    const row = (await getActiveUserSettings())!;
+    expect(row).toMatchObject({ lateWindowMinutes: 40, reminderPeriodMinutes: 30, askSkipReason: true });
+    expect(row.fieldUpdatedAt!.lateWindowMinutes).toBe(SEED_UPDATED_AT);
+    expect(row.fieldUpdatedAt!.reminderPeriodMinutes).toBe(SEED_UPDATED_AT);
+    expect(row.fieldUpdatedAt!.askSkipReason).toBe(SEED_UPDATED_AT);
+  });
+
+  it("ignores a dose-rule value the setting does not offer", () => {
+    expect(settingsFromRow({ lateWindowMinutes: 7, reminderPeriodMinutes: 0, askSkipReason: "no" })).toEqual({});
+    expect(settingsFromRow({ lateWindowMinutes: 0, reminderPeriodMinutes: 120, askSkipReason: false })).toEqual({
+      lateWindowMinutes: 0,
+      reminderPeriodMinutes: 120,
+      askSkipReason: false,
+    });
   });
 
   it("applies a week start chosen on another device", async () => {

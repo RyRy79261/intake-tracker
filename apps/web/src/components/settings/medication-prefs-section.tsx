@@ -28,6 +28,13 @@ import {
 import { Check, ChevronsUpDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Seg, SubHead, Tog, flabelClass, helpClass } from "@/components/settings/settings-kit";
+import {
+  LATE_WINDOW_ALWAYS,
+  LATE_WINDOW_NEVER,
+  LATE_WINDOW_OPTIONS,
+  REMINDER_PERIOD_OPTIONS,
+  reminderRepeatCount,
+} from "@intake/core/dose-rules";
 
 // ISO 3166-1 countries sorted alphabetically
 const COUNTRIES: { value: string; label: string; flag: string }[] = [
@@ -298,14 +305,14 @@ const TIME_FORMATS = [
   ["12h", "12h"],
 ] as const;
 
-const FOLLOW_UP_COUNTS = [
-  [0, "None"],
-  [1, "1 reminder"],
-  [2, "2 reminders"],
-  [3, "3 reminders"],
-] as const;
-
 const FOLLOW_UP_INTERVALS = [5, 10, 15, 20, 30] as const;
+
+/** The late window choices: minutes, then "Always ask" (0) and "Never ask" (-1). */
+const LATE_WINDOWS: ReadonlyArray<readonly [number, string]> = [
+  ...LATE_WINDOW_OPTIONS.map((m) => [m, `${m} minutes`] as const),
+  [LATE_WINDOW_ALWAYS, "Always ask"],
+  [LATE_WINDOW_NEVER, "Never ask"],
+];
 
 function deviceTimezone(): string | null {
   try {
@@ -315,10 +322,14 @@ function deviceTimezone(): string | null {
   }
 }
 
-/** "2 reminders every 10 min if a dose is not marked". */
-function remindersSummary(count: number, every: number): string {
-  if (count === 0) return "One reminder at the dose time";
-  return `${count} ${count === 1 ? "reminder" : "reminders"} every ${every} min if a dose is not marked`;
+/** "08:30, 08:40, 08:50, 09:00": the reminders of an 08:30 dose. */
+function reminderTimes(every: number, period: number): string {
+  const times: string[] = [];
+  for (let k = 0; k <= reminderRepeatCount(every, period); k++) {
+    const m = 8 * 60 + 30 + k * every;
+    times.push(`${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`);
+  }
+  return times.join(", ");
 }
 
 /**
@@ -335,8 +346,12 @@ export function MedicationPrefsSection() {
   const timeFormat = useSettingsStore((s) => s.timeFormat);
   const setTimeFormat = useSettingsStore((s) => s.setTimeFormat);
   const doseRemindersEnabled = useSettingsStore((s) => s.doseRemindersEnabled);
-  const reminderFollowUpCount = useSettingsStore((s) => s.reminderFollowUpCount);
-  const setReminderFollowUpCount = useSettingsStore((s) => s.setReminderFollowUpCount);
+  const reminderPeriodMinutes = useSettingsStore((s) => s.reminderPeriodMinutes);
+  const setReminderPeriodMinutes = useSettingsStore((s) => s.setReminderPeriodMinutes);
+  const lateWindowMinutes = useSettingsStore((s) => s.lateWindowMinutes);
+  const setLateWindowMinutes = useSettingsStore((s) => s.setLateWindowMinutes);
+  const askSkipReason = useSettingsStore((s) => s.askSkipReason);
+  const setAskSkipReason = useSettingsStore((s) => s.setAskSkipReason);
   const reminderFollowUpInterval = useSettingsStore((s) => s.reminderFollowUpInterval);
   const setReminderFollowUpInterval = useSettingsStore((s) => s.setReminderFollowUpInterval);
   const homeTimezone = useSettingsStore((s) => s.homeTimezone);
@@ -356,7 +371,7 @@ export function MedicationPrefsSection() {
 
   let reminderNote: string;
   if (!notificationsSupported) reminderNote = "Notifications are not supported in this browser";
-  else if (remindersEnabled) reminderNote = remindersSummary(reminderFollowUpCount, reminderFollowUpInterval);
+  else if (remindersEnabled) reminderNote = "A reminder at the dose time, repeated until the reminder period ends";
   else if (nativeReminders) reminderNote = "A notification on this device when a dose is due";
   else if (!isSignedIn && !doseRemindersEnabled) reminderNote = "Sign in to turn on push reminders across devices";
   else reminderNote = "Push notifications when a dose is due";
@@ -399,57 +414,85 @@ export function MedicationPrefsSection() {
             disabled={!notificationsSupported || togglingReminders}
           />
           {remindersEnabled && (
-            <>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label htmlFor="set-follow-ups" className={flabelClass}>
-                    Reminders
-                  </label>
-                  <Select
-                    value={String(reminderFollowUpCount)}
-                    onValueChange={(v) => setReminderFollowUpCount(Number(v))}
-                  >
-                    <SelectTrigger id="set-follow-ups" className="h-11 border-muted-foreground text-[0.9375rem]">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {FOLLOW_UP_COUNTS.map(([v, l]) => (
-                        <SelectItem key={v} value={String(v)}>
-                          {l}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <label htmlFor="set-follow-every" className={flabelClass}>
-                    Remind every
-                  </label>
-                  <Select
-                    value={String(reminderFollowUpInterval)}
-                    onValueChange={(v) => setReminderFollowUpInterval(Number(v))}
-                    disabled={reminderFollowUpCount === 0}
-                  >
-                    <SelectTrigger id="set-follow-every" className="h-11 border-muted-foreground text-[0.9375rem]">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {FOLLOW_UP_INTERVALS.map((v) => (
-                        <SelectItem key={v} value={String(v)}>
-                          Every {v} minutes
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <p className={`${helpClass} -mt-1`}>Extra reminders if a dose is not confirmed.</p>
-            </>
+            <div>
+              <label htmlFor="set-follow-every" className={flabelClass}>
+                Remind me every
+              </label>
+              <Select
+                value={String(reminderFollowUpInterval)}
+                onValueChange={(v) => setReminderFollowUpInterval(Number(v))}
+              >
+                <SelectTrigger id="set-follow-every" className="h-11 border-muted-foreground text-[0.9375rem]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {FOLLOW_UP_INTERVALS.map((v) => (
+                    <SelectItem key={v} value={String(v)}>
+                      {v} minutes
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           )}
         </>
       ) : (
         <p className={helpClass}>Sign in to turn on dose reminders.</p>
       )}
+
+      <div>
+        <label htmlFor="set-reminder-period" className={flabelClass}>
+          Reminder period
+        </label>
+        <Select
+          value={String(reminderPeriodMinutes)}
+          onValueChange={(v) => setReminderPeriodMinutes(Number(v))}
+        >
+          <SelectTrigger id="set-reminder-period" className="h-11 border-muted-foreground text-[0.9375rem]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {REMINDER_PERIOD_OPTIONS.map((v) => (
+              <SelectItem key={v} value={String(v)}>
+                {v} minutes
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <p className={`${helpClass} mt-1`} data-testid="reminder-period-help">
+          Reminders repeat until this time after the dose. Then a dose you have not marked is Missed.
+          An 08:30 dose: {reminderTimes(reminderFollowUpInterval, reminderPeriodMinutes)}.
+        </p>
+      </div>
+
+      <div>
+        <label htmlFor="set-late-window" className={flabelClass}>
+          Late window
+        </label>
+        <Select value={String(lateWindowMinutes)} onValueChange={(v) => setLateWindowMinutes(Number(v))}>
+          <SelectTrigger id="set-late-window" className="h-11 border-muted-foreground text-[0.9375rem]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {LATE_WINDOWS.map(([v, l]) => (
+              <SelectItem key={v} value={String(v)}>
+                {l}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <p className={`${helpClass} mt-1`}>
+          Ask for the time taken when you take a dose later than this.
+        </p>
+      </div>
+
+      <Tog
+        id="ask-skip-reason-toggle"
+        label="Ask me every time"
+        description="Ask why when you skip a dose."
+        checked={askSkipReason}
+        onCheckedChange={setAskSkipReason}
+      />
 
       <SubHead>Home timezone</SubHead>
       <div>

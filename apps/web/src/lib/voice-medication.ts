@@ -12,6 +12,7 @@ import {
 import { adjustStock, isActiveBrand } from "@/lib/inventory-service";
 import { toLocalDateKey } from "@/lib/date-utils";
 import { unwrap } from "@intake/core/service";
+import { DEFAULT_LATE_WINDOW_MINUTES, needsTakenTimePrompt } from "@intake/core/dose-rules";
 import type {
   ExtraMedicineItem,
   MedicationItem,
@@ -62,6 +63,14 @@ export type MedicationPlan =
       takenAt: number;
       /** True when the user said when; a taken dose is then re-timed. */
       timeSaid: boolean;
+      /**
+       * No time was said and a dose to take is past its late window: the
+       * user must pick "Take now", "Take at a specific time" or "Skip"
+       * before saving (the same rule as Take on the Today screen).
+       */
+      needsTimeChoice: boolean;
+      /** When the doses to take were due (the earliest), for "a specific time". */
+      dueAt?: number;
       changes: DoseChange[];
     }
   | {
@@ -222,11 +231,21 @@ export function medicationsForParse(ctx: VoiceMedicationContext, today: string):
     }));
 }
 
+/** How a plan applies the late-window rule. */
+export interface PlanOptions {
+  /** The current time; default `takenAt`. */
+  now?: number;
+  lateWindowMinutes?: number;
+  /** The user picked "Take now": no time choice is asked. */
+  takeNow?: boolean;
+}
+
 function planScheduledDose(
   item: ScheduledDoseItem,
   takenAt: number,
   timeSaid: boolean,
   ctx: VoiceMedicationContext,
+  opts: PlanOptions,
 ): PlanResult {
   let prescriptionId: string | undefined;
   if (item.medicine !== undefined && item.medicine.trim() !== "") {
@@ -260,13 +279,23 @@ function planScheduledDose(
   const slots = prescriptionId ? inSlot.filter((s) => s.prescriptionId === prescriptionId) : inSlot;
   if (slots.length === 0) return fail(`${item.medicine} is not in your ${slotTime} doses.`);
 
+  // Bulk rule: a take changes only the doses with no user action yet. A
+  // dose already taken keeps its time, unless every dose said is taken: then
+  // the spoken time corrects them.
+  const anyOpen = slots.some((s) => s.status !== "taken" && s.status !== "skipped");
   const changes = slots.map((slot): DoseChange => {
     const log = slot.existingLog;
     const taken = slot.status === "taken";
     switch (item.action) {
       case "taken":
+        if (slot.status === "skipped" && !prescriptionId) return { type: "none", slot, reason: "skipped" };
         if (!taken) return { type: "take", slot };
-        if (timeSaid && log?.actionTimestamp !== undefined && Math.abs(log.actionTimestamp - takenAt) >= RETIME_MIN_MS) {
+        if (
+          !anyOpen &&
+          timeSaid &&
+          log?.actionTimestamp !== undefined &&
+          Math.abs(log.actionTimestamp - takenAt) >= RETIME_MIN_MS
+        ) {
           return { type: "retime", slot, from: log.actionTimestamp };
         }
         return {
@@ -275,7 +304,10 @@ function planScheduledDose(
           reason: log?.actionTimestamp !== undefined ? `already taken at ${clockTime(log.actionTimestamp)}` : "already taken",
         };
       case "skipped":
-        return slot.status === "skipped" ? { type: "none", slot, reason: "already skipped" } : { type: "skip", slot };
+        if (slot.status === "skipped") return { type: "none", slot, reason: "already skipped" };
+        // A dose time skipped as a whole leaves its taken doses alone.
+        if (taken && !prescriptionId) return { type: "none", slot, reason: "already taken" };
+        return { type: "skip", slot };
       case "not_taken":
         return taken ? { type: "untake", slot } : { type: "none", slot, reason: "not marked taken" };
     }
@@ -283,7 +315,25 @@ function planScheduledDose(
   if (changes.every((c) => c.type === "none")) {
     return fail(`Nothing to change: ${changes.map((c) => `${c.slot.prescription.genericName} ${(c as { reason: string }).reason}`).join(", ")}.`);
   }
-  return { ok: true, plan: { kind: "scheduled_dose", date, slotTime, takenAt, timeSaid, changes } };
+  const takes = changes.filter((c) => c.type === "take");
+  const now = opts.now ?? takenAt;
+  const lateWindow = opts.lateWindowMinutes ?? DEFAULT_LATE_WINDOW_MINUTES;
+  const needsTimeChoice =
+    !timeSaid && !opts.takeNow && takes.some((c) => needsTakenTimePrompt(c.slot.dueAt, now, lateWindow));
+  const dueAt = takes.length > 0 ? Math.min(...takes.map((c) => c.slot.dueAt)) : undefined;
+  return {
+    ok: true,
+    plan: {
+      kind: "scheduled_dose",
+      date,
+      slotTime,
+      takenAt,
+      timeSaid,
+      needsTimeChoice,
+      ...(dueAt !== undefined && { dueAt }),
+      changes,
+    },
+  };
 }
 
 function planRefill(
@@ -362,10 +412,11 @@ export function planMedicationItem(
   ctx: VoiceMedicationContext,
   takenAt: number,
   timeSaid: boolean,
+  opts: PlanOptions = {},
 ): PlanResult {
   switch (item.kind) {
     case "scheduled_dose":
-      return planScheduledDose(item, takenAt, timeSaid, ctx);
+      return planScheduledDose(item, takenAt, timeSaid, ctx, opts);
     case "stock_refill":
       return planRefill(item, takenAt, timeSaid, ctx);
     case "extra_medicine":
@@ -414,6 +465,7 @@ export function describePlan(plan: MedicationPlan): string[] {
 export async function saveMedicationPlan(plan: MedicationPlan): Promise<void> {
   switch (plan.kind) {
     case "scheduled_dose": {
+      if (plan.needsTimeChoice) throw new Error("Pick when you took them first.");
       const errors: string[] = [];
       for (const change of plan.changes) {
         const { slot } = change;
@@ -426,13 +478,9 @@ export async function saveMedicationPlan(plan: MedicationPlan): Promise<void> {
         };
         const result =
           change.type === "take"
-            ? await takeDose({
-                ...key,
-                dosageMg: slot.dosageMg,
-                ...(plan.timeSaid && { takenAtTime: clockTime(plan.takenAt) }),
-              })
+            ? await takeDose({ ...key, dosageMg: slot.dosageMg, takenAt: plan.takenAt })
             : change.type === "retime"
-              ? await editDoseTime({ ...key, newTime: clockTime(plan.takenAt) })
+              ? await editDoseTime({ ...key, takenAt: plan.takenAt })
               : change.type === "skip"
                 ? await skipDose({ ...key, dosageMg: slot.dosageMg })
                 : change.type === "untake"

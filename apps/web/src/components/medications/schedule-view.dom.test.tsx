@@ -28,7 +28,6 @@ describe("ScheduleView", () => {
     await renderWithFixtures(
       <ScheduleView
         selectedDate={new Date()}
-        onDoseClick={() => {}}
         onAddMed={onAddMed}
       />,
     );
@@ -58,7 +57,6 @@ describe("ScheduleView", () => {
     await renderWithFixtures(
       <ScheduleView
         selectedDate={new Date()}
-        onDoseClick={() => {}}
         onAddMed={() => {}}
       />,
       {
@@ -71,9 +69,10 @@ describe("ScheduleView", () => {
       },
     );
 
-    // The seeded prescription's dose surfaces in its time-slot group.
+    // The seeded prescription's dose surfaces in its time-slot group, under
+    // the name on the box (the active brand).
     expect(
-      await screen.findByText("Spironolactone"),
+      await screen.findByText(inventory.brandName),
     ).toBeInTheDocument();
     // The slot renders an anchor element keyed by its derived local time.
     expect(document.getElementById(`time-slot-${localTime}`)).not.toBeNull();
@@ -100,7 +99,6 @@ describe("ScheduleView", () => {
     await renderWithFixtures(
       <ScheduleView
         selectedDate={new Date()}
-        onDoseClick={() => {}}
         onAddMed={() => {}}
       />,
       {

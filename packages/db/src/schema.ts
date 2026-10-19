@@ -933,6 +933,11 @@ export const userSettings = pgTable(
     secondaryRegion: text("secondary_region").notNull(),
     reminderFollowUpCount: integer("reminder_follow_up_count").notNull(),
     reminderFollowUpInterval: integer("reminder_follow_up_interval").notNull(),
+    // Dose rules. The defaults fill existing rows and rows pushed by older
+    // clients. Late window: 0 = always ask, -1 = never ask.
+    lateWindowMinutes: integer("late_window_minutes").notNull().default(40),
+    reminderPeriodMinutes: integer("reminder_period_minutes").notNull().default(30),
+    askSkipReason: boolean("ask_skip_reason").notNull().default(true),
     homeTimezone: text("home_timezone"),
     homeTimezoneConfirmedAt: bigint("home_timezone_confirmed_at", {
       mode: "number",
@@ -955,6 +960,14 @@ export const userSettings = pgTable(
     weekStartsOnCheck: check(
       "user_settings_week_starts_on_check",
       sql`${t.weekStartsOn} BETWEEN 0 AND 6`,
+    ),
+    lateWindowMinutesCheck: check(
+      "user_settings_late_window_minutes_check",
+      sql`${t.lateWindowMinutes} BETWEEN -1 AND 1440`,
+    ),
+    reminderPeriodMinutesCheck: check(
+      "user_settings_reminder_period_minutes_check",
+      sql`${t.reminderPeriodMinutes} BETWEEN 1 AND 1440`,
     ),
     userUpdatedIdx: index("idx_user_settings_user_updated").on(
       t.userId,

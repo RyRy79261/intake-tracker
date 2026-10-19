@@ -5,6 +5,8 @@ import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth-guard";
 import { useDailyDoseSchedule } from "@/hooks/use-medication-queries";
 import { useTodayKey } from "@/hooks/use-today-key";
+import { useNow } from "@/hooks/use-now";
+import { isOpenDoseStatus } from "@intake/core/dose-rules";
 import {
   SHELL_APPS,
   SYS_BAR_APPS,
@@ -21,11 +23,15 @@ import { TaskStrip } from "@/components/shell/task-strip";
 import { useIsDesktop } from "@/hooks/use-shell-mode";
 import { cn } from "@/lib/utils";
 
-/** Today's scheduled doses that are still open (not taken or skipped). */
+/**
+ * Today's doses that are due now and still open (not taken or skipped).
+ * Tonight's doses do not count until their time comes.
+ */
 export function useDueDoseCount(): number {
   const todayKey = useTodayKey();
   const slots = useDailyDoseSchedule(todayKey);
-  return slots?.filter((s) => s.status === "pending").length ?? 0;
+  const now = useNow();
+  return slots?.filter((s) => isOpenDoseStatus(s.status) && s.dueAt <= now).length ?? 0;
 }
 
 /** "Ryan Noble" -> "RN"; an email or single word -> its first letter. */

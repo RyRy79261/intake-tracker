@@ -74,11 +74,11 @@ export function installMedicationNotificationResync(
     error: (error) => console.error("[reminders] Observer failed:", error),
   });
 
-  // Follow-up count/interval shape the native reminders and are posted to
+  // The reminder interval and period shape the native reminders and are posted to
   // the push server; the reminders toggle gates web push.
   const unsubscribeSettings = useSettingsStore.subscribe((state, prev) => {
     if (
-      state.reminderFollowUpCount !== prev.reminderFollowUpCount ||
+      state.reminderPeriodMinutes !== prev.reminderPeriodMinutes ||
       state.reminderFollowUpInterval !== prev.reminderFollowUpInterval ||
       state.doseRemindersEnabled !== prev.doseRemindersEnabled
     ) {

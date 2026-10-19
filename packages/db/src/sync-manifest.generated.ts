@@ -166,7 +166,7 @@ export const SYNC_TABLES: Record<SyncTableName, SyncTableFacts> = {
     fkParents: [],
   },
   userSettings: {
-    integerFields: ["waterLimit", "saltLimit", "sugarLimit", "potassiumLimit", "waterExtendedBuffer", "saltExtendedBuffer", "sugarExtendedBuffer", "dayStartHour", "weekStartsOn", "reminderFollowUpCount", "reminderFollowUpInterval", "homeTimezoneConfirmedAt", "createdAt", "updatedAt", "deletedAt"],
+    integerFields: ["waterLimit", "saltLimit", "sugarLimit", "potassiumLimit", "waterExtendedBuffer", "saltExtendedBuffer", "sugarExtendedBuffer", "dayStartHour", "weekStartsOn", "reminderFollowUpCount", "reminderFollowUpInterval", "lateWindowMinutes", "reminderPeriodMinutes", "homeTimezoneConfirmedAt", "createdAt", "updatedAt", "deletedAt"],
     floatFields: [],
     nullableFields: ["homeTimezone", "homeTimezoneConfirmedAt", "fieldUpdatedAt", "deletedAt"],
     hasTimezone: false,

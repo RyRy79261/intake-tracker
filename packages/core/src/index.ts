@@ -31,3 +31,4 @@ export * from "./lifecycle";
 export * from "./effective-phase";
 export * from "./logical-day";
 export * from "./sodium";
+export * from "./dose-rules";

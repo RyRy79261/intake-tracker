@@ -197,6 +197,13 @@
       "when": 1792418213402,
       "tag": "0027_unlisted_medicine_doses",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1792441587716,
+      "tag": "0028_user_settings_dose_rules",
+      "breakpoints": true
     }
   ]
 }

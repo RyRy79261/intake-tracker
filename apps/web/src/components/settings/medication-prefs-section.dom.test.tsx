@@ -62,7 +62,7 @@ describe("MedicationPrefsSection (Settings › Medications)", () => {
     expect(screen.getByText(/sign in to turn on dose reminders/i)).toBeInTheDocument();
   });
 
-  it("offers dose reminders when signed in, with Reminders (not follow-ups)", async () => {
+  it('offers dose reminders when signed in, with "Remind me every" and the reminder period', async () => {
     sessionMock.mockReturnValue({
       data: { user: { id: "u1", email: "owner@example.test" } },
       isPending: false,
@@ -70,17 +70,19 @@ describe("MedicationPrefsSection (Settings › Medications)", () => {
     });
 
     await renderWithFixtures(<MedicationPrefsSection />, {
-      settings: { doseRemindersEnabled: true, reminderFollowUpCount: 2, reminderFollowUpInterval: 10 },
+      settings: { doseRemindersEnabled: true, reminderFollowUpInterval: 10, reminderPeriodMinutes: 30 },
     });
 
     expect(screen.getByRole("switch", { name: /dose reminders/i })).toBeInTheDocument();
-    expect(screen.getByText("2 reminders every 10 min if a dose is not marked")).toBeInTheDocument();
-    expect(screen.getByRole("combobox", { name: "Reminders" })).toHaveTextContent("2 reminders");
-    expect(screen.getByRole("combobox", { name: "Remind every" })).toHaveTextContent("Every 10 minutes");
+    expect(screen.getByRole("combobox", { name: "Remind me every" })).toHaveTextContent("10 minutes");
+    expect(screen.getByRole("combobox", { name: "Reminder period" })).toHaveTextContent("30 minutes");
+    expect(screen.getByTestId("reminder-period-help")).toHaveTextContent("08:30, 08:40, 08:50, 09:00");
+    // The old reminder count is gone: the period sets how many repeat.
+    expect(screen.queryByRole("combobox", { name: "Reminders" })).not.toBeInTheDocument();
     expect(screen.queryByText(/follow-up/i)).not.toBeInTheDocument();
   });
 
-  it("changes the reminder count", async () => {
+  it("changes the reminder period, the late window and the skip question", async () => {
     sessionMock.mockReturnValue({
       data: { user: { id: "u1", email: "owner@example.test" } },
       isPending: false,
@@ -88,12 +90,22 @@ describe("MedicationPrefsSection (Settings › Medications)", () => {
     });
     const user = userEvent.setup();
     await renderWithFixtures(<MedicationPrefsSection />, {
-      settings: { doseRemindersEnabled: true, reminderFollowUpCount: 2 },
+      settings: { doseRemindersEnabled: true, reminderPeriodMinutes: 30, lateWindowMinutes: 40, askSkipReason: true },
     });
 
-    await user.click(screen.getByRole("combobox", { name: "Reminders" }));
-    await user.click(await screen.findByRole("option", { name: "3 reminders" }));
-    expect(useSettingsStore.getState().reminderFollowUpCount).toBe(3);
+    expect(screen.getByRole("combobox", { name: "Late window" })).toHaveTextContent("40 minutes");
+    expect(screen.getByText("Ask for the time taken when you take a dose later than this.")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("combobox", { name: "Reminder period" }));
+    await user.click(await screen.findByRole("option", { name: "60 minutes" }));
+    expect(useSettingsStore.getState().reminderPeriodMinutes).toBe(60);
+
+    await user.click(screen.getByRole("combobox", { name: "Late window" }));
+    await user.click(await screen.findByRole("option", { name: "Never ask" }));
+    expect(useSettingsStore.getState().lateWindowMinutes).toBe(-1);
+
+    await user.click(screen.getByRole("switch", { name: /ask me every time/i }));
+    expect(useSettingsStore.getState().askSkipReason).toBe(false);
   });
 
   it("reflects the persisted time format and updates the store on change", async () => {

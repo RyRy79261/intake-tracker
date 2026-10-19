@@ -13,52 +13,49 @@ import { syncedWrite, type SyncedWriter } from "@/lib/synced-write";
 // Types
 // ---------------------------------------------------------------------------
 
-export interface TakeDoseInput {
+/** One scheduled dose: its slot key, plus the dose for stock math. */
+export interface DoseKey {
   prescriptionId: string;
   phaseId: string;
   scheduleId: string;
   date: string;
-  time: string;
-  dosageMg: number;
-  takenAtTime?: string; // "HH:MM" — user-specified time they actually took the dose
-}
-
-export interface UntakeDoseInput {
-  prescriptionId: string;
-  phaseId: string;
-  scheduleId: string;
-  date: string;
+  /** The slot's display time; stored on a new log, not part of the key. */
   time: string;
   dosageMg: number;
 }
 
-export interface SkipDoseInput {
-  prescriptionId: string;
-  phaseId: string;
-  scheduleId: string;
-  date: string;
-  time: string;
-  dosageMg: number;
+export interface TakeDoseInput extends DoseKey {
+  /**
+   * When the dose was taken (epoch ms). Absent: now. Any instant is
+   * accepted, before the dose time or after now: the user states it.
+   */
+  takenAt?: number;
+}
+
+export type UntakeDoseInput = DoseKey;
+export type UnskipDoseInput = DoseKey;
+
+export interface SkipDoseInput extends DoseKey {
   reason?: string;
 }
 
-export interface RescheduleDoseInput {
-  prescriptionId: string;
-  phaseId: string;
-  scheduleId: string;
-  date: string;
-  time: string;
+export interface RescheduleDoseInput extends DoseKey {
   newTime: string;
-  dosageMg: number;
 }
 
-export interface EditDoseTimeInput {
-  prescriptionId: string;
-  phaseId: string;
-  scheduleId: string;
-  date: string;
-  time: string;
-  newTime: string; // "HH:MM" — actual time the dose was taken
+export interface EditDoseTimeInput extends Omit<DoseKey, "dosageMg"> {
+  /** The time the dose was actually taken (epoch ms). */
+  takenAt: number;
+}
+
+/**
+ * One dose a write changed: its log before (undefined when the slot had no
+ * log) and after. Undo restores `before` exactly (revertDoseChanges).
+ */
+export interface DoseChange<K extends DoseKey = DoseKey> {
+  key: K;
+  before: DoseLog | undefined;
+  after: DoseLog;
 }
 
 export interface LogPrnDoseInput {
@@ -266,53 +263,13 @@ async function restoreTakenStock(
   const pills = prev.pillsConsumed ?? calculatePillsConsumed(dosageMg, inventory.strength) ?? 0;
   if (!(pills > 0)) return 0;
 
-  const newStock = (inventory.currentStock ?? 0) + pills;
-  await w.patch("inventoryItems", inventory.id, {
-    currentStock: Math.round(newStock * 10000) / 10000,
-  });
-
-  const sf = syncFields();
-  const invTxId = crypto.randomUUID();
-  await w.insert("inventoryTransactions", {
-    id: invTxId,
-    inventoryItemId: inventory.id,
-    timestamp: Date.now(),
-    amount: pills,
-    type: "consumed",
-    doseLogId: prev.id,
-    createdAt: sf.createdAt,
-    updatedAt: sf.updatedAt,
-    deletedAt: null,
-    deviceId: sf.deviceId,
-    timezone: sf.timezone,
-  });
+  await moveStock(w, inventory.id, pills, prev.id);
   return pills;
 }
 
-const HHMM = /^(\d{1,2}):(\d{2})$/;
-
-function parseHHMM(value: string): { h: number; m: number } | undefined {
-  const match = HHMM.exec(value);
-  const h = match ? Number(match[1]) : NaN;
-  const m = match ? Number(match[2]) : NaN;
-  if (!Number.isInteger(h) || !Number.isInteger(m) || h < 0 || h > 23 || m < 0 || m > 59) {
-    return undefined;
-  }
-  return { h, m };
-}
-
-function localTimestamp(date: string, h: number, m: number, addDays = 0): number {
-  const d = new Date(date + "T00:00:00");
-  d.setDate(d.getDate() + addDays);
-  d.setHours(h, m, 0, 0);
-  return d.getTime();
-}
-
-const HALF_DAY_MS = 12 * 60 * 60 * 1000;
-
 /**
- * Slack for a "taken at" time the picker allowed: the picked minute has no
- * seconds, and the check runs a moment after the user tapped.
+ * Slack for a "taken at" time: the picked minute has no seconds, and the
+ * check runs a moment after the user tapped.
  */
 const FUTURE_TAKEN_AT_GRACE_MS = 60 * 1000;
 
@@ -321,32 +278,14 @@ function isFutureTakenAt(timestamp: number, now: number = Date.now()): boolean {
   return timestamp > now + FUTURE_TAKEN_AT_GRACE_MS;
 }
 
-/**
- * Turn the "taken at" wall-clock time the user picked into a timestamp. The
- * picker only asks for a time, so a late dose taken after midnight (the 22:00
- * dose taken at 00:30) belongs to the day after the scheduled date: when the
- * time lands more than 12h before the slot, it rolls to the next day unless
- * that would be in the future. Returns undefined for a malformed time.
- */
-export function resolveTakenAt(
-  date: string,
-  scheduledTime: string,
-  takenAtTime: string,
-  now: number = Date.now(),
-): number | undefined {
-  const taken = parseHHMM(takenAtTime);
-  if (!taken) return undefined;
-  const sameDay = localTimestamp(date, taken.h, taken.m);
-  const scheduled = parseHHMM(scheduledTime);
-  if (!scheduled) return sameDay;
-
-  const slotAt = localTimestamp(date, scheduled.h, scheduled.m);
-  if (slotAt - sameDay > HALF_DAY_MS) {
-    const nextDay = localTimestamp(date, taken.h, taken.m, 1);
-    if (nextDay <= now) return nextDay;
-  }
-  return sameDay;
-}
+/** The tables a scheduled-dose write touches. */
+const DOSE_TABLES = [
+  "doseLogs",
+  "inventoryItems",
+  "inventoryTransactions",
+  "medicationPhases",
+  "phaseSchedules",
+] as const;
 
 // ---------------------------------------------------------------------------
 // Read functions — return T directly (throw on error)
@@ -374,122 +313,202 @@ export async function getDoseLog(
 // ---------------------------------------------------------------------------
 // Mutation functions — atomic transactions with audit logging
 // ---------------------------------------------------------------------------
+//
+// Each action has an in-transaction step (`*InTx`) that the single and the
+// bulk functions share. A bulk action runs every step in ONE synced write:
+// all doses change or none do.
+
+/** Refuse to take or skip a dose of a day after today. */
+function assertNotFutureDay(date: string, verb: "take" | "skip"): void {
+  // A dose cannot be taken ahead of its day: it would debit stock for a pill
+  // that is still in the bottle, and the dose is not due yet.
+  if (date > toLocalDateKey()) {
+    throw new Error(`Cannot ${verb} a dose scheduled for a future date`);
+  }
+}
+
+/** Put a dose's pills back in stock, or take them out again (undo of an untake). */
+async function moveStock(
+  w: SyncedWriter,
+  inventoryItemId: string,
+  pills: number,
+  doseLogId: string,
+): Promise<void> {
+  const inventory = await db.inventoryItems.get(inventoryItemId);
+  if (!inventory || pills === 0) return;
+  const newStock = (inventory.currentStock ?? 0) + pills;
+  await w.patch("inventoryItems", inventory.id, {
+    currentStock: Math.round(newStock * 10000) / 10000,
+  });
+  const sf = syncFields();
+  await w.insert("inventoryTransactions", {
+    id: crypto.randomUUID(),
+    inventoryItemId: inventory.id,
+    timestamp: Date.now(),
+    amount: pills,
+    type: "consumed",
+    doseLogId,
+    createdAt: sf.createdAt,
+    updatedAt: sf.updatedAt,
+    deletedAt: null,
+    deviceId: sf.deviceId,
+    timezone: sf.timezone,
+  });
+}
+
+/**
+ * Take one dose inside a synced write. A dose that is already taken is left
+ * exactly as it is (no stock moves, its taken time stays): returns null.
+ */
+async function takeInTx(w: SyncedWriter, input: TakeDoseInput): Promise<DoseChange | null> {
+  const { prescriptionId, phaseId, scheduleId, date, time, dosageMg, takenAt } = input;
+  assertNotFutureDay(date, "take");
+  if (takenAt !== undefined && !Number.isFinite(takenAt)) throw new Error("Invalid time");
+
+  const prev = await getDoseLogRaw(scheduleId, date);
+  if (prev?.status === "taken") return null;
+  // Resolve the log id first so the consumed transaction can link to it.
+  const logId = prev?.id ?? (await newScheduledDoseLogId(scheduleId, date));
+
+  // A taken dose has no skip reason; clear one left by an earlier skip.
+  const patch: DoseLogPatch = { skipReason: undefined };
+
+  // Find active inventory for this prescription. `isActive` is a boolean and
+  // IndexedDB cannot index booleans, so the shared helper filters in memory.
+  const inventory = await getActiveInventoryForPrescription(prescriptionId);
+  const pills = inventory && calculatePillsConsumed(dosageMg, inventory.strength);
+  const invalidStrength = !!inventory && pills === undefined;
+
+  // Snapshot what is being taken, so later schedule or inventory edits
+  // cannot rewrite this dose. The item id is only the one debited now: a
+  // stale id from an earlier take would let the next undo restore pills that
+  // were never taken out.
+  const [phase, schedule] = await Promise.all([
+    db.medicationPhases.get(phaseId),
+    db.phaseSchedules.get(scheduleId),
+  ]);
+  patch.doseAmount = dosageMg;
+  patch.doseUnit = schedule?.unit ?? phase?.unit;
+  // An invalid strength debits nothing, so no item is recorded.
+  const inventoryItemId = pills !== undefined ? inventory?.id : undefined;
+  patch.inventoryItemId = inventoryItemId;
+  patch.pillsConsumed = pills ?? 0;
+  patch.pillStrength = inventory?.strength;
+
+  // Negative stock is allowed (user decision).
+  if (inventory && pills !== undefined) await moveStock(w, inventory.id, -pills, logId);
+
+  if (takenAt !== undefined) patch.actionTimestamp = takenAt;
+
+  const after = await writeSlotLog(
+    w, prev, logId, { prescriptionId, phaseId, scheduleId, date, time }, "taken", patch,
+  );
+
+  const auditDetails: Record<string, unknown> = {
+    prescriptionId, date, time, dosageMg, pillsConsumed: pills ?? 0, inventoryItemId,
+  };
+  if (pills !== undefined && pills > 0 && !isCleanFraction(pills)) {
+    auditDetails.warning = "odd_fraction";
+  }
+  if (invalidStrength) auditDetails.warning = "invalid_strength";
+  await w.audit("dose_taken", auditDetails);
+
+  return { key: input, before: prev, after };
+}
+
+/** Skip one dose inside a synced write. A taken dose gets its pills back. */
+async function skipInTx(w: SyncedWriter, input: SkipDoseInput): Promise<DoseChange> {
+  const { prescriptionId, phaseId, scheduleId, date, time, dosageMg, reason } = input;
+  // Skipping ahead of the day would mark a dose that is not yet due.
+  assertNotFutureDay(date, "skip");
+
+  const prev = await getDoseLogRaw(scheduleId, date);
+  const logId = prev?.id ?? (await newScheduledDoseLogId(scheduleId, date));
+  const pillsConsumed = await restoreTakenStock(w, prev, dosageMg);
+
+  // Snapshot the dose that was skipped.
+  const [phase, schedule] = await Promise.all([
+    db.medicationPhases.get(phaseId),
+    db.phaseSchedules.get(scheduleId),
+  ]);
+  const after = await writeSlotLog(
+    w, prev, logId, { prescriptionId, phaseId, scheduleId, date, time }, "skipped",
+    {
+      doseAmount: dosageMg,
+      doseUnit: schedule?.unit ?? phase?.unit,
+      pillsConsumed: 0,
+      // Always written: a skip without a reason clears an older one.
+      skipReason: reason,
+    },
+  );
+
+  await w.audit("dose_skipped", {
+    prescriptionId, date, time, dosageMg, pillsConsumed, reason,
+    inventoryItemId: prev?.inventoryItemId,
+  });
+  return { key: input, before: prev, after };
+}
+
+/**
+ * Reverse a taken dose inside a synced write: its pills go back to stock.
+ * The log goes back to open: "rescheduled" if it carries a reschedule
+ * override, else "pending" (the Today screen then shows it open or missed by
+ * the time). The log is not soft-deleted: its id is deterministic and the
+ * server never resurrects a tombstone, so a later re-take could not sync.
+ */
+async function untakeInTx(w: SyncedWriter, input: UntakeDoseInput): Promise<DoseChange> {
+  const { prescriptionId, phaseId, scheduleId, date, time, dosageMg } = input;
+  const prev = await getDoseLogRaw(scheduleId, date);
+  const logId = prev?.id ?? (await newScheduledDoseLogId(scheduleId, date));
+  const pillsConsumed = await restoreTakenStock(w, prev, dosageMg);
+
+  const after = await writeSlotLog(
+    w, prev, logId, { prescriptionId, phaseId, scheduleId, date, time },
+    prev?.rescheduledTo ? "rescheduled" : "pending",
+    // Clear a reason left by an earlier skip: the slot is no longer skipped.
+    { pillsConsumed: 0, skipReason: undefined },
+  );
+
+  await w.audit("dose_untaken", {
+    prescriptionId, date, time, dosageMg, pillsConsumed,
+    inventoryItemId: prev?.inventoryItemId,
+  });
+  return { key: input, before: prev, after };
+}
+
+/**
+ * Reverse a skip inside a synced write: the dose is open again and its
+ * reason is cleared. Null when the dose is not skipped.
+ */
+async function unskipInTx(w: SyncedWriter, input: UnskipDoseInput): Promise<DoseChange | null> {
+  const { prescriptionId, phaseId, scheduleId, date, time } = input;
+  const prev = await getDoseLogRaw(scheduleId, date);
+  if (prev?.status !== "skipped") return null;
+
+  const after = await writeSlotLog(
+    w, prev, prev.id, { prescriptionId, phaseId, scheduleId, date, time },
+    prev.rescheduledTo ? "rescheduled" : "pending",
+    { skipReason: undefined },
+  );
+  await w.audit("dose_untaken", { prescriptionId, date, time, unskipped: true });
+  return { key: input, before: prev, after };
+}
 
 /**
  * Record a dose as taken. Atomic: dose log + stock decrement + audit log in
  * a single Dexie transaction. Fractional pill math uses dosageMg / pillStrength.
+ * A dose that is already taken is returned unchanged: its taken time stays.
+ * Use editDoseTime to change it.
  */
 export async function takeDose(input: TakeDoseInput): Promise<ServiceResult<DoseLog>> {
   try {
-    const { prescriptionId, phaseId, scheduleId, date, time, dosageMg, takenAtTime } = input;
-
-    // A dose cannot be taken ahead of its day; it would debit stock for a
-    // pill that is still in the bottle.
-    if (date > toLocalDateKey()) {
-      return err("Cannot take a dose scheduled for a future date");
-    }
-
-    // Convert user-specified taken time to a timestamp if provided
-    let actionTimestampOverride: number | undefined;
-    if (takenAtTime) {
-      actionTimestampOverride = resolveTakenAt(date, time, takenAtTime);
-      if (actionTimestampOverride === undefined) {
-        return err(`Invalid time "${takenAtTime}"`);
-      }
-      if (isFutureTakenAt(actionTimestampOverride)) {
-        return err("Cannot record a dose as taken at a future time");
-      }
-    }
-
-    const log = await syncedWrite(["doseLogs", "inventoryItems", "inventoryTransactions", "medicationPhases", "phaseSchedules"], async (w) => {
-      const prev = await getDoseLogRaw(scheduleId, date);
-      // Resolve the log id first so the consumed transaction can link to it.
-      const logId = prev?.id ?? (await newScheduledDoseLogId(scheduleId, date));
-      const wasTaken = prev?.status === "taken";
-
-      let inventoryItemId: string | undefined = prev?.inventoryItemId;
-      let pillsConsumed = 0;
-      // A taken dose has no skip reason; clear one left by an earlier skip.
-      const patch: DoseLogPatch = { skipReason: undefined };
-      let invalidStrength = false;
-
-      if (!wasTaken) {
-        // Find active inventory for this prescription. `isActive` is a
-        // boolean and IndexedDB cannot index booleans, so a
-        // `.where({ isActive: 1 })` equality match never hits — the shared
-        // helper filters in memory the same way every other call site does.
-        const inventory = await getActiveInventoryForPrescription(prescriptionId);
-        const pills = inventory && calculatePillsConsumed(dosageMg, inventory.strength);
-        if (inventory && pills === undefined) invalidStrength = true;
-
-        // Snapshot what is being taken, so later schedule or inventory edits
-        // cannot rewrite this dose. The item id is only the one debited now:
-        // a stale id from an earlier take would let the next undo restore
-        // pills that were never taken out.
-        const [phase, schedule] = await Promise.all([
-          db.medicationPhases.get(phaseId),
-          db.phaseSchedules.get(scheduleId),
-        ]);
-        patch.doseAmount = dosageMg;
-        patch.doseUnit = schedule?.unit ?? phase?.unit;
-        // An invalid strength debits nothing, so no item is recorded.
-        inventoryItemId = pills !== undefined ? inventory?.id : undefined;
-        patch.inventoryItemId = inventoryItemId;
-        patch.pillsConsumed = 0;
-        patch.pillStrength = inventory?.strength;
-
-        if (inventory && pills !== undefined) {
-          pillsConsumed = pills;
-          patch.pillsConsumed = pillsConsumed;
-          const newStock = (inventory.currentStock ?? 0) - pillsConsumed;
-
-          // Update stock (negative allowed per user decision)
-          await w.patch("inventoryItems", inventory.id, {
-            currentStock: Math.round(newStock * 10000) / 10000,
-          });
-
-          // Record inventory transaction
-          const sf = syncFields();
-          const invTxId = crypto.randomUUID();
-          await w.insert("inventoryTransactions", {
-            id: invTxId,
-            inventoryItemId: inventory.id,
-            timestamp: Date.now(),
-            amount: -pillsConsumed,
-            type: "consumed" as const,
-            doseLogId: logId,
-            createdAt: sf.createdAt,
-            updatedAt: sf.updatedAt,
-            deletedAt: null,
-            deviceId: sf.deviceId,
-            timezone: sf.timezone,
-          });
-        }
-      }
-
-      if (actionTimestampOverride !== undefined) patch.actionTimestamp = actionTimestampOverride;
-
-      // Upsert dose log
-      const doseLog = await writeSlotLog(
-        w, prev, logId, { prescriptionId, phaseId, scheduleId, date, time }, "taken", patch,
-      );
-
-      // Audit log
-      const auditDetails: Record<string, unknown> = {
-        prescriptionId, date, time, dosageMg, pillsConsumed, inventoryItemId,
-      };
-      if (pillsConsumed > 0 && !isCleanFraction(pillsConsumed)) {
-        auditDetails.warning = "odd_fraction";
-      }
-      if (invalidStrength) auditDetails.warning = "invalid_strength";
-      await w.audit("dose_taken", auditDetails);
-
-      return doseLog;
+    const log = await syncedWrite(DOSE_TABLES, async (w) => {
+      const change = await takeInTx(w, input);
+      return change?.after ?? (await getDoseLogRaw(input.scheduleId, input.date))!;
     });
-
     return ok(log);
   } catch (e) {
-    return err("Failed to take dose", e);
+    return err(e instanceof Error && e.message.startsWith("Cannot") ? e.message : "Failed to take dose", e);
   }
 }
 
@@ -663,91 +682,33 @@ function hhmm(timestamp: number): string {
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 
-/**
- * Reverse a taken dose. Restores the stock the take deducted. The log goes
- * back to the state it had before the take: "rescheduled" if it carries a
- * reschedule override, else "pending", which the schedule view reads by date
- * (pending today, missed on a past day). The log is not soft-deleted: its id
- * is deterministic and the server never resurrects a tombstone, so a later
- * re-take of the same slot could not sync.
- */
+/** Reverse a taken dose. Restores the stock the take deducted. */
 export async function untakeDose(input: UntakeDoseInput): Promise<ServiceResult<DoseLog>> {
   try {
-    const { prescriptionId, phaseId, scheduleId, date, time, dosageMg } = input;
-
-    const log = await syncedWrite(["doseLogs", "inventoryItems", "inventoryTransactions"], async (w) => {
-      const prev = await getDoseLogRaw(scheduleId, date);
-      const logId = prev?.id ?? (await newScheduledDoseLogId(scheduleId, date));
-      const pillsConsumed = await restoreTakenStock(w, prev, dosageMg);
-
-      const doseLog = await writeSlotLog(
-        w, prev, logId, { prescriptionId, phaseId, scheduleId, date, time },
-        prev?.rescheduledTo ? "rescheduled" : "pending",
-        // Clear a reason left by an earlier skip: the slot is no longer skipped.
-        { pillsConsumed: 0, skipReason: undefined },
-      );
-
-      await w.audit("dose_untaken", {
-        prescriptionId, date, time, dosageMg, pillsConsumed,
-        inventoryItemId: prev?.inventoryItemId,
-      });
-
-      return doseLog;
-    });
-
+    const log = await syncedWrite(DOSE_TABLES, async (w) => (await untakeInTx(w, input)).after);
     return ok(log);
   } catch (e) {
     return err("Failed to untake dose", e);
   }
 }
 
-/**
- * Skip a dose. If previously taken, reverses stock adjustment.
- */
+/** Skip a dose. If previously taken, reverses stock adjustment. */
 export async function skipDose(input: SkipDoseInput): Promise<ServiceResult<DoseLog>> {
   try {
-    const { prescriptionId, phaseId, scheduleId, date, time, dosageMg, reason } = input;
-
-    // Skipping ahead of the day would mark a dose that is not yet due.
-    if (date > toLocalDateKey()) {
-      return err("Cannot skip a dose scheduled for a future date");
-    }
-
-    const log = await syncedWrite(["doseLogs", "inventoryItems", "inventoryTransactions", "medicationPhases", "phaseSchedules"], async (w) => {
-      const prev = await getDoseLogRaw(scheduleId, date);
-      const logId = prev?.id ?? (await newScheduledDoseLogId(scheduleId, date));
-
-      // Reverse stock if previously taken
-      const pillsConsumed = await restoreTakenStock(w, prev, dosageMg);
-
-      // Snapshot the dose that was skipped.
-      const [phase, schedule] = await Promise.all([
-        db.medicationPhases.get(phaseId),
-        db.phaseSchedules.get(scheduleId),
-      ]);
-      const patch: DoseLogPatch = {
-        doseAmount: dosageMg,
-        doseUnit: schedule?.unit ?? phase?.unit,
-        pillsConsumed: 0,
-        // Always written: a skip without a reason clears an older one.
-        skipReason: reason,
-      };
-
-      const doseLog = await writeSlotLog(
-        w, prev, logId, { prescriptionId, phaseId, scheduleId, date, time }, "skipped", patch,
-      );
-
-      await w.audit("dose_skipped", {
-        prescriptionId, date, time, dosageMg, pillsConsumed, reason,
-        inventoryItemId: prev?.inventoryItemId,
-      });
-
-      return doseLog;
-    });
-
+    const log = await syncedWrite(DOSE_TABLES, async (w) => (await skipInTx(w, input)).after);
     return ok(log);
   } catch (e) {
-    return err("Failed to skip dose", e);
+    return err(e instanceof Error && e.message.startsWith("Cannot") ? e.message : "Failed to skip dose", e);
+  }
+}
+
+/** Reverse a skip: the dose is open again. A dose that is not skipped is left alone. */
+export async function unskipDose(input: UnskipDoseInput): Promise<ServiceResult<DoseLog | undefined>> {
+  try {
+    const log = await syncedWrite(DOSE_TABLES, async (w) => (await unskipInTx(w, input))?.after);
+    return ok(log);
+  } catch (e) {
+    return err("Failed to unskip dose", e);
   }
 }
 
@@ -761,7 +722,7 @@ export async function rescheduleDose(input: RescheduleDoseInput): Promise<Servic
   try {
     const { prescriptionId, phaseId, scheduleId, date, time, newTime, dosageMg } = input;
 
-    const log = await syncedWrite(["doseLogs", "inventoryItems", "inventoryTransactions"], async (w) => {
+    const log = await syncedWrite(DOSE_TABLES, async (w) => {
       const prev = await getDoseLogRaw(scheduleId, date);
       const logId = prev?.id ?? (await newScheduledDoseLogId(scheduleId, date));
 
@@ -788,87 +749,188 @@ export async function rescheduleDose(input: RescheduleDoseInput): Promise<Servic
   }
 }
 
-/**
- * Take all doses in a list. Each dose gets its own transaction —
- * one failure does not block others.
- */
-export async function takeAllDoses(
-  entries: { prescriptionId: string; phaseId: string; scheduleId: string; dosageMg: number }[],
-  date: string,
-  time: string,
-  takenAtTime?: string,
-): Promise<ServiceResult<void>> {
-  const errors: string[] = [];
+// ---------------------------------------------------------------------------
+// Bulk dose actions ("Mark all doses")
+// ---------------------------------------------------------------------------
+//
+// One synced write covers every dose, so all of them change or none do.
+// Take all and Skip all change only the doses with no user action yet: a
+// dose that is already taken or skipped is never overridden. The result
+// lists only the doses that changed, with their log before, for undo.
 
-  for (const entry of entries) {
-    const result = await takeDose({
-      prescriptionId: entry.prescriptionId,
-      phaseId: entry.phaseId,
-      scheduleId: entry.scheduleId,
-      date,
-      time,
-      dosageMg: entry.dosageMg,
-      ...(takenAtTime ? { takenAtTime } : {}),
+async function runBulk<K extends DoseKey>(
+  entries: readonly K[],
+  step: (w: SyncedWriter, entry: K) => Promise<DoseChange | null>,
+): Promise<ServiceResult<DoseChange<K>[]>> {
+  try {
+    const changes = await syncedWrite(DOSE_TABLES, async (w) => {
+      const out: DoseChange<K>[] = [];
+      for (const entry of entries) {
+        const change = await step(w, entry);
+        if (change) out.push({ ...change, key: entry });
+      }
+      return out;
     });
-    if (!result.success) {
-      errors.push(result.error);
-    }
+    return ok(changes);
+  } catch (e) {
+    return err(e instanceof Error && e.message.startsWith("Cannot") ? e.message : "Could not save. No dose changed.", e);
   }
+}
 
-  if (errors.length > 0) {
-    return err(`Failed to take ${errors.length} dose(s): ${errors.join("; ")}`);
-  }
-  return ok(undefined);
+/** True when the dose's stored log is a final user action (taken or skipped). */
+async function isMarked(entry: DoseKey): Promise<boolean> {
+  const prev = await getDoseLogRaw(entry.scheduleId, entry.date);
+  return prev?.status === "taken" || prev?.status === "skipped";
 }
 
 /**
- * Skip all doses in a list. Each dose gets its own transaction —
- * one failure does not block others.
+ * Take every dose in `entries` at `takenAt` (default now). Only open doses
+ * change; with `onlyOpen: false` a skipped dose is taken too (a single Take
+ * on a skipped dose). A taken dose never changes.
  */
-export async function skipAllDoses(
-  entries: { prescriptionId: string; phaseId: string; scheduleId: string; dosageMg: number }[],
-  date: string,
-  time: string,
-  reason?: string,
-): Promise<ServiceResult<void>> {
-  const errors: string[] = [];
-
-  for (const entry of entries) {
-    const result = await skipDose({
-      prescriptionId: entry.prescriptionId,
-      phaseId: entry.phaseId,
-      scheduleId: entry.scheduleId,
-      date,
-      time,
-      dosageMg: entry.dosageMg,
-      ...(reason !== undefined && { reason }),
-    });
-    if (!result.success) {
-      errors.push(result.error);
-    }
-  }
-
-  if (errors.length > 0) {
-    return err(`Failed to skip ${errors.length} dose(s): ${errors.join("; ")}`);
-  }
-  return ok(undefined);
+export function takeDoses<K extends DoseKey>(
+  entries: readonly K[],
+  opts: { takenAt?: number; onlyOpen?: boolean } = {},
+): Promise<ServiceResult<DoseChange<K>[]>> {
+  const onlyOpen = opts.onlyOpen ?? true;
+  return runBulk(entries, async (w, entry) => {
+    if (onlyOpen && (await isMarked(entry))) return null;
+    return takeInTx(w, { ...entry, ...(opts.takenAt !== undefined && { takenAt: opts.takenAt }) });
+  });
 }
 
 /**
- * Edit the recorded time of an already-taken dose. Only `actionTimestamp` is
- * updated — inventory is untouched since the dose itself is unchanged.
+ * Skip every open dose in `entries`, with one reason (or none). With
+ * `onlyOpen: false` a taken dose is skipped too and its pills go back.
+ */
+export function skipDoses<K extends DoseKey>(
+  entries: readonly K[],
+  opts: { reason?: string; onlyOpen?: boolean } = {},
+): Promise<ServiceResult<DoseChange<K>[]>> {
+  const onlyOpen = opts.onlyOpen ?? true;
+  return runBulk(entries, async (w, entry) => {
+    if (onlyOpen && (await isMarked(entry))) return null;
+    return skipInTx(w, { ...entry, ...(opts.reason !== undefined && { reason: opts.reason }) });
+  });
+}
+
+/** Untake every taken dose in `entries`; their pills go back to stock. */
+export function untakeDoses<K extends DoseKey>(
+  entries: readonly K[],
+): Promise<ServiceResult<DoseChange<K>[]>> {
+  return runBulk(entries, async (w, entry) => {
+    const prev = await getDoseLogRaw(entry.scheduleId, entry.date);
+    return prev?.status === "taken" ? untakeInTx(w, entry) : null;
+  });
+}
+
+/** Unskip every skipped dose in `entries`: open again, reason cleared. */
+export function unskipDoses<K extends DoseKey>(
+  entries: readonly K[],
+): Promise<ServiceResult<DoseChange<K>[]>> {
+  return runBulk(entries, (w, entry) => unskipInTx(w, entry));
+}
+
+/**
+ * Give skipped doses their reason after the skip was written (the reason
+ * sheet opens after the skip). A dose that is no longer skipped is left
+ * alone. Returns how many doses got the reason.
+ */
+export async function setSkipReason(logIds: readonly string[], reason: string): Promise<ServiceResult<number>> {
+  try {
+    const count = await syncedWrite(["doseLogs"], async (w) => {
+      let n = 0;
+      for (const id of logIds) {
+        const log = await db.doseLogs.get(id);
+        if (!log || !isLive(log) || log.status !== "skipped") continue;
+        await w.patch("doseLogs", id, { skipReason: reason });
+        n++;
+      }
+      return n;
+    });
+    return ok(count);
+  } catch (e) {
+    return err("Failed to save the reason", e);
+  }
+}
+
+/**
+ * Undo: put each changed dose back EXACTLY as it was before the change
+ * (status, taken time, skip reason and the stock snapshot). Stock follows
+ * the status: undoing a take refunds its pills, undoing an untake debits
+ * them again. A dose changed since (another action, another device) is left
+ * alone and counted as stale. `updatedAt` is not compared: the sync push ack
+ * re-stamps it a few seconds after every write without changing the dose.
+ * The skip reason is not compared either: it is set after a skip.
+ */
+export async function revertDoseChanges(
+  changes: readonly DoseChange[],
+): Promise<ServiceResult<{ reverted: number; stale: number }>> {
+  try {
+    const counts = await syncedWrite(DOSE_TABLES, async (w) => {
+      let reverted = 0;
+      let stale = 0;
+      for (const { key, before, after } of changes) {
+        const current = await db.doseLogs.get(after.id);
+        if (
+          !current ||
+          !isLive(current) ||
+          current.status !== after.status ||
+          current.actionTimestamp !== after.actionTimestamp ||
+          (current.pillsConsumed ?? 0) !== (after.pillsConsumed ?? 0)
+        ) {
+          stale++;
+          continue;
+        }
+        if (current.status === "taken") await restoreTakenStock(w, current, key.dosageMg);
+        if (before?.status === "taken" && before.inventoryItemId && (before.pillsConsumed ?? 0) > 0) {
+          await moveStock(w, before.inventoryItemId, -(before.pillsConsumed ?? 0), current.id);
+        }
+        await w.patch("doseLogs", current.id, before
+          ? {
+              status: before.status,
+              actionTimestamp: before.actionTimestamp,
+              timezone: before.timezone,
+              rescheduledTo: before.rescheduledTo,
+              skipReason: before.skipReason,
+              inventoryItemId: before.inventoryItemId,
+              pillsConsumed: before.pillsConsumed,
+              pillStrength: before.pillStrength,
+              doseAmount: before.doseAmount,
+              doseUnit: before.doseUnit,
+            }
+          : {
+              // The slot had no log: it goes back to open. The row is kept
+              // (a tombstone of a deterministic id never syncs back).
+              status: "pending",
+              actionTimestamp: w.now,
+              skipReason: undefined,
+              pillsConsumed: 0,
+              inventoryItemId: undefined,
+            });
+        await w.audit(
+          before?.status === "taken" ? "dose_taken" : before?.status === "skipped" ? "dose_skipped" : "dose_untaken",
+          { prescriptionId: key.prescriptionId, date: key.date, time: key.time, undo: true },
+        );
+        reverted++;
+      }
+      return { reverted, stale };
+    });
+    return ok(counts);
+  } catch (e) {
+    return err("Failed to undo", e);
+  }
+}
+
+/**
+ * Change the recorded time of an already-taken dose. Only `actionTimestamp`
+ * changes; stock is untouched since the dose itself is unchanged. Any
+ * instant is accepted: the user states when it was taken.
  */
 export async function editDoseTime(input: EditDoseTimeInput): Promise<ServiceResult<DoseLog>> {
   try {
-    const { prescriptionId, scheduleId, date, time, newTime } = input;
-
-    const newTimestamp = resolveTakenAt(date, time, newTime);
-    if (newTimestamp === undefined) {
-      return err(`Invalid time "${newTime}"`);
-    }
-    if (isFutureTakenAt(newTimestamp)) {
-      return err("Cannot record a dose as taken at a future time");
-    }
+    const { prescriptionId, scheduleId, date, time, takenAt } = input;
+    if (!Number.isFinite(takenAt)) return err("Invalid time");
 
     const log = await syncedWrite(["doseLogs"], async (w) => {
       const prev = await getDoseLogRaw(scheduleId, date);
@@ -876,12 +938,8 @@ export async function editDoseTime(input: EditDoseTimeInput): Promise<ServiceRes
         throw new Error("Dose is not logged as taken");
       }
 
-      const written = await w.patch("doseLogs", prev.id, { actionTimestamp: newTimestamp });
-
-      await w.audit("dose_time_edited", {
-        prescriptionId, date, time, newTime,
-      });
-
+      const written = await w.patch("doseLogs", prev.id, { actionTimestamp: takenAt });
+      await w.audit("dose_time_edited", { prescriptionId, date, time, takenAt });
       return written!;
     });
 
@@ -889,29 +947,4 @@ export async function editDoseTime(input: EditDoseTimeInput): Promise<ServiceRes
   } catch (e) {
     return err("Failed to edit dose time", e);
   }
-}
-
-/**
- * Edit the recorded time for a list of taken doses. Each dose gets its own
- * transaction — one failure does not block others.
- */
-export async function editAllDoseTimes(
-  entries: { prescriptionId: string; phaseId: string; scheduleId: string }[],
-  date: string,
-  time: string,
-  newTime: string,
-): Promise<ServiceResult<void>> {
-  const errors: string[] = [];
-
-  for (const entry of entries) {
-    const result = await editDoseTime({ ...entry, date, time, newTime });
-    if (!result.success) {
-      errors.push(result.error);
-    }
-  }
-
-  if (errors.length > 0) {
-    return err(`Failed to edit ${errors.length} dose(s): ${errors.join("; ")}`);
-  }
-  return ok(undefined);
 }

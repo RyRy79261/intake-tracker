@@ -1,195 +1,149 @@
 "use client";
 
-import { useState } from "react";
-import { PillIconWithBadge } from "@/components/medications/pill-icon";
-import { Button } from "@intake/ui/button";
+import { useRef } from "react";
 import { Check } from "lucide-react";
+import { PillIconWithBadge } from "@/components/medications/pill-icon";
 import { cn } from "@/lib/utils";
-import { formatDoseAmount, getCurrentTimeHHMM } from "@/lib/medication-ui-utils";
-import { RetroactiveTimePicker } from "@/components/medications/retroactive-time-picker";
+import { doseDisplayName, doseStatusLine, formatDoseLine } from "@/lib/medication-ui-utils";
 import type { DoseSlot } from "@/hooks/use-medication-queries";
 
 interface DoseRowProps {
   slot: DoseSlot;
-  isToday: boolean;
+  /** A dose of a day after today: there is no Take button. */
   isFuture: boolean;
-  onTake: (slot: DoseSlot) => void;
-  onRetroactiveTake: (slot: DoseSlot, time: string) => void;
-  onSkip: (slot: DoseSlot) => void;
-  onDoseClick: (slot: DoseSlot) => void;
-  onEditTime: (slot: DoseSlot, time: string) => void;
+  /** A tap on the row opens the dose dialog, for every status. */
+  onOpen: (slot: DoseSlot) => void;
+  /** Take. Absent: no Take button (the rows of the "Mark all doses" modal). */
+  onTake?: (slot: DoseSlot) => void;
+  /** A long press of Take: ask for the time taken at once. */
+  onTakeLongPress?: (slot: DoseSlot) => void;
 }
 
-const LATE_THRESHOLD_MINUTES = 30;
+const LONG_PRESS_MS = 500;
 
 /**
- * The row's buttons look 36px tall (the prototype's `.btn.sm`) but take taps
- * over 44px: an invisible ::before reaches 4px above and below, into the
- * row's padding. Not sideways, so Skip and Take never overlap.
+ * One dose: the pill with its status badge, the name on the box, the dose
+ * line and the status line. A tap anywhere opens the dose dialog. The round
+ * Take button on the right takes the dose (a long press asks for the time
+ * taken); it shows a filled check once taken.
  */
-const rowButton = "relative h-9 before:absolute before:inset-x-0 before:-inset-y-1 before:content-['']";
+export function DoseRow({ slot, isFuture, onOpen, onTake, onTakeLongPress }: DoseRowProps) {
+  const { status, inventory, existingLog } = slot;
+  const name = doseDisplayName(slot);
+  const statusLine = doseStatusLine(slot);
+  const rescheduled = status === "pending" && existingLog?.status === "rescheduled";
+  const badge = rescheduled ? "rescheduled" : status;
 
-function isLateDose(scheduledTime: string): boolean {
-  const now = new Date();
-  const nowMinutes = now.getHours() * 60 + now.getMinutes();
-  const parts = scheduledTime.split(":").map(Number);
-  const schedMinutes = (parts[0] ?? 0) * 60 + (parts[1] ?? 0);
-  return nowMinutes - schedMinutes > LATE_THRESHOLD_MINUTES;
-}
-
-function formatTimestamp(ts: number): string {
-  const d = new Date(ts);
-  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-}
-
-export function DoseRow({ slot, isToday, isFuture, onTake, onRetroactiveTake, onSkip, onDoseClick, onEditTime }: DoseRowProps) {
-  const { status, prescription, phase, inventory } = slot;
-  const [timePickerOpen, setTimePickerOpen] = useState(false);
-  const [editPickerOpen, setEditPickerOpen] = useState(false);
-
-  const isActionable = !isFuture && (status === "pending" || status === "missed");
-
-  const doseLabel = formatDoseAmount(slot);
-
-  const foodInstruction = phase.foodInstruction !== "none" ? phase.foodInstruction : null;
-
-  const handleTakeClick = () => {
-    if (isToday && !isLateDose(slot.localTime)) {
-      // Within notification window — log immediately at current time
-      onTake(slot);
-    } else {
-      // Past date or late today — ask what time they took it
-      setTimePickerOpen(true);
-    }
+  const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressed = useRef(false);
+  const clearPress = () => {
+    if (pressTimer.current) clearTimeout(pressTimer.current);
+    pressTimer.current = null;
+  };
+  const longPress = () => {
+    longPressed.current = true;
+    clearPress();
+    onTakeLongPress?.(slot);
   };
 
-  const handleRetroactiveConfirm = (time: string) => {
-    onRetroactiveTake(slot, time);
-  };
-
-  // Display the time the dose was actually taken
-  const takenAtDisplay = slot.existingLog?.actionTimestamp
-    ? formatTimestamp(slot.existingLog.actionTimestamp)
-    : slot.localTime;
+  const showTake = !!onTake && !isFuture;
+  const taken = status === "taken";
 
   return (
-    <>
-      <div
-        data-status={status}
-        className={cn(
-          "grid grid-cols-[34px_minmax(0,1fr)_auto] items-center gap-2.5 border-t border-line/60 p-2.5 first:border-t-0",
-          status === "missed" && "shadow-[inset_3px_0_0_hsl(var(--sodium))]",
-          !isActionable && "cursor-pointer hover:bg-foreground/4 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring",
-        )}
-        onClick={!isActionable ? () => onDoseClick(slot) : undefined}
-        role={!isActionable ? "button" : undefined}
-        tabIndex={!isActionable ? 0 : undefined}
-        onKeyDown={!isActionable ? (e) => {
-          // Only the row itself: Enter on the inner Edit button stays with it.
-          if (e.target !== e.currentTarget) return;
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            onDoseClick(slot);
-          }
-        } : undefined}
+    <div
+      data-status={status}
+      data-testid="dose-row"
+      className={cn(
+        "grid grid-cols-[34px_minmax(0,1fr)_auto] items-center gap-2.5 border-t border-line/60 p-2.5 first:border-t-0",
+        status === "missed" && "shadow-[inset_3px_0_0_hsl(var(--sodium))]",
+      )}
+    >
+      <button
+        type="button"
+        onClick={() => onOpen(slot)}
+        aria-label={`${name}${statusLine ? `, ${statusLine}` : ""}. Open dose`}
+        className="col-span-2 grid cursor-pointer grid-cols-[34px_minmax(0,1fr)] items-center gap-2.5 text-left hover:bg-foreground/4 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
       >
         <PillIconWithBadge
           shape={inventory?.pillShape || "round"}
           color={inventory?.pillColor || "#ccc"}
           size={34}
-          status={status === "missed" ? "pending" : status}
+          status={badge}
         />
-
-        <div className="min-w-0">
-          <p className={cn(
-            "text-[0.9375rem] font-semibold leading-snug",
-            status === "skipped" && "text-muted-foreground line-through"
+        <span className="min-w-0">
+          <span className={cn(
+            "block text-[0.9375rem] font-semibold leading-snug",
+            status === "skipped" && "text-muted-foreground line-through",
           )}>
-            {prescription.genericName}
-          </p>
-          <p className="text-[0.8125rem] leading-snug text-muted-foreground">
-            {doseLabel}
-            {foodInstruction && ` -- ${foodInstruction} eating`}
-          </p>
-
-          {status === "taken" && (
-            <p className="mt-0.5 flex items-center gap-1 text-[0.8125rem] font-semibold text-meds">
-              <Check className="h-3.5 w-3.5" strokeWidth={2.5} />
-              Taken at {takenAtDisplay}
-            </p>
-          )}
-
-          {status === "skipped" && (
-            <p className="mt-0.5 text-[0.8125rem] text-muted-foreground">
-              {slot.existingLog?.skipReason || "Skipped"}
-            </p>
-          )}
-
-          {status === "missed" && (
-            <p className="mt-0.5 text-[0.8125rem] font-medium text-sodium">Missed</p>
-          )}
-        </div>
-
-        {isActionable ? (
-          <div className="flex shrink-0 items-center gap-2">
-            <Button
-              size="sm"
-              variant="outline"
-              className={cn(rowButton, "px-2.5 text-[0.8125rem]")}
-              onClick={(e) => {
-                e.stopPropagation();
-                onSkip(slot);
-              }}
+            {name}
+          </span>
+          <span className="block text-[0.8125rem] leading-snug text-muted-foreground">
+            {formatDoseLine(slot)}
+          </span>
+          {statusLine && (
+            <span
+              data-testid="dose-status"
+              className={cn(
+                "mt-0.5 block text-[0.8125rem]",
+                taken && "font-semibold text-meds",
+                status === "skipped" && "text-muted-foreground",
+                status === "missed" && "font-medium text-sodium",
+                rescheduled && "font-medium text-meds",
+              )}
             >
-              Skip
-            </Button>
-            <Button
-              size="sm"
-              className={cn(rowButton, "px-3")}
-              onClick={(e) => {
-                e.stopPropagation();
-                handleTakeClick();
-              }}
-            >
-              Take
-            </Button>
-          </div>
-        ) : status === "taken" ? (
-          <Button
-            size="sm"
-            variant="outline"
-            className={cn(rowButton, "shrink-0 px-2.5 text-[0.8125rem]")}
-            onClick={(e) => {
-              e.stopPropagation();
-              setEditPickerOpen(true);
-            }}
+              {statusLine}
+            </span>
+          )}
+        </span>
+      </button>
+
+      {showTake ? (
+        <button
+          type="button"
+          aria-label={taken ? `${name} taken. Open dose` : `Take ${name}`}
+          aria-pressed={taken}
+          className={cn(
+            // 44px tap target around a 36px ring.
+            "relative flex h-11 w-11 shrink-0 items-center justify-center rounded-full",
+            "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
+          )}
+          onPointerDown={() => {
+            if (taken || !onTakeLongPress) return;
+            longPressed.current = false;
+            clearPress();
+            pressTimer.current = setTimeout(longPress, LONG_PRESS_MS);
+          }}
+          onPointerUp={clearPress}
+          onPointerLeave={clearPress}
+          onPointerCancel={clearPress}
+          onContextMenu={(e) => {
+            // A long press on a touch screen (and a right click) opens the menu
+            // event; use it for the same "pick the time" action.
+            if (taken || !onTakeLongPress) return;
+            e.preventDefault();
+            if (!longPressed.current) longPress();
+          }}
+          onClick={() => {
+            if (longPressed.current) {
+              longPressed.current = false;
+              return;
+            }
+            if (taken) onOpen(slot);
+            else onTake?.(slot);
+          }}
+        >
+          <span
+            className={cn(
+              "flex h-9 w-9 items-center justify-center rounded-full border-2",
+              taken ? "border-meds bg-meds text-on-domain" : "border-meds text-meds",
+            )}
           >
-            Edit
-          </Button>
-        ) : (
-          <span />
-        )}
-      </div>
-
-      {/* A late dose today defaults to now; a past-date back-fill defaults
-          to the scheduled time, matching Mark All and the detail drawer. */}
-      <RetroactiveTimePicker
-        open={timePickerOpen}
-        onOpenChange={setTimePickerOpen}
-        defaultTime={isToday ? getCurrentTimeHHMM() : slot.localTime}
-        compoundName={prescription.genericName}
-        onConfirm={handleRetroactiveConfirm}
-        notAfterNow={isToday}
-      />
-
-      <RetroactiveTimePicker
-        open={editPickerOpen}
-        onOpenChange={setEditPickerOpen}
-        defaultTime={takenAtDisplay}
-        compoundName={prescription.genericName}
-        onConfirm={(time) => onEditTime(slot, time)}
-        notAfterNow={isToday}
-      />
-    </>
+            <Check className="h-5 w-5" strokeWidth={2.5} aria-hidden="true" />
+          </span>
+        </button>
+      ) : (
+        <span />
+      )}
+    </div>
   );
 }

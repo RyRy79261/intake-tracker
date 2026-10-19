@@ -5,6 +5,38 @@ import { Drawer as DrawerPrimitive } from "vaul"
 
 import { cn } from "../lib/utils"
 
+/**
+ * Drawers closed together (a sheet over a drawer, then the drawer) each step
+ * back over their own history entry. `history.back()` is async, so the steps
+ * run one at a time: each waits for the previous popstate, and a drawer
+ * steps back only while its own entry is the current one.
+ */
+const backQueue: string[] = [];
+let backInFlight = false;
+
+function stepBackFor(id: string): void {
+  backQueue.push(id);
+  pumpBackQueue();
+}
+
+function pumpBackQueue(): void {
+  while (!backInFlight && backQueue.length > 0) {
+    const id = backQueue.shift()!;
+    if (window.history.state?.drawerId !== id) continue;
+    backInFlight = true;
+    const done = () => {
+      window.removeEventListener("popstate", done);
+      clearTimeout(timer);
+      backInFlight = false;
+      pumpBackQueue();
+    };
+    window.addEventListener("popstate", done);
+    // Never wait forever for a popstate that does not come.
+    const timer = setTimeout(done, 1000);
+    window.history.back();
+  }
+}
+
 const Drawer = ({
   shouldScaleBackground = true,
   // Vaul's input repositioning yanks the whole sheet upward by the keyboard
@@ -23,12 +55,15 @@ const Drawer = ({
     if (open === undefined) return;
 
     if (open && !hasPushedState.current) {
-      window.history.pushState({ drawerId: id }, "");
+      // Keep the entry's own state (the app's window tags): a drawer opened
+      // over another drawer pops back to that drawer's entry, and the app
+      // must still read it as the same screen, not as a Back past it.
+      const current: unknown = window.history.state;
+      const base = current && typeof current === "object" ? current : {};
+      window.history.pushState({ ...base, drawerId: id }, "");
       hasPushedState.current = true;
     } else if (!open && hasPushedState.current) {
-      if (window.history.state?.drawerId === id) {
-        window.history.back();
-      }
+      stepBackFor(id);
       hasPushedState.current = false;
     }
   }, [open, id]);
