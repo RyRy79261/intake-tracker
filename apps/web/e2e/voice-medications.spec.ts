@@ -112,7 +112,7 @@ test.describe("Voice: medications", () => {
     // The unlisted medicine shows with the day's other doses.
     await page.goto("/medications");
     await expect(page.getByText("Not on your medication list")).toBeVisible();
-    await expect(page.getByText("Paracetamol", { exact: true })).toBeVisible();
+    await expect(page.getByText("Paracetamol 1 tablet")).toBeVisible();
   });
 
   test("refuses a medicine that is not on the list instead of adding it", async ({ page }) => {
