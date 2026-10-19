@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.42.0](https://github.com/RyRy79261/intake-tracker/compare/v1.41.0...v1.42.0) (2026-10-19)
+
+
+### Features
+
+* **voice:** log doses, refills and unlisted medicines by voice ([#444](https://github.com/RyRy79261/intake-tracker/issues/444)) ([f2fb242](https://github.com/RyRy79261/intake-tracker/commit/f2fb242e1746b27fb89cb853e67851b4b1ad3406))
+
 ## [1.41.0](https://github.com/RyRy79261/intake-tracker/compare/v1.40.4...v1.41.0) (2026-10-18)
 
 
