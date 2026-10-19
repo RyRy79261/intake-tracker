@@ -144,10 +144,14 @@ type NameMatch =
 
 /**
  * The medicine on the list a spoken name means: its generic name or a brand
- * name, exactly (ignoring case, spaces and marks), else one that contains the
- * other. Two different medicines matching is ambiguous, never a guess.
+ * name, exactly (ignoring case, spaces and marks), else (unless `loose` is
+ * false) one that contains the other. Two different medicines matching is ambiguous, never a guess.
  */
-export function matchMedicine(name: string, ctx: VoiceMedicationContext): NameMatch {
+export function matchMedicine(
+  name: string,
+  ctx: VoiceMedicationContext,
+  { loose: allowLoose = true }: { loose?: boolean } = {},
+): NameMatch {
   const wanted = norm(name);
   if (wanted === "") return { found: false };
   const live = ctx.prescriptions.filter((p) => p.isActive);
@@ -163,7 +167,9 @@ export function matchMedicine(name: string, ctx: VoiceMedicationContext): NameMa
       if (key === "") continue;
       const hit = brand ? { prescription, brand } : { prescription };
       if (key === wanted) exact.push(hit);
-      else if (wanted.length >= 4 && (key.includes(wanted) || wanted.includes(key))) loose.push(hit);
+      else if (allowLoose && wanted.length >= 4 && (key.includes(wanted) || wanted.includes(key))) {
+        loose.push(hit);
+      }
     }
   }
   for (const hits of [exact, loose]) {
@@ -307,7 +313,10 @@ function planRefill(
 
 function planExtra(item: ExtraMedicineItem, takenAt: number, ctx: VoiceMedicationContext): PlanResult {
   const name = item.medicine.trim();
-  const match = matchMedicine(name, ctx);
+  // Exact names only: a near miss ("paracetamol" in "Paracetamol/Codeine")
+  // must not take its pills from another medicine's stock. A name that is
+  // not exact is saved as unlisted, and the row says so.
+  const match = matchMedicine(name, ctx, { loose: false });
   if (!match.found && match.ambiguous) return unknownMedicine(name, match);
   const base = {
     kind: "extra_medicine" as const,

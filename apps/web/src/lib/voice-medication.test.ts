@@ -217,6 +217,14 @@ describe("extra medicines by voice", () => {
     expect(await db.inventoryItems.count()).toBe(1);
   });
 
+  it("does not take an extra dose from a medicine whose name only contains the one said", async () => {
+    await seed("Paracetamol/Codeine", "Co-codamol", "08:30");
+    const p = await plan({ kind: "extra_medicine", medicine: "Paracetamol", amount: 1, unit: "tablet" });
+    expect(p.kind === "extra_medicine" && p.prescription).toBeUndefined();
+    await saveMedicationPlan(p);
+    expect((await db.inventoryItems.toArray())[0]?.currentStock).toBe(30);
+  });
+
   it("logs an extra dose of a medicine on the list from its stock", async () => {
     await seed("Furosemide", "Lasix", "08:30");
     const p = await plan({ kind: "extra_medicine", medicine: "furosemide", amount: 2, unit: "tablet" });
