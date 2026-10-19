@@ -237,7 +237,9 @@ export const inventoryTransactionSchema = baseRecord
 
 export const doseLogSchema = baseRecord
   .extend({
-    prescriptionId: z.string(),
+    // An unlisted medicine (a paracetamol) has a name and no prescription.
+    prescriptionId: z.string().nullable().optional(),
+    medicineName: z.string().nullable().optional(),
     // PRN (as-needed) doses have no phase or schedule; pulled rows carry null.
     phaseId: z.string().nullable().optional(),
     scheduleId: z.string().nullable().optional(),

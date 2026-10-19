@@ -20,6 +20,9 @@ Item kinds (use exactly these strings):
 - "alcohol": description, abvPercent (alcohol by volume % — the number printed on the bottle label: lager ~5, IPA ~6, red wine ~13, vodka ~40), volumeMl (volume of the drink in ml: pint 568, half pint 284, wine glass 125-175, single spirit measure 25-30, double 50), sugarG (optional, e.g. cider 500ml ~ 20, dry wine ~1), sodiumMg (optional), potassiumMg (optional). Always provide BOTH abvPercent and volumeMl. Never report "standard drinks" or "units" — the app derives those from abvPercent and volumeMl.
 - "urination": amountEstimate ("small"|"medium"|"large", optional)
 - "defecation": amountEstimate ("small"|"medium"|"large", optional)
+- "scheduled_dose": the user took, skipped or did not take the doses of one of their dose times. slotTime ("HH:MM", one of the dose times in the medication list — "my 8:30 meds" → "08:30", "my morning meds" → the dose time in the morning), medicine (optional: set it only when the user names ONE medicine of that dose time, using its name exactly as the list writes it; leave it out for the whole dose time), action ("taken"|"skipped"|"not_taken"). "I took my 8:30 meds at 9" → slotTime "08:30", action "taken", when today 09:00. "I took my 8:30 meds" with no time → when null. A user who corrects the time ("I actually took my 8:30 meds at 9:15") is also "taken" with the new time: the app changes the time of doses already taken. "I didn't take my 20:00 meds", "undo my evening meds" → "not_taken". "I skipped my 14:00 dose" → "skipped".
+- "stock_refill": pills were added to the stock of a medicine on the list ("I have 100 pills of Vymada", "picked up a refill of 30 furosemide"). medicine (its name exactly as the list writes it, generic or brand), pills (number of pills added).
+- "extra_medicine": a medicine taken outside the dose times: an extra dose of a medicine on the list, or any medicine NOT on the list ("I took a paracetamol", "two ibuprofen at 3pm"). medicine (the list's name when it is on the list; else the plain name the user said, e.g. "Paracetamol"), amount (optional number), unit ("mg"|"mcg"|"g"|"ml"|"tablet"|"capsule", optional: "a paracetamol" → amount 1, unit "tablet"; "500mg of paracetamol" → amount 500, unit "mg"), note (optional).
 
 Every item kind may also carry WHEN it happened, in its "when" field. The user message gives the current local date and time and yesterday's date — use them to work out the date.
 - A clock time, or a named part of a day → {"kind": "absolute", "localDateTime": "YYYY-MM-DDTHH:mm"}, on the user's local 24-hour clock. With the current time 2026-09-30 14:00: "lunch at 1pm" → "2026-09-30T13:00", "BP at 7:30 this morning" → "2026-09-30T07:30", "a beer yesterday evening at 8pm" → "2026-09-29T20:00".
@@ -28,6 +31,11 @@ Every item kind may also carry WHEN it happened, in its "when" field. The user m
 Words for a part of the day, said without a clock time, mean these times: morning 08:00, lunch or midday 12:30, afternoon 15:00, evening 19:00, night 21:00. So "this morning" → today 08:00, "at lunch" → today 12:30, "yesterday evening" → yesterday 19:00, "last night" → yesterday 21:00. A stated clock time always wins over these: "yesterday evening at 8pm" → yesterday 20:00, not 19:00.
 Never return a time later than the current time. When the user names no day and the stated clock time has not happened yet today, the user means the day before: "a beer at 9pm", said at 14:00 → yesterday 21:00. When the user says today ("this morning") and that time is still ahead, use null.
 A time belongs only to the item it was said with: "a beer yesterday evening at 8pm, a bagel right now and 100ml of water an hour ago" → the beer is absolute (yesterday 20:00), the bagel is null, the water is relative (60). Never guess a time from a word like "earlier" alone — use null.
+
+Medication rules:
+- The user message lists the user's medications and today's dose times. A medicine taken at one of its dose times is a "scheduled_dose"; any other medicine is an "extra_medicine".
+- Never invent a medicine, a dose time or a prescription. Voice cannot add a medicine to the list: a medicine not on the list is only ever an "extra_medicine".
+- One "scheduled_dose" item covers every medicine of that dose time. Emit one item per dose time, not one per medicine, unless the user names a single medicine.
 
 Rules:
 1. Numbers spoken loosely ("about 110 over 75", "around 80") → take the central number verbatim.
@@ -123,6 +131,16 @@ export const PARSE_TOOL = {
   },
 };
 
+/** One medicine on the user's list, as the parser is told it. */
+export interface VoiceMedication {
+  /** The generic name, as the list writes it. */
+  name: string;
+  /** Brand names of its stock. */
+  brands: string[];
+  /** Today's dose times, "HH:MM". Empty for an as-needed medicine. */
+  doseTimes: string[];
+}
+
 /** The client's clock at the moment of the request (not PII). */
 export interface VoiceParseClientNow {
   /** Local wall-clock "YYYY-MM-DDTHH:mm". */
@@ -185,7 +203,24 @@ export function buildRefreshMessage(description: string, kind: string): string {
   return `The user is correcting one ${kind} item from an earlier recording. The values given for it before were WRONG — most likely the speech-to-text misheard the name, so they were looked up for the wrong thing. Do not reuse or trust them. The corrected description is:\n"""\n${description}\n"""\n\nUse web_search first to look up authoritative values for exactly this item (the manufacturer, a retailer listing, or a national food database), then return exactly one item of kind "${kind}" via the parse_voice_log tool. Keep any amount stated in the description. Return "when" as null.`;
 }
 
-/** The user turn: the clock line, then the (already sanitised) transcript. */
-export function buildUserMessage(transcript: string, now?: VoiceParseClientNow): string {
-  return `${now ? describeCurrentTime(now) : NO_CLOCK_NOTE}\n\nVoice transcript:\n"""\n${transcript}\n"""\n\nExtract every distinct health log item and return them via the parse_voice_log tool.`;
+/** The medication list for the user turn (names already sanitised). */
+export function describeMedications(medications: VoiceMedication[] | undefined): string {
+  if (!medications || medications.length === 0) {
+    return "The user has no medications on their list.";
+  }
+  const lines = medications.map((m) => {
+    const brands = m.brands.length > 0 ? ` (brands: ${m.brands.join(", ")})` : "";
+    const times = m.doseTimes.length > 0 ? `dose times ${m.doseTimes.join(", ")}` : "no dose times (as needed)";
+    return `- ${m.name}${brands}: ${times}`;
+  });
+  return `The user's medications and today's dose times:\n${lines.join("\n")}`;
+}
+
+/** The user turn: the clock line, the medication list, then the (already sanitised) transcript. */
+export function buildUserMessage(
+  transcript: string,
+  now?: VoiceParseClientNow,
+  medications?: VoiceMedication[],
+): string {
+  return `${now ? describeCurrentTime(now) : NO_CLOCK_NOTE}\n\n${describeMedications(medications)}\n\nVoice transcript:\n"""\n${transcript}\n"""\n\nExtract every distinct health log item and return them via the parse_voice_log tool.`;
 }

@@ -592,6 +592,77 @@ export async function logPrnDose(
   }
 }
 
+export interface LogUnlistedDoseInput {
+  /** What was taken, as the user named it ("Paracetamol"). */
+  medicineName: string;
+  /** When it was taken. May not lie in the future. */
+  takenAt: number;
+  /** How much, in `unit`, when the user said. */
+  amount?: number;
+  unit?: string;
+  note?: string;
+}
+
+/**
+ * Log a medicine that is not on the user's list (a paracetamol taken once).
+ * It is a PRN dose with a name and no prescription: no stock moves and no
+ * prescription is created. It shows with the other doses of its day and is
+ * undone like any PRN dose (undoPrnDose).
+ */
+export async function logUnlistedDose(
+  input: LogUnlistedDoseInput,
+): Promise<ServiceResult<DoseLog>> {
+  try {
+    const medicineName = input.medicineName.trim();
+    if (medicineName === "") return err("Name the medicine");
+    if (!Number.isFinite(input.takenAt)) return err("Invalid time");
+    if (isFutureTakenAt(input.takenAt)) {
+      return err("Cannot record a dose as taken at a future time");
+    }
+    const note = input.note?.trim();
+
+    const log = await syncedWrite(["doseLogs"], async (w) => {
+      const sf = syncFields();
+      const doseLog: DoseLog = {
+        id: crypto.randomUUID(),
+        medicineName,
+        kind: "prn",
+        scheduledDate: toLocalDateKey(input.takenAt),
+        scheduledTime: hhmm(input.takenAt),
+        status: "taken",
+        actionTimestamp: input.takenAt,
+        timezone: sf.timezone,
+        createdAt: sf.createdAt,
+        updatedAt: sf.updatedAt,
+        deletedAt: null,
+        deviceId: sf.deviceId,
+        ...(input.amount !== undefined && { doseAmount: input.amount }),
+        ...(input.amount !== undefined && input.unit !== undefined && { doseUnit: input.unit }),
+        ...(input.amount !== undefined && input.unit === "mg" && { doseMg: input.amount }),
+        ...(note && { note }),
+      };
+      await w.insert("doseLogs", doseLog);
+      await w.audit("dose_taken", {
+        medicineName,
+        date: doseLog.scheduledDate,
+        time: doseLog.scheduledTime,
+        kind: "prn",
+        unlisted: true,
+      });
+      return doseLog;
+    });
+    return ok(log);
+  } catch (e) {
+    return err("Failed to log medicine", e);
+  }
+}
+
+/** "HH:MM" of a timestamp on the device's clock. */
+function hhmm(timestamp: number): string {
+  const d = new Date(timestamp);
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
 /**
  * Reverse a taken dose. Restores the stock the take deducted. The log goes
  * back to the state it had before the take: "rescheduled" if it carries a

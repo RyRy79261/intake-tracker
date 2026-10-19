@@ -606,9 +606,10 @@ export const doseLogs = pgTable(
     userId: text("user_id")
       .notNull()
       .references(() => usersSync.id, { onDelete: "cascade" }),
-    prescriptionId: text("prescription_id")
-      .notNull()
-      .references(() => prescriptions.id),
+    // Null only for an unlisted medicine (a paracetamol taken once): a PRN
+    // dose with no prescription, named by `medicineName` instead.
+    prescriptionId: text("prescription_id").references(() => prescriptions.id),
+    medicineName: text("medicine_name"),
     // Nullable for PRN ("as needed") doses, which have no phase/schedule. The
     // kindFieldsCheck below still requires both for scheduled doses.
     phaseId: text("phase_id").references(() => medicationPhases.id),
@@ -658,6 +659,12 @@ export const doseLogs = pgTable(
     kindFieldsCheck: check(
       "dose_logs_kind_fields_check",
       sql`${t.kind} = 'prn' OR (${t.phaseId} IS NOT NULL AND ${t.scheduleId} IS NOT NULL)`,
+    ),
+    // A dose belongs to a prescription, or it is an unlisted PRN dose with a
+    // name of its own.
+    medicineCheck: check(
+      "dose_logs_medicine_check",
+      sql`${t.prescriptionId} IS NOT NULL OR (${t.kind} = 'prn' AND ${t.medicineName} IS NOT NULL AND btrim(${t.medicineName}) <> '')`,
     ),
     userUpdatedIdx: index("idx_dose_logs_user_updated").on(
       t.userId,

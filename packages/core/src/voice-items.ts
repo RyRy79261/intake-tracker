@@ -11,7 +11,7 @@
  * - the review row's check before an item can be saved
  *   ({@link voiceItemProblem}).
  *
- * Before this module the nine kinds were typed four times (tool schema, Zod,
+ * Before this module the kinds were typed four times (tool schema, Zod,
  * client types, client validation) and their limits twice, and nothing
  * checked that what the route returns passes the review check.
  */
@@ -53,6 +53,8 @@ export interface ChoiceFieldSpec extends FieldBase {
 export interface TextFieldSpec extends FieldBase {
   type: "text";
   maxLength: number;
+  /** A shape the text must have, and what to say when it has not. */
+  pattern?: { regex: RegExp; message: string };
 }
 
 export type VoiceFieldSpec = NumberFieldSpec | ChoiceFieldSpec | TextFieldSpec;
@@ -159,6 +161,47 @@ export const VOICE_ITEM_SPEC = {
     amountEstimate: AMOUNT_ESTIMATE,
     note: NOTE,
   },
+  // Medication kinds act only on what the user already has: a dose time of
+  // their schedule, the stock of a medicine on their list. Voice never adds a
+  // prescription, a schedule or a stock item. Which doses or stock an item
+  // means is resolved on the device (lib/voice-medication.ts).
+  //
+  // The doses of one dose time ("my 8:30 meds"), or of one medicine in it:
+  // taken (again with a new time, to correct it), skipped, or not taken.
+  scheduled_dose: {
+    slotTime: {
+      type: "text",
+      label: "Dose time",
+      maxLength: 5,
+      pattern: { regex: /^([01]\d|2[0-3]):[0-5]\d$/, message: "Dose time must be HH:MM." },
+      required: false,
+    },
+    medicine: { type: "text", label: "Medicine", maxLength: 100, required: false },
+    action: {
+      type: "choice",
+      label: "Action",
+      values: ["taken", "skipped", "not_taken"],
+      required: true,
+    },
+  },
+  // Pills added to the stock of a medicine on the list.
+  stock_refill: {
+    medicine: { type: "text", label: "Medicine", maxLength: 100, required: true },
+    pills: { type: "number", label: "Pills", unit: "pills", min: 1, max: 10000, required: true },
+  },
+  // A medicine taken outside the schedule: an extra dose of one on the list,
+  // or one not on it at all (a paracetamol), saved with its name only.
+  extra_medicine: {
+    medicine: { type: "text", label: "Medicine", maxLength: 100, required: true },
+    amount: { type: "number", label: "Amount", unit: "", min: 0.01, max: 100000, required: false },
+    unit: {
+      type: "choice",
+      label: "Unit",
+      values: ["mg", "mcg", "g", "ml", "tablet", "capsule"],
+      required: false,
+    },
+    note: NOTE,
+  },
 } as const satisfies Record<string, Record<string, VoiceFieldSpec>>;
 
 type Spec = typeof VOICE_ITEM_SPEC;
@@ -171,6 +214,18 @@ export const VOICE_ITEM_KINDS = Object.keys(VOICE_ITEM_SPEC) as VoiceItemKind[];
  * Kinds a review row can re-look-up on its own. The row sends its edited
  * description with its `kind`, and the parser returns that one item again.
  */
+/** Kinds that act on the user's medications rather than add a record. */
+export const MEDICATION_KINDS = [
+  "scheduled_dose",
+  "stock_refill",
+  "extra_medicine",
+] as const satisfies readonly VoiceItemKind[];
+export type MedicationKind = (typeof MEDICATION_KINDS)[number];
+
+export function isMedicationKind(kind: VoiceItemKind): kind is MedicationKind {
+  return (MEDICATION_KINDS as readonly string[]).includes(kind);
+}
+
 export const REFRESHABLE_KINDS = ["food", "caffeine", "alcohol"] as const satisfies readonly VoiceItemKind[];
 export type RefreshableKind = (typeof REFRESHABLE_KINDS)[number];
 
@@ -214,14 +269,12 @@ function fieldSchema(field: VoiceFieldSpec): z.ZodType {
     case "choice":
       schema = z.enum(field.values as [string, ...string[]]);
       break;
-    case "text":
-      schema = field.required
-        ? z
-            .string()
-            .max(field.maxLength)
-            .refine((s) => s.trim().length > 0)
-        : z.string().max(field.maxLength);
+    case "text": {
+      let text = z.string().max(field.maxLength);
+      if (field.pattern) text = text.regex(field.pattern.regex);
+      schema = field.required ? text.refine((s) => s.trim().length > 0) : text;
       break;
+    }
   }
   return field.required ? schema : schema.optional();
 }
@@ -323,6 +376,8 @@ export function voiceItemProblem(item: VoiceItem): string | null {
         else if (field.required && value.trim().length === 0) problem = `${field.label} is required.`;
         else if (value.length > field.maxLength) {
           problem = `${field.label} must be at most ${field.maxLength} characters.`;
+        } else if (field.pattern && !field.pattern.regex.test(value)) {
+          problem = field.pattern.message;
         }
         break;
     }

@@ -633,6 +633,54 @@ describe("sync-push integration (real Postgres)", () => {
     });
   });
 
+  describe("unlisted medicine doses", () => {
+    const unlistedDose = (overrides: Record<string, unknown> = {}) => ({
+      id: crypto.randomUUID(),
+      kind: "prn",
+      medicineName: "Paracetamol",
+      doseAmount: 1,
+      doseUnit: "tablet",
+      scheduledDate: "2024-01-15",
+      scheduledTime: "09:05",
+      status: "taken",
+      actionTimestamp: BASE_TS,
+      timezone: "UTC",
+      createdAt: BASE_TS,
+      updatedAt: BASE_TS + 1000,
+      deletedAt: null,
+      deviceId: "dev-A",
+      ...overrides,
+    });
+
+    it("accepts a named dose with no prescription", async () => {
+      const row = unlistedDose();
+      const res = await POST(
+        makePushRequest({ ops: [{ queueId: 1, tableName: "doseLogs", op: "upsert", row }] }),
+      );
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as PushResponse;
+      expect(body.accepted).toHaveLength(1);
+
+      const [stored] = await ctx.db
+        .select()
+        .from(schema.doseLogs)
+        .where(eq(schema.doseLogs.id, row.id));
+      expect(stored?.medicineName).toBe("Paracetamol");
+      expect(stored?.prescriptionId).toBeNull();
+    });
+
+    it("rejects a dose with neither a prescription nor a name", async () => {
+      const row = unlistedDose({ medicineName: null });
+      const res = await POST(
+        makePushRequest({ ops: [{ queueId: 1, tableName: "doseLogs", op: "upsert", row }] }),
+      );
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as PushResponse;
+      expect(body.rejected).toHaveLength(1);
+      expect(await ctx.db.select().from(schema.doseLogs)).toHaveLength(0);
+    });
+  });
+
   describe("array column handling", () => {
     it("stores and retrieves text[] arrays on prescriptions", async () => {
       const rxId = crypto.randomUUID();

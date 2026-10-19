@@ -17,6 +17,7 @@ import { standardDrinksFromAbv } from "@intake/core/alcohol";
 import {
   VOICE_ITEM_COLOR,
   VOICE_ITEM_LABEL,
+  isMedicationItem,
   type VoiceParsedItem,
 } from "@/lib/voice-types";
 import { useOptionalTrackerEnabled } from "@/lib/optional-trackers";
@@ -52,7 +53,17 @@ interface ParsedItemRowProps {
   onRefresh?: () => void;
   /** A refresh is in flight — the button spins. */
   refreshing?: boolean;
+  /**
+   * For a medication item: what saving it would do, or why it cannot be
+   * saved. Undefined while the medication list loads.
+   */
+  medication?: MedicationRowState;
+  /** Names on the medication list, suggested in the medicine field. */
+  medicineNames?: string[];
 }
+
+/** What a medication row shows: the planned changes, or the problem. */
+export type MedicationRowState = { ok: true; lines: string[] } | { ok: false; problem: string };
 
 type ColorClass = { bar: string; ring: string; chip: string };
 
@@ -99,6 +110,7 @@ const COLOR_CLASS: Record<string, ColorClass> = {
     ring: "ring-defecation/30",
     chip: "bg-defecation text-defecation-foreground",
   },
+  meds: { bar: "bg-meds", ring: "ring-meds/30", chip: "bg-meds text-meds-foreground" },
 };
 
 /**
@@ -115,6 +127,7 @@ const ROW_DOMAIN: Record<string, Domain> = {
   alcohol: "alcohol",
   urination: "bath",
   defecation: "bath",
+  meds: "meds",
 };
 
 function numberOrZero(v: string): number {
@@ -219,10 +232,13 @@ function ItemEditor({
   item,
   onChange,
   disabled,
+  medicineListId,
 }: {
   item: VoiceParsedItem;
   onChange: (next: VoiceParsedItem) => void;
   disabled?: boolean;
+  /** Id of the datalist of medicine names, for the medicine field. */
+  medicineListId?: string;
 }) {
   // Optional tracker visibility — gates the food editor's sugar/potassium
   // fields so disabled trackers don't show up even if the AI returned a
@@ -515,6 +531,131 @@ function ItemEditor({
         </Field>
       );
 
+    case "scheduled_dose":
+      return (
+        <div className="grid grid-cols-2 gap-2">
+          <Field label="Dose time">
+            <Input
+              type="time"
+              aria-label="Dose time"
+              disabled={disabled}
+              value={item.slotTime ?? ""}
+              onChange={(e) => onChange(setOptionalEnum(item, "slotTime", e.target.value))}
+            />
+          </Field>
+          <Field label="Done">
+            <Select
+              disabled={disabled ?? false}
+              value={item.action}
+              onValueChange={(v) =>
+                onChange({ ...item, action: v as "taken" | "skipped" | "not_taken" })
+              }
+            >
+              <SelectTrigger className="h-9" aria-label="Done">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="taken">Taken</SelectItem>
+                <SelectItem value="skipped">Skipped</SelectItem>
+                <SelectItem value="not_taken">Not taken (undo)</SelectItem>
+              </SelectContent>
+            </Select>
+          </Field>
+          <div className="col-span-2">
+            <Field label="Medicine (blank = all at this time)">
+              <Input
+                aria-label="Medicine"
+                list={medicineListId}
+                disabled={disabled}
+                value={item.medicine ?? ""}
+                placeholder="All"
+                onChange={(e) => onChange(setOptionalEnum(item, "medicine", e.target.value))}
+              />
+            </Field>
+          </div>
+        </div>
+      );
+
+    case "stock_refill":
+      return (
+        <div className="grid grid-cols-2 gap-2">
+          <Field label="Medicine">
+            <Input
+              aria-label="Medicine"
+              list={medicineListId}
+              disabled={disabled}
+              value={item.medicine}
+              onChange={(e) => onChange({ ...item, medicine: e.target.value })}
+            />
+          </Field>
+          <Field label="Pills added">
+            <Input
+              type="number"
+              inputMode="numeric"
+              aria-label="Pills added"
+              disabled={disabled}
+              value={item.pills}
+              onChange={(e) => onChange({ ...item, pills: numberOrZero(e.target.value) })}
+            />
+          </Field>
+        </div>
+      );
+
+    case "extra_medicine":
+      return (
+        <div className="grid grid-cols-2 gap-2">
+          <div className="col-span-2">
+            <Field label="Medicine">
+              <Input
+                aria-label="Medicine"
+                list={medicineListId}
+                disabled={disabled}
+                value={item.medicine}
+                onChange={(e) => onChange({ ...item, medicine: e.target.value })}
+              />
+            </Field>
+          </div>
+          <Field label="Amount">
+            <Input
+              type="number"
+              inputMode="decimal"
+              aria-label="Amount"
+              disabled={disabled}
+              value={item.amount ?? ""}
+              placeholder="—"
+              onChange={(e) => onChange(setOptionalNumber(item, "amount", e.target.value))}
+            />
+          </Field>
+          <Field label="Unit">
+            <Select
+              disabled={disabled ?? false}
+              value={item.unit ?? AMOUNT_NONE}
+              onValueChange={(v) =>
+                onChange(
+                  setOptionalEnum<typeof item, "unit", NonNullable<typeof item.unit>>(
+                    item,
+                    "unit",
+                    v === AMOUNT_NONE ? "" : v,
+                  ),
+                )
+              }
+            >
+              <SelectTrigger className="h-9" aria-label="Unit">
+                <SelectValue placeholder="—" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={AMOUNT_NONE}>—</SelectItem>
+                {(["tablet", "capsule", "mg", "mcg", "g", "ml"] as const).map((u) => (
+                  <SelectItem key={u} value={u}>
+                    {u}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+        </div>
+      );
+
     case "defecation":
       return (
         <Field label="Amount">
@@ -644,6 +785,8 @@ export function ParsedItemRow({
   notes,
   onRefresh,
   refreshing,
+  medication,
+  medicineNames,
 }: ParsedItemRowProps) {
   const token = VOICE_ITEM_COLOR[item.kind];
   const c: ColorClass =
@@ -651,7 +794,18 @@ export function ParsedItemRow({
   const label = VOICE_ITEM_LABEL[item.kind];
   // Only a pending row is validated: an approved row is locked, and approval
   // is what the check gates.
-  const invalid = approved === null ? validateVoiceItem(item) : null;
+  // A medication row also needs a plan: until the list loads, or when it
+  // names nothing on the list or would change nothing, it cannot be approved.
+  const isMedication = isMedicationItem(item);
+  const medicationProblem = !isMedication
+    ? null
+    : medication === undefined
+      ? "Loading your medications…"
+      : medication.ok
+        ? null
+        : medication.problem;
+  const invalid = approved === null ? (validateVoiceItem(item) ?? medicationProblem) : null;
+  const medicineListId = isMedication && medicineNames?.length ? `voice-medicines-${index}` : undefined;
 
   return (
     <div
@@ -687,7 +841,25 @@ export function ParsedItemRow({
             item={item}
             onChange={onChange}
             disabled={disabled || approved !== null}
+            {...(medicineListId && { medicineListId })}
           />
+          {medicineListId && (
+            <datalist id={medicineListId}>
+              {medicineNames!.map((name) => (
+                <option key={name} value={name} />
+              ))}
+            </datalist>
+          )}
+          {medication?.ok && (
+            <ul className="space-y-0.5 text-xs" data-testid={`voice-item-${index}-plan`}>
+              {medication.lines.map((line) => (
+                <li key={line} className="flex items-start gap-1.5">
+                  <Check className="mt-px h-3 w-3 shrink-0 text-meds" />
+                  <span>{line}</span>
+                </li>
+              ))}
+            </ul>
+          )}
           <TimeField
             item={item}
             index={index}

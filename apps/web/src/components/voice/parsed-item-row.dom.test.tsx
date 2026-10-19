@@ -338,3 +338,117 @@ describe("ParsedItemRow", () => {
     expect(screen.queryByRole("button", { name: /Refresh/ })).not.toBeInTheDocument();
   });
 });
+
+describe("ParsedItemRow — medication items", () => {
+  const dose = { kind: "scheduled_dose", slotTime: "08:30", action: "taken" } as const;
+  const noop = () => {};
+
+  it("cannot be approved while the medication list loads", () => {
+    render(
+      <ParsedItemRow item={dose} index={0} onChange={noop} onApprove={noop} onReject={noop} approved={null} />,
+    );
+    expect(screen.getByRole("alert")).toHaveTextContent("Loading your medications…");
+    expect(screen.getByRole("button", { name: "Approve Doses" })).toBeDisabled();
+  });
+
+  it("shows what saving will do and suggests the names on the list", () => {
+    const { container } = render(
+      <ParsedItemRow
+        item={dose}
+        index={0}
+        onChange={noop}
+        onApprove={noop}
+        onReject={noop}
+        approved={null}
+        medication={{ ok: true, lines: ["Furosemide 40 mg: mark taken at 09:10"] }}
+        medicineNames={["Furosemide", "Lasix"]}
+      />,
+    );
+    expect(screen.getByTestId("voice-item-0-plan")).toHaveTextContent(
+      "Furosemide 40 mg: mark taken at 09:10",
+    );
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Approve Doses" })).toBeEnabled();
+
+    const medicine = screen.getByLabelText("Medicine");
+    expect(medicine).toHaveAttribute("list", "voice-medicines-0");
+    const options = [...container.querySelectorAll("#voice-medicines-0 option")].map((o) =>
+      o.getAttribute("value"),
+    );
+    expect(options).toEqual(["Furosemide", "Lasix"]);
+  });
+
+  it("shows the problem and blocks approval when the plan cannot be saved", () => {
+    render(
+      <ParsedItemRow
+        item={{ kind: "stock_refill", medicine: "Atorvastatin", pills: 30 }}
+        index={0}
+        onChange={noop}
+        onApprove={noop}
+        onReject={noop}
+        approved={null}
+        medication={{ ok: false, problem: '"Atorvastatin" is not on your medication list.' }}
+      />,
+    );
+    expect(screen.getByRole("alert")).toHaveTextContent('"Atorvastatin" is not on your medication list.');
+    expect(screen.queryByTestId("voice-item-0-plan")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Approve Refill" })).toBeDisabled();
+  });
+
+  it("edits a dose's time and medicine, and blank means all at that time", () => {
+    const onChange = vi.fn();
+    render(
+      <ParsedItemRow
+        item={{ ...dose, medicine: "Lasix" }}
+        index={0}
+        onChange={onChange}
+        onApprove={noop}
+        onReject={noop}
+        approved={null}
+        medication={{ ok: true, lines: [] }}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText("Dose time"), { target: { value: "20:00" } });
+    expect(onChange).toHaveBeenLastCalledWith({ ...dose, medicine: "Lasix", slotTime: "20:00" });
+
+    fireEvent.change(screen.getByLabelText("Medicine"), { target: { value: "" } });
+    expect(onChange).toHaveBeenLastCalledWith(dose);
+  });
+
+  it("edits a refill's pill count", () => {
+    const onChange = vi.fn();
+    render(
+      <ParsedItemRow
+        item={{ kind: "stock_refill", medicine: "Vymada", pills: 100 }}
+        index={0}
+        onChange={onChange}
+        onApprove={noop}
+        onReject={noop}
+        approved={null}
+        medication={{ ok: true, lines: [] }}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText("Pills added"), { target: { value: "60" } });
+    expect(onChange).toHaveBeenLastCalledWith({ kind: "stock_refill", medicine: "Vymada", pills: 60 });
+  });
+
+  it("edits an unlisted medicine's amount, and a blank amount leaves it out", () => {
+    const onChange = vi.fn();
+    const item = { kind: "extra_medicine", medicine: "Paracetamol", amount: 1, unit: "tablet" } as const;
+    render(
+      <ParsedItemRow
+        item={item}
+        index={0}
+        onChange={onChange}
+        onApprove={noop}
+        onReject={noop}
+        approved={null}
+        medication={{ ok: true, lines: [] }}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText("Amount"), { target: { value: "2" } });
+    expect(onChange).toHaveBeenLastCalledWith({ ...item, amount: 2 });
+    fireEvent.change(screen.getByLabelText("Amount"), { target: { value: "" } });
+    expect(onChange).toHaveBeenLastCalledWith({ kind: "extra_medicine", medicine: "Paracetamol", unit: "tablet" });
+  });
+});

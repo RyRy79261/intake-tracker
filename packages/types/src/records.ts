@@ -421,7 +421,13 @@ export interface DailyNote {
 
 export interface DoseLog {
   id: string;
-  prescriptionId: string;
+  /**
+   * Absent only for an unlisted medicine: a PRN dose of something with no
+   * prescription (a paracetamol), named by `medicineName`.
+   */
+  prescriptionId?: string;
+  /** Name of an unlisted medicine. Set only when `prescriptionId` is absent. */
+  medicineName?: string;
   /** Absent for PRN doses (kind='prn'), which have no phase/schedule. */
   phaseId?: string;
   scheduleId?: string;

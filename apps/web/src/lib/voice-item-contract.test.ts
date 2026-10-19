@@ -30,7 +30,8 @@ function itemAt(kind: VoiceItemKind, pick: (f: NumberFieldSpec) => number): Reco
   for (const [name, field] of fields(kind)) {
     if (field.type === "number") item[name] = pick(field);
     else if (field.type === "choice") item[name] = field.values[0];
-    else item[name] = "x".repeat(field.maxLength);
+    // A text with a shape (a dose time) gets the latest value it allows.
+    else item[name] = field.pattern ? "23:59" : "x".repeat(field.maxLength);
   }
   return item;
 }
@@ -106,6 +107,9 @@ describe("voice item contract: tool schema", () => {
           "alcohol",
           "urination",
           "defecation",
+          "scheduled_dose",
+          "stock_refill",
+          "extra_medicine",
         ],
       },
       systolic: { type: "number" },
@@ -126,6 +130,12 @@ describe("voice item contract: tool schema", () => {
       volumeMl: { type: "number" },
       amountEstimate: { type: "string", enum: ["small", "medium", "large"] },
       note: { type: "string" },
+      slotTime: { type: "string" },
+      medicine: { type: "string" },
+      action: { type: "string", enum: ["taken", "skipped", "not_taken"] },
+      pills: { type: "number" },
+      amount: { type: "number" },
+      unit: { type: "string", enum: ["mg", "mcg", "g", "ml", "tablet", "capsule"] },
     });
   });
 

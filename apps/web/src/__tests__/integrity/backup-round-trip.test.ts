@@ -187,4 +187,30 @@ describe("backup round-trip: deep field equality", () => {
       ].join("\n")).toBe(JSON.stringify(original));
     }
   });
+  it("a dose of a medicine not on the list survives with its name and no prescription", async () => {
+    // A voice-logged paracetamol: PRN, a name, no prescription, phase or schedule.
+    const unlisted = makeDoseLog("", "", "", {
+      kind: "prn",
+      medicineName: "Paracetamol",
+      status: "taken",
+      actionTimestamp: 1_700_000_000_000,
+      doseAmount: 1,
+      doseUnit: "tablet",
+    });
+    delete unlisted.prescriptionId;
+    delete unlisted.phaseId;
+    delete unlisted.scheduleId;
+    await db.doseLogs.add(unlisted);
+
+    const blob = await exportBackup();
+    await db.doseLogs.clear();
+    await db.auditLogs.clear();
+    const importResult = await importBackup(backupDataToFile(await blobToBackupData(blob)), "replace");
+    expect(importResult.success).toBe(true);
+
+    const restored = await db.doseLogs.get(unlisted.id);
+    expect(restored?.medicineName).toBe("Paracetamol");
+    expect(restored?.prescriptionId).toBeUndefined();
+    expect(JSON.stringify(restored)).toBe(JSON.stringify(unlisted));
+  });
 });

@@ -184,3 +184,63 @@ describe("dose_logs PRN schema (migration 0019, real Postgres)", () => {
     );
   });
 });
+
+describe("dose_logs unlisted medicine (migration 0027, real Postgres)", () => {
+  const unlisted = () => ({
+    ...doseBase(),
+    kind: "prn",
+    prescriptionId: null,
+    phaseId: null,
+    scheduleId: null,
+  });
+
+  it("accepts a PRN dose with a name and no prescription", async () => {
+    await ctx.db.insert(schema.doseLogs).values({
+      ...unlisted(),
+      id: "dose-unlisted",
+      medicineName: "Paracetamol",
+      doseAmount: 1,
+      doseUnit: "tablet",
+    });
+
+    const [row] = await ctx.db
+      .select()
+      .from(schema.doseLogs)
+      .where(eq(schema.doseLogs.id, "dose-unlisted"));
+    expect(row?.prescriptionId).toBeNull();
+    expect(row?.medicineName).toBe("Paracetamol");
+  });
+
+  it("rejects a dose with neither a prescription nor a name (medicine_check)", async () => {
+    await expectConstraintViolation(
+      () => ctx.db.insert(schema.doseLogs).values({ ...unlisted(), id: "dose-nameless" }),
+      "dose_logs_medicine_check",
+    );
+  });
+
+  it("rejects a blank name with no prescription (medicine_check)", async () => {
+    await expectConstraintViolation(
+      () =>
+        ctx.db
+          .insert(schema.doseLogs)
+          .values({ ...unlisted(), id: "dose-blank-name", medicineName: "   " }),
+      "dose_logs_medicine_check",
+    );
+  });
+
+  it("rejects a scheduled dose with a name but no prescription (medicine_check)", async () => {
+    await expectConstraintViolation(
+      () =>
+        ctx.db.insert(schema.doseLogs).values({
+          ...doseBase(),
+          id: "dose-scheduled-unlisted",
+          kind: "scheduled",
+          prescriptionId: null,
+          phaseId: "phase-1",
+          scheduleId: "sched-1",
+          medicineName: "Paracetamol",
+        }),
+      "dose_logs_medicine_check",
+    );
+  });
+});

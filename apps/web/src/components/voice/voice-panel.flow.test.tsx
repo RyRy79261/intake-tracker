@@ -47,6 +47,13 @@ vi.mock("@/components/voice/voice-recorder", () => ({
 
 import { VoicePanel } from "@/components/voice/voice-panel";
 import { renderWithFixtures } from "@/__tests__/react-test-utils";
+import {
+  makeInventoryItem,
+  makeInventoryTransaction,
+  makeMedicationPhase,
+  makePhaseSchedule,
+  makePrescription,
+} from "@/__tests__/fixtures/db-fixtures";
 
 /** Items the mocked parse route returns for the next request. */
 let parsedItems: VoiceParsedItem[] = [];
@@ -499,7 +506,8 @@ describe("VoicePanel commit — timing", () => {
       await user.click(screen.getByRole("button", { name: "mock-record" }));
       await screen.findByText(/Items \(/);
 
-      // The request carried the device's clock, and nothing else new.
+      // The request carried the device's clock and the (empty) medication
+      // list, and nothing else new.
       const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
       expect(lastParseRequest).toEqual({
         transcript: "dictated transcript",
@@ -508,6 +516,7 @@ describe("VoicePanel commit — timing", () => {
           timeZone: tz,
           utcOffsetMinutes: -NOW.getTimezoneOffset() + 0, // + 0 turns -0 into 0 (UTC)
         },
+        medications: [],
       });
 
       // Each row shows its parsed time before anything is saved.
@@ -757,5 +766,75 @@ describe("VoicePanel row refresh", () => {
       expect(within(row).getByDisplayValue("130")).toBeInTheDocument();
     });
     expect(screen.getByRole("button", { name: /^Save/ })).toBeEnabled();
+  });
+});
+
+describe("VoicePanel — medications", () => {
+  // 2026-10-19 14:00 on the device's clock; Furosemide is due at 08:30.
+  const NOW = new Date(2026, 9, 19, 14, 0);
+  const TZ = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+  beforeEach(async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(NOW);
+    const before = new Date(2026, 8, 1).getTime();
+    const rx = makePrescription({ genericName: "Furosemide", createdAt: before });
+    const phase = makeMedicationPhase(rx.id, { startDate: before });
+    const schedule = makePhaseSchedule(phase.id, {
+      time: "08:30",
+      anchorTimezone: TZ,
+      dosage: 40,
+      createdAt: before,
+    });
+    const inv = makeInventoryItem(rx.id, { brandName: "Lasix", strength: 40, currentStock: 30 });
+    await db.prescriptions.add(rx);
+    await db.medicationPhases.add(phase);
+    await db.phaseSchedules.add(schedule);
+    await db.inventoryItems.add(inv);
+    await db.inventoryTransactions.add(makeInventoryTransaction(inv.id, { amount: 30 }));
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("sends the list, saves what it can and leaves a refused row unapproved", async () => {
+    parsedItems = [
+      { kind: "scheduled_dose", slotTime: "08:30", action: "taken" },
+      { kind: "stock_refill", medicine: "Atorvastatin", pills: 30 },
+      { kind: "stock_refill", medicine: "Lasix", pills: 60 },
+      { kind: "extra_medicine", medicine: "Paracetamol", amount: 1, unit: "tablet" },
+    ];
+    const user = userEvent.setup();
+    await renderWithFixtures(<VoicePanel />);
+    await user.click(screen.getByRole("button", { name: "mock-record" }));
+    await screen.findByText(/Items \(/);
+
+    expect((lastParseRequest as { medications: unknown }).medications).toEqual([
+      { name: "Furosemide", brands: ["Lasix"], doseTimes: ["08:30"] },
+    ]);
+    // Wait for the plans: until the list loads, no medication row can be approved.
+    expect(await screen.findByTestId("voice-item-0-plan")).toHaveTextContent(
+      "Furosemide 40 mg: mark taken",
+    );
+    expect(within(screen.getByTestId("voice-item-1")).getByRole("alert")).toHaveTextContent(
+      '"Atorvastatin" is not on your medication list.',
+    );
+
+    await user.click(screen.getByRole("button", { name: /Approve all/i }));
+    expect(screen.getByText(/Items \(3 approved · 1 pending\)/)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /^Save/ }));
+
+    await waitFor(async () => {
+      expect(await db.doseLogs.count()).toBe(2);
+    });
+    const logs = await db.doseLogs.toArray();
+    expect(logs.find((l) => l.kind !== "prn")).toMatchObject({ status: "taken", scheduledTime: "08:30" });
+    expect(logs.find((l) => l.kind === "prn")).toMatchObject({ medicineName: "Paracetamol", doseUnit: "tablet" });
+    // 30 − 1 pill for the dose + 60 refilled. Nothing was added for Atorvastatin.
+    await waitFor(async () => {
+      expect((await db.inventoryItems.toArray())[0]?.currentStock).toBe(89);
+    });
+    expect(await db.prescriptions.count()).toBe(1);
+    expect(await db.inventoryItems.count()).toBe(1);
   });
 });

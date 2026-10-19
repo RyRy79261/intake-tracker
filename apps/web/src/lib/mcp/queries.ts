@@ -758,7 +758,11 @@ export async function listRecentDoses(
       doseMg: doseLogs.doseMg,
       scheduleDosage: phaseSchedules.dosage,
       scheduleUnit: phaseSchedules.unit,
-      genericName: prescriptions.genericName,
+      // An unlisted medicine (no prescription) carries its own name.
+      genericName: sql<
+        string | null
+      >`COALESCE(${prescriptions.genericName}, ${doseLogs.medicineName})`,
+      unlisted: sql<boolean>`${doseLogs.prescriptionId} IS NULL`,
       // Three-state: null = prescription hard-deleted (no matching row),
       // true = soft-deleted (archived), false = live. A bare
       // `deletedAt IS NOT NULL` would wrongly report a hard-gone (unmatched

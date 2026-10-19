@@ -489,6 +489,35 @@ describe("MCP query fns — listRecentDoses name resolution (real Postgres)", ()
     expect(doses[0]?.archived).toBeNull();
   });
 
+  it("names an unlisted medicine's dose by its own name", async () => {
+    await ctx.db.insert(schema.doseLogs).values(
+      doseLogFixture(
+        ctx.testUserId,
+        { prescriptionId: "", phaseId: "", scheduleId: "" },
+        {
+          kind: "prn",
+          prescriptionId: null,
+          phaseId: null,
+          scheduleId: null,
+          medicineName: "Paracetamol",
+          doseAmount: 1,
+          doseUnit: "tablet",
+        },
+      ),
+    );
+
+    const { doses } = await queries.listRecentDoses(ctx.testUserId, 50);
+
+    expect(doses).toHaveLength(1);
+    expect(doses[0]).toMatchObject({
+      genericName: "Paracetamol",
+      unlisted: true,
+      archived: null,
+      doseAmount: 1,
+      doseUnit: "tablet",
+    });
+  });
+
   it("excludes tombstoned dose logs", async () => {
     const refs = await seedMedChain(ctx.testUserId);
     await ctx.db.insert(schema.doseLogs).values([
