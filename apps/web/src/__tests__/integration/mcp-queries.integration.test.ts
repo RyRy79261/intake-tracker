@@ -1251,3 +1251,49 @@ describe("MCP query fns — dose status matches the app (real Postgres)", () => 
     ]);
   });
 });
+
+// PR 2b: an "Apply from" schedule edit. The old row is closed at the change
+// day (effective_to) and the new row starts there (effective_from); the MCP
+// reports the regimen of the day asked about.
+describe("MCP query fns — Apply from schedule edit (real Postgres)", () => {
+  const noonBerlin = (day: number) => Date.UTC(2026, 9, day, 10, 0);
+
+  async function seedChange() {
+    const presc = prescriptionFixture(ctx.testUserId, { genericName: "Bisoprolol", createdAt: 0 });
+    await ctx.db.insert(schema.prescriptions).values(presc);
+    const phase = medicationPhaseFixture(ctx.testUserId, presc.id);
+    await ctx.db.insert(schema.medicationPhases).values(phase);
+    await ctx.db.insert(schema.phaseSchedules).values([
+      phaseScheduleFixture(ctx.testUserId, phase.id, {
+        time: "08:30",
+        dosage: 5,
+        effectiveTo: "2026-10-22",
+      }),
+      phaseScheduleFixture(ctx.testUserId, phase.id, {
+        time: "09:00",
+        dosage: 10,
+        effectiveFrom: "2026-10-22",
+      }),
+    ]);
+  }
+
+  it("today's slots use the old row before the change day and the new row from it", async () => {
+    await seedChange();
+    const slotsOn = async (day: number) =>
+      (
+        await queries.getTodaySummary(ctx.testUserId, { timezone: "Europe/Berlin", now: noonBerlin(day) })
+      ).doses.slots.map((sl) => `${sl.time} ${sl.dosage}`);
+    expect(await slotsOn(21)).toEqual(["08:30 5"]);
+    expect(await slotsOn(22)).toEqual(["09:00 10"]);
+  });
+
+  it("listMedications lists the rows in effect today", async () => {
+    await seedChange();
+    const timesOn = async (day: number) =>
+      (
+        await queries.listMedications(ctx.testUserId, { timezone: "Europe/Berlin", now: noonBerlin(day) })
+      ).medications[0]?.phase?.schedules.map((s) => s.time);
+    expect(await timesOn(21)).toEqual(["08:30"]);
+    expect(await timesOn(23)).toEqual(["09:00"]);
+  });
+});

@@ -527,6 +527,10 @@ export const phaseSchedules = pgTable(
     daysOfWeek: integer("days_of_week").array().notNull(),
     enabled: boolean("enabled").notNull(),
     unit: text("unit"),
+    // "Apply from" window: device-local date keys ("YYYY-MM-DD"), from
+    // inclusive, to exclusive. Null on rows dated by createdAt/deletedAt.
+    effectiveFrom: text("effective_from"),
+    effectiveTo: text("effective_to"),
     // NOTE: no `timezone` column — PhaseSchedule omits it; anchorTimezone covers it.
     createdAt: bigint("created_at", { mode: "number" }).notNull(),
     updatedAt: bigint("updated_at", { mode: "number" }).notNull(),

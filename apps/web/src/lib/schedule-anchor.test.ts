@@ -202,7 +202,13 @@ describe("edited schedule times anchor to the home timezone", () => {
       id: phase.id,
       schedules: [{ id: schedule.id, time: "10:00", daysOfWeek: [1], dosage: 50 }],
     });
-    expectAnchoredTo(await db.phaseSchedules.get(schedule.id), HOME);
+    // "Apply from" today: the old row closes, the new row carries the time.
+    const open = (await db.phaseSchedules.where("phaseId").equals(phase.id).toArray()).filter(
+      (s) => s.deletedAt === null && !s.effectiveTo,
+    );
+    expect(open).toHaveLength(1);
+    expectAnchoredTo(open[0], HOME);
+    expectAnchoredTo(await db.phaseSchedules.get(schedule.id), "Europe/Berlin");
   });
 
   it("updateTitrationPlan re-encodes a changed time in the home zone", async () => {

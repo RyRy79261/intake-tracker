@@ -211,6 +211,13 @@
       "when": 1792481599869,
       "tag": "0029_dose_logs_remind_at",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1792492291412,
+      "tag": "0030_phase_schedules_effective_window",
+      "breakpoints": true
     }
   ]
 }

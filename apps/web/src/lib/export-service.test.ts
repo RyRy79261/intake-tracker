@@ -567,3 +567,52 @@ describe("export: missed doses", () => {
     expect(pdf).toMatch(/Skipped: 1, missed \\?\(not logged\\?\): 2/);
   });
 });
+
+// PR 2b: an "Apply from" edit made earlier keeps the old time and dose on
+// the days before its date, also in the export.
+describe("export: Apply from schedule edit", () => {
+  it("lists the old time before the change date and the new time from it, one dose a day", async () => {
+    const { updatePhase } = await import("@/lib/phase-service");
+    // Local noon on 2026-10-19; the change is saved for the 21st.
+    const at = (day: number) => new Date(2026, 9, 19 + day, 12, 0).getTime();
+    const key = (day: number) => toLocalDateKey(at(day));
+    vi.useFakeTimers({ toFake: ["Date"], now: at(0) });
+    try {
+      const since = at(-10);
+      const rx = makePrescription({ genericName: "Bisoprolol", createdAt: since });
+      const phase = makeMedicationPhase(rx.id, { startDate: since, createdAt: since });
+      const sched = makePhaseSchedule(phase.id, {
+        time: "08:00",
+        dosage: 5,
+        anchorTimezone: getDeviceTimezone(),
+        createdAt: since,
+      });
+      await db.prescriptions.add(rx);
+      await db.medicationPhases.add(phase);
+      await db.phaseSchedules.add(sched);
+      const res = await updatePhase({
+        id: phase.id,
+        applyFrom: key(2),
+        schedules: [{ id: sched.id, time: "09:00", dosage: 10, daysOfWeek: [0, 1, 2, 3, 4, 5, 6] }],
+      });
+      expect(res.success).toBe(true);
+
+      // Four days later, export the days 0 to 3: all missed.
+      vi.setSystemTime(at(4));
+      await exportAllRecordsCSV({ start: at(0) - 12 * 60 * 60 * 1000, end: at(3) });
+      const block = (await capturedCSV()).split("\n\n").find((b) => b.startsWith("# Dose logs\n"))!;
+      const rows = block.split("\n").slice(1);
+      const rowsFor = (d: number) => rows.filter((r) => r.startsWith(`${key(d)},`));
+      for (const d of [0, 1]) {
+        expect(rowsFor(d)).toHaveLength(1);
+        expect(rowsFor(d)[0]).toContain(",08:00,Bisoprolol,missed,scheduled,,5,mg");
+      }
+      for (const d of [2, 3]) {
+        expect(rowsFor(d)).toHaveLength(1);
+        expect(rowsFor(d)[0]).toContain(",09:00,Bisoprolol,missed,scheduled,,10,mg");
+      }
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});

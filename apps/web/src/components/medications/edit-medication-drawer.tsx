@@ -10,7 +10,8 @@ import { Label } from "@intake/ui/label";
 import { Textarea } from "@intake/ui/textarea";
 import {
   usePhasesForPrescription,
-  useSchedulesForPhase,
+  useLatestSchedulesForPhase,
+  usePendingScheduleChange,
   useUpdatePrescription,
   useDeletePrescription,
   usePrescriptions,
@@ -41,7 +42,15 @@ import { DoseAmountInput, DosePreviewLine } from "@/components/medications/dose-
 import { PillIcon } from "@/components/medications/pill-icon";
 import { PILL_SHAPES, PRESET_COLORS } from "@/components/medications/add-medication-steps/types";
 import { cn } from "@/lib/utils";
-import { weekDayOrder } from "@/lib/date-utils";
+import { toLocalDateKey, weekDayOrder } from "@/lib/date-utils";
+import { formatDoseTime } from "@/lib/medication-ui-utils";
+import {
+  ApplyFromField,
+  describeScheduleChange,
+  formatChangeDay,
+  isApplyFromValid,
+} from "@/components/medications/apply-from-field";
+import { useToast } from "@intake/ui/use-toast";
 import { useSettingsStore } from "@/stores/settings-store";
 
 const SELECT_CLASS =
@@ -139,7 +148,10 @@ function ScheduleTab({ prescription }: { prescription: Prescription }) {
   const phases = usePhasesForPrescription(prescription.id);
   const maintenancePhase = getMaintenancePhase(phases);
   const activeTitration = getActiveTitrationPhase(phases);
-  const dbSchedules = useSchedulesForPhase(maintenancePhase?.id);
+  // The newest regimen, also a change that starts later: edits build on it.
+  const dbSchedules = useLatestSchedulesForPhase(maintenancePhase?.id);
+  const pendingChange = usePendingScheduleChange(maintenancePhase?.id);
+  const { toast } = useToast();
   const weekStartsOn = useSettingsStore((s) => s.weekStartsOn);
   const updatePhase = useUpdatePhase();
   const startNewPhase = useStartNewPhase();
@@ -152,6 +164,9 @@ function ScheduleTab({ prescription }: { prescription: Prescription }) {
   const [foodInstruction, setFoodInstruction] = useState<FoodInstruction>("none");
   const [rows, setRows] = useState<SchedRow[]>([]);
   const [dirty, setDirty] = useState(false);
+  const todayKey = toLocalDateKey();
+  // "Apply from": days before it keep the old time, dose and weekdays.
+  const [applyFrom, setApplyFrom] = useState(todayKey);
 
   // Hydrate from the DB whenever the maintenance phase or its schedules change,
   // unless the user has unsaved edits in progress.
@@ -226,22 +241,41 @@ function ScheduleTab({ prescription }: { prescription: Prescription }) {
   const allRowsValid = rows.length > 0 && rows.every(isRowValid);
   const unitMismatch = !!activeBrand && !unitsMatch(unit, activeBrand.unit);
   const isSaving = updatePhase.isPending || startNewPhase.isPending;
-  const canSave = dirty && allRowsValid && !unitMismatch && !isSaving;
+  const applyFromValid = !maintenancePhase || isApplyFromValid(applyFrom, todayKey);
+  const canSave = dirty && allRowsValid && !unitMismatch && applyFromValid && !isSaving;
 
   const handleSave = async () => {
-    if (!allRowsValid || unitMismatch) return;
+    if (!allRowsValid || unitMismatch || !applyFromValid) return;
     if (maintenancePhase) {
-      await updatePhase.mutateAsync({
-        id: maintenancePhase.id,
-        unit,
-        foodInstruction,
-        schedules: validRows.map((r) => ({
-          ...(r.id ? { id: r.id } : {}),
-          time: r.time,
-          dosage: parseFloat(r.dosage),
-          daysOfWeek: r.daysOfWeek,
-        })),
-      });
+      let outcome;
+      try {
+        outcome = await updatePhase.mutateAsync({
+          id: maintenancePhase.id,
+          unit,
+          foodInstruction,
+          applyFrom,
+          schedules: validRows.map((r) => ({
+            ...(r.id ? { id: r.id } : {}),
+            time: r.time,
+            dosage: parseFloat(r.dosage),
+            daysOfWeek: r.daysOfWeek,
+          })),
+        });
+      } catch (e) {
+        toast({
+          title: "Schedule not saved",
+          description: e instanceof Error ? e.message : "Try again.",
+          variant: "destructive",
+        });
+        return;
+      }
+      if (outcome.scheduleChange) {
+        toast({
+          title: "Schedule saved",
+          description: describeScheduleChange(outcome.scheduleChange, toLocalDateKey()),
+        });
+      }
+      setApplyFrom(toLocalDateKey());
     } else {
       await startNewPhase.mutateAsync({
         prescriptionId: prescription.id,
@@ -259,7 +293,10 @@ function ScheduleTab({ prescription }: { prescription: Prescription }) {
     setDirty(false);
   };
 
-  const handleReset = () => setDirty(false);
+  const handleReset = () => {
+    setDirty(false);
+    setApplyFrom(toLocalDateKey());
+  };
 
   return (
     <div className="flex flex-col gap-4 pb-2">
@@ -277,6 +314,25 @@ function ScheduleTab({ prescription }: { prescription: Prescription }) {
         Edit the day-to-day schedule for minor tweaks. For a planned dose
         increase or decrease, create a plan in the Titrations tab instead.
       </p>
+
+      {pendingChange && (
+        <div className="border border-line bg-background p-2.5 text-[0.8125rem]" role="status">
+          <p className="font-medium">
+            A change starts {formatChangeDay(pendingChange.startsOn, todayKey)}.
+          </p>
+          {pendingChange.until.length > 0 && (
+            <p className="text-muted-foreground">
+              Until then:{" "}
+              <span className="font-mono">
+                {[...pendingChange.until]
+                  .sort((a, b) => a.time.localeCompare(b.time))
+                  .map((s) => `${formatDoseTime(s.time)} ${s.dosage} ${maintenancePhase?.unit ?? ""}`.trim())
+                  .join(", ")}
+              </span>
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Unit */}
       <div className="space-y-1.5">
@@ -385,6 +441,10 @@ function ScheduleTab({ prescription }: { prescription: Prescription }) {
           <Plus /> Add time
         </Button>
       </div>
+
+      {dirty && maintenancePhase && (
+        <ApplyFromField value={applyFrom} onChange={setApplyFrom} todayKey={todayKey} />
+      )}
 
       {dirty && (
         <div className="sticky bottom-0 flex gap-2 border-t border-line bg-panel pt-2.5">

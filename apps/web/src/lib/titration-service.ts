@@ -12,6 +12,8 @@ import { getScheduleAnchorTimezone } from "@/lib/schedule-anchor";
 import { isLive } from "@intake/core/lifecycle";
 import { toLocalDateKey } from "@/lib/date-utils";
 import { syncedWrite, type SyncedWriter } from "@/lib/synced-write";
+import { writeScheduleChange } from "@/lib/medication-schedule-service";
+import type { ChangeDayRule } from "@intake/core/schedule-window";
 
 // ---------------------------------------------------------------------------
 // Input types
@@ -354,6 +356,14 @@ export interface UpdateTitrationPlanInput {
   notes?: string;
   warnings?: string[];
   entries?: TitrationEntryInput[];
+  /**
+   * First day a running titration's new schedules apply ("YYYY-MM-DD",
+   * default today, not before today). Days before it keep the old rows. A
+   * plan that has not started is edited in place.
+   */
+  applyFrom?: string;
+  /** Test seam: the change-day rule (default DEFAULT_CHANGE_DAY_RULE). */
+  changeDayRule?: ChangeDayRule;
 }
 
 /**
@@ -382,7 +392,7 @@ export async function updateTitrationPlan(
     if (input.notes !== undefined) planUpdates.notes = input.notes;
     if (input.warnings !== undefined) planUpdates.warnings = input.warnings;
 
-    await syncedWrite(["titrationPlans", "medicationPhases", "phaseSchedules"], async (w) => {
+    await syncedWrite(["titrationPlans", "medicationPhases", "phaseSchedules", "doseLogs"], async (w) => {
       await w.patch("titrationPlans", plan.id, planUpdates);
 
       if (input.entries) {
@@ -423,7 +433,17 @@ export async function updateTitrationPlan(
             if (Object.keys(changes).length > 0) {
               await w.patch("medicationPhases", existing.id, changes);
             }
-            await reconcileSchedules(w, existing.id, entry.schedules, { tz, deviceId: sf.deviceId });
+            if (existing.status === "active") {
+              // A running titration: the change applies from a date, so the
+              // days before it keep their time and dose.
+              await writeScheduleChange(w, existing.id, entry.schedules, {
+                ...(input.applyFrom !== undefined && { applyFrom: input.applyFrom }),
+                ...(input.changeDayRule !== undefined && { rule: input.changeDayRule }),
+                ...(existing.unit && { closedUnit: existing.unit }),
+              });
+            } else {
+              await reconcileSchedules(w, existing.id, entry.schedules, { tz, deviceId: sf.deviceId });
+            }
             continue;
           }
 
@@ -467,7 +487,10 @@ export async function updateTitrationPlan(
     const updated = await db.titrationPlans.get(plan.id);
     return ok(updated!);
   } catch (e) {
-    return err("Failed to update titration plan", e);
+    return err(
+      e instanceof Error && e.message.startsWith("Pick ") ? e.message : "Failed to update titration plan",
+      e,
+    );
   }
 }
 
@@ -531,9 +554,12 @@ export async function completeTitrationPlan(
       );
 
       const sf = baseSyncFields();
+      const todayKey = toLocalDateKey(now);
       for (const titPhase of titrationPhases) {
+        // The rows in effect from today on: a row an "Apply from" edit
+        // already closed is history.
         const titSchedules = (await liveSchedulesForPhaseInsideTx(titPhase.id))
-          .filter((s) => s.enabled === true);
+          .filter((s) => s.enabled === true && (!s.effectiveTo || s.effectiveTo > todayKey));
 
         const rxPhases = await livePhasesForRxInsideTx(titPhase.prescriptionId);
         const maintenancePhase = pickMaintenancePhase(rxPhases);
@@ -554,6 +580,9 @@ export async function completeTitrationPlan(
             dosage: s.dosage,
             daysOfWeek: s.daysOfWeek,
             enabled: true,
+            // A pending "Apply from" change keeps its dates.
+            ...(s.effectiveFrom && s.effectiveFrom > todayKey && { effectiveFrom: s.effectiveFrom }),
+            ...(s.effectiveTo && { effectiveTo: s.effectiveTo }),
             createdAt: now,
             updatedAt: now,
             deletedAt: null,

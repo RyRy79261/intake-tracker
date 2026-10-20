@@ -22,7 +22,10 @@ import {
   updateSchedule,
   deleteSchedule,
   getSchedulesForPhase,
+  getLatestSchedulesForPhase,
+  getPendingScheduleChange,
 } from "@/lib/medication-schedule-service";
+export type { ScheduleChangeOutcome } from "@/lib/medication-schedule-service";
 import { startNewPhase, updatePhase, activatePhase, type CreatePhaseInput, type UpdatePhaseInput } from "@/lib/medication-service";
 import {
   getTitrationPlans,
@@ -232,11 +235,30 @@ export function useAllInventoryItems() {
   return useLiveQuery(() => getAllInventoryItems(), [], []);
 }
 
+/** The phase's schedules in effect today. */
 export function useSchedulesForPhase(phaseId: string | undefined) {
   return useLiveQuery(
     () => phaseId ? getSchedulesForPhase(phaseId) : [],
     [phaseId],
     []
+  );
+}
+
+/** The phase's newest schedules, also a change that starts later ("Apply from"). */
+export function useLatestSchedulesForPhase(phaseId: string | undefined) {
+  return useLiveQuery(
+    () => phaseId ? getLatestSchedulesForPhase(phaseId) : [],
+    [phaseId],
+    []
+  );
+}
+
+/** A saved schedule change that starts after today, if any. */
+export function usePendingScheduleChange(phaseId: string | undefined) {
+  return useLiveQuery(
+    async () => (phaseId ? (await getPendingScheduleChange(phaseId)) ?? null : null),
+    [phaseId],
+    null,
   );
 }
 

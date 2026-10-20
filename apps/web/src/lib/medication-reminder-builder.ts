@@ -11,7 +11,7 @@
  *   1. `loadReminderDoses()` reads the regimen from Dexie: live, active
  *      prescriptions, the effective phase per prescription (titration over
  *      maintenance, via `selectEffectivePhases`) and its live, enabled
- *      schedules.
+ *      schedules, each with its "Apply from" window.
  *   2. `buildReminderOccurrences()` turns those doses into absolute instants.
  *      A schedule's canonical time is its wall-clock `time` in
  *      `anchorTimezone`, so the instant is resolved per date (DST-correct) and
@@ -22,6 +22,8 @@
 import { db, readRealDatabase, type DoseLog, type InventoryItem, type MedicationPhase, type PhaseSchedule } from "@/lib/db";
 import { isLive } from "@intake/core/lifecycle";
 import { selectEffectivePhases } from "@intake/core/effective-phase";
+import { scheduleInEffectOn } from "@intake/core/schedule-window";
+import { scheduleDoseUnit } from "@/lib/medication-schedule-service";
 import { formatComboDose } from "@intake/core/compound";
 import { isActiveBrand } from "@/lib/inventory-service";
 import { effectiveRemindAt, selectSlotLog } from "@/lib/dose-log-read";
@@ -44,6 +46,9 @@ export interface ReminderDose {
   anchorTimezone: string;
   /** Weekdays in `anchorTimezone` (0 = Sunday). */
   daysOfWeek: number[];
+  /** "Apply from" window of the schedule (date keys, from inclusive, to exclusive). */
+  effectiveFrom?: string;
+  effectiveTo?: string;
 }
 
 /** A dose on a concrete date. */
@@ -191,7 +196,7 @@ function formatDosage(
   schedule: PhaseSchedule,
   brand: InventoryItem | undefined,
 ): string {
-  return formatComboDose(schedule.dosage, phase.unit ?? "mg", brand);
+  return formatComboDose(schedule.dosage, scheduleDoseUnit(schedule, phase.unit ?? "mg"), brand);
 }
 
 /**
@@ -258,6 +263,8 @@ async function readDoses(): Promise<ReminderDose[]> {
         time: schedule.time.padStart(5, "0"),
         anchorTimezone: schedule.anchorTimezone,
         daysOfWeek: schedule.daysOfWeek ?? [],
+        ...(schedule.effectiveFrom && { effectiveFrom: schedule.effectiveFrom }),
+        ...(schedule.effectiveTo && { effectiveTo: schedule.effectiveTo }),
       });
     }
   }
@@ -269,7 +276,8 @@ async function readDoses(): Promise<ReminderDose[]> {
 // ---------------------------------------------------------------------------
 
 /**
- * Every occurrence with `from <= at < from + days`, sorted by time.
+ * Every occurrence with `from <= at < from + days`, sorted by time. A dose
+ * occurs only on the dates of its "Apply from" window.
  * `deviceTz` also stands in for a schedule whose anchor zone is missing or
  * unknown to Intl.
  */
@@ -287,6 +295,9 @@ export function buildReminderOccurrences(
     let dateKey = addDays(zonedParts(opts.from, tz).dateKey, -1);
     for (let i = 0; i <= opts.days + 1; i++, dateKey = addDays(dateKey, 1)) {
       if (!dose.daysOfWeek.includes(weekdayOf(dateKey))) continue;
+      // An "Apply from" edit: the old time until the change day, the new
+      // time from it.
+      if (!scheduleInEffectOn(dose, dateKey)) continue;
       const at = zonedTimeToEpoch(dateKey, dose.time, tz);
       if (at < opts.from || at >= end) continue;
       const local = zonedParts(at, opts.deviceTz);

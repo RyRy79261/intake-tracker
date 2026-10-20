@@ -15,6 +15,7 @@ import {
   makePhaseSchedule,
 } from "@/__tests__/fixtures/db-fixtures";
 import { localHHMMStringToUTCMinutes } from "@/lib/timezone";
+import { toLocalDateKey } from "@/lib/date-utils";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -34,6 +35,15 @@ async function syncRowsFor(tableName: string, recordId: string) {
     .where("[tableName+recordId]")
     .equals([tableName, recordId])
     .toArray();
+}
+
+/** The phase's one live row that no "Apply from" edit has closed. */
+async function openRow(phaseId: string) {
+  const rows = (await db.phaseSchedules.where("phaseId").equals(phaseId).toArray()).filter(
+    (s) => s.deletedAt == null && !s.effectiveTo,
+  );
+  expect(rows).toHaveLength(1);
+  return rows[0]!;
 }
 
 function makeCreateInput(prescriptionId: string, overrides?: Partial<CreatePhaseInput>): CreatePhaseInput {
@@ -208,7 +218,7 @@ describe("startNewPhase", () => {
 // ---------------------------------------------------------------------------
 
 describe("updatePhase schedule reconciliation", () => {
-  it("partitions existing/new/removed schedules into update/add/delete", async () => {
+  it("closes changed and removed rows at today and adds the new rows from today", async () => {
     const rx = makePrescription();
     const phase = makeMedicationPhase(rx.id);
     const keep = makePhaseSchedule(phase.id, { time: "08:00", dosage: 50 });
@@ -216,50 +226,43 @@ describe("updatePhase schedule reconciliation", () => {
     await db.prescriptions.add(rx);
     await db.medicationPhases.add(phase);
     await db.phaseSchedules.bulkAdd([keep, drop]);
+    const today = toLocalDateKey();
 
     const result = await updatePhase({
       id: phase.id,
       schedules: [
-        // existing → updated (dosage change)
+        // existing → changed (dosage change)
         { id: keep.id, time: "08:00", daysOfWeek: [1, 2], dosage: 100 },
         // no id → added
         { time: "12:00", daysOfWeek: [3], dosage: 25 },
-        // `drop` omitted → deleted
+        // `drop` omitted → removed
       ],
     });
     expect(result.success).toBe(true);
+    if (result.success) expect(result.data.scheduleChange).toEqual({ applyFrom: today });
 
-    const remaining = (await db.phaseSchedules.where("phaseId").equals(phase.id).toArray())
-      .filter((s) => s.deletedAt == null);
-    const remainingIds = remaining.map((s) => s.id);
+    const rows = await db.phaseSchedules.where("phaseId").equals(phase.id).toArray();
+    // Both old rows ran before today: they stay as history, closed at today.
+    expect(rows.find((r) => r.id === keep.id)).toMatchObject({ dosage: 50, effectiveTo: today, deletedAt: null });
+    expect(rows.find((r) => r.id === drop.id)).toMatchObject({ effectiveTo: today, deletedAt: null });
 
-    // kept+updated survives with new values; dropped is tombstoned; new one added.
-    expect(remainingIds).toContain(keep.id);
-    expect(remainingIds).not.toContain(drop.id);
-    expect(remaining).toHaveLength(2);
+    const fresh = rows.filter((r) => r.id !== keep.id && r.id !== drop.id);
+    expect(fresh).toHaveLength(2);
+    expect(fresh.every((r) => r.effectiveFrom === today && !r.effectiveTo)).toBe(true);
+    expect(fresh.find((r) => r.time === "08:00")).toMatchObject({ dosage: 100, daysOfWeek: [1, 2] });
+    expect(fresh.find((r) => r.time === "12:00")).toMatchObject({ dosage: 25, daysOfWeek: [3] });
 
-    const updated = remaining.find((s) => s.id === keep.id)!;
-    expect(updated.dosage).toBe(100);
-    expect(updated.daysOfWeek).toEqual([1, 2]);
-
-    const added = remaining.find((s) => s.id !== keep.id)!;
-    expect(added.time).toBe("12:00");
-    expect(added.dosage).toBe(25);
-
-    // Sync ops: delete for the removed one, upserts for kept+added.
-    const dropSync = await syncRowsFor("phaseSchedules", drop.id);
-    expect(dropSync).toHaveLength(1);
-    expect(dropSync[0]!.op).toBe("delete");
-    const keepSync = await syncRowsFor("phaseSchedules", keep.id);
-    expect(keepSync[0]!.op).toBe("upsert");
-    const addSync = await syncRowsFor("phaseSchedules", added.id);
-    expect(addSync[0]!.op).toBe("upsert");
+    // Every write is queued for sync as an upsert.
+    for (const r of rows) {
+      expect((await syncRowsFor("phaseSchedules", r.id))[0]!.op).toBe("upsert");
+    }
   });
 
-  it("soft-deletes and disables removed schedules so the tombstone can sync", async () => {
+  it("soft-deletes and disables a removed row that never applied, so the tombstone can sync", async () => {
     const rx = makePrescription();
     const phase = makeMedicationPhase(rx.id);
-    const drop = makePhaseSchedule(phase.id);
+    // Added today: it has no days before today to keep.
+    const drop = makePhaseSchedule(phase.id, { createdAt: Date.now() - 1000 });
     await db.prescriptions.add(rx);
     await db.medicationPhases.add(phase);
     await db.phaseSchedules.add(drop);
@@ -272,6 +275,42 @@ describe("updatePhase schedule reconciliation", () => {
     expect(row!.enabled).toBe(false);
     expect(row!.updatedAt).toBeGreaterThan(drop.updatedAt);
     expect((await syncRowsFor("phaseSchedules", drop.id))[0]!.op).toBe("delete");
+  });
+
+  it("edits a pending phase's rows in place", async () => {
+    const rx = makePrescription();
+    const phase = makeMedicationPhase(rx.id, { status: "pending" });
+    const row = makePhaseSchedule(phase.id, { time: "08:00", dosage: 50 });
+    await db.prescriptions.add(rx);
+    await db.medicationPhases.add(phase);
+    await db.phaseSchedules.add(row);
+
+    await updatePhase({
+      id: phase.id,
+      schedules: [{ id: row.id, time: "08:00", daysOfWeek: [1], dosage: 75 }],
+    });
+
+    const rows = await db.phaseSchedules.where("phaseId").equals(phase.id).toArray();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ id: row.id, dosage: 75 });
+    expect(rows[0]!.effectiveTo).toBeUndefined();
+  });
+
+  it("refuses an \"Apply from\" date before today", async () => {
+    const rx = makePrescription();
+    const phase = makeMedicationPhase(rx.id);
+    const row = makePhaseSchedule(phase.id);
+    await db.prescriptions.add(rx);
+    await db.medicationPhases.add(phase);
+    await db.phaseSchedules.add(row);
+
+    const result = await updatePhase({
+      id: phase.id,
+      applyFrom: "2020-01-01",
+      schedules: [{ id: row.id, time: "09:00", daysOfWeek: [1], dosage: 50 }],
+    });
+    expect(result).toMatchObject({ success: false, error: "Pick today or a later date." });
+    expect(await db.phaseSchedules.where("phaseId").equals(phase.id).toArray()).toEqual([row]);
   });
 
   it("ignores already-deleted schedules when reconciling", async () => {
@@ -398,10 +437,11 @@ describe("updatePhase keeps each schedule's anchorTimezone", () => {
       schedules: [{ id: schedule.id, time: "08:00", daysOfWeek: [1], dosage: 75 }],
     });
 
-    const updated = await db.phaseSchedules.get(schedule.id);
-    expect(updated!.anchorTimezone).toBe("Europe/Berlin");
-    expect(updated!.scheduleTimeUTC).toBe(999);
-    expect(updated!.dosage).toBe(75);
+    // The new row (from today) continues the old one's anchor and cache.
+    const updated = await openRow(phase.id);
+    expect(updated.anchorTimezone).toBe("Europe/Berlin");
+    expect(updated.scheduleTimeUTC).toBe(999);
+    expect(updated.dosage).toBe(75);
   });
 
   it("encodes a changed time in the schedule's own anchor, not the device zone", async () => {
@@ -412,9 +452,11 @@ describe("updatePhase keeps each schedule's anchorTimezone", () => {
       schedules: [{ id: schedule.id, time: "09:00", daysOfWeek: [1], dosage: 50 }],
     });
 
-    const updated = await db.phaseSchedules.get(schedule.id);
-    expect(updated!.time).toBe("09:00");
-    expect(updated!.anchorTimezone).toBe("Europe/Berlin");
-    expect(updated!.scheduleTimeUTC).toBe(localHHMMStringToUTCMinutes("09:00", "Europe/Berlin"));
+    const updated = await openRow(phase.id);
+    expect(updated.time).toBe("09:00");
+    expect(updated.anchorTimezone).toBe("Europe/Berlin");
+    expect(updated.scheduleTimeUTC).toBe(localHHMMStringToUTCMinutes("09:00", "Europe/Berlin"));
+    // The old row keeps its time for the days before today.
+    expect((await db.phaseSchedules.get(schedule.id))!.time).toBe("08:00");
   });
 });

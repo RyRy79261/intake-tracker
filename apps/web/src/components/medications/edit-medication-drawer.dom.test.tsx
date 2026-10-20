@@ -283,8 +283,10 @@ describe("PrescriptionViewDrawer", () => {
 
     await vi.waitFor(async () => {
       expect((await db.medicationPhases.get(phase.id))?.unit).toBe("mcg");
+      // The open row: the old one is closed at today and keeps 0.1 mg.
       const rows = await db.phaseSchedules.where("phaseId").equals(phase.id).toArray();
-      expect(rows.map((r) => r.dosage)).toEqual([200]);
+      expect(rows.filter((r) => !r.effectiveTo).map((r) => r.dosage)).toEqual([200]);
+      expect(rows.find((r) => r.effectiveTo)).toMatchObject({ dosage: 0.1, unit: "mg" });
     });
   });
 
@@ -325,7 +327,7 @@ describe("PrescriptionViewDrawer", () => {
 
     await vi.waitFor(async () => {
       const rows = await db.phaseSchedules.where("phaseId").equals(phase.id).toArray();
-      expect(rows.map((r) => r.dosage)).toEqual([150]);
+      expect(rows.filter((r) => !r.effectiveTo).map((r) => r.dosage)).toEqual([150]);
     });
   });
 

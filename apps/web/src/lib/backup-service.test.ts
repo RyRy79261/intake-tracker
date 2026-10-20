@@ -856,3 +856,23 @@ describe("backup-service: a rescheduled dose's remindAt", () => {
     expect(await db.doseLogs.get("moved")).toMatchObject({ status: "rescheduled", remindAt });
   });
 });
+
+describe("backup-service: a schedule's Apply from window", () => {
+  it("survives export and import unchanged", async () => {
+    await db.phaseSchedules.bulkAdd([
+      makePhaseSchedule("ph", { id: "old", time: "08:30", effectiveTo: "2026-10-22" }),
+      makePhaseSchedule("ph", { id: "new", time: "09:00", effectiveFrom: "2026-10-22" }),
+    ]);
+    const blob = await exportBackup();
+    const json = JSON.parse(await blob.text()) as {
+      phaseSchedules: { id: string; effectiveFrom?: string; effectiveTo?: string }[];
+    };
+    expect(json.phaseSchedules.find((s) => s.id === "old")?.effectiveTo).toBe("2026-10-22");
+
+    await db.phaseSchedules.clear();
+    const res = await importBackup(makeFile(JSON.stringify(json)), "merge");
+    expect(res.success).toBe(true);
+    expect(await db.phaseSchedules.get("old")).toMatchObject({ effectiveTo: "2026-10-22" });
+    expect(await db.phaseSchedules.get("new")).toMatchObject({ effectiveFrom: "2026-10-22" });
+  });
+});

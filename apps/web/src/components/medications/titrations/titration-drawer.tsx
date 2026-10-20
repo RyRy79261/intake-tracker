@@ -29,7 +29,8 @@ import { aiClient } from "@/lib/ai-client";
 import { useAuthGate } from "@/components/auth-guard";
 import { RxEntryCard, EditPhaseScheduleLoader } from "@/components/medications/titrations/rx-entry-card";
 import { DAY_LABELS_LONG } from "@/components/medications/titrations/types";
-import { sortDaysForDisplay } from "@/lib/date-utils";
+import { sortDaysForDisplay, toLocalDateKey } from "@/lib/date-utils";
+import { ApplyFromField, isApplyFromValid } from "@/components/medications/apply-from-field";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useTitrationDrawerForm } from "@/components/medications/titrations/use-titration-drawer-form";
 
@@ -52,6 +53,14 @@ export function TitrationDrawer({
   const weekStartsOn = useSettingsStore((s) => s.weekStartsOn);
 
   const editingPhases = usePhasesForTitrationPlan(editingPlan?.id);
+  // A running plan's dose changes apply from a date; a plan that has not
+  // started is edited as a whole.
+  const isRunning = editingPlan?.status === "active";
+  const todayKey = toLocalDateKey();
+  const [applyFrom, setApplyFrom] = useState(todayKey);
+  useEffect(() => {
+    if (open) setApplyFrom(toLocalDateKey());
+  }, [open]);
 
   const form = useTitrationDrawerForm();
   const {
@@ -181,6 +190,8 @@ export function TitrationDrawer({
     };
 
     // Guard against empty/invalid startDate producing NaN timestamps.
+    if (isRunning && !isApplyFromValid(applyFrom, todayKey)) return;
+
     const parsedStart = startDate ? new Date(startDate + "T00:00:00").getTime() : NaN;
     const startDateField =
       !startNow && Number.isFinite(parsedStart)
@@ -197,8 +208,17 @@ export function TitrationDrawer({
           ...(notes.trim() ? { notes: notes.trim() } : {}),
           ...(warningsList.length > 0 ? { warnings: warningsList } : {}),
           entries: entryData,
+          ...(isRunning && { applyFrom }),
         },
-        { onSuccess },
+        {
+          onSuccess,
+          onError: (e) =>
+            toast({
+              title: "Plan not saved",
+              description: e instanceof Error ? e.message : "Try again.",
+              variant: "destructive",
+            }),
+        },
       );
     } else {
       createMutation.mutate(
@@ -281,6 +301,10 @@ export function TitrationDrawer({
               </p>
             )}
           </div>
+
+          {isRunning && (
+            <ApplyFromField value={applyFrom} onChange={setApplyFrom} todayKey={todayKey} />
+          )}
 
           <div className="space-y-2">
             <div className="flex items-center justify-between">
@@ -369,7 +393,12 @@ export function TitrationDrawer({
           <Button
             className="w-full"
             onClick={handleSubmit}
-            disabled={!canSubmit || createMutation.isPending || updateMutation.isPending}
+            disabled={
+              !canSubmit ||
+              (isRunning && !isApplyFromValid(applyFrom, todayKey)) ||
+              createMutation.isPending ||
+              updateMutation.isPending
+            }
           >
             {(createMutation.isPending || updateMutation.isPending)
               ? (isEditing ? "Saving..." : "Creating...")
