@@ -100,7 +100,8 @@ describe("local-notifications", () => {
       setItem: (k: string, v: string) => void store.set(k, v),
       removeItem: (k: string) => void store.delete(k),
     });
-    useSettingsStore.setState({ reminderFollowUpCount: 0, reminderFollowUpInterval: 10 });
+    // No repeats: the interval is longer than the reminder period.
+    useSettingsStore.setState({ reminderFollowUpInterval: 30, reminderPeriodMinutes: 20 });
   });
 
   afterEach(() => {
@@ -242,8 +243,8 @@ describe("local-notifications", () => {
       expect(days).not.toContain("2026-09-28");
     });
 
-    it("adds follow-ups per the follow-up settings", async () => {
-      useSettingsStore.setState({ reminderFollowUpCount: 2, reminderFollowUpInterval: 15 });
+    it("repeats every interval through the reminder period (15 and 30: three reminders)", async () => {
+      useSettingsStore.setState({ reminderFollowUpInterval: 15, reminderPeriodMinutes: 30 });
       await seedRegimen({ daysOfWeek: [1] });
 
       await sync();
@@ -258,8 +259,25 @@ describe("local-notifications", () => {
       ]);
     });
 
+    it("with the defaults (every 10 minutes for 30) reminds at the dose time and 3 times after", async () => {
+      useSettingsStore.setState({ reminderFollowUpInterval: 10, reminderPeriodMinutes: 30 });
+      await seedRegimen({ daysOfWeek: [1] });
+
+      await sync();
+
+      const monday = scheduled()
+        .filter((n) => n.schedule.at.toISOString().startsWith("2026-09-28"))
+        .map((n) => n.schedule.at.toISOString());
+      expect(monday).toEqual([
+        "2026-09-28T06:00:00.000Z",
+        "2026-09-28T06:10:00.000Z",
+        "2026-09-28T06:20:00.000Z",
+        "2026-09-28T06:30:00.000Z",
+      ]);
+    });
+
     it("limits follow-ups to the follow-up horizon but keeps every main reminder", async () => {
-      useSettingsStore.setState({ reminderFollowUpCount: 2, reminderFollowUpInterval: 10 });
+      useSettingsStore.setState({ reminderFollowUpInterval: 10, reminderPeriodMinutes: 20 });
       await seedRegimen({ daysOfWeek: [0, 1, 2, 3, 4, 5, 6] });
 
       await sync();
@@ -275,7 +293,7 @@ describe("local-notifications", () => {
     });
 
     it("keeps main reminders over follow-ups when the alarm cap is reached", async () => {
-      useSettingsStore.setState({ reminderFollowUpCount: 3, reminderFollowUpInterval: 5 });
+      useSettingsStore.setState({ reminderFollowUpInterval: 5, reminderPeriodMinutes: 15 });
       // 15 daily doses: 450 main reminders over 30 days, 315 follow-ups.
       for (let h = 6; h < 21; h++) {
         await seedRegimen({ daysOfWeek: [0, 1, 2, 3, 4, 5, 6], time: `${String(h).padStart(2, "0")}:00` });

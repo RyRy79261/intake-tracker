@@ -6,7 +6,7 @@ import {
   type PhaseSchedule,
   type InventoryItem,
 } from "@/lib/db";
-import { getDeviceTimezone, resolveScheduleLocalTime } from "@/lib/timezone";
+import { getDeviceTimezone, resolveScheduleLocalTime, zonedWallClockToInstant } from "@/lib/timezone";
 import { calculatePillsConsumed, isCleanFraction, selectSlotLog } from "@/lib/dose-log-service";
 import { isActiveBrand } from "@/lib/inventory-service";
 import { isValidPillStrength } from "@intake/core/compound";
@@ -29,6 +29,12 @@ export interface DoseSlot {
   scheduledDate: string; // YYYY-MM-DD
   scheduleTimeUTC: number; // minutes from midnight UTC
   localTime: string; // "HH:MM" in device timezone for display
+  /**
+   * When the dose is due (epoch ms): the schedule's wall clock on this date
+   * in its anchor zone, or the reschedule time of a rescheduled dose. The
+   * late-window and missed rules compare instants, never minutes of the day.
+   */
+  dueAt: number;
   dosageMg: number; // from PhaseSchedule.dosage
   unit: string; // from MedicationPhase.unit
 
@@ -131,6 +137,38 @@ function selectPhasesLiveOn(
     });
   }
   return result;
+}
+
+/** The instant "HH:MM" reads on the device's clock on `dateStr`. */
+function deviceInstant(dateStr: string, hhmm: string): number {
+  const [h = 0, m = 0] = hhmm.split(":").map(Number);
+  const d = new Date(`${dateStr}T00:00:00`);
+  d.setHours(h, m, 0, 0);
+  return d.getTime();
+}
+
+/**
+ * When a dose is due: the schedule's wall clock on the date in its anchor
+ * zone (the same instant `localTime` shows), or for a rescheduled dose the
+ * new time it was moved to (picked on the device's clock).
+ */
+function slotDueAt(
+  schedule: PhaseSchedule,
+  dateStr: string,
+  tz: string,
+  localTime: string,
+  log: DoseLog | undefined,
+): number {
+  if (log?.status === "rescheduled" && log.rescheduledTo) {
+    return deviceInstant(dateStr, log.rescheduledTo);
+  }
+  try {
+    const instant = zonedWallClockToInstant(dateStr, schedule.time, schedule.anchorTimezone || tz);
+    if (instant !== null) return instant;
+  } catch {
+    // Unknown IANA name on the record: use the time shown.
+  }
+  return deviceInstant(dateStr, localTime);
 }
 
 // ---------------------------------------------------------------------------
@@ -303,6 +341,7 @@ export async function getDailyDoseSchedule(
       scheduleTimeUTC: schedule.scheduleTimeUTC,
       // A rescheduled dose sits at its new time.
       localTime: existingLog?.rescheduledTo ?? localTime,
+      dueAt: slotDueAt(schedule, dateStr, tz, localTime, existingLog),
       dosageMg: shownDose,
       unit: snapshot?.doseUnit ?? phase.unit,
       status,

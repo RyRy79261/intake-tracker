@@ -7,7 +7,6 @@ import { TimeRangeSelector } from "@/components/analytics/time-range-selector";
 import type { TimeRange, TimeScope } from "@intake/types/analytics";
 import { AddMedicationWizard } from "@/components/medications/add-medication-wizard";
 import { CompoundList } from "@/components/medications/compound-list";
-import { DoseDetailDialog } from "@/components/medications/dose-detail-dialog";
 import { WardMedTabs, wardMedTabId, type MedTab } from "@/components/medications/med-tabs";
 import { OtherDosesToday } from "@/components/medications/other-doses-today";
 import { PrescriptionsView } from "@/components/medications/prescriptions-view";
@@ -15,7 +14,6 @@ import { ScheduleView } from "@/components/medications/schedule-view";
 import { TitrationsView } from "@/components/medications/titrations-view";
 import { WeekDaySelector } from "@/components/medications/week-day-selector";
 import { useTimeScopeRange } from "@/hooks/use-analytics-queries";
-import type { DoseSlot } from "@/hooks/use-medication-queries";
 import { toLocalDateKey } from "@/lib/date-utils";
 import { TodayGadget } from "@/components/home/today-gadget";
 
@@ -68,16 +66,10 @@ export function MedsDemo({ tab: initialTab }: { tab: "schedule" | "prescriptions
   const panelId = useId();
   const [selectedDate, setSelectedDate] = useState(() => new Date());
   const [wizardOpen, setWizardOpen] = useState(false);
-  const [slot, setSlot] = useState<DoseSlot | null>(null);
-  const [detailOpen, setDetailOpen] = useState(false);
 
   const todayKey = toLocalDateKey();
   const selectedKey = toLocalDateKey(selectedDate);
 
-  const openDose = useCallback((next: DoseSlot) => {
-    setSlot(next);
-    setDetailOpen(true);
-  }, []);
   const addMed = useCallback(() => setWizardOpen(true), []);
 
   return (
@@ -90,7 +82,7 @@ export function MedsDemo({ tab: initialTab }: { tab: "schedule" | "prescriptions
         {tab === "schedule" && (
           <>
             <WeekDaySelector selectedDate={selectedDate} onSelectDate={setSelectedDate} />
-            <ScheduleView selectedDate={selectedDate} onDoseClick={openDose} onAddMed={addMed} />
+            <ScheduleView selectedDate={selectedDate} onAddMed={addMed} />
             <OtherDosesToday dateKey={selectedKey} isToday={selectedKey === todayKey} />
           </>
         )}
@@ -110,13 +102,6 @@ export function MedsDemo({ tab: initialTab }: { tab: "schedule" | "prescriptions
         </button>
       </div>
 
-      <DoseDetailDialog
-        open={detailOpen}
-        onOpenChange={setDetailOpen}
-        slot={slot}
-        isToday={selectedKey === todayKey}
-        isFuture={selectedKey > todayKey}
-      />
       <AddMedicationWizard open={wizardOpen} onOpenChange={setWizardOpen} />
     </div>
   );

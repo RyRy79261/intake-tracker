@@ -7,14 +7,12 @@ import { WeekDaySelector } from "@/components/medications/week-day-selector";
 import { WardMedTabs, wardMedTabId } from "@/components/medications/med-tabs";
 import { ScheduleView } from "@/components/medications/schedule-view";
 import { OtherDosesToday } from "@/components/medications/other-doses-today";
-import { DoseDetailDialog } from "@/components/medications/dose-detail-dialog";
 import { CompoundList } from "@/components/medications/compound-list";
 import { PrescriptionsView } from "@/components/medications/prescriptions-view";
 import { AboutMedicineView } from "@/components/medications/about-medicine-view";
 import { usePrescriptions } from "@/hooks/use-medication-queries";
 import { TitrationsView } from "@/components/medications/titrations-view";
 import { TitrationStartPrompt } from "@/components/medications/titrations/titration-start-prompt";
-import type { DoseSlot } from "@/hooks/use-medication-queries";
 import { useMedicationNotifications } from "@/hooks/use-medication-notifications";
 import { useMedicationUIStore } from "@/stores/medication-ui-store";
 
@@ -33,7 +31,6 @@ export function MedicationsPageBody() {
   // "today" (and a today selection) to the new day.
   const { selectedDate, setSelectedDate, todayKey } = useRollingSelectedDate();
 
-  const [doseDetailOpen, setDoseDetailOpen] = useState(false);
   // "About this medicine" replaces the tabs while open (the prototype's
   // in-window sub-view). The Rx tab stays mounted underneath, hidden, so its
   // expanded card is still open on the way back.
@@ -43,7 +40,6 @@ export function MedicationsPageBody() {
     aboutId && activeTab === "prescriptions"
       ? (prescriptions.find((p) => p.id === aboutId) ?? null)
       : null;
-  const [selectedSlot, setSelectedSlot] = useState<DoseSlot | null>(null);
 
   // Closing About gives focus back to the card's "About this medicine"
   // button (`data-about-opener`), which was hidden while About was open.
@@ -71,12 +67,15 @@ export function MedicationsPageBody() {
 
   const selectedKey = toLocalDateKey(selectedDate);
   const isToday = selectedKey === todayKey;
-  const isFuture = selectedKey > todayKey;
 
-  const handleDoseClick = useCallback((slot: DoseSlot) => {
-    setSelectedSlot(slot);
-    setDoseDetailOpen(true);
-  }, []);
+  // Info in the dose dialog: "About this medicine" on the Rx tab.
+  const handleOpenInfo = useCallback(
+    (prescriptionId: string) => {
+      setActiveTab("prescriptions");
+      setAboutId(prescriptionId);
+    },
+    [setActiveTab],
+  );
 
   const handleAddMed = useCallback(() => {
     setWizardOpen(true);
@@ -103,8 +102,8 @@ export function MedicationsPageBody() {
             <TitrationStartPrompt className="mb-3" />
             <ScheduleView
               selectedDate={selectedDate}
-              onDoseClick={handleDoseClick}
               onAddMed={handleAddMed}
+              onOpenInfo={handleOpenInfo}
             />
             <OtherDosesToday dateKey={selectedKey} isToday={isToday} />
           </div>
@@ -121,14 +120,6 @@ export function MedicationsPageBody() {
         {activeTab === "titrations" && <TitrationsView />}
       </div>
       </div>
-
-      <DoseDetailDialog
-        open={doseDetailOpen}
-        onOpenChange={setDoseDetailOpen}
-        slot={selectedSlot}
-        isToday={isToday}
-        isFuture={isFuture}
-      />
     </div>
   );
 }

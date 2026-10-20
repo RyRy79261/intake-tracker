@@ -52,14 +52,14 @@ describe("installMedicationNotificationResync", () => {
     expect(target).toHaveBeenCalledTimes(1);
   });
 
-  it("resyncs when the follow-up settings change", async () => {
+  it("resyncs when the reminder period changes", async () => {
     const target = vi.fn();
     dispose = installMedicationNotificationResync(target, DEBOUNCE_MS);
     await settle();
     target.mockClear();
 
     useSettingsStore.setState({
-      reminderFollowUpCount: useSettingsStore.getState().reminderFollowUpCount + 1,
+      reminderPeriodMinutes: useSettingsStore.getState().reminderPeriodMinutes + 15,
     });
     await settle();
 

@@ -108,19 +108,167 @@ describe("scheduled doses by voice", () => {
     expect(lasix?.currentStock).toBe(29);
   });
 
-  it("corrects the time of doses already taken, and moves no stock again", async () => {
+  it("corrects the time of a taken dose the user names, and moves no stock again", async () => {
     await seed("Furosemide", "Lasix", "08:30");
     await saveMedicationPlan(
       await plan({ kind: "scheduled_dose", slotTime: "08:30", action: "taken" }, local(8, 35), true),
     );
 
-    const p = await plan({ kind: "scheduled_dose", slotTime: "08:30", action: "taken" }, local(9, 15), true);
+    const p = await plan(
+      { kind: "scheduled_dose", slotTime: "08:30", medicine: "Lasix", action: "taken" },
+      local(9, 15),
+      true,
+    );
     expect(describePlan(p)).toEqual(["Furosemide 50 mg: change time 08:35 → 09:15"]);
     await saveMedicationPlan(p);
 
     const slot = await slotStatus(TODAY, "Furosemide");
     expect(slot?.existingLog?.actionTimestamp).toBe(local(9, 15));
     expect((await db.inventoryItems.toArray())[0]?.currentStock).toBe(29);
+  });
+
+  it("a whole dose time with every dose taken changes nothing: taken doses keep their time", async () => {
+    await seed("Furosemide", "Lasix", "08:30");
+    await seed("Sacubitril/Valsartan", "Vymada", "08:30");
+    await saveMedicationPlan(
+      await plan({ kind: "scheduled_dose", slotTime: "08:30", medicine: "Lasix", action: "taken" }, local(8, 35), true),
+    );
+    await saveMedicationPlan(
+      await plan({ kind: "scheduled_dose", slotTime: "08:30", medicine: "Vymada", action: "taken" }, local(8, 40), true),
+    );
+
+    // "Log all my remaining 08:30 meds as taken at 09:00."
+    expect(
+      await problem({ kind: "scheduled_dose", slotTime: "08:30", action: "taken" }, local(9, 0), true),
+    ).toBe("Nothing to change: Furosemide already taken at 08:35, Sacubitril/Valsartan already taken at 08:40.");
+    expect((await slotStatus(TODAY, "Furosemide"))?.existingLog?.actionTimestamp).toBe(local(8, 35));
+    expect((await slotStatus(TODAY, "Sacubitril/Valsartan"))?.existingLog?.actionTimestamp).toBe(local(8, 40));
+  });
+
+  it("a stated taken time after now is saved as said", async () => {
+    await seed("Furosemide", "Lasix", "08:30");
+    // Now is 10:00; the user says 11:00.
+    const p = await plan({ kind: "scheduled_dose", slotTime: "08:30", action: "taken" }, local(11, 0), true);
+    expect(describePlan(p)).toEqual(["Furosemide 50 mg: mark taken at 11:00"]);
+    await saveMedicationPlan(p);
+    expect((await slotStatus(TODAY, "Furosemide"))?.existingLog?.actionTimestamp).toBe(local(11, 0));
+  });
+
+  it("refuses a dose of a future day", async () => {
+    await seed("Furosemide", "Lasix", "08:30");
+    const ctx = await loadVoiceMedicationContext(medicationDates([local(9, 0, 1)], NOW));
+    const result = planMedicationItem(
+      { kind: "scheduled_dose", slotTime: "08:30", action: "taken" },
+      ctx,
+      local(9, 0, 1),
+      true,
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.problem).toMatch(/not due yet/);
+  });
+
+  it("saves a row all or nothing: a failure on the second dose leaves the first open", async () => {
+    await seed("Furosemide", "Lasix", "08:30");
+    await seed("Sacubitril/Valsartan", "Vymada", "08:30");
+    const p = await plan({ kind: "scheduled_dose", slotTime: "08:30", action: "taken" }, local(9, 10), true);
+
+    const table = db.phaseSchedules;
+    const realGet = table.get.bind(table);
+    let calls = 0;
+    const spy = vi.spyOn(table, "get").mockImplementation(((...args: Parameters<typeof table.get>) => {
+      calls++;
+      if (calls === 2) throw new Error("disk full");
+      return realGet(...args);
+    }) as typeof table.get);
+    await expect(saveMedicationPlan(p)).rejects.toThrow(/No dose changed/);
+    spy.mockRestore();
+
+    expect(calls).toBe(2);
+    expect(await db.doseLogs.count()).toBe(0);
+    for (const item of await db.inventoryItems.toArray()) expect(item.currentStock).toBe(30);
+  });
+
+  it("the time choice's Skip saves the open doses as skipped and leaves a taken one", async () => {
+    await seed("Furosemide", "Lasix", "08:30");
+    await seed("Sacubitril/Valsartan", "Vymada", "08:30");
+    await seed("Spironolactone", "Aldactone", "08:30");
+    await saveMedicationPlan(
+      await plan({ kind: "scheduled_dose", slotTime: "08:30", medicine: "Lasix", action: "taken" }, local(8, 35), true),
+    );
+    const late = await plan({ kind: "scheduled_dose", slotTime: "08:30", action: "taken" });
+    expect(late.kind === "scheduled_dose" && late.needsTimeChoice).toBe(true);
+
+    // Skip turns the row into a skip of the same dose time.
+    await saveMedicationPlan(await plan({ kind: "scheduled_dose", slotTime: "08:30", action: "skipped" }));
+    expect((await slotStatus(TODAY, "Furosemide"))?.existingLog?.actionTimestamp).toBe(local(8, 35));
+    expect((await slotStatus(TODAY, "Furosemide"))?.status).toBe("taken");
+    expect((await slotStatus(TODAY, "Sacubitril/Valsartan"))?.status).toBe("skipped");
+    expect((await slotStatus(TODAY, "Spironolactone"))?.status).toBe("skipped");
+  });
+
+  it("a whole dose time said with one dose already taken changes only the open doses", async () => {
+    await seed("Furosemide", "Lasix", "08:30");
+    await seed("Sacubitril/Valsartan", "Vymada", "08:30");
+    await saveMedicationPlan(
+      await plan({ kind: "scheduled_dose", slotTime: "08:30", medicine: "Lasix", action: "taken" }, local(8, 35), true),
+    );
+
+    // "Log all my remaining 08:30 meds as taken at 09:00."
+    const p = await plan({ kind: "scheduled_dose", slotTime: "08:30", action: "taken" }, local(9, 0), true);
+    expect(describePlan(p).sort()).toEqual([
+      "Furosemide 50 mg: no change (already taken at 08:35)",
+      "Sacubitril/Valsartan 50 mg: mark taken at 09:00",
+    ]);
+    await saveMedicationPlan(p);
+    expect((await slotStatus(TODAY, "Furosemide"))?.existingLog?.actionTimestamp).toBe(local(8, 35));
+    expect((await slotStatus(TODAY, "Sacubitril/Valsartan"))?.existingLog?.actionTimestamp).toBe(local(9, 0));
+    // One pill came out of Lasix, once.
+    const lasix = (await db.inventoryItems.toArray()).find((i) => i.brandName === "Lasix");
+    expect(lasix?.currentStock).toBe(29);
+  });
+
+  it("a dose time skipped as a whole leaves its taken doses taken", async () => {
+    await seed("Furosemide", "Lasix", "08:30");
+    await seed("Sacubitril/Valsartan", "Vymada", "08:30");
+    await saveMedicationPlan(
+      await plan({ kind: "scheduled_dose", slotTime: "08:30", medicine: "Lasix", action: "taken" }, local(8, 35), true),
+    );
+    await saveMedicationPlan(await plan({ kind: "scheduled_dose", slotTime: "08:30", action: "skipped" }));
+    expect((await slotStatus(TODAY, "Furosemide"))?.status).toBe("taken");
+    expect((await slotStatus(TODAY, "Sacubitril/Valsartan"))?.status).toBe("skipped");
+  });
+
+  it("asks when a late dose was taken if no time was said (the late window)", async () => {
+    await seed("Furosemide", "Lasix", "08:30");
+    const item = { kind: "scheduled_dose", slotTime: "08:30", action: "taken" } as const;
+
+    // 10:00 is past 08:30 + 40 minutes.
+    const late = await plan(item);
+    expect(late.kind === "scheduled_dose" && late.needsTimeChoice).toBe(true);
+    expect(late.kind === "scheduled_dose" && late.dueAt).toBe(local(8, 30));
+    await expect(saveMedicationPlan(late)).rejects.toThrow("Pick when you took them first.");
+
+    // "Take now" picked: no choice left, and the save records now.
+    const ctx = await context();
+    const now = planMedicationItem(item, ctx, NOW, false, { takeNow: true });
+    expect(now.ok && now.plan.kind === "scheduled_dose" && now.plan.needsTimeChoice).toBe(false);
+    if (now.ok) await saveMedicationPlan(now.plan);
+    expect((await slotStatus(TODAY, "Furosemide"))?.existingLog?.actionTimestamp).toBe(NOW);
+  });
+
+  it("records now with no choice inside the late window, and when a time is said", async () => {
+    await seed("Furosemide", "Lasix", "08:30");
+    const item = { kind: "scheduled_dose", slotTime: "08:30", action: "taken" } as const;
+    const ctx = await context();
+
+    const inWindow = planMedicationItem(item, ctx, local(8, 45), false, { now: local(8, 45) });
+    expect(inWindow.ok && inWindow.plan.kind === "scheduled_dose" && inWindow.plan.needsTimeChoice).toBe(false);
+
+    const said = await plan(item, local(9, 30), true);
+    expect(said.kind === "scheduled_dose" && said.needsTimeChoice).toBe(false);
+
+    const never = planMedicationItem(item, ctx, NOW, false, { lateWindowMinutes: -1 });
+    expect(never.ok && never.plan.kind === "scheduled_dose" && never.plan.needsTimeChoice).toBe(false);
   });
 
   it("refuses a take that changes nothing", async () => {

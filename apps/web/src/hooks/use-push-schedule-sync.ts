@@ -1,5 +1,6 @@
 "use client";
 
+import { reminderRepeatCount } from "@intake/core/dose-rules";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Capacitor } from "@capacitor/core";
 import { useSettingsStore } from "@/stores/settings-store";
@@ -27,8 +28,10 @@ import {
  */
 export function usePushScheduleSync(): void {
   const doseRemindersEnabled = useSettingsStore((s) => s.doseRemindersEnabled);
-  const followUpCount = useSettingsStore((s) => s.reminderFollowUpCount);
   const followUpInterval = useSettingsStore((s) => s.reminderFollowUpInterval);
+  const reminderPeriod = useSettingsStore((s) => s.reminderPeriodMinutes);
+  // The repeats run through the reminder period; the server takes 0-10.
+  const followUpCount = Math.min(10, reminderRepeatCount(followUpInterval, reminderPeriod));
   const dayStartHour = useSettingsStore((s) => s.dayStartHour);
   const { authenticated } = useAuth();
 

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterEach, vi } from "vitest";
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
@@ -9,6 +9,7 @@ import { PrescriptionCard } from "@/components/medications/prescription-card";
 // eslint-disable-next-line no-restricted-imports
 import { db, type DoseLog } from "@/lib/db";
 import { toLocalDateKey } from "@/lib/date-utils";
+import { getDeviceTimezone } from "@/lib/timezone";
 import { renderWithFixtures } from "@/__tests__/react-test-utils";
 import {
   makePrescription,
@@ -348,5 +349,39 @@ describe("PrescriptionCard", () => {
     expect(
       screen.getByRole("button", { name: /confirm undo as-needed dose/i }),
     ).toHaveClass("min-h-11");
+  });
+
+  describe("a dose missed on the same day", () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("is not All done: the card still shows the dose as next", async () => {
+      const today = new Date();
+      vi.useFakeTimers({ toFake: ["Date"] });
+      // 09:05: the 08:30 dose has had no action for 35 minutes, so it is Missed.
+      vi.setSystemTime(new Date(today.getFullYear(), today.getMonth(), today.getDate(), 9, 5));
+      const created = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 30).getTime();
+      const prescription = makePrescription({ genericName: "Lisinopril", createdAt: created });
+      const phase = makeMedicationPhase(prescription.id, { unit: "mg", startDate: created });
+      const schedule = makePhaseSchedule(phase.id, {
+        dosage: 10,
+        time: "08:30",
+        anchorTimezone: getDeviceTimezone(),
+        createdAt: created,
+      });
+      const inventory = makeInventoryItem(prescription.id, { brandName: "Zestril", strength: 10, currentStock: 40 });
+      await renderWithFixtures(<PrescriptionCard prescription={prescription} />, {
+        seed: {
+          prescriptions: [prescription],
+          medicationPhases: [phase],
+          phaseSchedules: [schedule],
+          inventoryItems: [inventory],
+        },
+      });
+
+      expect(await screen.findByText("Next: 08:30")).toBeInTheDocument();
+      expect(screen.queryByText("All done")).not.toBeInTheDocument();
+    });
   });
 });

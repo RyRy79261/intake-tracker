@@ -37,7 +37,7 @@ const DEAD_KEYS = [
 
 describe("settings migrations", () => {
   it("constant matches the version migrate brings state up to", () => {
-    expect(SETTINGS_PERSIST_VERSION).toBe(18);
+    expect(SETTINGS_PERSIST_VERSION).toBe(19);
   });
 
   // A user who never changed a setting must end up exactly where a fresh
@@ -58,6 +58,21 @@ describe("settings migrations", () => {
   it("keeps a valid week start and replaces a malformed one on upgrade", () => {
     expect(hydrate({ weekStartsOn: 0 }, 17).weekStartsOn).toBe(0);
     expect(hydrate({ weekStartsOn: 9 }, 17).weekStartsOn).toBe(1);
+  });
+
+  it("gives installs saved before the dose rules a 40-minute late window, a 30-minute period and the skip question", () => {
+    const migrated = migrateSettings({ reminderFollowUpInterval: 15 }, 18) as unknown as Record<string, unknown>;
+    expect(migrated.lateWindowMinutes).toBe(40);
+    expect(migrated.reminderPeriodMinutes).toBe(30);
+    expect(migrated.askSkipReason).toBe(true);
+    expect(migrated.reminderFollowUpInterval).toBe(15);
+  });
+
+  it("keeps valid dose rules and replaces malformed ones on upgrade", () => {
+    const kept = hydrate({ lateWindowMinutes: -1, reminderPeriodMinutes: 60, askSkipReason: false }, 18);
+    expect(kept).toMatchObject({ lateWindowMinutes: -1, reminderPeriodMinutes: 60, askSkipReason: false });
+    const fixed = hydrate({ lateWindowMinutes: 7, reminderPeriodMinutes: 0, askSkipReason: "yes" }, 18);
+    expect(fixed).toMatchObject({ lateWindowMinutes: 40, reminderPeriodMinutes: 30, askSkipReason: true });
   });
 
   it("moves installs still on the old 8 / 3 shake defaults to the current 10 / 5", () => {

@@ -1,9 +1,14 @@
 // @vitest-environment jsdom
-import { describe, it, expect } from "vitest";
-import { screen } from "@testing-library/react";
+import { describe, it, expect, vi, afterEach } from "vitest";
+import { screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 
 import { DoseDetailDialog } from "@/components/medications/dose-detail-dialog";
+import { useDoseActions } from "@/components/medications/use-dose-actions";
 import { renderWithFixtures } from "@/__tests__/react-test-utils";
+// The test reads the seeded IndexedDB directly to assert the writes.
+// eslint-disable-next-line no-restricted-imports
+import { db } from "@/lib/db";
 import {
   makePrescription,
   makeMedicationPhase,
@@ -12,31 +17,28 @@ import {
   makeDoseLog,
 } from "@/__tests__/fixtures/db-fixtures";
 import type { DoseSlot } from "@/hooks/use-medication-queries";
+import type { SlotDay } from "@intake/core/dose-rules";
 
-/**
- * DoseDetailDialog receives a fully-built DoseSlot as a prop (it does not fetch
- * its own data), so these tests assemble a coherent slot and assert the drawer
- * surfaces the dose details. Rendered with `open` so the drawer is mounted.
- */
+const at = (h: number, m: number, day = 0) => new Date(2026, 9, 19 + day, h, m).getTime();
+const DATE = "2026-10-19";
+
 function buildSlot(overrides: Partial<DoseSlot> = {}): DoseSlot {
   const prescription = makePrescription({ genericName: "Metoprolol" });
-  const phase = makeMedicationPhase(prescription.id, {
-    unit: "mg",
-    foodInstruction: "none",
-  });
-  const schedule = makePhaseSchedule(phase.id, { dosage: 50, time: "08:00" });
+  const phase = makeMedicationPhase(prescription.id, { unit: "mg", foodInstruction: "none" });
+  const schedule = makePhaseSchedule(phase.id, { dosage: 50, time: "08:30" });
   const inventory = makeInventoryItem(prescription.id, {
-    prescriptionId: prescription.id,
     brandName: "Lopressor",
     strength: 50,
+    currentStock: 12,
   });
   return {
     prescriptionId: prescription.id,
     phaseId: phase.id,
     scheduleId: schedule.id,
-    scheduledDate: "2024-03-10",
-    scheduleTimeUTC: 480,
-    localTime: "08:00",
+    scheduledDate: DATE,
+    scheduleTimeUTC: 510,
+    localTime: "08:30",
+    dueAt: at(8, 30),
     dosageMg: 50,
     unit: "mg",
     status: "pending",
@@ -49,111 +51,158 @@ function buildSlot(overrides: Partial<DoseSlot> = {}): DoseSlot {
   };
 }
 
+function withLog(slot: DoseSlot, log: Parameters<typeof makeDoseLog>[3]): DoseSlot {
+  return { ...slot, existingLog: makeDoseLog(slot.prescriptionId, slot.phaseId, slot.scheduleId, log) };
+}
+
+function Harness({ slot, day, now, onOpenInfo }: { slot: DoseSlot; day: SlotDay; now: number; onOpenInfo?: (id: string) => void }) {
+  const actions = useDoseActions();
+  return (
+    <>
+      <DoseDetailDialog
+        open
+        onOpenChange={() => {}}
+        slot={slot}
+        day={day}
+        now={now}
+        actions={actions}
+        {...(onOpenInfo && { onOpenInfo })}
+      />
+      {actions.sheets}
+    </>
+  );
+}
+
+async function renderDialog(slot: DoseSlot, day: SlotDay = "today", now = at(9, 0), onOpenInfo?: (id: string) => void) {
+  return renderWithFixtures(<Harness slot={slot} day={day} now={now} {...(onOpenInfo && { onOpenInfo })} />, {
+    seed: {
+      prescriptions: [slot.prescription],
+      medicationPhases: [slot.phase],
+      phaseSchedules: [slot.schedule],
+      inventoryItems: slot.inventory ? [slot.inventory] : [],
+      ...(slot.existingLog && { doseLogs: [slot.existingLog] }),
+    },
+  });
+}
+
+const button = (name: string) => screen.queryByRole("button", { name });
+
+afterEach(() => {
+  vi.useRealTimers();
+});
+
 describe("DoseDetailDialog", () => {
-  it("renders nothing when no slot is supplied", async () => {
-    const { container } = await renderWithFixtures(
-      <DoseDetailDialog
-        open
-        onOpenChange={() => {}}
-        slot={null}
-        isToday
-      />,
-    );
-    expect(container).toBeEmptyDOMElement();
+  it("shows the brand with its strength, the generic name, the schedule and the pills left", async () => {
+    await renderDialog(buildSlot());
+    expect(screen.getByText("Lopressor 50mg")).toBeInTheDocument();
+    expect(screen.getByText("Metoprolol")).toBeInTheDocument();
+    expect(screen.getByText(/Scheduled for 08:30, Monday, Oct 19/)).toBeInTheDocument();
+    expect(screen.getByText("12 pills left")).toBeInTheDocument();
   });
 
-  it("shows the medicine name, strength and schedule for a pending dose", async () => {
+  it("shows when the medicine was last taken", async () => {
     const slot = buildSlot();
-    await renderWithFixtures(
-      <DoseDetailDialog
-        open
-        onOpenChange={() => {}}
-        slot={slot}
-        isToday
-      />,
-    );
-
-    expect(
-      await screen.findByText(/Lopressor 50mg \(Metoprolol\)/),
-    ).toBeInTheDocument();
-    expect(screen.getByText(/Scheduled for 08:00/)).toBeInTheDocument();
-  });
-
-  it("offers Take, Skip and Reschedule actions for a today pending dose", async () => {
-    const slot = buildSlot();
-    await renderWithFixtures(
-      <DoseDetailDialog
-        open
-        onOpenChange={() => {}}
-        slot={slot}
-        isToday
-      />,
-    );
-
-    expect(await screen.findByText("TAKE")).toBeInTheDocument();
-    expect(screen.getByText("SKIP")).toBeInTheDocument();
-    expect(screen.getByText("RESCHEDULE")).toBeInTheDocument();
-  });
-
-  it("shows UNTAKE (not TAKE) and the taken time for an already-taken dose", async () => {
-    const base = buildSlot();
-    const takenAt = new Date("2024-03-10T08:05:00").getTime();
-    const slot = buildSlot({
+    const earlier = makeDoseLog(slot.prescriptionId, slot.phaseId, slot.scheduleId, {
+      scheduledDate: "2026-10-18",
       status: "taken",
-      existingLog: makeDoseLog(
-        base.prescriptionId,
-        base.phaseId,
-        base.scheduleId,
-        {
-          status: "taken",
-          scheduledDate: "2024-03-10",
-          actionTimestamp: takenAt,
-        },
-      ),
+      actionTimestamp: at(8, 31, -1),
     });
-
-    await renderWithFixtures(
-      <DoseDetailDialog
-        open
-        onOpenChange={() => {}}
-        slot={slot}
-        isToday
-      />,
-    );
-
-    expect(await screen.findByText("UNTAKE")).toBeInTheDocument();
-    expect(screen.queryByText("TAKE")).not.toBeInTheDocument();
-    expect(screen.getByText(/Taken at/)).toBeInTheDocument();
+    await renderWithFixtures(<Harness slot={slot} day="today" now={at(9, 0)} />, {
+      seed: {
+        prescriptions: [slot.prescription],
+        medicationPhases: [slot.phase],
+        phaseSchedules: [slot.schedule],
+        inventoryItems: [slot.inventory!],
+        doseLogs: [earlier],
+      },
+    });
+    expect(await screen.findByText("Last taken at 08:31, yesterday")).toBeInTheDocument();
   });
 
-  it("surfaces the skip reason for a skipped dose", async () => {
-    const base = buildSlot();
-    const slot = buildSlot({
-      status: "skipped",
-      existingLog: makeDoseLog(
-        base.prescriptionId,
-        base.phaseId,
-        base.scheduleId,
-        {
-          status: "skipped",
-          scheduledDate: "2024-03-10",
-          actionTimestamp: new Date("2024-03-10T09:00:00").getTime(),
-          skipReason: "Ran out",
-        },
-      ),
-    });
+  it("has Info and Edit in the header", async () => {
+    const user = userEvent.setup();
+    const onOpenInfo = vi.fn();
+    const slot = buildSlot();
+    await renderDialog(slot, "today", at(9, 0), onOpenInfo);
+    await user.click(screen.getByRole("button", { name: "About Metoprolol" }));
+    expect(onOpenInfo).toHaveBeenCalledWith(slot.prescriptionId);
+    expect(screen.getByRole("button", { name: "Edit Metoprolol" })).toBeInTheDocument();
+  });
 
-    await renderWithFixtures(
-      <DoseDetailDialog
-        open
-        onOpenChange={() => {}}
-        slot={slot}
-        isToday
-      />,
+  // The action bar table of section 4.5.
+  it("an open dose today: Skip, Take and Reschedule", async () => {
+    await renderDialog(buildSlot());
+    expect(button("Skip")).toBeInTheDocument();
+    expect(button("Take")).toBeInTheDocument();
+    expect(button("Reschedule")).toBeInTheDocument();
+    expect(button("Untake")).not.toBeInTheDocument();
+  });
+
+  it("a missed dose can still be taken or skipped", async () => {
+    await renderDialog(buildSlot({ status: "missed" }), "today", at(9, 5));
+    expect(screen.getByTestId("dialog-status")).toHaveTextContent("Missed");
+    expect(button("Skip")).toBeInTheDocument();
+    expect(button("Take")).toBeInTheDocument();
+  });
+
+  it("a taken dose: Untake and Change time, no Take or Skip", async () => {
+    await renderDialog(withLog(buildSlot({ status: "taken" }), { scheduledDate: DATE, status: "taken", actionTimestamp: at(8, 32) }));
+    expect(screen.getByTestId("dialog-status")).toHaveTextContent("Taken at 08:32");
+    expect(button("Untake")).toBeInTheDocument();
+    expect(button("Change time")).toBeInTheDocument();
+    expect(button("Take")).not.toBeInTheDocument();
+    expect(button("Skip")).not.toBeInTheDocument();
+    expect(button("Reschedule")).not.toBeInTheDocument();
+  });
+
+  it("a skipped dose: Unskip, Take and Reschedule", async () => {
+    await renderDialog(withLog(buildSlot({ status: "skipped" }), { scheduledDate: DATE, status: "skipped", skipReason: "Cost" }));
+    expect(screen.getByTestId("dialog-status")).toHaveTextContent("Skipped · Cost");
+    expect(button("Unskip")).toBeInTheDocument();
+    expect(button("Take")).toBeInTheDocument();
+    expect(button("Reschedule")).toBeInTheDocument();
+    expect(button("Skip")).not.toBeInTheDocument();
+  });
+
+  it("a dose of a future day cannot be taken or skipped", async () => {
+    await renderDialog(buildSlot({ scheduledDate: "2026-10-20", dueAt: at(8, 30, 1) }), "future");
+    expect(button("Take")).not.toBeInTheDocument();
+    expect(button("Skip")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("late-warning")).not.toBeInTheDocument();
+  });
+
+  it("warns only after the late window, never before the dose time", async () => {
+    const { unmount } = await renderDialog(buildSlot(), "today", at(9, 10));
+    expect(screen.queryByTestId("late-warning")).not.toBeInTheDocument();
+    unmount();
+    await renderDialog(buildSlot(), "today", at(9, 11));
+    expect(screen.getByTestId("late-warning")).toHaveTextContent(
+      "You have not marked this dose. Consider if it is safe to take it now.",
     );
+  });
 
-    expect(await screen.findByText(/Reason: Ran out/)).toBeInTheDocument();
-    // A skipped dose cannot be skipped again.
-    expect(screen.queryByText("SKIP")).not.toBeInTheDocument();
+  it("Take inside the late window records now; after it, asks first", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(at(9, 0));
+    const user = userEvent.setup();
+    const slot = buildSlot();
+    await renderDialog(slot, "today", at(9, 0));
+    await user.click(button("Take")!);
+    await waitFor(async () => {
+      const log = await db.doseLogs.where("scheduleId").equals(slot.scheduleId).first();
+      expect(log).toMatchObject({ status: "taken", actionTimestamp: at(9, 0) });
+    });
+    expect(screen.queryByText(/When did you take/)).not.toBeInTheDocument();
+  });
+
+  it("Take after the late window opens the time-taken sheet with the three options", async () => {
+    const user = userEvent.setup();
+    const now = Date.now();
+    await renderDialog(buildSlot({ dueAt: now - 3 * 3_600_000 }), "today", now);
+    await user.click(button("Take")!);
+    expect(await screen.findByText("When did you take Lopressor?")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Take now \(\d{2}:\d{2}\)$/ })).toBeInTheDocument();
+    expect(button("Take at a specific time")).toBeInTheDocument();
+    expect(button("Skip")).toBeInTheDocument();
   });
 });

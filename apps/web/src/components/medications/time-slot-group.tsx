@@ -3,118 +3,86 @@
 import { Button } from "@intake/ui/button";
 import { DoseRow } from "@/components/medications/dose-row";
 import { cn } from "@/lib/utils";
+import { formatDoseTime } from "@/lib/medication-ui-utils";
 import type { DoseSlot } from "@/hooks/use-medication-queries";
 
 interface TimeSlotGroupProps {
   time: string;
   slots: DoseSlot[];
-  isToday: boolean;
   isFuture: boolean;
-  isNextUpcoming: boolean;
+  /** The current time: the header is primary within 60 minutes of the slot. */
+  now: number;
+  /** Today only: the slot is due within the hour (shown on the header). */
+  isToday: boolean;
+  onOpenDose: (slot: DoseSlot) => void;
   onTake: (slot: DoseSlot) => void;
-  onRetroactiveTake: (slot: DoseSlot, time: string) => void;
-  onSkip: (slot: DoseSlot) => void;
-  onDoseClick: (slot: DoseSlot) => void;
-  onMarkAll: (time: string, slots: DoseSlot[]) => void;
-  onSkipAll: (time: string, slots: DoseSlot[]) => void;
-  onEditAll: (time: string, slots: DoseSlot[]) => void;
-  onEditTime: (slot: DoseSlot, time: string) => void;
+  onTakeLongPress: (slot: DoseSlot) => void;
+  onMarkAll: (time: string) => void;
 }
 
-function formatTime12(time24: string): string {
-  const parts = time24.split(":").map(Number);
-  const h = parts[0] ?? 0;
-  const m = parts[1] ?? 0;
-  const ampm = h >= 12 ? "PM" : "AM";
-  const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
-  return `${h12}:${String(m).padStart(2, "0")} ${ampm}`;
-}
+const HOUR_MS = 60 * 60 * 1000;
 
 /**
  * The prototype's `.btn.sm`: 32px outlined, compact type. An invisible
- * ::before reaches 6px above and below so the tap target is 44px (the
- * header is 44px tall); not sideways, so Skip All and Mark All never overlap.
+ * ::before reaches 6px above and below so the tap target is 44px.
  */
 const slotButton =
   "relative h-8 px-2.5 text-[0.8125rem] before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']";
 
-function isTimeOverdue(time24: string): boolean {
-  const parts = time24.split(":").map(Number);
-  const h = parts[0] ?? 0;
-  const m = parts[1] ?? 0;
-  const now = new Date();
-  return now.getHours() * 60 + now.getMinutes() > h * 60 + m;
-}
-
+/**
+ * One card per dose time. The header shows the time (primary when it is
+ * within an hour of now, the missed colour when a dose in it is missed) and,
+ * for two or more doses, "Mark all doses" (not on a future day: its only
+ * bulk action is Reschedule, which is not built yet). A slot with one dose
+ * has no header button: its row does the work.
+ */
 export function TimeSlotGroup({
   time,
   slots,
-  isToday,
   isFuture,
-  isNextUpcoming,
+  isToday,
+  now,
+  onOpenDose,
   onTake,
-  onRetroactiveTake,
-  onSkip,
-  onDoseClick,
+  onTakeLongPress,
   onMarkAll,
-  onSkipAll,
-  onEditAll,
-  onEditTime,
 }: TimeSlotGroupProps) {
-  // Bulk Take/Skip only ever act on the slots still waiting for a decision;
-  // already-logged doses are changed one at a time or via Edit All.
-  const openSlots = slots.filter((s) => s.status === "pending" || s.status === "missed");
-  const hasPending = openSlots.length > 0;
-  const hasTaken = slots.some((s) => s.status === "taken");
+  const dueAt = Math.min(...slots.map((s) => s.dueAt));
+  const near = isToday && Math.abs(now - dueAt) <= HOUR_MS;
+  const missed = slots.some((s) => s.status === "missed");
   const allDone = slots.every((s) => s.status === "taken" || s.status === "skipped");
-  const overdue = isToday && isTimeOverdue(time) && hasPending;
 
   return (
     <div
       id={`time-slot-${time}`}
-      data-next={isNextUpcoming || undefined}
+      data-testid="time-slot"
+      data-time={time}
+      data-near={near || undefined}
       className={cn(
-        "border border-line bg-panel",
-        isNextUpcoming && "shadow-[inset_3px_0_0_hsl(var(--meds))]",
-        !isNextUpcoming && allDone && "opacity-85",
+        "scroll-mt-14 border border-line bg-panel",
+        near && "shadow-[inset_3px_0_0_hsl(var(--meds))]",
+        !near && allDone && "opacity-85",
       )}
     >
       <div className="flex min-h-11 items-center gap-2 border-b border-line bg-chrome px-2.5">
         <h3
+          data-testid="slot-time"
           className={cn(
             "font-mono text-base font-semibold",
-            overdue ? "text-bp" : "text-foreground"
+            missed ? "text-sodium" : near ? "text-meds" : "text-foreground",
           )}
         >
-          {formatTime12(time)}
+          {formatDoseTime(time)}
         </h3>
-        {!isFuture && hasPending && (
-          <div className="ml-auto flex items-center gap-1.5">
-            <Button
-              variant="outline"
-              size="sm"
-              className={slotButton}
-              onClick={() => onSkipAll(time, openSlots)}
-            >
-              Skip All
-            </Button>
-            <Button
-              size="sm"
-              className={slotButton}
-              onClick={() => onMarkAll(time, openSlots)}
-            >
-              Mark All
-            </Button>
-          </div>
-        )}
-        {!isFuture && !hasPending && hasTaken && (
+        {/* A future day has no bulk action until Reschedule ships (PR 2). */}
+        {slots.length >= 2 && !isFuture && (
           <Button
             variant="outline"
             size="sm"
             className={cn(slotButton, "ml-auto")}
-            onClick={() => onEditAll(time, slots)}
+            onClick={() => onMarkAll(time)}
           >
-            Edit All
+            Mark all doses
           </Button>
         )}
       </div>
@@ -122,15 +90,12 @@ export function TimeSlotGroup({
       <div>
         {slots.map((slot) => (
           <DoseRow
-            key={`${slot.scheduleId}-${slot.localTime}`}
+            key={slot.scheduleId}
             slot={slot}
-            isToday={isToday}
             isFuture={isFuture}
+            onOpen={onOpenDose}
             onTake={onTake}
-            onRetroactiveTake={onRetroactiveTake}
-            onSkip={onSkip}
-            onDoseClick={onDoseClick}
-            onEditTime={onEditTime}
+            onTakeLongPress={onTakeLongPress}
           />
         ))}
       </div>

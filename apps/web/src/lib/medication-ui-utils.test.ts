@@ -300,7 +300,7 @@ describe("formatTakeToastDescription", () => {
   });
 
   it("says no stock is tracked without a brand", () => {
-    expect(formatTakeToastDescription(slot({}))).toBe("Dose logged -- no stock tracked");
+    expect(formatTakeToastDescription(slot({}))).toBe("Dose logged. No stock tracked.");
   });
 });
 

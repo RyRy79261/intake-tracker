@@ -8,6 +8,12 @@ import {
 } from "@/lib/constants";
 import { DEFAULT_QUICK_NAV_ITEMS, type QuickNavItem } from "@/lib/quick-nav-defaults";
 import { DEFAULT_WEEK_STARTS_ON, isWeekStartsOn } from "@/lib/week-start";
+import {
+  DEFAULT_LATE_WINDOW_MINUTES,
+  DEFAULT_REMINDER_PERIOD_MINUTES,
+  isLateWindowMinutes,
+  isReminderPeriodMinutes,
+} from "@intake/core/dose-rules";
 
 export type { LiquidPreset } from "@/lib/constants";
 export type { QuickNavItem } from "@/lib/quick-nav-defaults";
@@ -91,7 +97,15 @@ export interface Settings {
   // Dose reminder settings
   doseRemindersEnabled: boolean;
   reminderFollowUpCount: number;
-  reminderFollowUpInterval: number; // minutes
+  reminderFollowUpInterval: number; // minutes ("Remind me every")
+  // Take asks for the time taken when later than this after the dose time
+  // (minutes; 0 = always ask, -1 = never ask).
+  lateWindowMinutes: number;
+  // Reminders repeat, and an open dose turns missed, until this long after
+  // the dose time (minutes).
+  reminderPeriodMinutes: number;
+  // Skip asks why ("Ask me every time").
+  askSkipReason: boolean;
 
   // Weight increment for +/- buttons (kg)
   weightIncrement: number;
@@ -154,6 +168,9 @@ interface SettingsActions {
   setDoseRemindersEnabled: (value: boolean) => void;
   setReminderFollowUpCount: (value: number) => void;
   setReminderFollowUpInterval: (value: number) => void;
+  setLateWindowMinutes: (value: number) => void;
+  setReminderPeriodMinutes: (value: number) => void;
+  setAskSkipReason: (value: boolean) => void;
   // Weight increment
   setWeightIncrement: (value: number) => void;
   // Storage mode
@@ -212,6 +229,9 @@ const defaultSettings: Settings = {
   doseRemindersEnabled: false,
   reminderFollowUpCount: 2,
   reminderFollowUpInterval: 10,
+  lateWindowMinutes: DEFAULT_LATE_WINDOW_MINUTES,
+  reminderPeriodMinutes: DEFAULT_REMINDER_PERIOD_MINUTES,
+  askSkipReason: true,
   homeTimezone: null,
   homeTimezoneConfirmedAt: null,
   bigText: false,
@@ -224,7 +244,7 @@ const defaultSettings: Settings = {
  * that would break an older stored state (new required field, dropped key,
  * renamed key, etc).
  */
-export const SETTINGS_PERSIST_VERSION = 18;
+export const SETTINGS_PERSIST_VERSION = 19;
 
 /**
  * Fields "Reset to Defaults" must not touch:
@@ -371,6 +391,18 @@ export function migrateSettings(
     // Monday default (what the app already showed).
     if (!isWeekStartsOn(state.weekStartsOn)) state.weekStartsOn = DEFAULT_WEEK_STARTS_ON;
   }
+  if (version < 19) {
+    // The dose rules became settings. Installs saved before them get the
+    // defaults: a 40-minute late window, a 30-minute reminder period and a
+    // skip reason asked every time.
+    if (!isLateWindowMinutes(state.lateWindowMinutes)) {
+      state.lateWindowMinutes = DEFAULT_LATE_WINDOW_MINUTES;
+    }
+    if (!isReminderPeriodMinutes(state.reminderPeriodMinutes)) {
+      state.reminderPeriodMinutes = DEFAULT_REMINDER_PERIOD_MINUTES;
+    }
+    if (typeof state.askSkipReason !== "boolean") state.askSkipReason = true;
+  }
   return state as unknown as Settings & SettingsActions;
 }
 
@@ -438,6 +470,14 @@ export const useSettingsStore = create<Settings & SettingsActions>()(
       setDoseRemindersEnabled: (value) => set({ doseRemindersEnabled: value }),
       setReminderFollowUpCount: (value) => set({ reminderFollowUpCount: value }),
       setReminderFollowUpInterval: (value) => set({ reminderFollowUpInterval: value }),
+      // Only a value the setting offers; anything else is ignored.
+      setLateWindowMinutes: (value) => {
+        if (isLateWindowMinutes(value)) set({ lateWindowMinutes: value });
+      },
+      setReminderPeriodMinutes: (value) => {
+        if (isReminderPeriodMinutes(value)) set({ reminderPeriodMinutes: value });
+      },
+      setAskSkipReason: (value) => set({ askSkipReason: value }),
 
       // Weight increment
       setWeightIncrement: (value) =>

@@ -1,7 +1,7 @@
 import type { VoiceParsedItem } from "@/lib/voice-types";
 import { parseBloodPressureForm, parseWeightForm } from "@intake/core/record-schemas";
 import { voiceItemProblem } from "@intake/core/voice-items";
-import { spokenTimeError } from "@/lib/voice-time";
+import { allowsFutureTime, spokenTimeError } from "@/lib/voice-time";
 import { getDeviceTimezone } from "@/lib/timezone";
 
 /**
@@ -24,14 +24,16 @@ import { getDeviceTimezone } from "@/lib/timezone";
  * Why a voice item cannot be saved as-is, or `null` when it is valid.
  *
  * `now` and `timeZone` are the clock the item's time is checked against (it
- * must be a real date-time, not in the future); they default to the device's.
+ * must be a real date-time, not in the future, except for a dose marked
+ * taken); they default to the device's.
  */
 export function validateVoiceItem(
   item: VoiceParsedItem,
   now: number = Date.now(),
   timeZone: string = getDeviceTimezone(),
 ): string | null {
-  const timeError = spokenTimeError(item.at, now, timeZone);
+  // A dose marked taken may be at any time the user states, also after now.
+  const timeError = spokenTimeError(item.at, now, timeZone, { allowFuture: allowsFutureTime(item) });
   if (timeError) return timeError;
   if (item.kind === "blood_pressure") {
     const parsed = parseBloodPressureForm({

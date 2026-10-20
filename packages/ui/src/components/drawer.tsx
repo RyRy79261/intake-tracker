@@ -5,6 +5,44 @@ import { Drawer as DrawerPrimitive } from "vaul"
 
 import { cn } from "../lib/utils"
 
+/**
+ * Drawers closed together (a sheet over a drawer, then the drawer) each step
+ * back over their own history entry. `history.back()` is async, so the steps
+ * run one at a time: each waits for the previous popstate, and a drawer
+ * steps back only while its own entry is the current one.
+ */
+const backQueue: string[] = [];
+let backInFlight = false;
+
+function stepBackFor(id: string): void {
+  backQueue.push(id);
+  pumpBackQueue();
+}
+
+function pumpBackQueue(): void {
+  while (!backInFlight && backQueue.length > 0) {
+    const id = backQueue.shift()!;
+    if (window.history.state?.drawerId !== id) continue;
+    backInFlight = true;
+    const done = () => {
+      window.removeEventListener("popstate", done);
+      clearTimeout(timer);
+      backInFlight = false;
+      pumpBackQueue();
+    };
+    window.addEventListener("popstate", done);
+    // Never wait forever for a popstate that does not come.
+    const timer = setTimeout(done, 1000);
+    window.history.back();
+  }
+}
+
+/** The drawer depth a history entry stands for: 0 for a screen's own entry. */
+function entryDepth(state: unknown): number {
+  const d = state && typeof state === "object" ? (state as { drawerDepth?: unknown }).drawerDepth : undefined;
+  return typeof d === "number" ? d : 0;
+}
+
 const Drawer = ({
   shouldScaleBackground = true,
   // Vaul's input repositioning yanks the whole sheet upward by the keyboard
@@ -18,17 +56,24 @@ const Drawer = ({
 }: React.ComponentProps<typeof DrawerPrimitive.Root>) => {
   const id = React.useId();
   const hasPushedState = React.useRef(false);
+  // How many drawer entries deep this drawer's own entry is (1 = over the
+  // screen, 2 = over another drawer, …). Kept in the entry's state.
+  const depth = React.useRef(0);
 
   React.useEffect(() => {
     if (open === undefined) return;
 
     if (open && !hasPushedState.current) {
-      window.history.pushState({ drawerId: id }, "");
+      // Keep the entry's own state (the app's window tags): a drawer opened
+      // over another drawer pops back to that drawer's entry, and the app
+      // must still read it as the same screen, not as a Back past it.
+      const current: unknown = window.history.state;
+      const base = current && typeof current === "object" ? current : {};
+      depth.current = entryDepth(base) + 1;
+      window.history.pushState({ ...base, drawerId: id, drawerDepth: depth.current }, "");
       hasPushedState.current = true;
     } else if (!open && hasPushedState.current) {
-      if (window.history.state?.drawerId === id) {
-        window.history.back();
-      }
+      stepBackFor(id);
       hasPushedState.current = false;
     }
   }, [open, id]);
@@ -36,7 +81,10 @@ const Drawer = ({
   React.useEffect(() => {
     const handlePopState = () => {
       if (open && onOpenChange && hasPushedState.current) {
-        if (window.history.state?.drawerId !== id) {
+        // Close only when Back went past this drawer's own entry. A drawer
+        // opened on top of it that steps back lands on this drawer's entry
+        // (same depth), and this drawer stays open.
+        if (entryDepth(window.history.state) < depth.current) {
           onOpenChange(false);
           hasPushedState.current = false;
         }

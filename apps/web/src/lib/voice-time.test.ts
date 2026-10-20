@@ -212,7 +212,29 @@ describe("spokenTimestamp", () => {
   });
 });
 
+describe("spokenTimestamp: a dose marked taken", () => {
+  it("keeps a stated time after now (no limit on a taken time)", () => {
+    const dose = { kind: "scheduled_dose", action: "taken", at: "2026-09-30T15:00" } as const;
+    expect(spokenTimestamp(dose, NOW_JHB, JHB)).toBe(parseLocalDateTime("2026-09-30T15:00", JHB));
+    // A skip is not a taken time: it is still clamped to now.
+    expect(spokenTimestamp({ ...dose, action: "skipped" }, NOW_JHB, JHB)).toBe(NOW_JHB);
+  });
+
+  it("resolves a spoken time after now for a dose taken, not for a drink", () => {
+    const when = { kind: "absolute", localDateTime: "2026-09-30T15:00" } as const;
+    expect(resolveSpokenWhen(when, NOW_JHB, JHB, { allowFuture: true })).toBe("2026-09-30T15:00");
+    expect(resolveSpokenWhen(when, NOW_JHB, JHB)).toBeUndefined();
+    const dose = { kind: "scheduled_dose", slotTime: "08:30", action: "taken", when } as VoiceParsedItem;
+    expect(normalizeSpokenTiming(dose, NOW_JHB, JHB).at).toBe("2026-09-30T15:00");
+  });
+});
+
 describe("spokenTimeError", () => {
+  it("accepts a future time when allowed (a dose marked taken)", () => {
+    expect(spokenTimeError("2026-09-30T15:00", NOW_JHB, JHB, { allowFuture: true })).toBeNull();
+    expect(spokenTimeError("25:00", NOW_JHB, JHB, { allowFuture: true })).toMatch(/valid/);
+  });
+
   it("accepts no time, and a past time", () => {
     expect(spokenTimeError(undefined, NOW_JHB, JHB)).toBeNull();
     expect(spokenTimeError("2026-09-29T20:00", NOW_JHB, JHB)).toBeNull();

@@ -3,6 +3,7 @@
  * Uses the browser's Notification API for local notifications.
  */
 
+import { reminderRepeatCount } from "@intake/core/dose-rules";
 import { ok, err } from "@intake/core/service";
 import type { ServiceResult } from "@intake/types/service";
 import { apiFetch } from "@/lib/api-fetch";
@@ -318,7 +319,8 @@ export async function syncPushSettings(): Promise<void> {
   if (!(await hasPushSubscription())) return;
 
   const body = JSON.stringify({
-    followUpCount: s.reminderFollowUpCount,
+    // The server takes 0-10 repeats; the count comes from the period.
+    followUpCount: Math.min(10, reminderRepeatCount(s.reminderFollowUpInterval, s.reminderPeriodMinutes)),
     followUpIntervalMinutes: s.reminderFollowUpInterval,
     dayStartHour: s.dayStartHour,
   });

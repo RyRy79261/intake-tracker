@@ -20,6 +20,7 @@ import { applyPresetCaffeine } from "@/lib/voice-presets";
 import { validateVoiceItem } from "@/lib/voice-validation";
 import {
   clientNowForParse,
+  formatLocalDateTime,
   isLongAgo,
   normalizeSpokenTiming,
   spokenTimestamp,
@@ -65,6 +66,8 @@ type RowState = {
   flagged: boolean;
   /** An AI re-look-up of this one row is in flight. */
   refreshing: boolean;
+  /** A late dose row: the user picked "Take now" (record the save time). */
+  takeNow?: boolean;
 };
 
 /**
@@ -100,19 +103,29 @@ function parseNotices(data: VoiceParseResponse): string[] {
   return notices;
 }
 
+/** A planned row still waiting for "Take now", "Take at a specific time" or "Skip". */
+function needsChoice(planned: PlanResult | null | undefined): boolean {
+  return !!planned?.ok && planned.plan.kind === "scheduled_dose" && planned.plan.needsTimeChoice;
+}
+
 /**
  * What saving a medication row would do, against the loaded list, with the
  * row's own time or `now`. Not a medication row → null.
  */
 function planRow(
-  item: VoiceParsedItem,
+  row: Pick<RowState, "item" | "takeNow">,
   ctx: VoiceMedicationContext | undefined,
   now: number,
   timeZone: string,
 ): PlanResult | null | undefined {
+  const { item } = row;
   if (!isMedicationItem(item)) return null;
   if (!ctx) return undefined;
-  return planMedicationItem(item, ctx, spokenTimestamp(item, now, timeZone), item.at !== undefined);
+  return planMedicationItem(item, ctx, spokenTimestamp(item, now, timeZone), item.at !== undefined, {
+    now,
+    lateWindowMinutes: useSettingsStore.getState().lateWindowMinutes,
+    ...(row.takeNow && { takeNow: true }),
+  });
 }
 
 interface VoicePanelProps {
@@ -355,7 +368,8 @@ export function VoicePanel({ onCommitted, initialClip }: VoicePanelProps) {
         !r.flagged &&
         !r.refreshing &&
         validateVoiceItem(r.item, now, timeZone) === null &&
-        planRow(r.item, medicationContextRef.current, now, timeZone)?.ok !== false &&
+        planRow(r, medicationContextRef.current, now, timeZone)?.ok !== false &&
+        !needsChoice(planRow(r, medicationContextRef.current, now, timeZone)) &&
         !(isMedicationItem(r.item) && !medicationContextRef.current) &&
         !isLongAgo(r.item.at, now, timeZone)
           ? { ...r, approved: true }
@@ -404,7 +418,7 @@ export function VoicePanel({ onCommitted, initialClip }: VoicePanelProps) {
         // closed database and retries once (issue #287).
         if (isMedicationItem(item)) {
           // Planned again now, against the list as it is at save time.
-          const planned = planRow(item, medicationContextRef.current, batchNow, timeZone);
+          const planned = planRow(row, medicationContextRef.current, batchNow, timeZone);
           if (!planned) throw new Error("Your medications have not loaded yet");
           if (!planned.ok) throw new Error(planned.problem);
           await saveMedicationPlan(planned.plan);
@@ -450,14 +464,28 @@ export function VoicePanel({ onCommitted, initialClip }: VoicePanelProps) {
     }
   }, [rows, toast, reset, queryClient, logParsedEntry, onCommitted]);
 
-  const medicationRowProps = (item: VoiceParsedItem) => {
-    const planned = planRow(item, medicationContext, Date.now(), getDeviceTimezone());
+  const medicationRowProps = (row: RowState, index: number) => {
+    const timeZone = getDeviceTimezone();
+    const planned = planRow(row, medicationContext, Date.now(), timeZone);
     if (planned === null) return {};
+    const plan = planned?.ok ? planned.plan : undefined;
+    const timeChoice =
+      plan?.kind === "scheduled_dose" && plan.needsTimeChoice
+        ? {
+            onTakeNow: () => updateRow(index, { takeNow: true }),
+            onPickTime: () =>
+              updateRow(index, {
+                item: { ...row.item, at: formatLocalDateTime(plan.dueAt ?? Date.now(), timeZone) },
+              }),
+            onSkip: () =>
+              updateRow(index, { item: { ...row.item, action: "skipped" } as VoiceParsedItem }),
+          }
+        : undefined;
     const medication: MedicationRowState | undefined =
       planned === undefined
         ? undefined
         : planned.ok
-          ? { ok: true, lines: describePlan(planned.plan) }
+          ? { ok: true, lines: describePlan(planned.plan), ...(timeChoice && { timeChoice }) }
           : { ok: false, problem: planned.problem };
     return { ...(medication && { medication }), medicineNames };
   };
@@ -556,7 +584,7 @@ export function VoicePanel({ onCommitted, initialClip }: VoicePanelProps) {
                     {...(isRefreshable(row.item) && {
                       onRefresh: () => void refreshRow(row),
                     })}
-                    {...medicationRowProps(row.item)}
+                    {...medicationRowProps(row, i)}
                     onChange={(next) => updateRow(i, { item: next })}
                     onApprove={() =>
                       updateRow(i, {

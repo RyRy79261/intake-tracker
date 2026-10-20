@@ -16,6 +16,26 @@ export async function getDoseLogById(id: string): Promise<DoseLog | undefined> {
 }
 
 /**
+ * The latest taken dose of a prescription (scheduled or as needed), leaving
+ * out `excludeId` (the dose the dialog shows). Undefined when none.
+ */
+export async function getLastTakenDose(
+  prescriptionId: string,
+  excludeId?: string,
+): Promise<DoseLog | undefined> {
+  const logs = await db.doseLogs
+    .where("prescriptionId")
+    .equals(prescriptionId)
+    .filter((l) => isLive(l) && l.status === "taken" && l.id !== excludeId && l.actionTimestamp != null)
+    .toArray();
+  let latest: DoseLog | undefined;
+  for (const log of logs) {
+    if (!latest || log.actionTimestamp! > latest.actionTimestamp!) latest = log;
+  }
+  return latest;
+}
+
+/**
  * Live PRN (kind='prn') logs for a prescription dated on or after `sinceDate`
  * ("YYYY-MM-DD"), newest first.
  */

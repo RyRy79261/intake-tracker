@@ -24,8 +24,10 @@ import { useOptionalTrackerEnabled } from "@/lib/optional-trackers";
 import { validateVoiceItem } from "@/lib/voice-validation";
 import {
   REVIEW_AFTER_DAYS,
+  allowsFutureTime,
   describeSpokenTime,
   formatLocalDateTime,
+  isFutureTime,
   isLongAgo,
 } from "@/lib/voice-time";
 import { getDeviceTimezone } from "@/lib/timezone";
@@ -62,8 +64,17 @@ interface ParsedItemRowProps {
   medicineNames?: string[];
 }
 
-/** What a medication row shows: the planned changes, or the problem. */
-export type MedicationRowState = { ok: true; lines: string[] } | { ok: false; problem: string };
+/**
+ * What a medication row shows: the planned changes, or the problem. A late
+ * dose with no time said also asks when it was taken (`timeChoice`).
+ */
+export type MedicationRowState =
+  | {
+      ok: true;
+      lines: string[];
+      timeChoice?: { onTakeNow: () => void; onPickTime: () => void; onSkip: () => void };
+    }
+  | { ok: false; problem: string };
 
 type ColorClass = { bar: string; ring: string; chip: string };
 
@@ -721,7 +732,7 @@ function TimeField({
             aria-label="Time"
             className="h-9 w-[13.5rem]"
             disabled={disabled}
-            max={formatLocalDateTime(now, timeZone)}
+            {...(!allowsFutureTime(item) && { max: formatLocalDateTime(now, timeZone) })}
             value={item.at ?? ""}
             onChange={(e) => setAt(e.target.value)}
           />
@@ -759,6 +770,15 @@ function TimeField({
         <p className="flex items-start gap-1.5 text-[11px] leading-snug text-amber-700 dark:text-amber-400">
           <AlertTriangle className="mt-px h-3 w-3 shrink-0" />
           <span>More than {REVIEW_AFTER_DAYS} days ago. Check the date.</span>
+        </p>
+      )}
+      {allowsFutureTime(item) && isFutureTime(item.at, now, timeZone) && (
+        <p
+          className="flex items-start gap-1.5 text-[11px] leading-snug text-amber-700 dark:text-amber-400"
+          data-testid={`voice-item-${index}-future`}
+        >
+          <AlertTriangle className="mt-px h-3 w-3 shrink-0" />
+          <span>This time is in the future.</span>
         </p>
       )}
     </div>
@@ -802,7 +822,9 @@ export function ParsedItemRow({
     : medication === undefined
       ? "Loading your medications…"
       : medication.ok
-        ? null
+        ? medication.timeChoice
+          ? "Pick when you took them."
+          : null
         : medication.problem;
   const invalid = approved === null ? (validateVoiceItem(item) ?? medicationProblem) : null;
   const medicineListId = isMedication && medicineNames?.length ? `voice-medicines-${index}` : undefined;
@@ -859,6 +881,22 @@ export function ParsedItemRow({
                 </li>
               ))}
             </ul>
+          )}
+          {medication?.ok && medication.timeChoice && approved === null && (
+            <div className="space-y-1.5" data-testid={`voice-item-${index}-time-choice`}>
+              <p className="text-xs font-medium">When did you take your meds?</p>
+              <div className="flex flex-wrap gap-1.5">
+                <Button type="button" size="sm" className="h-8" disabled={disabled} onClick={medication.timeChoice.onTakeNow}>
+                  Take now
+                </Button>
+                <Button type="button" size="sm" variant="outline" className="h-8" disabled={disabled} onClick={medication.timeChoice.onPickTime}>
+                  Take at a specific time
+                </Button>
+                <Button type="button" size="sm" variant="outline" className="h-8" disabled={disabled} onClick={medication.timeChoice.onSkip}>
+                  Skip
+                </Button>
+              </div>
+            </div>
           )}
           <TimeField
             item={item}

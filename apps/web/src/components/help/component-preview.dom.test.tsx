@@ -95,8 +95,9 @@ describe("ComponentPreview", () => {
   it("shows the sample schedule and a + button for medication-schedule", async () => {
     renderPreview("medication-schedule");
 
+    // Rows show the name on the box (the brand).
     expect(
-      await screen.findAllByText("Furosemide", undefined, { timeout: 5000 }),
+      await screen.findAllByText("Lasix", undefined, { timeout: 5000 }),
     ).not.toHaveLength(0);
     expect(within(demo()).getByRole("button", { name: "Add medication" })).toBeInTheDocument();
   });

@@ -93,5 +93,12 @@ describe("validateVoiceItem", () => {
     it("rejects a time in the future", () => {
       expect(water("2026-09-30T14:30")).toMatch(/future/);
     });
+
+    it("accepts a time after now for a dose marked taken, and refuses it for a skip", () => {
+      const dose = (action: "taken" | "skipped") =>
+        validateVoiceItem({ kind: "scheduled_dose", slotTime: "08:30", action, at: "2026-09-30T15:00" }, now, tz);
+      expect(dose("taken")).toBeNull();
+      expect(dose("skipped")).toMatch(/future/);
+    });
   });
 });

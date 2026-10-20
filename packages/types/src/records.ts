@@ -625,6 +625,16 @@ export interface UserSettings {
   secondaryRegion: string;
   reminderFollowUpCount: number;
   reminderFollowUpInterval: number; // minutes
+  // Dose rules (minutes). Absent on rows written before they existed:
+  // readers keep their own value.
+  // Take asks for the time taken when later than this after the dose time.
+  // 0 = always ask, -1 = never ask.
+  lateWindowMinutes?: number;
+  // Reminders repeat, and a dose with no action becomes missed, until this
+  // long after the dose time.
+  reminderPeriodMinutes?: number;
+  // Skip asks why ("Ask me every time").
+  askSkipReason?: boolean;
   // IANA zone the user's dose schedules belong to; null = never confirmed.
   homeTimezone: string | null;
   homeTimezoneConfirmedAt: number | null; // when homeTimezone was last set

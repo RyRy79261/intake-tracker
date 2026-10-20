@@ -193,7 +193,8 @@ describe("usePushScheduleSync", () => {
     expect(callsTo("/api/push/settings")).toHaveLength(1);
 
     act(() => {
-      useSettingsStore.setState({ reminderFollowUpCount: 4, reminderFollowUpInterval: 15 });
+      // Every 15 minutes for an hour: 4 repeats.
+      useSettingsStore.setState({ reminderPeriodMinutes: 60, reminderFollowUpInterval: 15 });
     });
 
     await waitFor(() => expect(callsTo("/api/push/settings")).toHaveLength(2));
@@ -288,7 +289,8 @@ describe("app-wide reminder resync (no Medications window open)", () => {
     await waitFor(() => expect(callsTo("/api/push/settings")).toHaveLength(1));
 
     act(() => {
-      useSettingsStore.setState({ reminderFollowUpCount: 0, reminderFollowUpInterval: 15 });
+      // The period is shorter than the interval: no repeats.
+      useSettingsStore.setState({ reminderPeriodMinutes: 10, reminderFollowUpInterval: 15 });
     });
 
     await waitFor(() => expect(callsTo("/api/push/settings")).toHaveLength(2));

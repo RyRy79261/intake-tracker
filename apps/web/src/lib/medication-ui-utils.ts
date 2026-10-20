@@ -1,6 +1,7 @@
 import type { DoseSlot } from "@/lib/dose-schedule-service";
 import type { InventoryItem, MedicationPhase } from "@/lib/db";
 import { isCleanFraction } from "@/lib/dose-log-service";
+import { formatClockTime, formatTimeOnly, toLocalDateKey } from "@/lib/date-utils";
 import {
   isCombo,
   isValidPillStrength,
@@ -161,9 +162,9 @@ export function describeBrandDose(
  * (see calculatePillsConsumed), so the toast must not claim it was.
  */
 export function formatTakeToastDescription(slot: DoseSlot): string {
-  if (!slot.inventory) return "Dose logged -- no stock tracked";
+  if (!slot.inventory) return "Dose logged. No stock tracked.";
   if (slot.inventoryWarning === "invalid_strength" || slot.pillsPerDose == null) {
-    return "Dose logged -- tablet strength missing, stock not changed";
+    return "Dose logged. Tablet strength missing, so stock did not change.";
   }
   return `${formatPillCount(slot.pillsPerDose)} deducted`;
 }
@@ -255,4 +256,86 @@ export function computeProgress(slots: DoseSlot[]): {
   const allDone = total > 0 && pending === 0;
 
   return { total, taken, skipped, pending, pct, allDone };
+}
+
+// ---------------------------------------------------------------------------
+// Time format and labels for the medication screens
+// ---------------------------------------------------------------------------
+
+/**
+ * A dose time ("08:30") in the user's Time format setting. The one helper
+ * for every medication surface, so rows, headers and sheets agree.
+ */
+export function formatDoseTime(hhmm: string): string {
+  return formatClockTime(hhmm);
+}
+
+/** The clock time of an instant in the user's Time format ("08:32"). */
+export function formatDoseInstant(timestamp: number): string {
+  return formatTimeOnly(timestamp);
+}
+
+/** "Oct 18" for an instant. */
+function shortDate(timestamp: number): string {
+  return new Date(timestamp).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+/** "Sunday, Oct 18" for a "YYYY-MM-DD" key. */
+export function formatDoseDate(dateKey: string): string {
+  return new Date(`${dateKey}T12:00:00`).toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "short",
+    day: "numeric",
+  });
+}
+
+/**
+ * The name the owner sees on the box: the active brand, else the generic
+ * name (the reminders use the same rule).
+ */
+export function doseDisplayName(slot: Pick<DoseSlot, "inventory" | "prescription">): string {
+  return slot.inventory?.brandName?.trim() || slot.prescription.genericName;
+}
+
+/** "100 mg · 1 tablet · with food": the dose and the food instruction. */
+export function formatDoseLine(slot: DoseSlot): string {
+  const food = slot.phase.foodInstruction;
+  const parts = [formatDoseAmount(slot)];
+  if (food === "before") parts.push("before food");
+  else if (food === "after") parts.push("with food");
+  return parts.join(" · ");
+}
+
+/**
+ * "Taken at 08:32", or "Taken at 08:32, Oct 18" when the dose was taken on
+ * another day than its own.
+ */
+export function formatTakenAt(timestamp: number, doseDate: string): string {
+  const day = toLocalDateKey(timestamp);
+  return day === doseDate
+    ? `Taken at ${formatDoseInstant(timestamp)}`
+    : `Taken at ${formatDoseInstant(timestamp)}, ${shortDate(timestamp)}`;
+}
+
+/** The status line of a dose row, or null for an open dose that is not missed. */
+export function doseStatusLine(slot: DoseSlot): string | null {
+  switch (slot.status) {
+    case "taken":
+      return slot.existingLog?.actionTimestamp !== undefined
+        ? formatTakenAt(slot.existingLog.actionTimestamp, slot.scheduledDate)
+        : "Taken";
+    case "skipped":
+      return slot.existingLog?.skipReason ? `Skipped · ${slot.existingLog.skipReason}` : "Skipped";
+    case "missed":
+      return "Missed";
+    default:
+      return slot.existingLog?.status === "rescheduled" && slot.existingLog.rescheduledTo
+        ? `Rescheduled for ${formatDoseTime(slot.existingLog.rescheduledTo)}`
+        : null;
+  }
+}
+
+/** "3 meds", "1 med". */
+export function medsCount(n: number): string {
+  return `${n} ${n === 1 ? "med" : "meds"}`;
 }

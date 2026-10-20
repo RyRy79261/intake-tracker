@@ -167,7 +167,7 @@ export function LogDoseDialog({ open, onOpenChange }: LogDoseDialogProps) {
       description:
         brand && pills !== undefined
           ? `${formatPillCount(pills)} deducted`
-          : "Dose logged -- no stock tracked",
+          : "Dose logged. No stock tracked.",
       // mutateAsync, not mutate's per-call onError: the toast outlives this
       // dialog (switching tabs unmounts it), and React Query drops per-call
       // callbacks once their component has gone.

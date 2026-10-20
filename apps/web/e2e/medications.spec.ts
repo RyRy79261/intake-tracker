@@ -1,4 +1,5 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
+import { berlin, DAY, doseLogs, prepare, seedSlot, stocks, ZONE, type SeededDose } from './helpers/meds';
 
 test.describe('Medications', () => {
   test('should mock AI search and create medication', async ({ page }) => {
@@ -150,23 +151,23 @@ test.describe('Medications', () => {
     // Wait for wizard drawer to fully close
     await expect(page.getByRole('dialog')).toBeHidden({ timeout: 5000 });
 
-    // The Schedule tab should already be active (default tab)
-    // Wait for the schedule view to render — look for the medication name in a dose slot
-    const doseSlot = page.locator('text=Aviolix Compound').first();
+    // The Schedule tab should already be active (default tab). The row
+    // shows the name on the box: the brand.
+    const doseSlot = page.getByTestId('window').getByText('Aviolix 75', { exact: true }).first();
     await expect(doseSlot).toBeVisible({ timeout: 10000 });
 
-    // Click the inline "Take" button on the dose row
-    // Use exact match to avoid matching "Intake" nav button (has-text is case-insensitive)
-    const takeRowButton = page.getByRole('button', { name: 'Take', exact: true }).first();
+    // The round Take button on the dose row.
+    const takeRowButton = page.getByRole('button', { name: 'Take Aviolix 75' }).first();
     await expect(takeRowButton).toBeVisible({ timeout: 5000 });
     await takeRowButton.click();
 
-    // Either dose logged immediately (within 30min of schedule) or RetroactiveTimePicker appears
-    const logDose = page.locator('button:has-text("Log Dose")');
-    const takenAt = page.locator('text=/Taken at/');
-    await expect(logDose.or(takenAt)).toBeVisible({ timeout: 5000 });
-    if (await logDose.isVisible()) {
-      await logDose.click();
+    // Either the dose is logged at once (inside the late window) or the
+    // "When did you take" sheet asks first.
+    const takeNow = page.getByRole('button', { name: /^Take now/ });
+    const takenAt = page.getByTestId('window').locator('text=/Taken at/');
+    await expect(takeNow.or(takenAt)).toBeVisible({ timeout: 5000 });
+    if (await takeNow.isVisible()) {
+      await takeNow.click();
     }
 
     // === Per D-02: Verify dose recorded in history ===
@@ -414,5 +415,263 @@ test.describe('Medications', () => {
       consoleErrors,
       `unexpected console errors:\n${consoleErrors.join('\n')}`,
     ).toEqual([]);
+  });
+});
+
+/**
+ * The Today screen and "Mark all doses" (Medisafe parity, PR 1). Six
+ * medicines are due at 08:30 Berlin time; the page clock is set to a minute
+ * of that day. Seeded in IndexedDB and fully offline (no sync, no AI).
+ */
+test.describe('Today: Mark all doses and the late window', () => {
+  test.use({ timezoneId: ZONE, locale: 'en-GB' });
+
+  const win = (page: Page) => page.getByTestId('window');
+  const modal = (page: Page) => page.getByTestId('mark-all-doses');
+  const sheet = (page: Page) =>
+    page.getByRole('dialog').filter({ hasText: 'When did you take your meds?' });
+
+  async function openMarkAll(page: Page) {
+    await win(page).getByRole('button', { name: 'Mark all doses' }).click();
+    await expect(modal(page)).toBeVisible();
+  }
+
+  /** Every log's taken time, in minutes after 08:30 (whole minutes). */
+  async function takenMinutes(page: Page, doses: SeededDose[]) {
+    const logs = await doseLogs(page);
+    return doses.map((d) => {
+      const log = logs.get(d.scheduleId);
+      return log?.status === 'taken'
+        ? Math.floor((Number(log.actionTimestamp) - berlin('08:30')) / 60_000)
+        : String(log?.status ?? 'none');
+    });
+  }
+
+  test('at 09:30, Take all asks; "Take at a specific time" with 08:30 records 08:30 on all six', async ({ page }) => {
+    await prepare(page, '09:30');
+    const doses = await seedSlot(page, 6);
+
+    await openMarkAll(page);
+    await expect(modal(page).getByTestId('late-warning')).toBeVisible();
+    await modal(page).getByRole('button', { name: 'Take all', exact: true }).click();
+
+    await expect(sheet(page)).toBeVisible();
+    await expect(sheet(page).getByRole('button', { name: /^Take now \(09:3\d\)$/ })).toBeVisible();
+    await expect(sheet(page).getByRole('button', { name: 'Take at a specific time' })).toBeVisible();
+    await expect(sheet(page).getByRole('button', { name: 'Skip', exact: true })).toBeVisible();
+
+    await sheet(page).getByRole('button', { name: 'Take at a specific time' }).click();
+    // The default is when the doses were due.
+    await expect(sheet(page).getByLabel('Time taken')).toHaveValue('08:30');
+    await expect(sheet(page).getByLabel('Date taken')).toHaveValue(DAY);
+    await sheet(page).getByRole('button', { name: 'Save' }).click();
+
+    await expect(page.getByText('6 meds taken').first()).toBeVisible();
+    await expect.poll(() => takenMinutes(page, doses)).toEqual([0, 0, 0, 0, 0, 0]);
+    expect(await stocks(page, doses)).toEqual([29, 29, 29, 29, 29, 29]);
+    await expect(win(page).getByText('Taken at 08:30')).toHaveCount(6);
+  });
+
+  test('at 09:00, Take all records 09:00 with no sheet; Undo returns all to open', async ({ page }) => {
+    await prepare(page, '09:00');
+    const doses = await seedSlot(page, 6);
+
+    await openMarkAll(page);
+    await expect(modal(page).getByTestId('late-warning')).toHaveCount(0);
+    await modal(page).getByRole('button', { name: 'Take all', exact: true }).click();
+
+    await expect(sheet(page)).toHaveCount(0);
+    await expect.poll(() => takenMinutes(page, doses)).toEqual([30, 30, 30, 30, 30, 30]);
+    await expect(modal(page)).toBeHidden();
+
+    await page.getByRole('button', { name: /^Undo/ }).click();
+    await expect
+      .poll(async () => [...(await doseLogs(page)).values()].map((l) => l.status))
+      .toEqual(['pending', 'pending', 'pending', 'pending', 'pending', 'pending']);
+    expect(await stocks(page, doses)).toEqual([30, 30, 30, 30, 30, 30]);
+    await expect(win(page).getByText(/^Taken at/)).toHaveCount(0);
+  });
+
+  test('at 07:30, Take all records 07:30 with no sheet', async ({ page }) => {
+    await prepare(page, '07:30');
+    const doses = await seedSlot(page, 6);
+
+    await openMarkAll(page);
+    await modal(page).getByRole('button', { name: 'Take all', exact: true }).click();
+
+    await expect(sheet(page)).toHaveCount(0);
+    await expect.poll(() => takenMinutes(page, doses)).toEqual([-60, -60, -60, -60, -60, -60]);
+  });
+
+  test('one dose taken at 08:35: Take all at 09:00 leaves it and takes the other five, with no confirmation', async ({ page }) => {
+    await prepare(page, '09:00');
+    const doses = await seedSlot(page, 6, [{ status: 'taken', at: '08:35' }]);
+
+    await openMarkAll(page);
+    await modal(page).getByRole('button', { name: 'Take all', exact: true }).click();
+
+    // No override confirmation, and no time sheet.
+    await expect(page.getByRole('alertdialog')).toHaveCount(0);
+    await expect(sheet(page)).toHaveCount(0);
+    await expect.poll(() => takenMinutes(page, doses)).toEqual([5, 30, 30, 30, 30, 30]);
+    // The first dose's pill came out once.
+    expect(await stocks(page, doses)).toEqual([29, 29, 29, 29, 29, 29]);
+    await expect(page.getByText('5 meds taken').first()).toBeVisible();
+  });
+
+  test('an untouched 08:30 dose shows Missed at 09:01 on the same day', async ({ page }) => {
+    await prepare(page, '09:00');
+    await seedSlot(page, 1);
+    const row = win(page).getByTestId('dose-row');
+    await expect(row).toHaveAttribute('data-status', 'pending');
+    await expect(row.getByText('Missed')).toHaveCount(0);
+
+    await page.clock.setSystemTime(new Date(berlin('09:01') + 5_000));
+    // The screen re-reads the clock every 15 seconds.
+    await expect(row.getByText('Missed')).toBeVisible({ timeout: 20_000 });
+    await expect(row).toHaveAttribute('data-status', 'missed');
+  });
+
+  test('Untake all shows once every dose is taken and puts the pills back', async ({ page }) => {
+    await prepare(page, '10:00');
+    const all = Array.from({ length: 6 }, () => ({ status: 'taken' as const, at: '08:40' }));
+    const doses = await seedSlot(page, 6, all);
+    expect(await stocks(page, doses)).toEqual([29, 29, 29, 29, 29, 29]);
+
+    await openMarkAll(page);
+    await expect(modal(page).getByRole('button', { name: 'Take all', exact: true })).toHaveCount(0);
+    await expect(modal(page).getByRole('button', { name: 'Skip all', exact: true })).toHaveCount(0);
+    await modal(page).getByRole('button', { name: 'Untake all', exact: true }).click();
+
+    await expect.poll(() => stocks(page, doses)).toEqual([30, 30, 30, 30, 30, 30]);
+    await expect(page.getByText('6 meds untaken').first()).toBeVisible();
+  });
+
+  test('Untake all shows as a text button while some doses are open', async ({ page }) => {
+    await prepare(page, '09:00');
+    const doses = await seedSlot(page, 3, [{ status: 'taken', at: '08:35' }]);
+
+    await openMarkAll(page);
+    await expect(modal(page).getByRole('button', { name: 'Take all', exact: true })).toBeVisible();
+    await expect(modal(page).getByRole('button', { name: 'Skip all', exact: true })).toBeVisible();
+    await modal(page).getByRole('button', { name: 'Untake all', exact: true }).click();
+    await expect.poll(() => stocks(page, doses)).toEqual([30, 30, 30]);
+  });
+
+  test("at 09:30, Take all then the sheet's Skip skips the five open doses, keeps the 08:35 one, and asks why", async ({ page }) => {
+    await prepare(page, '09:30');
+    const doses = await seedSlot(page, 6, [{ status: 'taken', at: '08:35' }]);
+
+    await openMarkAll(page);
+    await modal(page).getByRole('button', { name: 'Take all', exact: true }).click();
+    await sheet(page).getByRole('button', { name: 'Skip', exact: true }).click();
+
+    await expect(page.getByText('Why are you skipping this dose?')).toBeVisible();
+    await expect.poll(() => takenMinutes(page, doses)).toEqual([5, 'skipped', 'skipped', 'skipped', 'skipped', 'skipped']);
+    expect(await stocks(page, doses)).toEqual([29, 30, 30, 30, 30, 30]);
+  });
+
+  test('Take all, then Take now at 09:30, records 09:30', async ({ page }) => {
+    await prepare(page, '09:30');
+    const doses = await seedSlot(page, 2);
+
+    await openMarkAll(page);
+    await modal(page).getByRole('button', { name: 'Take all', exact: true }).click();
+    const takeNow = sheet(page).getByRole('button', { name: /^Take now/ });
+    // The button shows the time it records: 09:30 and the minute or so the test ran.
+    const [, hh, mm] = /\((\d{2}):(\d{2})\)/.exec((await takeNow.textContent()) ?? '')!;
+    const shown = Number(hh) * 60 + Number(mm) - (8 * 60 + 30);
+    expect(shown).toBeGreaterThanOrEqual(60);
+    expect(shown).toBeLessThanOrEqual(62);
+    await takeNow.click();
+    await expect.poll(() => takenMinutes(page, doses)).toEqual([shown, shown]);
+  });
+
+  test('modal, dose dialog, then the time sheet: Cancel keeps both open, and Back closes them one at a time', async ({ page }) => {
+    await prepare(page, '10:00');
+    await seedSlot(page, 3);
+    const dialog = page.getByRole('dialog').filter({ hasText: /Scheduled for 08:30/ });
+    const timeSheet = page.getByRole('dialog').filter({ hasText: /^When did you take/ });
+
+    await openMarkAll(page);
+    await modal(page).getByRole('button', { name: /Open dose/ }).first().click();
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole('button', { name: 'Take', exact: true }).click();
+    await expect(timeSheet).toBeVisible();
+    await timeSheet.getByRole('button', { name: 'Cancel' }).click();
+
+    await expect(timeSheet).toHaveCount(0);
+    await expect(dialog).toBeVisible();
+    await expect(modal(page)).toBeVisible();
+
+    await page.goBack();
+    await expect(dialog).toHaveCount(0);
+    await expect(modal(page)).toBeVisible();
+
+    await page.goBack();
+    await expect(modal(page)).toHaveCount(0);
+    await expect(win(page)).toBeVisible();
+  });
+
+  test('the modal fills a phone and is a centred panel of normal width on a wide screen', async ({ page }) => {
+    await prepare(page, '09:00');
+    await seedSlot(page, 2);
+    await openMarkAll(page);
+    const phone = page.viewportSize()!;
+    const box = (await modal(page).boundingBox())!;
+    expect(box.width).toBe(phone.width);
+    expect(box.height).toBeGreaterThan(phone.height * 0.85);
+    await modal(page).getByRole('button', { name: 'Close' }).click();
+    await expect(modal(page)).toHaveCount(0);
+
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await openMarkAll(page);
+    await expect(modal(page)).toBeVisible();
+    await expect
+      .poll(async () => (await modal(page).boundingBox())!.width)
+      .toBeLessThanOrEqual(512);
+    const wide = (await modal(page).boundingBox())!;
+    expect(Math.abs(wide.x + wide.width / 2 - 720)).toBeLessThan(2);
+    await expect(modal(page).getByRole('button', { name: 'Take all', exact: true })).toBeVisible();
+  });
+
+  test('at the end of the list, the "Unmarked meds" chip does not cover the last dose', async ({ page }) => {
+    await prepare(page, '21:00');
+    const times = ['08:30', '08:30', '13:00', '13:00', '20:00', '20:00', '22:00', '22:00'];
+    await seedSlot(page, 8, [], times);
+
+    const chip = win(page).getByRole('button', { name: 'Unmarked meds' });
+    const lastRow = win(page).getByTestId('dose-row').last();
+    await lastRow.scrollIntoViewIfNeeded();
+    await expect(chip).toBeVisible();
+    // Scroll every container to its end: the chip sits under the last row.
+    await page.evaluate(() => {
+      for (const el of document.querySelectorAll<HTMLElement>('*')) {
+        if (el.scrollHeight > el.clientHeight) el.scrollTop = el.scrollHeight;
+      }
+    });
+    await expect(chip).toBeVisible();
+    const c = (await chip.boundingBox())!;
+    const r = (await lastRow.boundingBox())!;
+    expect(c.y).toBeGreaterThanOrEqual(r.y + r.height);
+
+    await chip.click();
+    await expect(win(page).locator('#time-slot-08\\:30')).toBeInViewport();
+  });
+
+  test('Unskip all shows once every dose is skipped and opens them again', async ({ page }) => {
+    await prepare(page, '10:00');
+    const all = Array.from({ length: 6 }, () => ({ status: 'skipped' as const, at: '08:40', reason: 'Cost' }));
+    const doses = await seedSlot(page, 6, all);
+
+    await openMarkAll(page);
+    await expect(modal(page).getByRole('button', { name: 'Untake all', exact: true })).toHaveCount(0);
+    await expect(modal(page).getByRole('button', { name: 'Take all', exact: true })).toHaveCount(0);
+    await modal(page).getByRole('button', { name: 'Unskip all', exact: true }).click();
+
+    await expect
+      .poll(async () => [...(await doseLogs(page)).values()].map((l) => [l.status, l.skipReason ?? null]))
+      .toEqual(Array.from({ length: 6 }, () => ['pending', null]));
+    expect(await stocks(page, doses)).toEqual([30, 30, 30, 30, 30, 30]);
   });
 });

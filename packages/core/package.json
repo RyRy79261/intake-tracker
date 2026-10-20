@@ -20,7 +20,8 @@
     "./logical-day": "./src/logical-day.ts",
     "./daily-totals": "./src/daily-totals.ts",
     "./sodium": "./src/sodium.ts",
-    "./voice-items": "./src/voice-items.ts"
+    "./voice-items": "./src/voice-items.ts",
+    "./dose-rules": "./src/dose-rules.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
