@@ -130,7 +130,7 @@ export function DoseDetailDialog({
 
   // Strength shown next to the name in the header: the scheduled dose, per
   // compound for a combination drug.
-  const headerStrength = formatComboDose(schedule.dosage, phase.unit, inventory);
+  const headerStrength = formatComboDose(schedule.dosage, slot.unit, inventory);
   // Any open or skipped dose of any day can be moved; a taken one is untaken first.
   const canReschedule = status !== "taken";
   // "Cancel reschedule" while the log still holds a reschedule.
@@ -251,7 +251,7 @@ export function DoseDetailDialog({
                 <div className="flex items-center gap-2">
                   <Info className="h-4 w-4" />
                   <span>
-                    {inventory!.brandName}: {formatCompoundFull(inventory!.compounds, phase.unit)} per pill
+                    {inventory!.brandName}: {formatCompoundFull(inventory!.compounds, slot.unit)} per pill
                   </span>
                 </div>
               )}

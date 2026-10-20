@@ -295,12 +295,13 @@ export function buildReminderOccurrences(
     let dateKey = addDays(zonedParts(opts.from, tz).dateKey, -1);
     for (let i = 0; i <= opts.days + 1; i++, dateKey = addDays(dateKey, 1)) {
       if (!dose.daysOfWeek.includes(weekdayOf(dateKey))) continue;
-      // An "Apply from" edit: the old time until the change day, the new
-      // time from it.
-      if (!scheduleInEffectOn(dose, dateKey)) continue;
       const at = zonedTimeToEpoch(dateKey, dose.time, tz);
       if (at < opts.from || at >= end) continue;
       const local = zonedParts(at, opts.deviceTz);
+      // An "Apply from" edit: the old time until the change day, the new
+      // time from it. The change day is a device-local date (as on the Today
+      // screen), so judge the window by the device date of the reminder.
+      if (!scheduleInEffectOn(dose, local.dateKey)) continue;
       out.push({ dose, dateKey, at, localTime: local.time, localWeekday: local.weekday });
     }
   }

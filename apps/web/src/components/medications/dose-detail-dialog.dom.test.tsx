@@ -207,3 +207,15 @@ describe("DoseDetailDialog", () => {
     expect(button("Skip")).toBeInTheDocument();
   });
 });
+
+describe("DoseDetailDialog: unit while a unit change is pending", () => {
+  afterEach(() => vi.useRealTimers());
+  it("shows the dose in the slot's own unit, not the phase's new unit", async () => {
+    // mg -> mcg saved from a later day: the phase says mcg, today's row is still mg.
+    const base = buildSlot();
+    const slot = { ...base, phase: { ...base.phase, unit: "mcg" }, unit: "mg" };
+    await renderDialog(slot);
+    expect(await screen.findAllByText(/50\s?mg/)).not.toHaveLength(0);
+    expect(screen.queryByText(/50\s?mcg/)).toBeNull();
+  });
+});
