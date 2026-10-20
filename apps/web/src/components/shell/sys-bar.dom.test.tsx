@@ -19,8 +19,10 @@ vi.mock("@/components/auth-guard", () => ({
 }));
 
 let slots: Array<{ status: string; dueAt?: number }> | undefined = [];
+let carried: Array<{ status: string; dueAt?: number }> | undefined = [];
 vi.mock("@/hooks/use-medication-queries", () => ({
   useDailyDoseSchedule: () => slots,
+  useCarriedOverDoses: () => carried,
 }));
 
 import { SysBar, initialsFor } from "@/components/shell/sys-bar";
@@ -36,6 +38,7 @@ describe("SysBar", () => {
     window.history.replaceState(null, "", "/");
     auth = { ready: true, authenticated: false, user: null };
     slots = [];
+    carried = [];
   });
 
   it("shows the title and the app buttons", () => {
@@ -59,6 +62,18 @@ describe("SysBar", () => {
     render(<SysBar />);
     const meds = screen.getByRole("button", { name: "Medications, 2 open" });
     expect(meds).toHaveTextContent("2");
+    expect(screen.getByTestId("dose-pip")).toHaveTextContent("2");
+  });
+
+  it("counts a dose carried over from an earlier day from its new time", () => {
+    const past = Date.now() - 60_000;
+    slots = [{ status: "pending", dueAt: past }];
+    carried = [
+      { status: "pending", dueAt: past },
+      // Rescheduled to later today: not due yet.
+      { status: "pending", dueAt: Date.now() + 3_600_000 },
+    ];
+    render(<SysBar />);
     expect(screen.getByTestId("dose-pip")).toHaveTextContent("2");
   });
 

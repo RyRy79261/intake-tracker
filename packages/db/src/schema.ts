@@ -636,6 +636,9 @@ export const doseLogs = pgTable(
     pillStrength: real("pill_strength"),
     actionTimestamp: bigint("action_timestamp", { mode: "number" }),
     rescheduledTo: text("rescheduled_to"),
+    // Epoch ms of the reminder after a reschedule; counts only while the
+    // status is 'rescheduled'.
+    remindAt: bigint("remind_at", { mode: "number" }),
     skipReason: text("skip_reason"),
     note: text("note"),
     // DoseLog DOES have a timezone column (see the DoseLog interface in @intake/types/records).

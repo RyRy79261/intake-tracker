@@ -449,7 +449,17 @@ export interface DoseLog {
   pillsConsumed?: number;
   pillStrength?: number;
   actionTimestamp?: number;
+  /**
+   * Legacy: the "HH:MM" an older build moved a rescheduled dose to. No
+   * longer written; read only to convert old logs (see `remindAt`).
+   */
   rescheduledTo?: string;
+  /**
+   * Epoch ms. The reminder instant after a reschedule (or a snooze). It
+   * counts only while `status` is "rescheduled"; for any other status it is
+   * history. Read it through `dueInstant`.
+   */
+  remindAt?: number;
   skipReason?: string;
   note?: string;
   timezone: string; // IANA timezone string, e.g. "Africa/Johannesburg"

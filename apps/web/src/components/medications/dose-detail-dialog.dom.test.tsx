@@ -38,6 +38,7 @@ function buildSlot(overrides: Partial<DoseSlot> = {}): DoseSlot {
     scheduledDate: DATE,
     scheduleTimeUTC: 510,
     localTime: "08:30",
+    scheduledAt: at(8, 30),
     dueAt: at(8, 30),
     dosageMg: 50,
     unit: "mg",

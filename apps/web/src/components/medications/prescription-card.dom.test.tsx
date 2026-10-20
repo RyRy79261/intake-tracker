@@ -384,4 +384,52 @@ describe("PrescriptionCard", () => {
       expect(screen.queryByText("All done")).not.toBeInTheDocument();
     });
   });
+
+  describe("a rescheduled dose", () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    async function renderRescheduled(remindAt: (day: Date) => number) {
+      const day = new Date(2026, 9, 19);
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(new Date(2026, 9, 19, 9, 0));
+      const created = new Date(2026, 8, 1).getTime();
+      const prescription = makePrescription({ genericName: "Lisinopril", createdAt: created });
+      const phase = makeMedicationPhase(prescription.id, { unit: "mg", startDate: created });
+      const schedule = makePhaseSchedule(phase.id, {
+        dosage: 10,
+        time: "08:30",
+        anchorTimezone: getDeviceTimezone(),
+        createdAt: created,
+      });
+      const log = makeDoseLog(prescription.id, phase.id, schedule.id, {
+        scheduledDate: toLocalDateKey(day),
+        scheduledTime: "08:30",
+        status: "rescheduled",
+        remindAt: remindAt(day),
+        actionTimestamp: new Date(2026, 9, 19, 8, 40).getTime(),
+      });
+      await renderWithFixtures(<PrescriptionCard prescription={prescription} />, {
+        seed: {
+          prescriptions: [prescription],
+          medicationPhases: [phase],
+          phaseSchedules: [schedule],
+          doseLogs: [log],
+        },
+      });
+    }
+
+    it("shows its new time as next, not due before that time", async () => {
+      await renderRescheduled(() => new Date(2026, 9, 19, 10, 0).getTime());
+      const label = await screen.findByText("Next: 10:00");
+      expect(label).not.toHaveClass("text-meds");
+      expect(screen.queryByText("Next: 08:30")).not.toBeInTheDocument();
+    });
+
+    it("names the day when the dose moved to tomorrow", async () => {
+      await renderRescheduled(() => new Date(2026, 9, 20, 9, 0).getTime());
+      expect(await screen.findByText("Next: 09:00, tomorrow")).toBeInTheDocument();
+    });
+  });
 });

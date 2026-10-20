@@ -2,7 +2,10 @@
 
 import { useCallback, useState, type ReactNode } from "react";
 import {
+  DoseRuleError,
+  useCancelReschedule,
   useEditDoseTime,
+  useRescheduleDoses,
   useRevertDoseChanges,
   useSetSkipReason,
   useSkipDoses,
@@ -15,12 +18,15 @@ import {
 } from "@/hooks/use-medication-queries";
 import { bulkDoseTargets, isOpenDoseStatus, needsTakenTimePrompt } from "@intake/core/dose-rules";
 import { useSettingsStore } from "@/stores/settings-store";
+import { toLocalDateKey } from "@/lib/date-utils";
 import { toast } from "@intake/ui/use-toast";
 import { showUndoToast } from "@/components/medications/undo-toast";
 import { SkipReasonPicker } from "@/components/medications/skip-reason-picker";
 import { TakenTimeSheet, type TakenTimeChoice } from "@/components/medications/taken-time-sheet";
+import { RescheduleSheet } from "@/components/medications/reschedule-sheet";
 import {
   doseDisplayName,
+  formatRescheduleTime,
   formatTakeToastDescription,
   hapticSkip,
   hapticTake,
@@ -58,6 +64,12 @@ interface TakeOptions {
   ask?: boolean;
 }
 
+interface ReschedulePrompt {
+  slots: DoseSlot[];
+  future: boolean;
+  resolve: (remindAt: number | null) => void;
+}
+
 interface Prompt {
   title: string;
   dueAt: number;
@@ -84,8 +96,11 @@ export function useDoseActions() {
   const reasonMut = useSetSkipReason();
   const revertMut = useRevertDoseChanges();
   const editTimeMut = useEditDoseTime();
+  const rescheduleMut = useRescheduleDoses<SlotKey>();
+  const cancelRescheduleMut = useCancelReschedule();
 
   const [prompt, setPrompt] = useState<Prompt | null>(null);
+  const [moving, setMoving] = useState<ReschedulePrompt | null>(null);
   const [reasonFor, setReasonFor] = useState<{ logIds: string[]; ranOut: boolean } | null>(null);
 
   const ask = useCallback(
@@ -261,6 +276,58 @@ export function useDoseActions() {
     [ask, editTimeMut, failed],
   );
 
+  /**
+   * Reschedule: pick a new date and time, then move every open dose to it
+   * (one dose from its dialog: a skipped dose too). The doses stay under
+   * their original time; Undo puts back the previous reminder exactly.
+   */
+  const reschedule = useCallback(
+    async (slots: DoseSlot[], opts: { single?: boolean } = {}): Promise<DoseActionOutcome> => {
+      const targets = opts.single ? slots.filter((s) => s.status !== "taken") : bulkDoseTargets(slots, "reschedule");
+      if (targets.length === 0) return { changed: 0, verb: "rescheduled" };
+      const today = toLocalDateKey();
+      const remindAt = await new Promise<number | null>((resolve) =>
+        setMoving({ slots: targets, future: targets.every((t) => t.scheduledDate > today), resolve }),
+      );
+      if (remindAt === null) return "cancelled";
+      let changes: DoseChange<SlotKey>[];
+      try {
+        ({ changes } = await rescheduleMut.mutateAsync({
+          entries: targets.map(keyOf),
+          remindAt,
+          onlyOpen: !opts.single,
+        }));
+      } catch (e) {
+        // unwrap folds the cause into the message; show only a rule's own text.
+        const cause = e instanceof Error ? e.cause : undefined;
+        toast({ title: cause instanceof DoseRuleError ? cause.message : SAVE_FAILED, variant: "destructive" });
+        return "failed";
+      }
+      const when = formatRescheduleTime(remindAt, targets[0]!.scheduledDate);
+      const verb = `rescheduled for ${when}`;
+      offerUndo(label(targets, changes, verb), undefined, changes);
+      return { changed: changes.length, verb };
+    },
+    [rescheduleMut, offerUndo],
+  );
+
+  /** "Cancel reschedule": the dose is due at its original time again. */
+  const cancelReschedule = useCallback(
+    async (slot: DoseSlot): Promise<DoseActionOutcome> => {
+      const key = keyOf(slot);
+      let change: DoseChange | null;
+      try {
+        change = await cancelRescheduleMut.mutateAsync(key);
+      } catch {
+        return failed();
+      }
+      if (!change) return { changed: 0, verb: "unchanged" };
+      offerUndo(`${doseDisplayName(slot)} reschedule cancelled`, undefined, [{ ...change, key }]);
+      return { changed: 1, verb: "reschedule cancelled" };
+    },
+    [cancelRescheduleMut, offerUndo, failed],
+  );
+
   const closePrompt = (choice: TakenTimeChoice | null) => {
     prompt?.resolve(choice);
     setPrompt(null);
@@ -277,6 +344,19 @@ export function useDoseActions() {
         onCancel={() => closePrompt(null)}
         onChoose={(choice) => closePrompt(choice)}
       />
+      <RescheduleSheet
+        open={moving !== null}
+        slots={moving?.slots ?? []}
+        future={moving?.future ?? false}
+        onCancel={() => {
+          moving?.resolve(null);
+          setMoving(null);
+        }}
+        onConfirm={(at) => {
+          moving?.resolve(at);
+          setMoving(null);
+        }}
+      />
       <SkipReasonPicker
         open={reasonFor !== null}
         onOpenChange={(open) => !open && setReasonFor(null)}
@@ -292,9 +372,9 @@ export function useDoseActions() {
   );
 
   /** A time or reason sheet is open over the screen. */
-  const sheetOpen = prompt !== null || reasonFor !== null;
+  const sheetOpen = prompt !== null || reasonFor !== null || moving !== null;
 
-  return { take, skip, untake, unskip, changeTime, sheets, sheetOpen };
+  return { take, skip, untake, unskip, changeTime, reschedule, cancelReschedule, sheets, sheetOpen };
 }
 
 export type DoseActions = ReturnType<typeof useDoseActions>;

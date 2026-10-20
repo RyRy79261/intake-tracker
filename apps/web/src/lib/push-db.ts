@@ -156,8 +156,13 @@ export async function releaseSentNotification(
 // ----- Dose status -----
 
 /**
- * The subset of `scheduleIds` whose dose on `scheduledDate` is already dealt
- * with (taken, skipped or rescheduled) in the synced dose_logs.
+ * The subset of `scheduleIds` whose dose on `scheduledDate` gets no push at
+ * its slot time: taken or skipped in the synced dose_logs, or rescheduled to
+ * a new instant (`remind_at`). A rescheduled dose still owes a reminder, but
+ * at its new time, which this dormant server cannot send: push_schedules
+ * knows only the weekly slot times. So it sends nothing for that dose (the
+ * device's local reminders fire at `remind_at`). A legacy rescheduled row
+ * with no `remind_at` is not skipped.
  */
 export async function getHandledScheduleIds(
   userId: string,
@@ -172,7 +177,7 @@ export async function getHandledScheduleIds(
     WHERE user_id = ${userId}
       AND scheduled_date = ${scheduledDate}
       AND schedule_id = ANY(${scheduleIds})
-      AND status IN ('taken', 'skipped', 'rescheduled')
+      AND (status IN ('taken', 'skipped') OR (status = 'rescheduled' AND remind_at IS NOT NULL))
       AND deleted_at IS NULL
   `;
   return new Set(rows.map((r) => r.schedule_id as string));

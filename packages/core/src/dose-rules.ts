@@ -91,11 +91,11 @@ export function reminderRepeatCount(intervalMinutes: number, periodMinutes: numb
   return Math.floor(periodMinutes / intervalMinutes);
 }
 
-export type BulkDoseAction = "take" | "skip" | "untake" | "unskip";
+export type BulkDoseAction = "take" | "skip" | "untake" | "unskip" | "reschedule";
 
 /**
- * The doses a bulk action changes. Take all and Skip all change only the
- * open doses: a dose the user already took or skipped is never overridden.
+ * The doses a bulk action changes. Take all, Skip all and Reschedule
+ * change only the open doses: a dose the user already took or skipped is never overridden.
  * Untake all changes the taken doses; Unskip all the skipped ones.
  */
 export function bulkDoseTargets<T extends { status: string }>(
@@ -105,6 +105,7 @@ export function bulkDoseTargets<T extends { status: string }>(
   switch (action) {
     case "take":
     case "skip":
+    case "reschedule":
       return doses.filter((d) => isOpenDoseStatus(d.status));
     case "untake":
       return doses.filter((d) => d.status === "taken");
@@ -130,13 +131,12 @@ export interface SlotActions {
 
 /**
  * Which bulk buttons a slot shows. A future day can only be rescheduled:
- * its doses cannot be taken or skipped yet. `allowReschedule` stays false
- * until rescheduling a slot is built.
+ * its doses cannot be taken or skipped yet. Reschedule shows while at least
+ * one dose is open (a rescheduled dose is still open).
  */
 export function slotActions(
   doses: readonly { status: string }[],
   day: SlotDay,
-  { allowReschedule = false }: { allowReschedule?: boolean } = {},
 ): SlotActions {
   const open = doses.filter((d) => isOpenDoseStatus(d.status)).length;
   const taken = doses.filter((d) => d.status === "taken").length;
@@ -147,6 +147,75 @@ export function slotActions(
     unskipAll: markable && open === 0 && skipped > 0,
     takeAll: markable && open > 0,
     untakeAll: !markable || taken === 0 ? false : open === 0 ? "primary" : "secondary",
-    reschedule: allowReschedule && open > 0,
+    reschedule: open > 0,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Rescheduling
+// ---------------------------------------------------------------------------
+
+/**
+ * When a dose is due: its reminder instant while it is rescheduled, else its
+ * scheduled instant. `remindAt` counts only while the status is
+ * "rescheduled"; on a taken, skipped or pending log it is history.
+ */
+export function dueInstant(
+  log: { status?: string | null; remindAt?: number | null } | null | undefined,
+  scheduledAt: number,
+): number {
+  return log?.status === "rescheduled" && log.remindAt != null && Number.isFinite(log.remindAt)
+    ? log.remindAt
+    : scheduledAt;
+}
+
+/**
+ * The status a dose goes back to when the user reverses a take or a skip:
+ * "rescheduled" while its reminder instant is still ahead, else "pending"
+ * (the missed rule then applies from the original time).
+ */
+export function reopenedStatus(
+  remindAt: number | null | undefined,
+  now: number,
+): "rescheduled" | "pending" {
+  return remindAt != null && remindAt > now ? "rescheduled" : "pending";
+}
+
+/** A reason to look again at a new reminder time. A warning never blocks the save. */
+export type RescheduleWarning =
+  | { kind: "past" }
+  | { kind: "after-next-dose"; nextDoseAt: number };
+
+/**
+ * The warnings for a new reminder instant. There is no time limit: any
+ * instant can be saved. "past": the instant is not after now (its first
+ * reminder is not posted, and once its reminder period has ended the dose
+ * shows as missed). "after-next-dose": the instant is at or after the next
+ * scheduled dose of the same medicine, so the user could take two doses
+ * close together.
+ */
+export function rescheduleWarnings(
+  newAt: number,
+  now: number,
+  nextDoseAt?: number | null,
+): RescheduleWarning[] {
+  const out: RescheduleWarning[] = [];
+  if (newAt <= now) out.push({ kind: "past" });
+  if (nextDoseAt != null && newAt >= nextDoseAt) out.push({ kind: "after-next-dose", nextDoseAt });
+  return out;
+}
+
+/**
+ * True while a rescheduled dose of an earlier day is still waiting: its
+ * reminder period after `remindAt` has not ended. Such a dose is not missed
+ * yet, also on a past day (the "Moved to today" group).
+ */
+export function isRescheduleWaiting(
+  logStatus: string | null | undefined,
+  remindAt: number | null | undefined,
+  now: number,
+  reminderPeriodMinutes: number = DEFAULT_REMINDER_PERIOD_MINUTES,
+): boolean {
+  if (logStatus !== "rescheduled" || remindAt == null || !Number.isFinite(remindAt)) return false;
+  return minutesBetween(remindAt, now) <= Math.max(0, reminderPeriodMinutes);
 }

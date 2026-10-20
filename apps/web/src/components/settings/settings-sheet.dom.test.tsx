@@ -17,6 +17,7 @@ vi.mock("@/components/auth-guard", () => ({
 
 vi.mock("@/hooks/use-medication-queries", () => ({
   useDailyDoseSchedule: () => [],
+  useCarriedOverDoses: () => [],
 }));
 
 import { SysBar } from "@/components/shell/sys-bar";

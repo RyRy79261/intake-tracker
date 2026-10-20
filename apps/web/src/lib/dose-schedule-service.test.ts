@@ -274,7 +274,7 @@ describe("getDailyDoseSchedule", () => {
     expect(slots[0]!.inventoryWarning).toBe("no_inventory");
   });
 
-  it("builds a rescheduled slot at its new time, still owed (doses-titration-schedule#6)", async () => {
+  it("keeps a rescheduled slot under its original time; an old past-day one is missed (doses-titration-schedule#6)", async () => {
     const { rx, phase, schedule } = await seedPrescription({
       daysOfWeek: [2],
     });
@@ -288,10 +288,11 @@ describe("getDailyDoseSchedule", () => {
 
     const slots = await getDailyDoseSchedule(TUESDAY, "UTC");
     expect(slots).toHaveLength(1);
-    // Rescheduled is not handled: the dose is still owed, now at 14:00, and
-    // on a past date it was missed.
+    // Rescheduled is not handled: the dose is still owed. A legacy "HH:MM"
+    // reschedule of a past day is not converted, so it was missed.
     expect(slots[0]!.status).toBe("missed");
-    expect(slots[0]!.localTime).toBe("14:00");
+    expect(slots[0]!.localTime).toBe("08:00");
+    expect(slots[0]!.remindAt).toBeUndefined();
     expect(slots[0]!.existingLog?.id).toBe(log.id);
   });
 
@@ -302,15 +303,16 @@ describe("getDailyDoseSchedule", () => {
         scheduledDate: TUESDAY,
         scheduledTime: "08:30",
         status: "rescheduled",
-        rescheduledTo: "10:00",
+        remindAt: new Date(`${TUESDAY}T10:00:00`).getTime(),
       }),
     );
-    // The new time is on the device's clock.
     const tenOClock = new Date(`${TUESDAY}T10:00:00`).getTime();
     vi.useFakeTimers({ toFake: ["Date"], now: tenOClock - 60 * 60_000 });
     try {
       const [slot] = await getDailyDoseSchedule(TUESDAY, "UTC");
       expect(slot?.dueAt).toBe(tenOClock);
+      // It stays under its original time.
+      expect(slot?.localTime).toBe("08:30");
       expect(withLiveStatus([slot!], tenOClock + 20 * 60_000, 30)![0]!.status).toBe("pending");
       expect(withLiveStatus([slot!], tenOClock + 30 * 60_000, 30)![0]!.status).toBe("pending");
       expect(withLiveStatus([slot!], tenOClock + 31 * 60_000, 30)![0]!.status).toBe("missed");
@@ -581,8 +583,9 @@ describe("slot and log matching", () => {
     expect(slots[0]!.status).toBe("missed");
   });
 
-  it("keeps a rescheduled dose at its new time once taken", async () => {
+  it("keeps a once-rescheduled dose under its original time once taken", async () => {
     const { rx, phase, schedule } = await seedRegimen();
+    const [unlogged] = await getDailyDoseSchedule(TUESDAY, "UTC");
     await db.doseLogs.add(
       makeDoseLog(rx.id, phase.id, schedule.id, {
         scheduledDate: TUESDAY, status: "taken", rescheduledTo: "14:00",
@@ -591,7 +594,8 @@ describe("slot and log matching", () => {
 
     const slots = await getDailyDoseSchedule(TUESDAY, "UTC");
     expect(slots[0]!.status).toBe("taken");
-    expect(slots[0]!.localTime).toBe("14:00");
+    expect(slots[0]!.localTime).toBe(unlogged!.localTime);
+    expect(slots[0]!.localTime).not.toBe("14:00");
   });
 
   it("shows the current dose and unit for an untaken log, not a stale snapshot", async () => {

@@ -95,10 +95,10 @@ function bar(modal: HTMLElement) {
 }
 
 describe('"Mark all doses" modal: buttons per slot state', () => {
-  it("every dose open: Skip all and Take all (no Reschedule until PR 2)", async () => {
+  it("every dose open: Skip all, Take all and Reschedule", async () => {
     await renderSlot([regimen("A"), regimen("B")]);
     const { modal } = await openModal();
-    expect(bar(modal)).toEqual(["Skip all", "Take all"]);
+    expect(bar(modal)).toEqual(["Skip all", "Take all", "Reschedule"]);
     expect(within(modal).getByRole("heading", { name: "08:30" })).toBeInTheDocument();
   });
 
@@ -107,7 +107,7 @@ describe('"Mark all doses" modal: buttons per slot state', () => {
     const b = regimen("B");
     await renderSlot([a, b], [logFor(a, yesterday(), "taken")]);
     const { modal } = await openModal();
-    expect(bar(modal)).toEqual(["Skip all", "Take all", "Untake all"]);
+    expect(bar(modal)).toEqual(["Skip all", "Take all", "Untake all", "Reschedule"]);
   });
 
   it("every dose taken: Untake all in place of Take all", async () => {
@@ -134,12 +134,13 @@ describe('"Mark all doses" modal: buttons per slot state', () => {
     expect(bar(modal)).toEqual(["Unskip all", "Untake all"]);
   });
 
-  it("a future day: no Mark all doses button (Reschedule comes in PR 2), and no Take on the rows", async () => {
+  it("a future day: only Reschedule in the modal, and no Take on the rows", async () => {
     const future = new Date();
     future.setDate(future.getDate() + 3);
     await renderSlot([regimen("A"), regimen("B")], [], future);
     expect(screen.queryByRole("button", { name: /^Take / })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Mark all doses" })).not.toBeInTheDocument();
+    const { modal } = await openModal();
+    expect(bar(modal)).toEqual(["Reschedule"]);
   });
 
   it("shows the date under the time on a day that is not today, and the late warning", async () => {

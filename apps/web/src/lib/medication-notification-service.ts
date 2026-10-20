@@ -1,10 +1,6 @@
 import { showNotification, getNotificationPermission } from "@/lib/push-notification-service";
 import { isCombo, formatCompoundShort } from "@intake/core/compound";
-import {
-  loadReminderDoses,
-  buildReminderOccurrences,
-  loadHandledSlots,
-} from "@/lib/medication-reminder-builder";
+import { loadReminderDoses, loadReminderOccurrences } from "@/lib/medication-reminder-builder";
 import { getDeviceTimezone } from "@/lib/timezone";
 import { toLocalDateKey } from "@/lib/date-utils";
 import { getRefillStatuses, reconcileRefillNotifications } from "@/lib/refill-status";
@@ -81,21 +77,27 @@ export async function checkDoseReminders(now: number = Date.now()): Promise<void
   const state = getState();
   const doses = await loadReminderDoses();
   // Due within the last few minutes, per the same builder native and push use.
-  const occurrences = buildReminderOccurrences(doses, {
-    from: now - DOSE_REMINDER_WINDOW_MS,
-    days: 1,
-    deviceTz: getDeviceTimezone(),
-  }).filter((o) => o.at <= now);
-  const handled = await loadHandledSlots(occurrences);
+  // A taken or skipped dose drops out; a rescheduled one is due at its new time.
+  const occurrences = (
+    await loadReminderOccurrences(doses, {
+      from: now - DOSE_REMINDER_WINDOW_MS,
+      days: 1,
+      deviceTz: getDeviceTimezone(),
+    })
+  ).filter((o) => o.at <= now);
 
   const dueNow: { name: string; time: string }[] = [];
   const notified: string[] = [];
   let slotTime: string | undefined;
   for (const o of occurrences) {
-    // Keyed by the dose's own date, not the UTC date.
-    const doseKey = `${o.dateKey}-${o.dose.scheduleId}`;
+    // Keyed by the dose's own date, not the UTC date. A rescheduled dose
+    // gets its own key, so it reminds again at its new time. That key is
+    // dated by the reminder instant, so the 2-day cleanup below never drops
+    // it while the reminder is still due (a dose can move days ahead).
+    const doseKey = o.scheduledAt !== undefined
+      ? `${toLocalDateKey(o.at)}-${o.dose.scheduleId}@${o.at}`
+      : `${o.dateKey}-${o.dose.scheduleId}`;
     if (state.notifiedDoses.includes(doseKey)) continue;
-    if (handled.has(`${o.dose.scheduleId}|${o.dateKey}`)) continue;
     // One notification per slot: later slots wait for the next tick.
     if (slotTime !== undefined && o.localTime !== slotTime) continue;
     slotTime = o.localTime;

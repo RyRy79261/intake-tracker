@@ -317,8 +317,38 @@ export function formatTakenAt(timestamp: number, doseDate: string): string {
     : `Taken at ${formatDoseInstant(timestamp)}, ${shortDate(timestamp)}`;
 }
 
+/**
+ * The day after a reminder time, when it is not the dose's own day:
+ * ", today", ", tomorrow" or ", Oct 22". Empty on the dose's own day.
+ */
+export function rescheduleDaySuffix(at: number, doseDate: string, now: number = Date.now()): string {
+  const day = toLocalDateKey(at);
+  if (day === doseDate) return "";
+  const today = toLocalDateKey(now);
+  const tomorrow = new Date(now);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  if (day === today) return ", today";
+  if (day === toLocalDateKey(tomorrow)) return ", tomorrow";
+  return `, ${shortDate(at)}`;
+}
+
+/** "10:00", or "00:30, tomorrow" when the time is on another day than the dose. */
+export function formatRescheduleTime(at: number, doseDate: string, now: number = Date.now()): string {
+  return `${formatDoseInstant(at)}${rescheduleDaySuffix(at, doseDate, now)}`;
+}
+
+/** True for an open dose that waits for its new reminder time. */
+export function isRescheduledSlot(slot: Pick<DoseSlot, "status" | "remindAt">): boolean {
+  return slot.status === "pending" && slot.remindAt !== undefined;
+}
+
+/** "From Sunday, Oct 18, 22:00": where a carried-over dose comes from. */
+export function formatCarriedOverOrigin(slot: Pick<DoseSlot, "scheduledDate" | "localTime">): string {
+  return `From ${formatDoseDate(slot.scheduledDate)}, ${formatDoseTime(slot.localTime)}`;
+}
+
 /** The status line of a dose row, or null for an open dose that is not missed. */
-export function doseStatusLine(slot: DoseSlot): string | null {
+export function doseStatusLine(slot: DoseSlot, now: number = Date.now()): string | null {
   switch (slot.status) {
     case "taken":
       return slot.existingLog?.actionTimestamp !== undefined
@@ -329,8 +359,8 @@ export function doseStatusLine(slot: DoseSlot): string | null {
     case "missed":
       return "Missed";
     default:
-      return slot.existingLog?.status === "rescheduled" && slot.existingLog.rescheduledTo
-        ? `Rescheduled for ${formatDoseTime(slot.existingLog.rescheduledTo)}`
+      return slot.remindAt !== undefined
+        ? `Rescheduled for ${formatRescheduleTime(slot.remindAt, slot.scheduledDate, now)}`
         : null;
   }
 }

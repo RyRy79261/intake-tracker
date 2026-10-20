@@ -4,7 +4,12 @@ import { useRef } from "react";
 import { Check } from "lucide-react";
 import { PillIconWithBadge } from "@/components/medications/pill-icon";
 import { cn } from "@/lib/utils";
-import { doseDisplayName, doseStatusLine, formatDoseLine } from "@/lib/medication-ui-utils";
+import {
+  doseDisplayName,
+  doseStatusLine,
+  formatDoseLine,
+  isRescheduledSlot,
+} from "@/lib/medication-ui-utils";
 import type { DoseSlot } from "@/hooks/use-medication-queries";
 
 interface DoseRowProps {
@@ -17,6 +22,8 @@ interface DoseRowProps {
   onTake?: (slot: DoseSlot) => void;
   /** A long press of Take: ask for the time taken at once. */
   onTakeLongPress?: (slot: DoseSlot) => void;
+  /** A dose of another day ("Moved to today"): where it comes from. */
+  origin?: string;
 }
 
 const LONG_PRESS_MS = 500;
@@ -27,11 +34,11 @@ const LONG_PRESS_MS = 500;
  * Take button on the right takes the dose (a long press asks for the time
  * taken); it shows a filled check once taken.
  */
-export function DoseRow({ slot, isFuture, onOpen, onTake, onTakeLongPress }: DoseRowProps) {
-  const { status, inventory, existingLog } = slot;
+export function DoseRow({ slot, isFuture, onOpen, onTake, onTakeLongPress, origin }: DoseRowProps) {
+  const { status, inventory } = slot;
   const name = doseDisplayName(slot);
   const statusLine = doseStatusLine(slot);
-  const rescheduled = status === "pending" && existingLog?.status === "rescheduled";
+  const rescheduled = isRescheduledSlot(slot);
   const badge = rescheduled ? "rescheduled" : status;
 
   const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -51,7 +58,7 @@ export function DoseRow({ slot, isFuture, onOpen, onTake, onTakeLongPress }: Dos
 
   return (
     <div
-      data-status={status}
+      data-status={rescheduled ? "rescheduled" : status}
       data-testid="dose-row"
       className={cn(
         "grid grid-cols-[34px_minmax(0,1fr)_auto] items-center gap-2.5 border-t border-line/60 p-2.5 first:border-t-0",
@@ -80,6 +87,11 @@ export function DoseRow({ slot, isFuture, onOpen, onTake, onTakeLongPress }: Dos
           <span className="block text-[0.8125rem] leading-snug text-muted-foreground">
             {formatDoseLine(slot)}
           </span>
+          {origin && (
+            <span data-testid="dose-origin" className="block text-[0.8125rem] leading-snug text-muted-foreground">
+              {origin}
+            </span>
+          )}
           {statusLine && (
             <span
               data-testid="dose-status"

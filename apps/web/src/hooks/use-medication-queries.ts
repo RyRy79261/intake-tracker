@@ -46,6 +46,9 @@ import {
   skipDose,
   unskipDose,
   rescheduleDose,
+  rescheduleDoses,
+  cancelReschedule,
+  getRescheduleWarnings,
   editDoseTime,
   takeDoses,
   skipDoses,
@@ -53,6 +56,7 @@ import {
   unskipDoses,
   setSkipReason,
   revertDoseChanges,
+  DoseRuleError,
   type DoseChange,
   type DoseKey,
   type TakeDoseInput,
@@ -61,9 +65,12 @@ import {
   type UnskipDoseInput,
   type SkipDoseInput,
   type RescheduleDoseInput,
+  type CancelRescheduleInput,
+  type DoseRescheduleWarning,
   type EditDoseTimeInput,
 } from "@/lib/dose-log-service";
 import {
+  getCarriedOverDoses,
   getDailyDoseSchedule,
   type DoseSlot,
 } from "@/lib/dose-schedule-service";
@@ -87,7 +94,11 @@ import { useNow } from "@/hooks/use-now";
 import { useSettingsStore } from "@/stores/settings-store";
 
 // Re-export types so components import from hooks, not services
-export type { DoseSlot, CreatePhaseInput, CreateTitrationPlanInput, DoseLog, UntakeDoseInput, DoseChange, DoseKey };
+export type {
+  DoseSlot, CreatePhaseInput, CreateTitrationPlanInput, DoseLog, UntakeDoseInput, DoseChange, DoseKey,
+  DoseRescheduleWarning,
+};
+export { getRescheduleWarnings, DoseRuleError };
 
 // ============================================================================
 // Read Hooks — useLiveQuery (no invalidation needed)
@@ -109,6 +120,26 @@ export function useDailyDoseSchedule(dateStr: string) {
   const now = useNow();
   const period = useSettingsStore((s) => s.reminderPeriodMinutes);
   return useMemo(() => withLiveStatus(slots, now, period), [slots, now, period]);
+}
+
+/**
+ * Doses of other days rescheduled into `dateStr` ("Moved to today"),
+ * with their live status. Only today has the group; other days get [].
+ */
+export function useCarriedOverDoses(dateStr: string) {
+  const todayKey = useTodayKey();
+  const isToday = dateStr === todayKey;
+  const period = useSettingsStore((s) => s.reminderPeriodMinutes);
+  const slots = useLiveQuery(
+    () => (isToday ? getCarriedOverDoses(dateStr, undefined, period) : Promise.resolve([])),
+    [dateStr, isToday, period],
+  );
+  const now = useNow();
+  return useMemo(() => {
+    const live = withLiveStatus(slots, now, period);
+    // The group lasts until the dose is taken, skipped or missed.
+    return live?.filter((s) => s.status === "pending");
+  }, [slots, now, period]);
 }
 
 /** Slots with the live status at `now`; the same array when nothing changed. */
@@ -309,6 +340,25 @@ export function useSkipDose() {
 export function useRescheduleDose() {
   return useMutation({
     mutationFn: async (input: RescheduleDoseInput) => unwrap(await rescheduleDose(input)),
+  });
+}
+
+/** Reschedule every open dose to one instant, in one synced write. */
+export function useRescheduleDoses<K extends DoseKey = DoseKey>() {
+  return useMutation({
+    mutationFn: async (args: { entries: K[]; remindAt: number; onlyOpen?: boolean }) =>
+      unwrap(
+        await rescheduleDoses(args.entries, args.remindAt, {
+          ...(args.onlyOpen !== undefined && { onlyOpen: args.onlyOpen }),
+        }),
+      ),
+  });
+}
+
+/** "Cancel reschedule": the dose is due at its original time again. */
+export function useCancelReschedule() {
+  return useMutation({
+    mutationFn: async (input: CancelRescheduleInput) => unwrap(await cancelReschedule(input)),
   });
 }
 

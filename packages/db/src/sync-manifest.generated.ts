@@ -75,9 +75,9 @@ export const SYNC_TABLES: Record<SyncTableName, SyncTableFacts> = {
     fkParents: [],
   },
   doseLogs: {
-    integerFields: ["actionTimestamp", "createdAt", "updatedAt", "deletedAt"],
+    integerFields: ["actionTimestamp", "remindAt", "createdAt", "updatedAt", "deletedAt"],
     floatFields: ["doseMg", "doseAmount", "pillsConsumed", "pillStrength"],
-    nullableFields: ["prescriptionId", "medicineName", "phaseId", "scheduleId", "inventoryItemId", "doseMg", "doseAmount", "doseUnit", "pillsConsumed", "pillStrength", "actionTimestamp", "rescheduledTo", "skipReason", "note", "deletedAt"],
+    nullableFields: ["prescriptionId", "medicineName", "phaseId", "scheduleId", "inventoryItemId", "doseMg", "doseAmount", "doseUnit", "pillsConsumed", "pillStrength", "actionTimestamp", "rescheduledTo", "remindAt", "skipReason", "note", "deletedAt"],
     hasTimezone: true,
     fkParents: [["inventoryItemId", "inventoryItems"], ["phaseId", "medicationPhases"], ["prescriptionId", "prescriptions"], ["scheduleId", "phaseSchedules"]],
   },

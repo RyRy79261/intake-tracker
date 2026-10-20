@@ -95,9 +95,11 @@ export async function prepare(page: Page, hhmm: string): Promise<void> {
 }
 
 export interface DoseState {
-  status: "taken" | "skipped";
+  status: "taken" | "skipped" | "rescheduled";
   at: string;
   reason?: string;
+  /** A rescheduled dose: its new reminder instant (epoch ms). */
+  remindAt?: number;
 }
 
 /**
@@ -112,6 +114,8 @@ export async function seedSlot(
   states: (DoseState | undefined)[] = [],
   /** Each medicine's dose time; default 08:30. */
   times: string[] = [],
+  /** The day the seeded logs belong to; default {@link DAY}. */
+  logDay: string = DAY,
 ): Promise<SeededDose[]> {
   await page.goto("/medications");
   await expect(page.getByTestId("window")).toBeVisible({ timeout: 30_000 });
@@ -205,7 +209,7 @@ export async function seedSlot(
         prescriptionId: ids.prescriptionId,
         phaseId: ids.phaseId,
         scheduleId: ids.scheduleId,
-        scheduledDate: DAY,
+        scheduledDate: logDay,
         scheduledTime: time,
         status: state.status,
         actionTimestamp: berlin(state.at),
@@ -215,6 +219,7 @@ export async function seedSlot(
         pillsConsumed: taken ? 1 : 0,
         ...(taken && { inventoryItemId: ids.inventoryId, pillStrength: 50 }),
         ...(state.reason && { skipReason: state.reason }),
+        ...(state.remindAt !== undefined && { remindAt: state.remindAt }),
         ...sync,
         updatedAt: berlin(state.at),
       });

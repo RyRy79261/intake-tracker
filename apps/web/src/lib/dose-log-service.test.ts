@@ -723,7 +723,9 @@ describe("skipDose", () => {
 // ---------------------------------------------------------------------------
 
 describe("rescheduleDose", () => {
-  it("keeps a single log for the slot, marked rescheduled with the new time", async () => {
+  const AT_14 = new Date(`${DATE}T14:00:00`).getTime();
+
+  it("keeps a single log for the slot, marked rescheduled with the new instant", async () => {
     const { rx, phase, schedule } = await seedFullPrescription();
 
     const result = await rescheduleDose({
@@ -732,16 +734,18 @@ describe("rescheduleDose", () => {
       scheduleId: schedule.id,
       date: DATE,
       time: TIME,
-      newTime: "14:00",
+      remindAt: AT_14,
       dosageMg: 50,
     });
 
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.data.status).toBe("rescheduled");
-      expect(result.data.rescheduledTo).toBe("14:00");
-      // The slot keeps its original scheduled time; the override is separate.
-      expect(result.data.scheduledTime).toBe(TIME);
+      expect(result.data.log.status).toBe("rescheduled");
+      expect(result.data.log.remindAt).toBe(AT_14);
+      // The old "HH:MM" override is no longer written.
+      expect(result.data.log.rescheduledTo).toBeUndefined();
+      // The slot keeps its original scheduled time.
+      expect(result.data.log.scheduledTime).toBe(TIME);
     }
 
     // No second "pending" log at the new time (doses-titration-schedule#6)
@@ -753,14 +757,15 @@ describe("rescheduleDose", () => {
     const { rx, phase, schedule } = await seedFullPrescription();
     const base = { prescriptionId: rx.id, phaseId: phase.id, scheduleId: schedule.id, date: DATE, dosageMg: 50 };
 
-    await rescheduleDose({ ...base, time: TIME, newTime: "14:00" });
-    // The view now shows the slot at 14:00, so that is the time the UI passes.
-    await takeDose({ ...base, time: "14:00" });
+    await rescheduleDose({ ...base, time: TIME, remindAt: AT_14 });
+    // The dose stays under its original time.
+    await takeDose({ ...base, time: TIME });
 
     const logs = await db.doseLogs.toArray();
     expect(logs).toHaveLength(1);
     expect(logs[0]!.status).toBe("taken");
-    expect(logs[0]!.rescheduledTo).toBe("14:00");
+    // Kept as history.
+    expect(logs[0]!.remindAt).toBe(AT_14);
   });
 });
 
@@ -949,15 +954,18 @@ describe("dose snapshot (prescriptions-model#3/#4)", () => {
     expect(log?.pillsConsumed).toBe(0);
   });
 
-  it("reschedule restores what was deducted, not the current dose", async () => {
+  it("reschedule never un-takes a taken dose: it is refused and the stock stays", async () => {
     const { rx, phase, schedule, inv } = await seedFullPrescription({ strength: 50, initialStock: 30 });
     const base = { prescriptionId: rx.id, phaseId: phase.id, scheduleId: schedule.id, date: DATE, time: TIME };
 
     await takeDose({ ...base, dosageMg: 50 });
-    await db.inventoryItems.update(inv.id, { strength: 25 });
-    await rescheduleDose({ ...base, newTime: "14:00", dosageMg: 100 });
+    const result = await rescheduleDose({
+      ...base, remindAt: new Date(`${DATE}T14:00:00`).getTime(), dosageMg: 50,
+    });
 
-    expect(await stockOf(inv.id)).toBe(30);
+    expect(result).toMatchObject({ success: false, error: "Untake the dose first." });
+    expect(await stockOf(inv.id)).toBe(29);
+    expect((await db.doseLogs.toArray())[0]).toMatchObject({ status: "taken" });
   });
 
   it("links reversal transactions to the dose log", async () => {
@@ -1124,7 +1132,7 @@ describe("dose action guards (gap-bulk-dose-actions)", () => {
     const { rx, phase, schedule } = await seedFullPrescription();
     const base = { prescriptionId: rx.id, phaseId: phase.id, scheduleId: schedule.id, date: DATE, time: TIME, dosageMg: 50 };
     await skipDose({ ...base, reason: "nausea" });
-    await rescheduleDose({ ...base, newTime: "14:00" });
+    await rescheduleDose({ ...base, remindAt: new Date(`${DATE}T14:00:00`).getTime() });
 
     const log = (await db.doseLogs.toArray())[0]!;
     expect(log.status).toBe("rescheduled");

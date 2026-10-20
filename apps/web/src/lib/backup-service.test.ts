@@ -839,3 +839,20 @@ describe("backup-service: tombstones retire their lifecycle flag", () => {
     expect(rx.isActive).toBe(false);
   });
 });
+
+describe("backup-service: a rescheduled dose's remindAt", () => {
+  it("survives export and import unchanged", async () => {
+    const remindAt = Date.UTC(2026, 9, 20, 8, 0);
+    await db.doseLogs.add(
+      makeDoseLog("rx", "ph", "sch", { id: "moved", status: "rescheduled", remindAt }),
+    );
+    const blob = await exportBackup();
+    const json = JSON.parse(await blob.text()) as { doseLogs: { id: string; remindAt?: number }[] };
+    expect(json.doseLogs.find((l) => l.id === "moved")?.remindAt).toBe(remindAt);
+
+    await db.doseLogs.clear();
+    const res = await importBackup(makeFile(JSON.stringify(json)), "merge");
+    expect(res.success).toBe(true);
+    expect(await db.doseLogs.get("moved")).toMatchObject({ status: "rescheduled", remindAt });
+  });
+});

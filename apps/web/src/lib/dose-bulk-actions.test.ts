@@ -286,7 +286,7 @@ describe("a rescheduled dose is still open", () => {
   it("Take all takes a dose rescheduled to 10:00 with the other open doses", async () => {
     const [d1, d2] = await seedSlot(2);
     setNow(at(8, 0));
-    expect((await rescheduleDose({ ...d1!, newTime: "10:00" })).success).toBe(true);
+    expect((await rescheduleDose({ ...d1!, remindAt: at(10, 0) })).success).toBe(true);
 
     setNow(at(9, 0));
     const result = await takeDoses([d1!, d2!]);

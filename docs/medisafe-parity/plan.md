@@ -252,7 +252,7 @@ From top to bottom:
 1. Week strip (keep `WeekDaySelector`). Add swipe left and right to change the day.
 2. Progress line (keep `DoseProgressSummary`). "All done for today!" shows when every dose is taken. "All doses handled" shows when some are skipped.
 3. Titration start prompt (keep).
-4. **Carried over** group (new, today only, PR 2). It shows doses from earlier days that are rescheduled into today. See section 5.6.
+4. **Carried over** group (new, today only, PR 2), titled "Moved to today". It shows doses of other days (earlier or later) that are rescheduled into today. See section 5.6.
 5. One card for each slot, in time order.
 6. Other doses today (keep `OtherDosesToday`).
 7. "+" button (keep `LogDoseFab`).
@@ -360,7 +360,7 @@ Write rules:
 | Future day | (none) | (none) | Reschedule |
 
 - A missed dose can still be taken, skipped or rescheduled (owner decision 5).
-- On a future day, there is no Take or Skip. Change from Medisafe: Medisafe lets you take a future dose with a warning. **This guard is kept on purpose** (owner decision 7 allows it only where correctness depends on it). The plan depends on it: stock is debited at the take, so a take of a future-day dose debits a pill that is still in the bottle, and the dose key (`scheduleId`, `scheduledDate`) of a future day is not due yet. A dose of today can be taken at any time, also before its dose time.
+- On a future day, there is no Take or Skip. Change from Medisafe: Medisafe lets you take a future dose with a warning. **This guard is kept on purpose** (owner decision 7 allows it only where correctness depends on it). The plan depends on it: stock is debited at the take, so a take of a future-day dose debits a pill that is still in the bottle, and the dose key (`scheduleId`, `scheduledDate`) of a future day is not due yet. A dose of today can be taken at any time, also before its dose time. The day is the one of the dose's due instant: a later day's dose rescheduled into today (or earlier) counts as today's and can be taken or skipped (section 5.6).
 - When rescheduled, the dialog also shows a text button "Cancel reschedule" (section 5.5).
 - Take uses the late-window rule (section 4.6). Long-press on Take opens the time-taken sheet.
 - Skip opens the skip reason sheet.
@@ -481,15 +481,16 @@ Write per action:
 - **There is no time limit** (owner decision 7). A dose or a slot can be rescheduled to any date and time. This matches Medisafe (no stated limit). The old 2-minute minimum and the 24-hour maximum are removed.
 - Warnings, not errors. Save is always allowed:
   - When the new instant is at or after the NEXT scheduled dose of the same med (for example the 20:30 dose): "This is after your next Brand dose at 20:30." This guards against a double dose without blocking a real need.
-  - When the new instant is not after now: "This time has passed. The reminder fires at once."
+  - When the new instant is not after now: "This time has passed. Its first reminder may not fire." A reminder never fires late, so only the repeats still to come fire. When the reminder period after the new instant has also ended: "This time has passed. The dose shows as missed."
+  - The next-dose warning names the day when that dose is not today: "This is after your next Brand dose at 08:30, tomorrow."
 - Reschedule is allowed for any open dose on any day. A carried-over dose (section 5.6) can be rescheduled again.
-- The only hard rule is the one in section 5.2: a taken dose cannot be rescheduled. Untake it first.
+- The only hard rule is the one in section 5.2: a taken dose cannot be rescheduled. Untake it first. Any day is allowed, also a day before the dose's own day (owner decision 7): tomorrow's 08:30 dose moved to today 20:00 shows in "Moved to today" and can be taken today (section 5.6).
 - The service and the UI use the same warning function, so the user sees the warning before save.
 
 ### 5.4 Reschedule sheet
 
 - Title: "Reschedule for".
-- Quick picks (one tap each): "+15 min", "+30 min", "+1 hour", "+2 hours". On today, each pick is relative to now. On a future day, each pick is relative to the scheduled time.
+- Quick picks (one tap each): "+15 min", "+30 min", "+1 hour", "+2 hours". A pick saves at once. When the picked time has a warning (section 5.3), the pick only fills in the fields and shows the warning; the user then taps "Reschedule". On today, each pick is relative to now. On a future day, each pick is relative to the scheduled time.
 - A time picker and a date picker. Quick days "Today" and "Tomorrow" are one tap; the date picker allows any date.
 - Default value: the current `remindAt` if it is still in the future, else now + 30 minutes (today) or the scheduled time + 30 minutes (future day).
 - A picked wall time that does not exist because of DST resolves to the shifted instant (`zonedTimeToEpoch` rule). The sheet shows the resolved time.
@@ -509,11 +510,12 @@ Write per action:
 
 - A 22:00 dose rescheduled to 00:30 keeps `scheduledDate` = the original day.
 - On the original day, it shows under 22:00 with "Rescheduled for 00:30, tomorrow".
-- On the day of `remindAt`, it ALSO shows in the "Carried over" group at the top of today until it is taken, skipped or missed. There is no reschedule limit (section 5.3), so the dose can come from any earlier day. The group title is "From earlier days". Each row shows its original day and time, for example "From Sunday, Oct 18, 22:00". The row is the same dose (same log). An action on it writes the same log.
+- On the day of `remindAt`, it ALSO shows in the "Carried over" group at the top of today until it is taken, skipped or missed. There is no reschedule limit (section 5.3), so the dose can come from any other day, earlier or later (tomorrow's 08:30 dose moved to today 20:00). The group title is "Moved to today". Each row shows its original day and time, for example "From Sunday, Oct 18, 22:00". The row is the same dose (same log). An action on it writes the same log.
+- A later day's dose moved into today can be taken or skipped today: the future-day guard (section 4.5) looks at the due instant, so a rescheduled dose whose `remindAt` is on or before the end of today counts as today's. A future-day dose with no reschedule is still refused. On its own day the dose still shows under 08:30, with "Rescheduled for 20:00" and the day ("today", "Oct 20"), or "Taken" once taken.
 - Take on it records the full instant from the time-taken sheet or now. There is no "HH:MM" guess.
 - The missed rule (section 5.8) uses `remindAt`, not the calendar day. So the dose does not turn missed at midnight.
 - Past-day rule from the 2026-09 audit stays: a dose with no log on a past day is missed. A rescheduled dose whose reminder period after `remindAt` has not ended is the only exception. This exception goes into `resolveDoseStatus` too (it gets an optional `remindAt` and `now`), so analytics, export and MCP do not count the carried-over dose as missed.
-- `getDailyDoseSchedule(today)` adds one read for the group: logs with status "rescheduled", `scheduledDate` before today, and `remindAt` on today. The set is small. Use an existing index if one fits. Else add a Dexie version with an index on `status` (repeat all store definitions). The sys-bar badge and the notification tap use the same list.
+- `getDailyDoseSchedule(today)` adds one read for the group: logs with status "rescheduled", `scheduledDate` on any other day (before or after today), and `remindAt` on today, or `remindAt` before today while its reminder period reaches into today (a dose moved to 23:50 still waits, and its reminders still fire, at 00:05). The set is small. Use an existing index if one fits. Else add a Dexie version with an index on `status` (repeat all store definitions). The sys-bar badge and the notification tap use the same list.
 - After midnight, the week strip on yesterday still shows the dose under 22:00 with "Rescheduled for 00:30, today".
 - Voice: "I took my 22:00 meds" after midnight already picks the previous day (12-hour rule in `voice-medication.ts`). Keep that test green.
 
@@ -551,7 +553,7 @@ Rule:
 - The shared reminder builder (`lib/medication-reminder-builder.ts`) emits an occurrence at `remindAt` instead of the scheduled instant for that dose.
 - Repeat reminders count from `remindAt`, through the reminder period (section 6.6).
 - In a slot, rescheduled doses form their own reminder group at `remindAt` (section 6.4).
-- Push server (`lib/push-db.ts`): change the handled list to `('taken','skipped')`. The server is dormant (section 6.2), but it must not be wrong.
+- Push server (`lib/push-db.ts`): the server is dormant (section 6.2), but it must not be wrong. It sends only at the weekly slot times (`push_schedules`), so it cannot send at `remindAt`. The handled list is taken, skipped, and rescheduled with a `remind_at`: a moved dose gets no push at its old time. Known limit while the server is dormant: no server push fires at `remindAt`; the device's local reminders do.
 - A reschedule or snooze of a dose whose notification is on screen removes the dose from that notification (section 6.3, "Posted notifications").
 
 ### 5.10 "From now on" schedule change
@@ -782,7 +784,7 @@ Scope:
 - `getDailyDoseSchedule` keeps the original `localTime`; adds `remindAt`; adds the "Carried over" list. Voice planning still matches by the original `localTime`.
 - Missed rule uses `remindAt`. `resolveDoseStatus` gets the carried-over exception.
 - Reminder builder: rescheduled is not handled; emits at `remindAt`. Push server handled list fixed. (The current native plugin then fires at the new time too, so this PR already fixes gap 5 on the phone.)
-- UI: reschedule sheet (time and any date), row and dialog states, "Cancel reschedule", Reschedule in the modal, "From earlier days" group, "Rescheduled meds" chip.
+- UI: reschedule sheet (time and any date), row and dialog states, "Cancel reschedule", Reschedule in the modal, "Moved to today" group, "Rescheduled meds" chip.
 
 Acceptance checks:
 
@@ -798,8 +800,9 @@ Acceptance checks:
 - Unit: a legacy `rescheduledTo: "00:30"` log for a 22:00 dose today converts to 00:30 tomorrow.
 - E2E: reschedule one 08:30 dose to 10:00; it stays under 08:30 with "Rescheduled for 10:00"; at 10:05 Take records now with no sheet.
 - E2E: "Reschedule" in the modal moves all open doses; Undo restores them.
-- E2E: 22:00 dose rescheduled to 00:30 shows in "From earlier days" after midnight and is not missed.
-- E2E: a dose rescheduled 2 days ahead shows in "From earlier days" on that day.
+- E2E: 22:00 dose rescheduled to 00:30 shows in "Moved to today" after midnight and is not missed.
+- E2E: a dose rescheduled 2 days ahead shows in "Moved to today" on that day.
+- Unit and E2E: tomorrow's 08:30 dose rescheduled to today 20:00 shows in "Moved to today"; Take works today and debits stock; with no action it is missed after 20:30; its reminders fire at 20:00.
 - E2E (two devices, `sync-two-devices.spec.ts`): `remindAt` syncs.
 
 ### PR 2b: "Apply from" schedule edits
@@ -899,4 +902,4 @@ Review on 2026-10-19 against the code on `main` (after PR #444) and the Medisafe
 9. Reminders: exact-alarm revoke, `USE_EXACT_ALARM` option, Doze rate limit, battery and notification permission rows; cancel the old plugin's alarms on upgrade; plugin registration; peek and ack queue; replay before resync; idempotent and ordered replay; lock-screen actions; trampoline rule for taps; notification per due instant and a modal for the notification's doses; update notifications already on screen; offline and other-device limit; late re-post rules for Always and Never; snooze minutes passed to native; follow-up range 0 to 9; stored defaults do not change; refill alarms pre-booked; new daily missed-meds alert (6.7a).
 10. PR plan: every PR needs an APK; one open PR at a time; order stated; PR 1 has a settings migration and no Reschedule in the modal; PR 2 notes that it already fixes gap 5 on the current plugin; PR 2b split out; web channel moved from PR 3 to PR 5 (it is P2); PR 4 adds the missed-meds alert; new acceptance checks for the edge cases.
 11. Open questions 6 to 8 added (exact alarms, reschedule limit, Take all over taken doses).
-12. Owner decisions of 2026-10-19 applied (section 8): modal labels and bulk rule (open doses only, no override dialog); no early prompt; 40-minute "Late window" with "Take now", "Take at a specific time", "Skip"; automatic Missed at the end of the reminder period; reminders by interval and period (08:30, 08:40, 08:50, 09:00); no reschedule or taken-time limits (future-day take guard kept, with reason); "From earlier days" group; one-time exact-alarm screen; PR acceptance checks updated.
+12. Owner decisions of 2026-10-19 applied (section 8): modal labels and bulk rule (open doses only, no override dialog); no early prompt; 40-minute "Late window" with "Take now", "Take at a specific time", "Skip"; automatic Missed at the end of the reminder period; reminders by interval and period (08:30, 08:40, 08:50, 09:00); no reschedule or taken-time limits (future-day take guard kept, with reason); "Moved to today" group (first titled "From earlier days"); one-time exact-alarm screen; PR acceptance checks updated.

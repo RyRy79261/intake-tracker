@@ -2,7 +2,7 @@
  * In-page dose reminders (the web notifier that runs while /medications is
  * open). It must agree with the Today view and the other reminder paths.
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, onTestFinished } from "vitest";
 import { createPreviewDatabase, db, resetActiveDatabase, setActiveDatabase } from "@/lib/db";
 import {
   makePrescription,
@@ -164,5 +164,61 @@ describe("checkRefillAlerts", () => {
       "Refill needed: Lopressor",
       expect.objectContaining({ tag: `refill-${rx.id}` }),
     );
+  });
+});
+
+describe("checkDoseReminders after a reschedule", () => {
+  beforeEach(() => {
+    mockShowNotification.mockReset().mockResolvedValue(true);
+  });
+
+  it("is quiet at the old time and reminds at the new time", async () => {
+    const { rx, phase, schedule } = await seed();
+    // 08:00 Berlin moved to 10:00 Berlin (08:00 UTC).
+    await db.doseLogs.add(
+      makeDoseLog(rx.id, phase.id, schedule.id, {
+        scheduledDate: "2026-09-28",
+        status: "rescheduled",
+        remindAt: Date.UTC(2026, 8, 28, 8, 0),
+      }),
+    );
+
+    await checkDoseReminders(NOW);
+    expect(mockShowNotification).not.toHaveBeenCalled();
+
+    await checkDoseReminders(Date.UTC(2026, 8, 28, 8, 2));
+    expect(mockShowNotification).toHaveBeenCalledWith("Time for your 10:00 medications", {
+      body: "Metoprolol 50mg",
+      tag: "dose-10:00",
+      requireInteraction: true,
+    });
+  });
+
+  it("reminds once for a dose moved three days ahead", async () => {
+    // The notifier remembers what it showed in localStorage.
+    const store = new Map<string, string>();
+    vi.stubGlobal("window", {});
+    vi.stubGlobal("localStorage", {
+      getItem: (k: string) => store.get(k) ?? null,
+      setItem: (k: string, v: string) => void store.set(k, v),
+      removeItem: (k: string) => void store.delete(k),
+    });
+    onTestFinished(() => {
+      vi.unstubAllGlobals();
+    });
+    const { rx, phase, schedule } = await seed();
+    // Monday's 08:00 dose moved to Thursday 10:00 Berlin (08:00 UTC).
+    await db.doseLogs.add(
+      makeDoseLog(rx.id, phase.id, schedule.id, {
+        scheduledDate: "2026-09-28",
+        status: "rescheduled",
+        remindAt: Date.UTC(2026, 9, 1, 8, 0),
+      }),
+    );
+
+    await checkDoseReminders(Date.UTC(2026, 9, 1, 8, 1));
+    await checkDoseReminders(Date.UTC(2026, 9, 1, 8, 2));
+    await checkDoseReminders(Date.UTC(2026, 9, 1, 8, 3));
+    expect(mockShowNotification).toHaveBeenCalledTimes(1);
   });
 });

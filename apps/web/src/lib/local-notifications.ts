@@ -1,11 +1,7 @@
 import { reminderRepeatCount } from "@intake/core/dose-rules";
 import { Capacitor } from "@capacitor/core";
 import { LocalNotifications } from "@capacitor/local-notifications";
-import {
-  loadReminderDoses,
-  buildReminderOccurrences,
-  loadHandledSlots,
-} from "@/lib/medication-reminder-builder";
+import { loadReminderDoses, loadReminderOccurrences } from "@/lib/medication-reminder-builder";
 import { getDeviceTimezone } from "@/lib/timezone";
 import { useSettingsStore } from "@/stores/settings-store";
 import { areRemindersSuspended } from "@/lib/reminder-suspension";
@@ -89,14 +85,6 @@ interface NativeNotification {
 }
 
 async function buildNotifications(now: number): Promise<NativeNotification[]> {
-  const doses = await loadReminderDoses();
-  const occurrences = buildReminderOccurrences(doses, {
-    from: now,
-    days: NATIVE_REMINDER_HORIZON_DAYS,
-    deviceTz: getDeviceTimezone(),
-  });
-  const handled = await loadHandledSlots(occurrences);
-
   // Repeat reminders run through the reminder period: one every interval
   // (08:30, 08:40, 08:50, 09:00 with the defaults), never before the dose.
   const { reminderPeriodMinutes, reminderFollowUpInterval } = useSettingsStore.getState();
@@ -104,10 +92,20 @@ async function buildNotifications(now: number): Promise<NativeNotification[]> {
   const intervalMs = Math.max(1, reminderFollowUpInterval) * 60_000;
   const followUpEnd = now + NATIVE_FOLLOW_UP_HORIZON_DAYS * 24 * 60 * 60 * 1000;
 
+  // Taken and skipped doses drop out; a rescheduled dose reminds at its new
+  // time (also one moved in from an earlier day). The look-back keeps the
+  // repeats of a rescheduled reminder that is just past.
+  const doses = await loadReminderDoses();
+  const occurrences = await loadReminderOccurrences(doses, {
+    from: now,
+    days: NATIVE_REMINDER_HORIZON_DAYS,
+    deviceTz: getDeviceTimezone(),
+    lookbackMs: followUps * intervalMs,
+  });
+
   const main: NativeNotification[] = [];
   const extra: NativeNotification[] = [];
   for (const o of occurrences) {
-    if (handled.has(`${o.dose.scheduleId}|${o.dateKey}`)) continue;
     const { genericName, dosageText } = o.dose;
     for (let i = 0; i <= (o.at < followUpEnd ? followUps : 0); i++) {
       const at = o.at + i * intervalMs;

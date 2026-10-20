@@ -1,0 +1,1 @@
+ALTER TABLE "dose_logs" ADD COLUMN "remind_at" bigint;

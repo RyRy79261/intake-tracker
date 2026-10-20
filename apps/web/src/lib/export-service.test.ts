@@ -335,9 +335,27 @@ describe("exportAllRecordsCSV (real Dexie data)", () => {
     await exportAllRecordsCSV(WIDE);
     const doses = section(await capturedCSV(), "Dose logs");
     expect(doses[0]).toBe(
-      "scheduled_date,scheduled_time,medication,status,kind,action_time,dose_amount,dose_unit,pills_consumed,pill_strength,skip_reason,rescheduled_to,note",
+      "scheduled_date,scheduled_time,medication,status,kind,action_time,dose_amount,dose_unit,pills_consumed,pill_strength,skip_reason,rescheduled_to,remind_at,note",
     );
     expect(doses[1]).toContain(",08:00,Furosemide,taken,scheduled,,40,mg,");
+  });
+
+  it("exports remind_at of a rescheduled dose as an ISO instant", async () => {
+    const rx = makePrescription({ genericName: "Furosemide" });
+    await db.prescriptions.add(rx);
+    const remindAt = Date.UTC(2023, 10, 14, 10, 0);
+    await db.doseLogs.add(
+      makeDoseLog(rx.id, "phase-1", "sched-1", {
+        scheduledDate: format(BASE_TS, "yyyy-MM-dd"),
+        scheduledTime: "08:00",
+        status: "rescheduled",
+        remindAt,
+      }),
+    );
+
+    await exportAllRecordsCSV(WIDE);
+    const doses = section(await capturedCSV(), "Dose logs");
+    expect(doses[1]).toContain(`,${new Date(remindAt).toISOString()},`);
   });
 
   it("names an 'All' export from the first record, not 1970", async () => {

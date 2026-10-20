@@ -31,10 +31,11 @@ const slotButton =
 
 /**
  * One card per dose time. The header shows the time (primary when it is
- * within an hour of now, the missed colour when a dose in it is missed) and,
- * for two or more doses, "Mark all doses" (not on a future day: its only
- * bulk action is Reschedule, which is not built yet). A slot with one dose
- * has no header button: its row does the work.
+ * within an hour of now, the missed colour when a dose in it is missed and
+ * none waits for a later reminder) and, for two or more doses, "Mark all
+ * doses" (on a future day its only action is Reschedule). A slot with one
+ * dose has no header button: its row does the work. A rescheduled dose
+ * stays under its original time.
  */
 export function TimeSlotGroup({
   time,
@@ -49,7 +50,10 @@ export function TimeSlotGroup({
 }: TimeSlotGroupProps) {
   const dueAt = Math.min(...slots.map((s) => s.dueAt));
   const near = isToday && Math.abs(now - dueAt) <= HOUR_MS;
-  const missed = slots.some((s) => s.status === "missed");
+  // Not missed while a dose in it still waits for its new reminder time.
+  const missed =
+    slots.some((s) => s.status === "missed") &&
+    !slots.some((s) => s.remindAt !== undefined && s.remindAt > now && s.status === "pending");
   const allDone = slots.every((s) => s.status === "taken" || s.status === "skipped");
 
   return (
@@ -74,8 +78,7 @@ export function TimeSlotGroup({
         >
           {formatDoseTime(time)}
         </h3>
-        {/* A future day has no bulk action until Reschedule ships (PR 2). */}
-        {slots.length >= 2 && !isFuture && (
+        {slots.length >= 2 && (
           <Button
             variant="outline"
             size="sm"

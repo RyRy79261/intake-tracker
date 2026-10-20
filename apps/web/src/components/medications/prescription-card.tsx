@@ -14,7 +14,9 @@ import {
   getActiveTitrationPhase,
   getPendingTitrationPhase,
   getCurrentTimeHHMM,
+  formatRescheduleTime,
 } from "@/lib/medication-ui-utils";
+import { useNow } from "@/hooks/use-now";
 import { isCombo, formatCompoundShort, formatComboDose } from "@intake/core/compound";
 import {
   usePhasesForPrescription,
@@ -88,6 +90,7 @@ export function PrescriptionCard({ prescription, expanded: controlledExpanded, o
   const phasesLoaded = usePhasesLoaded(prescription.id);
   const inventoryItems = useInventoryForPrescription(prescription.id);
   const allSlots = useDailyDoseSchedule(todayDateStr);
+  const now = useNow();
 
   const effectivePhase = getEffectivePhase(phases);
   const activeTitration = getActiveTitrationPhase(phases);
@@ -107,8 +110,17 @@ export function PrescriptionCard({ prescription, expanded: controlledExpanded, o
   // not "All done".
   const pendingSlots = prescriptionSlots.filter((s) => isOpenDoseStatus(s.status));
   const allHandled = prescriptionSlots.length > 0 && pendingSlots.length === 0;
-  const firstPending = pendingSlots.length > 0 ? pendingSlots[0] : undefined;
-  const nextDoseTime = firstPending?.localTime ?? null;
+  // The next dose is the one due first: a rescheduled dose is due at its new
+  // time, so "Next:" shows that time (with its day when it is not today).
+  const firstPending = pendingSlots.reduce<(typeof pendingSlots)[number] | undefined>(
+    (first, s) => (first === undefined || s.dueAt < first.dueAt ? s : first),
+    undefined,
+  );
+  const nextDoseTime = firstPending
+    ? firstPending.remindAt !== undefined
+      ? formatRescheduleTime(firstPending.dueAt, todayDateStr, now)
+      : firstPending.localTime
+    : null;
 
   // Gate on phasesLoaded: usePhasesForPrescription returns [] while loading, so
   // without this a scheduled prescription would briefly look as-needed and a
@@ -164,7 +176,7 @@ export function PrescriptionCard({ prescription, expanded: controlledExpanded, o
     nextDoseLabel = "All done";
   } else if (nextDoseTime) {
     nextDoseLabel = `Next: ${nextDoseTime}`;
-    nextDue = nextDoseTime <= getCurrentTimeHHMM();
+    nextDue = firstPending !== undefined && firstPending.dueAt <= now;
   } else {
     nextDoseLabel = "No doses today";
   }
