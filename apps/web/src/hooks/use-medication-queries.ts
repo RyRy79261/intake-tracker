@@ -122,7 +122,7 @@ export function useDailyDoseSchedule(dateStr: string) {
 }
 
 /**
- * Doses of earlier days rescheduled into `dateStr` ("From earlier days"),
+ * Doses of other days rescheduled into `dateStr` ("Moved to today"),
  * with their live status. Only today has the group; other days get [].
  */
 export function useCarriedOverDoses(dateStr: string) {

@@ -208,7 +208,7 @@ export function rescheduleWarnings(
 /**
  * True while a rescheduled dose of an earlier day is still waiting: its
  * reminder period after `remindAt` has not ended. Such a dose is not missed
- * yet, also on a past day (the "From earlier days" group).
+ * yet, also on a past day (the "Moved to today" group).
  */
 export function isRescheduleWaiting(
   logStatus: string | null | undefined,

@@ -8,8 +8,8 @@
  * Today's and future outstanding doses are pending, never missed.
  *
  * One exception: a dose rescheduled from an earlier day is not missed while
- * the reminder period after its `remindAt` has not ended (it waits in "From
- * earlier days"). The period here is the default, not the device setting, so
+ * the reminder period after its `remindAt` has not ended (it waits in "Moved
+ * to today"). The period here is the default, not the device setting, so
  * history (export, MCP on the server) does not change with a setting.
  *
  * The schedule view, analytics adherence, export, MCP tools and the insights

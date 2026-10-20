@@ -24,7 +24,7 @@ import { toLocalDateKey } from "@/lib/date-utils";
  * Rescheduling on the Today screen, with the clock fixed at 12:00 on
  * 2026-10-19: the reschedule sheet from the dose dialog and from the "Mark
  * all doses" modal, the row and dialog states of a rescheduled dose,
- * "Cancel reschedule", and the "From earlier days" group.
+ * "Cancel reschedule", and the "Moved to today" group.
  */
 
 /** Each test walks a few sheets; under a loaded full run that can pass 5 s. */
@@ -313,8 +313,8 @@ describe('"Reschedule" in the "Mark all doses" modal', () => {
     // Default: the dose time + 30 minutes, on that day.
     expect(within(sheet).getByLabelText("Reschedule time")).toHaveValue("09:00");
     expect(within(sheet).getByLabelText("Reschedule date")).toHaveValue("2026-10-21");
-    // Today is before the doses' day: the chip is off.
-    expect(within(sheet).getByRole("button", { name: "Today" })).toBeDisabled();
+    // Today is before the doses' day and still allowed.
+    expect(within(sheet).getByRole("button", { name: "Today" })).toBeEnabled();
     await user.click(within(sheet).getByRole("button", { name: "+15 min" }));
     await waitFor(async () => {
       expect((await logsOf(a))[0]).toMatchObject({ status: "rescheduled", remindAt: at(8, 45, 2) });
@@ -322,7 +322,7 @@ describe('"Reschedule" in the "Mark all doses" modal', () => {
     });
   });
 
-  it("a future day's dose cannot move to a day before its own", async () => {
+  it("a future day's dose can move to a day before its own (today 20:00)", async () => {
     const a = regimen("A");
     await renderDay([a], [], new Date(2026, 9, 21));
     const user = userEvent.setup();
@@ -330,23 +330,31 @@ describe('"Reschedule" in the "Mark all doses" modal', () => {
     await user.click(await screen.findByRole("button", { name: "Reschedule" }));
     const sheet = await screen.findByTestId("reschedule-sheet");
     const date = within(sheet).getByLabelText("Reschedule date");
-    expect(date).toHaveAttribute("min", "2026-10-21");
-    await user.clear(date);
-    await user.type(date, "2026-10-20");
-    expect(
-      await within(sheet).findByText("Pick Wednesday, Oct 21 or a later day. The dose cannot be taken before its day."),
-    ).toBeInTheDocument();
-    expect(within(sheet).getByRole("button", { name: "Reschedule" })).toBeDisabled();
-    expect(await db.doseLogs.count()).toBe(0);
+    expect(date).not.toHaveAttribute("min");
+    await user.click(within(sheet).getByRole("button", { name: "Today" }));
+    const time = within(sheet).getByLabelText("Reschedule time");
+    await user.clear(time);
+    await user.type(time, "20:00");
+    expect(within(sheet).queryByRole("alert")).not.toBeInTheDocument();
+    const save = within(sheet).getByRole("button", { name: "Reschedule" });
+    expect(save).toBeEnabled();
+    await user.click(save);
+    await waitFor(async () => {
+      expect((await logsOf(a))[0]).toMatchObject({
+        status: "rescheduled",
+        scheduledDate: "2026-10-21",
+        remindAt: at(20, 0),
+      });
+    });
   });
 });
 
-describe('"From earlier days"', () => {
+describe('"Moved to today"', () => {
   it("shows a dose of yesterday rescheduled into today, with where it comes from", async () => {
     const a = regimen("A", "22:00");
     await renderDay([a], [rescheduledLog(a, YESTERDAY, at(12, 30))]);
     const group = await screen.findByTestId("carried-over");
-    expect(within(group).getByRole("heading", { name: "From earlier days" })).toBeInTheDocument();
+    expect(within(group).getByRole("heading", { name: "Moved to today" })).toBeInTheDocument();
     expect(within(group).getByTestId("dose-origin")).toHaveTextContent("From Sunday, Oct 18, 22:00");
     expect(within(group).getByTestId("dose-status")).toHaveTextContent("Rescheduled for 12:30, today");
 
@@ -363,6 +371,36 @@ describe('"From earlier days"', () => {
       });
     });
     await waitFor(() => expect(screen.queryByTestId("carried-over")).not.toBeInTheDocument());
+  });
+
+  it("shows tomorrow's dose moved to today 20:00; Take works from the row and the dialog", async () => {
+    const a = regimen("A");
+    const b = regimen("B");
+    const TOMORROW = new Date(2026, 9, 20);
+    await renderDay([a, b], [rescheduledLog(a, TOMORROW, at(20, 0)), rescheduledLog(b, TOMORROW, at(20, 0))]);
+    const group = await screen.findByTestId("carried-over");
+    expect(within(group).getByRole("heading", { name: "Moved to today" })).toBeInTheDocument();
+    expect(within(group).getAllByTestId("dose-origin")[0]).toHaveTextContent("From Tuesday, Oct 20, 08:30");
+    expect(within(group).getAllByTestId("dose-status")[0]).toHaveTextContent("Rescheduled for 20:00, today");
+
+    const user = userEvent.setup();
+    await user.click(within(group).getByRole("button", { name: "Take A brand" }));
+    await waitFor(async () => {
+      expect((await logsOf(a))[0]).toMatchObject({
+        status: "taken",
+        scheduledDate: "2026-10-20",
+        actionTimestamp: at(12, 0),
+      });
+    });
+    expect((await db.inventoryItems.get(a.inventory.id))?.currentStock).toBe(29);
+
+    // The dialog of the other one has Take (it is due today), not only Reschedule.
+    await user.click(within(group).getByRole("button", { name: /^B brand[,.] .*Open dose$/ }));
+    const dialog = await screen.findByRole("dialog");
+    await user.click(within(dialog).getByRole("button", { name: /^Take/ }));
+    await waitFor(async () => {
+      expect((await logsOf(b))[0]).toMatchObject({ status: "taken", scheduledDate: "2026-10-20" });
+    });
   });
 
   it("is only on today", async () => {

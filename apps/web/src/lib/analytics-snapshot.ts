@@ -150,7 +150,7 @@ function scheduledAdherence(
   now: number,
 ): { dosesTaken: number; dosesDue: number; dosesSkipped: number; dosesMissed: number } {
   // Per date, the best status logged for each schedule slot.
-  // A rescheduled dose still waiting for its new time ("From earlier days")
+  // A rescheduled dose still waiting for its new time ("Moved to today")
   // is kept too: it is not missed yet.
   const statusByDate = new Map<string, Map<string, { status: string; remindAt?: number }>>();
   const rank = (status: string | undefined) =>

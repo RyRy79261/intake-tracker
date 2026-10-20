@@ -21,6 +21,7 @@ import {
   type DoseKey,
 } from "@/lib/dose-log-service";
 import { getCarriedOverDoses, getDailyDoseSchedule } from "@/lib/dose-schedule-service";
+import { loadReminderDoses, loadReminderOccurrences } from "@/lib/medication-reminder-builder";
 import { withLiveStatus } from "@/hooks/use-medication-queries";
 import { doseStatusLine } from "@/lib/medication-ui-utils";
 import { resolveDoseStatus } from "@/lib/dose-status";
@@ -31,7 +32,7 @@ import type * as TimezoneModule from "@/lib/timezone";
  * PR 2 acceptance checks for rescheduling: a reschedule moves one dose's
  * reminder to any instant (warnings only), never un-takes a dose, keeps the
  * dose under its original time, restarts the missed timer from the new time
- * and carries a dose into a later day ("From earlier days").
+ * and carries a dose into another day ("Moved to today").
  */
 
 vi.mock("@/lib/timezone", async (importOriginal) => ({
@@ -137,23 +138,22 @@ describe("no time limit: warnings only", () => {
     expect((await rescheduleDose({ ...key!, remindAt: at(9, 0, 1) })).success).toBe(true);
   });
 
-  it("a future day's dose cannot move to a day before its own (it could not be taken there)", async () => {
+  it("a future day's dose can move to a day before its own (tomorrow's 08:30 to today 20:00)", async () => {
     const [[key]] = await seed([["08:30"]], TOMORROW);
     const res = await rescheduleDose({ ...key!, remindAt: at(20, 0) });
-    expect(res).toMatchObject({ success: false, error: "Pick the dose's own day or a later day." });
-    expect(await logOf(key!)).toBeUndefined();
-    // The bulk path refuses it too, and changes nothing.
-    const bulk = await rescheduleDoses([key!], at(20, 0));
-    expect(bulk.success).toBe(false);
-    expect(await db.doseLogs.count()).toBe(0);
-    // Its own day at an earlier time is fine.
-    expect((await rescheduleDose({ ...key!, remindAt: at(0, 30, 1) })).success).toBe(true);
+    expect(res).toMatchObject({ success: true, data: { warnings: [] } });
+    expect(await logOf(key!)).toMatchObject({ status: "rescheduled", remindAt: at(20, 0), scheduledDate: TOMORROW });
+    // The bulk path too.
+    const [[other]] = await seed([["09:00"]], TOMORROW);
+    expect((await rescheduleDoses([other!], at(21, 0))).success).toBe(true);
+    expect((await logOf(other!))?.remindAt).toBe(at(21, 0));
   });
 
-  it("today's dose cannot move to yesterday", async () => {
+  it("today's dose can move to yesterday (warning only)", async () => {
     const [[key]] = await seed([["08:30"]]);
-    expect((await rescheduleDose({ ...key!, remindAt: at(22, 0, -1) })).success).toBe(false);
-    expect(await logOf(key!)).toBeUndefined();
+    const res = await rescheduleDose({ ...key!, remindAt: at(22, 0, -1) });
+    expect(res.success && res.data.warnings.map((w) => w.kind)).toEqual(["past"]);
+    expect((await logOf(key!))?.remindAt).toBe(at(22, 0, -1));
   });
 
   it("after the next dose of the same med: the warning shows and the save still happens", async () => {
@@ -364,7 +364,7 @@ describe("legacy rescheduledTo", () => {
   });
 });
 
-describe('"From earlier days"', () => {
+describe('"Moved to today"', () => {
   it("a 22:00 dose rescheduled to 00:30 shows after midnight and is not missed", async () => {
     const [[key]] = await seed([["22:00"]]);
     setNow(at(22, 5));
@@ -442,5 +442,92 @@ describe('"From earlier days"', () => {
     const log = (await logOf(key!))!;
     expect(resolveDoseStatus(log.status, log.scheduledDate, TOMORROW, { remindAt: log.remindAt, now: Date.now() }))
       .toBe("missed");
+  });
+});
+
+describe("a later day's dose moved into today", () => {
+  /** Tomorrow's 08:30 dose, rescheduled at 08:00 today to today 20:00. */
+  async function movedIn() {
+    const [[key]] = await seed([["08:30"]], TOMORROW);
+    expect((await rescheduleDose({ ...key!, remindAt: at(20, 0) })).success).toBe(true);
+    return key!;
+  }
+  const take = (key: DoseKey) => takeDose(key);
+
+  it("shows in today's carried-over list, waiting, with its own day and time", async () => {
+    const key = await movedIn();
+    setNow(at(19, 0));
+    const carried = withLiveStatus(await getCarriedOverDoses(TODAY, undefined, PERIOD), Date.now(), PERIOD)!;
+    expect(carried.map((s) => [s.scheduleId, s.scheduledDate, s.localTime, s.dueAt, s.status])).toEqual([
+      [key.scheduleId, TOMORROW, "08:30", at(20, 0), "pending"],
+    ]);
+    // Not on tomorrow's carried-over list: there it is the day's own dose.
+    expect(await getCarriedOverDoses(TOMORROW, undefined, PERIOD)).toEqual([]);
+  });
+
+  it("tomorrow's own view keeps it under 08:30 with the day of the new time", async () => {
+    const key = await movedIn();
+    const slot = await liveSlot(key);
+    expect(slot).toMatchObject({ localTime: "08:30", status: "pending", dueAt: at(20, 0) });
+    expect(doseStatusLine(slot)).toBe("Rescheduled for 20:00, today");
+  });
+
+  it("can be taken today, debiting stock; tomorrow's view then shows it taken", async () => {
+    const key = await movedIn();
+    setNow(at(20, 5));
+    const res = await take(key);
+    expect(res.success).toBe(true);
+    expect(await logOf(key)).toMatchObject({ status: "taken", actionTimestamp: at(20, 5) });
+    expect(await stockOf(key as Key)).toBe(29);
+    const live = withLiveStatus(await getCarriedOverDoses(TODAY, undefined, PERIOD), Date.now(), PERIOD)!;
+    expect(live.filter((s) => s.status === "pending")).toEqual([]);
+    const slot = await liveSlot(key);
+    expect(slot.status).toBe("taken");
+    expect(doseStatusLine(slot)).toMatch(/^Taken/);
+  });
+
+  it("can be taken before its new time and skipped today", async () => {
+    const key = await movedIn();
+    setNow(at(9, 0));
+    expect((await skipDoses([key])).success).toBe(true);
+    expect((await logOf(key))?.status).toBe("skipped");
+  });
+
+  it("a plain future-day dose with no reschedule is still refused", async () => {
+    const [[key]] = await seed([["08:30"]], TOMORROW);
+    expect(await take(key!)).toMatchObject({ success: false, error: "Cannot take a dose scheduled for a future date" });
+    expect((await skipDoses([key!])).success).toBe(false);
+    // Moved to the day after tomorrow, it is still a future dose.
+    await rescheduleDose({ ...key!, remindAt: at(9, 0, 2) });
+    expect((await take(key!)).success).toBe(false);
+    expect(await stockOf(key!)).toBe(30);
+  });
+
+  it("with no action it is missed after 20:30, today and on tomorrow's view", async () => {
+    const key = await movedIn();
+    setNow(at(20, 30));
+    expect(withLiveStatus(await getCarriedOverDoses(TODAY, undefined, PERIOD), Date.now(), PERIOD)![0]!.status)
+      .toBe("pending");
+    setNow(at(20, 31));
+    expect(withLiveStatus(await getCarriedOverDoses(TODAY, undefined, PERIOD), Date.now(), PERIOD)![0]!.status)
+      .toBe("missed");
+    expect((await liveSlot(key)).status).toBe("missed");
+  });
+
+  it("its reminder fires at 20:00, not at tomorrow's 08:30", async () => {
+    const key = await movedIn();
+    const doses = await loadReminderDoses();
+    // A window from now that holds tomorrow's 08:30, and one that ends before it.
+    for (const days of [2, 0.6]) {
+      const occ = (await loadReminderOccurrences(doses, { from: at(8, 0), days, deviceTz: TZ }))
+        .filter((o) => o.dose.scheduleId === key.scheduleId && o.dateKey === TOMORROW);
+      expect(occ.map((o) => o.at)).toEqual([at(20, 0)]);
+    }
+    // Taken: no reminder left for it.
+    setNow(at(20, 5));
+    await take(key);
+    const after = (await loadReminderOccurrences(doses, { from: at(20, 5), days: 1, deviceTz: TZ }))
+      .filter((o) => o.dose.scheduleId === key.scheduleId && o.dateKey === TOMORROW);
+    expect(after).toEqual([]);
   });
 });

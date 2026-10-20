@@ -23,7 +23,7 @@ interface ScheduleViewProps {
   onOpenInfo?: (prescriptionId: string) => void;
 }
 
-/** The `data-time` of the "From earlier days" group. */
+/** The `data-time` of the "Moved to today" group. */
 const CARRIED_TIME = "carried";
 
 /** One dose's key on this screen: a carried-over dose can share its schedule with today's. */
@@ -36,8 +36,8 @@ interface TimeGroup {
 }
 
 /**
- * The Today (Schedule) tab: "From earlier days" (doses of earlier days
- * rescheduled into today), then one card per dose time, in time order. A
+ * The Today (Schedule) tab: "Moved to today" (doses of other days, earlier
+ * or later, rescheduled into today), then one card per dose time, in time order. A
  * rescheduled dose stays under its original time. On open the list scrolls
  * to the dose time nearest to now. A clock ticks, so the header colours,
  * "Missed" and the "Unmarked meds" chip stay current while the screen is
@@ -145,7 +145,7 @@ export function ScheduleView({ selectedDate, onAddMed, onOpenInfo }: ScheduleVie
     });
     root.querySelectorAll<HTMLElement>("[data-time]").forEach((el) => observer.observe(el));
     return () => observer.disconnect();
-    // The "From earlier days" card is observed too, once it is on screen.
+    // The "Moved to today" card is observed too, once it is on screen.
   }, [groups, carried?.length]);
 
   // Off-screen cards with due, open doses. "Rescheduled meds" when every
@@ -182,11 +182,15 @@ export function ScheduleView({ selectedDate, onAddMed, onOpenInfo }: ScheduleVie
   const markAllGroup = groups.find((g) => g.time === markAllTime);
   const openDose =
     slots?.find((s) => doseId(s) === openDoseId) ?? carried?.find((s) => doseId(s) === openDoseId) ?? null;
+  // A later day's dose rescheduled to today (or earlier) is due today: it
+  // can be taken or skipped now, like the service allows.
+  const movedIn = (s: DoseSlot) =>
+    s.existingLog?.status === "rescheduled" && s.remindAt !== undefined && toLocalDateKey(s.remindAt) <= todayKey;
   const openDoseDay: SlotDay = !openDose
     ? day
     : openDose.scheduledDate < todayKey
       ? "past"
-      : openDose.scheduledDate > todayKey
+      : openDose.scheduledDate > todayKey && !movedIn(openDose)
         ? "future"
         : "today";
 
@@ -197,7 +201,7 @@ export function ScheduleView({ selectedDate, onAddMed, onOpenInfo }: ScheduleVie
       className="scroll-mt-14 border border-line bg-panel shadow-[inset_3px_0_0_hsl(var(--meds))]"
     >
       <div className="flex min-h-11 items-center border-b border-line bg-chrome px-2.5">
-        <h3 className="text-[0.9375rem] font-semibold">From earlier days</h3>
+        <h3 className="text-[0.9375rem] font-semibold">Moved to today</h3>
       </div>
       <div>
         {carried.map((slot) => (

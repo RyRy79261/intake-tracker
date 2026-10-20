@@ -22,7 +22,7 @@ interface DoseRowProps {
   onTake?: (slot: DoseSlot) => void;
   /** A long press of Take: ask for the time taken at once. */
   onTakeLongPress?: (slot: DoseSlot) => void;
-  /** A dose of an earlier day ("From earlier days"): where it comes from. */
+  /** A dose of another day ("Moved to today"): where it comes from. */
   origin?: string;
 }
 

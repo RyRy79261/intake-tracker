@@ -63,11 +63,6 @@ function quickPickBase(slots: readonly DoseSlot[], future: boolean, now: number)
   return Math.min(...slots.map((s) => s.scheduledAt));
 }
 
-/** The earliest day the doses can move to: their own day (the latest of them). */
-export function earliestRescheduleDate(slots: readonly DoseSlot[]): string {
-  return slots.reduce((max, s) => (s.scheduledDate > max ? s.scheduledDate : max), "");
-}
-
 /**
  * The text of one warning, with the medicine's name. A time that has passed
  * gets no first reminder (the reminders never fire late); once its reminder
@@ -95,10 +90,10 @@ export function rescheduleWarningText(
  * date and time. A quick pick (15 minutes to 2 hours) saves in one tap; when
  * that time has a warning, it fills in the fields instead so the user sees
  * the warning first. "Today" and "Tomorrow" set the day; the pickers allow
- * any date and time from the dose's own day on. A time that has passed, or
- * one after the next dose of the same medicine, shows a warning, but
- * Reschedule is still allowed. A day before the dose's own day is refused:
- * the dose could not be taken there (a future-day dose cannot be taken).
+ * any date and time, also a day before the dose's own day (tomorrow's dose
+ * moved to tonight is taken tonight). A time that has passed, or one after
+ * the next dose of the same medicine, shows a warning, but Reschedule is
+ * always allowed.
  */
 export function RescheduleSheet({ open, slots, future, onCancel, onConfirm }: RescheduleSheetProps) {
   const now = useNow();
@@ -121,10 +116,7 @@ export function RescheduleSheet({ open, slots, future, onCancel, onConfirm }: Re
     }
   }
 
-  const pickedAt = pickedInstant(date, time);
-  const minDate = earliestRescheduleDate(slots);
-  const tooEarly = pickedAt !== null && toLocalDateKey(pickedAt) < minDate;
-  const at = tooEarly ? null : pickedAt;
+  const at = pickedInstant(date, time);
 
   // The same warning function as the save, so the user sees it first.
   useEffect(() => {
@@ -152,7 +144,6 @@ export function RescheduleSheet({ open, slots, future, onCancel, onConfirm }: Re
   const quickPick = async (instant: number) => {
     if (picking) return;
     setInstant(instant);
-    if (toLocalDateKey(instant) < minDate) return;
     setPicking(true);
     const clear = await getRescheduleWarnings(slots.map(keyOf), instant, Date.now()).then(
       (w) => w.length === 0,
@@ -197,7 +188,6 @@ export function RescheduleSheet({ open, slots, future, onCancel, onConfirm }: Re
               <input
                 type="date"
                 value={date}
-                min={minDate || undefined}
                 onChange={(e) => setDate(e.target.value)}
                 aria-label="Reschedule date"
                 className="h-12 w-full rounded-none border border-input bg-background px-2 font-mono text-base text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
@@ -217,9 +207,8 @@ export function RescheduleSheet({ open, slots, future, onCancel, onConfirm }: Re
           <div className="grid grid-cols-2 gap-2">
             <button
               type="button"
-              disabled={today < minDate}
               aria-pressed={date === today}
-              className={cn(chip, date === today && "border-meds text-meds", "disabled:opacity-40")}
+              className={cn(chip, date === today && "border-meds text-meds")}
               onClick={() => setDate(today)}
             >
               Today
@@ -234,11 +223,7 @@ export function RescheduleSheet({ open, slots, future, onCancel, onConfirm }: Re
             </button>
           </div>
 
-          {tooEarly ? (
-            <p className="text-[0.8125rem] text-bp" role="alert">
-              Pick {formatDoseDate(minDate)} or a later day. The dose cannot be taken before its day.
-            </p>
-          ) : at === null ? (
+          {at === null ? (
             <p className="text-[0.8125rem] text-bp">Enter a date and a time.</p>
           ) : (
             // The resolved instant: a time that does not exist (DST) shows shifted.

@@ -114,7 +114,7 @@ test.describe('Today: rescheduling', () => {
     expect(Number((await doseLogs(page)).get(doses[0]!.scheduleId)?.actionTimestamp)).toBe(berlin('08:35'));
   });
 
-  test('a 22:00 dose rescheduled to 00:30 shows in "From earlier days" after midnight and is not missed', async ({ page }) => {
+  test('a 22:00 dose rescheduled to 00:30 shows in "Moved to today" after midnight and is not missed', async ({ page }) => {
     await prepare(page, '22:05');
     const [dose] = await seedSlot(page, 1, [], ['22:00']);
 
@@ -128,7 +128,7 @@ test.describe('Today: rescheduling', () => {
     await clockTo(page, berlin('00:40', NEXT_DAY));
     const group = win(page).getByTestId('carried-over');
     await expect(group).toBeVisible({ timeout: 20_000 });
-    await expect(group.getByRole('heading', { name: 'From earlier days' })).toBeVisible();
+    await expect(group.getByRole('heading', { name: 'Moved to today' })).toBeVisible();
     await expect(group.getByTestId('dose-origin')).toHaveText('From Monday, Oct 19, 22:00');
     await expect(group.getByTestId('dose-row')).toHaveAttribute('data-status', 'rescheduled');
     await expect(group.getByText('Missed')).toHaveCount(0);
@@ -140,7 +140,7 @@ test.describe('Today: rescheduling', () => {
     await expect(group).toBeHidden();
   });
 
-  test('a dose rescheduled 2 days ahead shows in "From earlier days" on that day', async ({ page }) => {
+  test('a dose rescheduled 2 days ahead shows in "Moved to today" on that day', async ({ page }) => {
     await prepare(page, '08:00');
     await seedSlot(page, 1, [{ status: 'rescheduled', at: '08:00', remindAt: berlin('09:00', TWO_DAYS) }]);
     await expect(win(page).getByTestId('dose-status')).toHaveText('Rescheduled for 09:00, Oct 21');
@@ -155,7 +155,7 @@ test.describe('Today: rescheduling', () => {
     await expect(group.getByTestId('dose-status')).toHaveText('Rescheduled for 09:00, today');
   });
 
-  test("tomorrow's dose cannot move to today; its own day is fine", async ({ page }) => {
+  test("tomorrow's 08:30 dose moved to today 20:00 shows on today and Take works", async ({ page }) => {
     await prepare(page, '09:00');
     const [dose] = await seedSlot(page, 1);
 
@@ -169,18 +169,34 @@ test.describe('Today: rescheduling', () => {
     }).toPass();
     await page.getByRole('dialog').getByRole('button', { name: 'Reschedule', exact: true }).click();
     await expect(resched(page)).toBeVisible();
-    await expect(resched(page).getByRole('button', { name: 'Today' })).toBeDisabled();
+    await expect(resched(page).getByRole('button', { name: 'Today' })).toBeEnabled();
+    await expect(resched(page).getByLabel('Reschedule date')).not.toHaveAttribute('min', /.+/);
+    await rescheduleTo(page, DAY, '20:00');
+    await expect.poll(async () => {
+      const log = (await doseLogs(page)).get(dose!.scheduleId);
+      return [log?.status, log?.scheduledDate, log?.remindAt];
+    }).toEqual(['rescheduled', NEXT_DAY, berlin('20:00')]);
+    // Tomorrow keeps it under 08:30, with the day of the new time.
+    await expect(win(page).getByTestId('dose-status')).toHaveText('Rescheduled for 20:00, today');
 
-    await resched(page).getByLabel('Reschedule date').fill(DAY);
-    await resched(page).getByLabel('Reschedule time').fill('20:00');
-    await expect(resched(page).getByRole('alert')).toHaveText(
-      'Pick Tuesday, Oct 20 or a later day. The dose cannot be taken before its day.',
-    );
-    await expect(resched(page).getByRole('button', { name: 'Reschedule', exact: true })).toBeDisabled();
-    expect((await doseLogs(page)).get(dose!.scheduleId)).toBeUndefined();
+    await win(page).getByRole('button', { name: /^Mon\s*19$/ }).click();
+    const group = win(page).getByTestId('carried-over');
+    await expect(group).toBeVisible();
+    await expect(group.getByRole('heading', { name: 'Moved to today' })).toBeVisible();
+    await expect(group.getByTestId('dose-origin')).toHaveText('From Tuesday, Oct 20, 08:30');
+    await expect(group.getByTestId('dose-status')).toHaveText('Rescheduled for 20:00, today');
 
-    await rescheduleTo(page, NEXT_DAY, '07:00');
-    await expect.poll(async () => (await doseLogs(page)).get(dose!.scheduleId)?.remindAt).toBe(berlin('07:00', NEXT_DAY));
+    await group.getByRole('button', { name: 'Take Brand1' }).click();
+    await expect.poll(async () => (await doseLogs(page)).get(dose!.scheduleId)?.status).toBe('taken');
+    expect((await doseLogs(page)).get(dose!.scheduleId)?.scheduledDate).toBe(NEXT_DAY);
+    expect(await stocks(page, [dose!])).toEqual([29]);
+    await expect(group).toBeHidden();
+
+    // Tomorrow's own view shows it taken under 08:30.
+    await win(page).getByRole('button', { name: /^Tue\s*20$/ }).click();
+    await expect(win(page).getByText('Tomorrow, Oct 20, 2026')).toBeVisible();
+    await expect(win(page).getByTestId('time-slot')).toHaveAttribute('data-time', '08:30');
+    await expect(win(page).getByTestId('dose-row')).toHaveAttribute('data-status', 'taken');
   });
 });
 

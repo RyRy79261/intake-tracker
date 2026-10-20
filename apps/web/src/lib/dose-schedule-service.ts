@@ -265,7 +265,7 @@ export async function getDailyDoseSchedule(
     const scheduleById = new Map(allSchedules.map((s) => [s.id, s]));
     const phaseById = new Map(allPhases.map((p) => [p.id, p]));
     for (const [scheduleId, log] of logMap) {
-      // A rescheduled dose stays too: it can still wait in "From earlier days".
+      // A rescheduled dose stays too: it can still wait in "Moved to today".
       if (shown.has(scheduleId) || log.status === "pending") continue;
       const schedule = scheduleById.get(scheduleId);
       const phase = schedule && phaseById.get(schedule.phaseId);
@@ -383,14 +383,15 @@ export async function getDailyDoseSchedule(
 }
 
 // ---------------------------------------------------------------------------
-// "From earlier days"
+// "Moved to today"
 // ---------------------------------------------------------------------------
 
 /**
- * Doses of earlier days that are rescheduled into `dateStr` ("From earlier
- * days" on Today). Each is the dose of its own day (same log, same key), so
- * an action on it writes that log. A 22:00 dose moved to 00:30 shows here
- * after midnight; a dose moved two days ahead shows on that day. A dose
+ * Doses of other days, earlier or later, that are rescheduled into `dateStr`
+ * ("Moved to today" on Today). Each is the dose of its own day (same log,
+ * same key), so an action on it writes that log. A 22:00 dose moved to 00:30
+ * shows here after midnight; a dose moved two days ahead shows on that day;
+ * tomorrow's 08:30 dose moved to today 20:00 shows here today. A dose
  * moved to just before midnight (23:50) shows here too while its reminder
  * period reaches into `dateStr`: it is still waiting and its reminders still
  * fire. The caller drops a dose once it is missed (live status).
@@ -409,7 +410,7 @@ export async function getCarriedOverDoses(
       isLive(log) &&
       log.kind !== "prn" &&
       !!log.scheduleId &&
-      log.scheduledDate < dateStr &&
+      log.scheduledDate !== dateStr &&
       log.remindAt != null &&
       reachesDay(log.remindAt),
   );

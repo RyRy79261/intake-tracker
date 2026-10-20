@@ -326,13 +326,27 @@ function failMessage(e: unknown, fallback: string): string {
   return e instanceof DoseRuleError ? e.message : fallback;
 }
 
-/** Refuse to take or skip a dose of a day after today. */
-function assertNotFutureDay(date: string, verb: "take" | "skip"): void {
+/**
+ * Refuse to take or skip a dose that is due on a day after today. The day is
+ * the one of the dose's due instant: a dose of a later day rescheduled to
+ * today (or earlier) counts as today's, so it can be taken or skipped. A
+ * future-day dose with no reschedule is refused.
+ */
+function assertNotFutureDay(
+  date: string,
+  prev: Pick<DoseLog, "status" | "remindAt"> | undefined,
+  verb: "take" | "skip",
+): void {
   // A dose cannot be taken ahead of its day: it would debit stock for a pill
   // that is still in the bottle, and the dose is not due yet.
-  if (date > toLocalDateKey()) {
-    throw new DoseRuleError(`Cannot ${verb} a dose scheduled for a future date`);
-  }
+  const today = toLocalDateKey();
+  if (date <= today) return;
+  const movedIn =
+    prev?.status === "rescheduled" &&
+    prev.remindAt != null &&
+    Number.isFinite(prev.remindAt) &&
+    toLocalDateKey(prev.remindAt) <= today;
+  if (!movedIn) throw new DoseRuleError(`Cannot ${verb} a dose scheduled for a future date`);
 }
 
 /** Put a dose's pills back in stock, or take them out again (undo of an untake). */
@@ -370,10 +384,10 @@ async function moveStock(
  */
 async function takeInTx(w: SyncedWriter, input: TakeDoseInput): Promise<DoseChange | null> {
   const { prescriptionId, phaseId, scheduleId, date, time, dosageMg, takenAt } = input;
-  assertNotFutureDay(date, "take");
   if (takenAt !== undefined && !Number.isFinite(takenAt)) throw new Error("Invalid time");
 
   const prev = await getDoseLogRaw(scheduleId, date);
+  assertNotFutureDay(date, prev, "take");
   if (prev?.status === "taken") return null;
   // Resolve the log id first so the consumed transaction can link to it.
   const logId = prev?.id ?? (await newScheduledDoseLogId(scheduleId, date));
@@ -427,10 +441,9 @@ async function takeInTx(w: SyncedWriter, input: TakeDoseInput): Promise<DoseChan
 /** Skip one dose inside a synced write. A taken dose gets its pills back. */
 async function skipInTx(w: SyncedWriter, input: SkipDoseInput): Promise<DoseChange> {
   const { prescriptionId, phaseId, scheduleId, date, time, dosageMg, reason } = input;
-  // Skipping ahead of the day would mark a dose that is not yet due.
-  assertNotFutureDay(date, "skip");
-
   const prev = await getDoseLogRaw(scheduleId, date);
+  // Skipping ahead of the day would mark a dose that is not yet due.
+  assertNotFutureDay(date, prev, "skip");
   const logId = prev?.id ?? (await newScheduledDoseLogId(scheduleId, date));
   const pillsConsumed = await restoreTakenStock(w, prev, dosageMg);
 
@@ -725,16 +738,12 @@ export async function unskipDose(input: UnskipDoseInput): Promise<ServiceResult<
  * write. The dose keeps its key and its original time; only `remindAt`
  * changes. A taken dose is refused: untake it first (the old silent un-take
  * is gone). A skipped dose is open again, its reason cleared. There is no
- * time limit and a future day is allowed.
+ * time limit: any day is allowed, also one before the dose's own day (a
+ * later day's dose moved to today can then be taken today).
  */
 async function rescheduleInTx(w: SyncedWriter, input: RescheduleDoseInput): Promise<DoseChange> {
   const { prescriptionId, phaseId, scheduleId, date, time, remindAt } = input;
   if (!Number.isFinite(remindAt)) throw new DoseRuleError("Invalid time");
-  // A dose cannot move to a day before its own: there it could not be taken
-  // (the future-day guard), and on its own day it would already be missed.
-  if (toLocalDateKey(remindAt) < date) {
-    throw new DoseRuleError("Pick the dose's own day or a later day.");
-  }
   const prev = await getDoseLogRaw(scheduleId, date);
   if (prev?.status === "taken") throw new DoseRuleError("Untake the dose first.");
   const logId = prev?.id ?? (await newScheduledDoseLogId(scheduleId, date));
