@@ -25,7 +25,8 @@ import {
   getLatestSchedulesForPhase,
   getPendingScheduleChange,
 } from "@/lib/medication-schedule-service";
-export type { ScheduleChangeOutcome } from "@/lib/medication-schedule-service";
+export type { ScheduleChangeOutcome, PendingScheduleChange } from "@/lib/medication-schedule-service";
+export { scheduleDoseUnit } from "@/lib/medication-schedule-service";
 import { startNewPhase, updatePhase, activatePhase, type CreatePhaseInput, type UpdatePhaseInput } from "@/lib/medication-service";
 import {
   getTitrationPlans,

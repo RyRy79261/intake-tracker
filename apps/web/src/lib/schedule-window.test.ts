@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   addDaysToKey,
   isEmptyPlan,
+  isNewestRegimen,
   planScheduleChange,
   scheduleInEffectOn,
   type PlannedRow,
@@ -122,7 +123,7 @@ describe("planScheduleChange", () => {
       expect(p.patches).toEqual([{ id: "a", changes: { effectiveTo: "2026-10-21" } }]);
       expect(p.inserts[0]!.effectiveFrom).toBe("2026-10-21");
       expect(p.logMoves).toEqual([]);
-      expect(p.deferred).toEqual([{ scheduleId: "a", startsOn: "2026-10-21" }]);
+      expect(p.startsOn).toBe("2026-10-21");
     });
 
     it("move-logs: the change starts on the day and the log moves to the new row", () => {
@@ -130,7 +131,7 @@ describe("planScheduleChange", () => {
       expect(p.patches).toEqual([{ id: "a", changes: { effectiveTo: "2026-10-20" } }]);
       expect(p.inserts[0]!.effectiveFrom).toBe("2026-10-20");
       expect(p.logMoves).toEqual([{ fromScheduleId: "a", insertIndex: 0, dates: ["2026-10-20"] }]);
-      expect(p.deferred).toEqual([]);
+      expect(p.startsOn).toBe("2026-10-20");
     });
 
     it("a removed row with a logged dose stays through that day under both rules", () => {
@@ -163,13 +164,55 @@ describe("planScheduleChange", () => {
       row("next", "09:00", { start: "2026-10-22", effectiveFrom: "2026-10-22" }),
     ];
 
-    it("applied from today replaces the pending change and closes the old row today", () => {
+    it("applied from today edits the pending row in place from today and closes the old row today", () => {
       const p = plan({ rows, desired: [{ id: "next", time: "10:00", dosage: 5, daysOfWeek: ALL }] });
-      expect(p.patches).toEqual([{ id: "old", changes: { effectiveTo: "2026-10-20" } }]);
-      expect(p.inserts).toEqual([
-        { content: { time: "10:00", dosage: 5, daysOfWeek: ALL }, effectiveFrom: "2026-10-20", replaces: "old" },
+      expect(p.patches).toEqual([
+        { id: "next", changes: { time: "10:00", dosage: 5, daysOfWeek: ALL, effectiveFrom: "2026-10-20" } },
+        { id: "old", changes: { effectiveTo: "2026-10-20" } },
       ]);
-      expect(p.tombstones).toEqual(["next"]);
+      expect(p.inserts).toEqual([]);
+      expect(p.tombstones).toEqual([]);
+    });
+
+    it("a dose of the pending row already taken keeps that row through its day (start-next-day)", () => {
+      // Tomorrow's 09:00 dose was moved to today and taken.
+      const p = plan({
+        rows,
+        applyFrom: "2026-10-20",
+        desired: [{ id: "next", time: "10:00", dosage: 5, daysOfWeek: ALL }],
+        loggedDates: new Map([["next", ["2026-10-22"]]]),
+      });
+      expect(p.startsOn).toBe("2026-10-23");
+      expect(p.tombstones).toEqual([]);
+      expect(p.patches).toEqual([{ id: "next", changes: { effectiveTo: "2026-10-23" } }]);
+      expect(p.inserts).toEqual([
+        { content: { time: "10:00", dosage: 5, daysOfWeek: ALL }, effectiveFrom: "2026-10-23", replaces: "next" },
+      ]);
+    });
+
+    it("move-logs: a logged dose of the pending row stays on it, edited in place", () => {
+      const p = plan({
+        rows,
+        rule: "move-logs",
+        desired: [{ id: "next", time: "10:00", dosage: 5, daysOfWeek: ALL }],
+        loggedDates: new Map([["next", ["2026-10-22"]]]),
+      });
+      expect(p.tombstones).toEqual([]);
+      expect(p.patches).toContainEqual({
+        id: "next",
+        changes: { time: "10:00", dosage: 5, daysOfWeek: ALL, effectiveFrom: "2026-10-20" },
+      });
+    });
+
+    it("a removed pending row with a logged dose is not dropped", () => {
+      const p = plan({
+        rows,
+        rule: "move-logs",
+        desired: [{ id: "old", time: "08:30", dosage: 5, daysOfWeek: ALL }],
+        loggedDates: new Map([["next", ["2026-10-22"]]]),
+      });
+      expect(p.tombstones).toEqual([]);
+      expect(p.patches).toContainEqual({ id: "next", changes: { effectiveTo: "2026-10-23" } });
     });
 
     it("going back to the old time re-opens the old row", () => {
@@ -188,6 +231,118 @@ describe("planScheduleChange", () => {
       expect(p.patches).toEqual([{ id: "next", changes: { effectiveTo: "2026-10-25" } }]);
       expect(p.inserts[0]).toMatchObject({ effectiveFrom: "2026-10-25", replaces: "next" });
       expect(p.tombstones).toEqual([]);
+    });
+  });
+
+  describe("start-next-day: one change day for the whole regimen", () => {
+    it("a split dose added to a taken dose starts tomorrow, not on top of it today", () => {
+      const p = plan({
+        rows: [row("a", "08:00", { dosage: 50 })],
+        desired: [
+          { id: "a", time: "08:00", dosage: 25, daysOfWeek: ALL },
+          { time: "20:00", dosage: 25, daysOfWeek: ALL },
+        ],
+        loggedDates: new Map([["a", ["2026-10-20"]]]),
+      });
+      expect(p.startsOn).toBe("2026-10-21");
+      expect(p.patches).toEqual([{ id: "a", changes: { effectiveTo: "2026-10-21" } }]);
+      expect(p.inserts.map((i) => [i.content.time, i.effectiveFrom])).toEqual([
+        ["08:00", "2026-10-21"],
+        ["20:00", "2026-10-21"],
+      ]);
+    });
+
+    it("a second edit the same day keeps the pending change and adds to it from tomorrow", () => {
+      // Edit 1: 08:00 (taken today) moved to 20:00 from tomorrow.
+      const rows = [
+        row("a", "08:00", { effectiveTo: "2026-10-21" }),
+        row("b", "20:00", { start: "2026-10-21", effectiveFrom: "2026-10-21" }),
+      ];
+      const p = plan({
+        rows,
+        desired: [
+          { id: "b", time: "20:00", dosage: 5, daysOfWeek: ALL },
+          { time: "12:00", dosage: 5, daysOfWeek: ALL },
+        ],
+        loggedDates: new Map([["a", ["2026-10-20"]]]),
+      });
+      expect(p.startsOn).toBe("2026-10-21");
+      expect(p.patches).toEqual([]);
+      expect(p.tombstones).toEqual([]);
+      expect(p.inserts).toEqual([{ content: { time: "12:00", dosage: 5, daysOfWeek: ALL }, effectiveFrom: "2026-10-21" }]);
+    });
+
+    it("a removed row without a log waits for the change day of its taken sibling", () => {
+      const p = plan({
+        rows: [row("am", "08:00"), row("pm", "20:00")],
+        desired: [{ id: "am", time: "09:00", dosage: 5, daysOfWeek: ALL }],
+        loggedDates: new Map([["am", ["2026-10-20"]]]),
+      });
+      expect(p.patches).toEqual([
+        { id: "am", changes: { effectiveTo: "2026-10-21" } },
+        { id: "pm", changes: { effectiveTo: "2026-10-21" } },
+      ]);
+    });
+
+    it("a taken dose of an unchanged row does not hold back the change of another row", () => {
+      const p = plan({
+        rows: [row("am", "08:00"), row("pm", "20:00")],
+        desired: [
+          { id: "am", time: "08:00", dosage: 5, daysOfWeek: ALL },
+          { id: "pm", time: "21:00", dosage: 5, daysOfWeek: ALL },
+        ],
+        loggedDates: new Map([["am", ["2026-10-20"]]]),
+      });
+      expect(p.startsOn).toBe("2026-10-20");
+      expect(p.inserts[0]).toMatchObject({ effectiveFrom: "2026-10-20", replaces: "pm" });
+    });
+  });
+
+  describe("unit", () => {
+    it("a unit-only change closes every row and starts new ones", () => {
+      const p = plan({
+        rows: [row("a", "08:30", { unit: "mg" })],
+        desired: [{ id: "a", time: "08:30", dosage: 5, daysOfWeek: ALL }],
+        unit: "mcg",
+      });
+      expect(p.patches).toEqual([{ id: "a", changes: { effectiveTo: "2026-10-20" } }]);
+      expect(p.inserts).toHaveLength(1);
+    });
+
+    it("from a future date, the row runs in the old unit until then", () => {
+      const p = plan({
+        applyFrom: "2026-10-25",
+        rows: [row("a", "08:30", { unit: "mg" })],
+        desired: [{ id: "a", time: "08:30", dosage: 5, daysOfWeek: ALL }],
+        unit: "mcg",
+      });
+      expect(p.patches).toEqual([{ id: "a", changes: { effectiveTo: "2026-10-25" } }]);
+      expect(p.inserts[0]!.effectiveFrom).toBe("2026-10-25");
+    });
+
+    it("the same unit keeps the row", () => {
+      const p = plan({
+        rows: [row("a", "08:30", { unit: "mg" })],
+        desired: [{ id: "a", time: "08:30", dosage: 5, daysOfWeek: ALL }],
+        unit: "mg",
+      });
+      expect(isEmptyPlan(p)).toBe(true);
+    });
+  });
+
+  describe("isNewestRegimen", () => {
+    const rows = [
+      row("old", "08:30", { effectiveTo: "2026-10-25" }),
+      row("next", "09:00", { start: "2026-10-25", effectiveFrom: "2026-10-25" }),
+    ];
+    it("is true for the rows a drawer shows (the pending change)", () => {
+      expect(isNewestRegimen(rows, [{ id: "next", time: "09:00", dosage: 5, daysOfWeek: ALL }])).toBe(true);
+    });
+    it("is false for any change, also a unit change", () => {
+      expect(isNewestRegimen(rows, [{ time: "10:00", dosage: 5, daysOfWeek: ALL }])).toBe(false);
+      expect(
+        isNewestRegimen([row("a", "08:30", { unit: "mg" })], [{ time: "08:30", dosage: 5, daysOfWeek: ALL }], "mcg"),
+      ).toBe(false);
     });
   });
 

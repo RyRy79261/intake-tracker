@@ -6,6 +6,8 @@ import { localHHMMStringToUTCMinutes } from "@/lib/timezone";
 import { getScheduleAnchorTimezone, homeAnchorOrUndefined } from "@/lib/schedule-anchor";
 import { isLive } from "@intake/core/lifecycle";
 import {
+  isEmptyPlan,
+  isNewestRegimen,
   planScheduleChange,
   scheduleInEffectOn,
   type ChangeDayRule,
@@ -50,13 +52,16 @@ export async function getLatestSchedulesForPhase(phaseId: string): Promise<Phase
 }
 
 /**
- * A schedule change that is saved but has not started yet: the date it
- * starts and the rows in effect until then. `undefined` when none is
- * pending on `todayKey`.
+ * The schedule changes that are saved but have not started yet. `steps`
+ * lists each one in date order: the day it starts and the rows in effect
+ * from that day. `until` is the rows in effect today. `undefined` when none
+ * is pending on `todayKey`.
  */
 export interface PendingScheduleChange {
+  /** The first day a saved change starts. */
   startsOn: string;
   until: PhaseSchedule[];
+  steps: { startsOn: string; schedules: PhaseSchedule[] }[];
 }
 
 export async function getPendingScheduleChange(
@@ -66,15 +71,22 @@ export async function getPendingScheduleChange(
   const live = (await db.phaseSchedules.where("phaseId").equals(phaseId).toArray()).filter(
     (s) => isLive(s) && s.enabled === true,
   );
-  const starts = live
-    .map((s) => s.effectiveFrom)
-    .filter((k): k is string => !!k && k > todayKey)
-    .sort();
-  const startsOn = starts[0];
+  // A change starts where a row starts or ends: a removed time only ends.
+  const days = [
+    ...new Set(
+      live
+        .flatMap((s) => [s.effectiveFrom, s.effectiveTo])
+        .filter((k): k is string => !!k && k > todayKey),
+    ),
+  ].sort();
+  const startsOn = days[0];
   if (!startsOn) return undefined;
+  const onDay = (key: string) =>
+    live.filter((s) => scheduleStartKey(s) <= key && scheduleInEffectOn(s, key));
   return {
     startsOn,
-    until: live.filter((s) => scheduleInEffectOn(s, todayKey) && !!s.effectiveTo && s.effectiveTo <= startsOn),
+    until: onDay(todayKey),
+    steps: days.map((key) => ({ startsOn: key, schedules: onDay(key) })),
   };
 }
 
@@ -94,6 +106,13 @@ export interface ScheduleChangeOptions {
    * still read "0.1 mg" after the phase moves to mcg.
    */
   closedUnit?: string;
+  /** The phase's unit after this edit. A row in another unit is a changed row. */
+  unit?: string;
+  /**
+   * Write nothing when `desired` is the newest regimen already (a drawer
+   * re-saving what it shows), so a pending change keeps its date.
+   */
+  skipIfNewest?: boolean;
 }
 
 /**
@@ -111,10 +130,12 @@ export function scheduleDoseUnit(
 export interface ScheduleChangeOutcome {
   applyFrom: string;
   /**
-   * The latest day a row's change starts on, when a logged dose moved it
-   * after `applyFrom` ("start-next-day"); else `undefined`.
+   * The day the change starts, when a logged dose moved it after
+   * `applyFrom` ("start-next-day"); else `undefined`.
    */
   deferredTo?: string;
+  /** True when nothing was written (the schedule was already this). */
+  unchanged?: boolean;
 }
 
 const DATE_KEY = /^\d{4}-\d{2}-\d{2}$/;
@@ -156,7 +177,11 @@ export async function writeScheduleChange(
     start: scheduleStartKey(s),
     ...(s.effectiveFrom && { effectiveFrom: s.effectiveFrom }),
     ...(s.effectiveTo && { effectiveTo: s.effectiveTo }),
+    ...(opts.closedUnit && { unit: scheduleDoseUnit(s, opts.closedUnit) }),
   }));
+  if (opts.skipIfNewest && isNewestRegimen(rows, desired, opts.unit)) {
+    return { applyFrom, unchanged: true };
+  }
 
   const loggedDates = new Map<string, string[]>();
   const logIdsBySlot = new Map<string, string[]>();
@@ -176,7 +201,15 @@ export async function writeScheduleChange(
     }
   }
 
-  const plan = planScheduleChange({ rows, desired, applyFrom, loggedDates, rule });
+  const plan = planScheduleChange({
+    rows,
+    desired,
+    applyFrom,
+    loggedDates,
+    rule,
+    ...(opts.closedUnit && opts.unit && { unit: opts.unit }),
+  });
+  if (isEmptyPlan(plan)) return { applyFrom, unchanged: true };
   const byId = new Map(live.map((s) => [s.id, s]));
 
   /** Time fields for `time` on a row continuing `prev`: re-encode only a changed time. */
@@ -199,8 +232,10 @@ export async function writeScheduleChange(
       ...(daysOfWeek !== undefined && { daysOfWeek: [...daysOfWeek] }),
       ...(time !== undefined && (prev?.time === time ? {} : timeFields(time, prev))),
       ...(effectiveTo !== undefined && { effectiveTo: effectiveTo ?? undefined }),
-      // A closed row keeps the unit its dose was in.
-      ...(effectiveTo && opts.closedUnit && { unit: opts.closedUnit }),
+      // A row keeps the unit its dose was in when it first closes. A row
+      // closed again (an earlier date) already has it: the phase unit may
+      // be the new one by now.
+      ...(effectiveTo && opts.closedUnit && !prev?.effectiveTo && { unit: opts.closedUnit }),
     });
   }
   const insertedIds: string[] = [];
@@ -229,8 +264,7 @@ export async function writeScheduleChange(
     }
   }
 
-  const deferredTo = plan.deferred.map((d) => d.startsOn).sort().at(-1);
-  return { applyFrom, ...(deferredTo && { deferredTo }) };
+  return { applyFrom, ...(plan.startsOn > applyFrom && { deferredTo: plan.startsOn }) };
 }
 
 // ---------------------------------------------------------------------------

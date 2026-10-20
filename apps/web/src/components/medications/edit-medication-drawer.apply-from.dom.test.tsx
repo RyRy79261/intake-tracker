@@ -97,7 +97,7 @@ describe("Schedule tab: Apply from", () => {
     await vi.waitFor(() =>
       expect(toastSpy).toHaveBeenCalledWith({
         title: "Schedule saved",
-        description: "The change starts Thursday, Oct 22. Until then, the old schedule stays.",
+        description: "The change starts Thursday, Oct 22. Days before it keep their schedule.",
       }),
     );
     const rows = await db.phaseSchedules.where("phaseId").equals(s.phase.id).toArray();
@@ -120,5 +120,87 @@ describe("Schedule tab: Apply from", () => {
         description: "Today's dose is already logged. The change starts tomorrow.",
       }),
     );
+  });
+
+  it("a food-instruction save leaves a pending change on its date", async () => {
+    const user = userEvent.setup();
+    const s = seed();
+    const next = makePhaseSchedule(s.phase.id, { time: "09:00", dosage: 10, effectiveFrom: IN_3, createdAt: at(9, 0) });
+    s.schedule.effectiveTo = IN_3;
+    s.seed.phaseSchedules.push(next);
+    await renderWithFixtures(
+      <PrescriptionViewDrawer prescription={s.prescription} open onOpenChange={() => {}} />,
+      { seed: s.seed },
+    );
+    expect(await screen.findByText("A change starts Thursday, Oct 22.")).toBeInTheDocument();
+    await user.click(screen.getByRole("radio", { name: "After eating" }));
+    expect(screen.queryByLabelText("Apply from")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /save schedule/i }));
+
+    await vi.waitFor(async () =>
+      expect((await db.medicationPhases.get(s.phase.id))?.foodInstruction).toBe("after"),
+    );
+    expect(await db.phaseSchedules.get(s.schedule.id)).toMatchObject({ effectiveTo: IN_3 });
+    expect(await db.phaseSchedules.get(next.id)).toMatchObject({ effectiveFrom: IN_3, deletedAt: null });
+    expect(toastSpy).not.toHaveBeenCalled();
+  });
+
+  it("an edit with a pending change starts on its date by default", async () => {
+    const s = seed();
+    const next = makePhaseSchedule(s.phase.id, { time: "09:00", dosage: 10, effectiveFrom: IN_3, createdAt: at(9, 0) });
+    s.schedule.effectiveTo = IN_3;
+    s.seed.phaseSchedules.push(next);
+    await renderWithFixtures(
+      <PrescriptionViewDrawer prescription={s.prescription} open onOpenChange={() => {}} />,
+      { seed: s.seed },
+    );
+    fireEvent.change(await screen.findByDisplayValue("09:00"), { target: { value: "10:00" } });
+    expect(await screen.findByLabelText("Apply from")).toHaveValue(IN_3);
+  });
+
+  it("a removed time from a future date names the change and what runs until then", async () => {
+    const user = userEvent.setup();
+    const s = seed();
+    const evening = makePhaseSchedule(s.phase.id, { time: "20:00", dosage: 10, createdAt: at(0, 0, -30) });
+    s.seed.phaseSchedules.push(evening);
+    await renderWithFixtures(
+      <PrescriptionViewDrawer prescription={s.prescription} open onOpenChange={() => {}} />,
+      { seed: s.seed },
+    );
+    await screen.findByDisplayValue("20:00");
+    await user.click(screen.getAllByRole("button", { name: "Remove dose" })[1]!);
+    fireEvent.change(await screen.findByLabelText("Apply from"), { target: { value: IN_3 } });
+    await user.click(screen.getByRole("button", { name: /save schedule/i }));
+
+    expect(await screen.findByText("A change starts Thursday, Oct 22.")).toBeInTheDocument();
+    expect(screen.getByText("08:00 10 mg, 20:00 10 mg")).toBeInTheDocument();
+    expect(await db.phaseSchedules.get(evening.id)).toMatchObject({ effectiveTo: IN_3 });
+  });
+
+  it("two pending changes are both listed in date order", async () => {
+    const s = seed();
+    const IN_1 = toLocalDateKey(at(12, 0, 1));
+    s.schedule.effectiveTo = IN_1;
+    s.seed.phaseSchedules.push(
+      makePhaseSchedule(s.phase.id, {
+        time: "09:00",
+        dosage: 10,
+        effectiveFrom: IN_1,
+        effectiveTo: IN_3,
+        createdAt: at(9, 0),
+      }),
+      makePhaseSchedule(s.phase.id, { time: "10:00", dosage: 10, effectiveFrom: IN_3, createdAt: at(9, 5) }),
+    );
+    await renderWithFixtures(
+      <PrescriptionViewDrawer prescription={s.prescription} open onOpenChange={() => {}} />,
+      { seed: s.seed },
+    );
+    expect(await screen.findByText("2 changes are saved.")).toBeInTheDocument();
+    const notice = screen.getByRole("status");
+    expect(notice).toHaveTextContent("Now: 08:00 10 mg");
+    expect(notice).toHaveTextContent("From tomorrow: 09:00 10 mg");
+    expect(notice).toHaveTextContent("From Thursday, Oct 22: 10:00 10 mg");
+    expect(notice).toHaveTextContent("The form shows the schedule from Thursday, Oct 22.");
+    expect(await screen.findByDisplayValue("10:00")).toBeInTheDocument();
   });
 });

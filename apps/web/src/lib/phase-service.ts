@@ -237,7 +237,7 @@ export async function updatePhase(input: UpdatePhaseInput): Promise<ServiceResul
         result.scheduleChange = await writeScheduleChange(w, id, schedules, {
           ...(applyFrom !== undefined && { applyFrom }),
           ...(changeDayRule !== undefined && { rule: changeDayRule }),
-          ...(phase.unit && { closedUnit: phase.unit }),
+          ...(phase.unit && { closedUnit: phase.unit, unit: updates.unit ?? phase.unit }),
         });
       } else if (schedules) {
         // Tombstoned schedules are history: an id pointing at one becomes a

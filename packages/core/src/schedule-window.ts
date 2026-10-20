@@ -52,6 +52,8 @@ export interface PlannedRow extends ScheduleContent, ScheduleWindowLike {
   enabled: boolean;
   /** First day the row applies: `effectiveFrom`, else the local date of `createdAt`. */
   start: string;
+  /** The unit the row's dose is read in (a closed row keeps its own). Unset: not compared. */
+  unit?: string | undefined;
 }
 
 /** A row the user wants from the "Apply from" date on. `id` is the row it was edited from. */
@@ -60,14 +62,16 @@ export interface DesiredRow extends ScheduleContent {
 }
 
 /**
- * What to do with an old row that already has a logged dose (taken, skipped
- * or rescheduled) on the change day or later.
+ * What to do when a row that changes already has a logged dose (taken,
+ * skipped or rescheduled) on the change day or later.
  *
- * - `"start-next-day"` (the product rule): the change for that row starts on
- *   the day after its last logged dose. The logged dose stays with the old
- *   row, so the day keeps the time, dose and log it had.
+ * - `"start-next-day"` (the product rule): the whole change starts on the
+ *   day after the last such logged dose. The logged dose stays with its row,
+ *   so the day keeps the time, dose and log it had, and no part of the new
+ *   regimen is added on top of it.
  * - `"move-logs"`: the change starts on the "Apply from" date, and those logs
- *   move to the new row (same write).
+ *   move to the new row (same write). A removed row has no new row, so it
+ *   stays until after its last logged dose.
  */
 export type ChangeDayRule = "start-next-day" | "move-logs";
 
@@ -79,6 +83,8 @@ export interface ScheduleChangeInput {
   /** Per row id, the date keys (>= applyFrom) that have a logged dose. */
   loggedDates: ReadonlyMap<string, readonly string[]>;
   rule: ChangeDayRule;
+  /** The phase's unit after the edit. A row read in another unit is a changed row. */
+  unit?: string | undefined;
 }
 
 export interface ScheduleChangePlan {
@@ -93,8 +99,11 @@ export interface ScheduleChangePlan {
   tombstones: string[];
   /** Logs to move to the new row at `insertIndex` ("move-logs" rule). */
   logMoves: { fromScheduleId: string; insertIndex: number; dates: string[] }[];
-  /** Rows whose change starts after `applyFrom` because a dose is already logged. */
-  deferred: { scheduleId: string; startsOn: string }[];
+  /**
+   * The day the new regimen starts: `applyFrom`, or later when a logged dose
+   * moved it ("start-next-day").
+   */
+  startsOn: string;
 }
 
 function sameDays(a: readonly number[], b: readonly number[]): boolean {
@@ -108,123 +117,156 @@ function sameContent(a: ScheduleContent, b: ScheduleContent): boolean {
   return a.time === b.time && a.dosage === b.dosage && sameDays(a.daysOfWeek, b.daysOfWeek);
 }
 
+/** Same time, dose and weekdays, read in the same unit. */
+function rowMatches(row: PlannedRow, d: DesiredRow, unit: string | undefined): boolean {
+  if (unit !== undefined && row.unit !== undefined && row.unit !== unit) return false;
+  return sameContent(row, d);
+}
+
 function contentOf(d: ScheduleContent): ScheduleContent {
   return { time: d.time, dosage: d.dosage, daysOfWeek: [...d.daysOfWeek] };
 }
 
 /**
+ * Whether `desired` is the phase's newest regimen (the enabled rows no edit
+ * has closed, also those that start later), in the same unit. Re-saving what
+ * a drawer shows is then not a change, so it must not move a pending one.
+ */
+export function isNewestRegimen(
+  rows: readonly PlannedRow[],
+  desired: readonly DesiredRow[],
+  unit?: string,
+): boolean {
+  const left = rows.filter((r) => r.enabled === true && !r.effectiveTo);
+  if (left.length !== desired.length) return false;
+  for (const d of desired) {
+    const i = left.findIndex((r) => rowMatches(r, d, unit));
+    if (i < 0) return false;
+    left.splice(i, 1);
+  }
+  return true;
+}
+
+/**
  * Plan an "Apply from" edit of one phase's schedules: make the regimen from
- * `applyFrom` on equal `desired`, and keep every day before it as it was.
+ * the change day on equal `desired`, and keep every day before it as it was.
  *
- * - A row that is unchanged is kept (and re-opened if a later change was
- *   pending).
+ * The change day is `applyFrom`. Under "start-next-day" it is the day after
+ * the last logged dose (on or after `applyFrom`) of any row that changes, so
+ * the whole regimen switches on one day.
+ *
+ * On the change day:
+ * - A row in effect that is unchanged is kept (and re-opened if a later
+ *   change was pending).
  * - A changed row that already applied before the change day is closed
  *   there, and a new row starts there. A changed row that never applied
- *   before it is edited in place.
+ *   before it (a pending change, or a row added that day) is edited in place.
  * - A removed row is closed at the change day, or dropped when it never
- *   applied.
- * - A row that only starts after `applyFrom` (a pending change) is replaced.
- *
- * The change day of a row is `applyFrom`, unless the row has a logged dose on
- * or after it (see ChangeDayRule).
+ *   applied. A row with a logged dose is never dropped.
+ * - Rows that ended before the change day are history and stay as they are.
  */
 export function planScheduleChange(input: ScheduleChangeInput): ScheduleChangePlan {
-  const { applyFrom, rule } = input;
-  const plan: ScheduleChangePlan = { patches: [], inserts: [], tombstones: [], logMoves: [], deferred: [] };
-
+  const { applyFrom, rule, unit } = input;
   const enabled = input.rows.filter((r) => r.enabled === true);
-  // Rows in effect on the change date or later.
-  const current = enabled.filter(
-    (r) => r.start <= applyFrom && (!r.effectiveTo || r.effectiveTo > applyFrom),
-  );
-  // Rows of a pending change that starts after the change date.
-  const upcoming = enabled.filter((r) => r.start > applyFrom);
+  const logged = (id: string) =>
+    (input.loggedDates.get(id) ?? []).filter((k) => k >= applyFrom).sort();
 
-  const unmatched = new Set(current.map((r) => r.id));
-  const remaining: DesiredRow[] = [];
-
-  // 1. Unchanged rows stay as they are.
-  for (const d of input.desired) {
-    const byId = current.find((r) => r.id === d.id && unmatched.has(r.id) && sameContent(r, d));
-    const same = byId ?? current.find((r) => unmatched.has(r.id) && sameContent(r, d));
-    if (!same) {
-      remaining.push(d);
-      continue;
+  /** Which rows the change touches when it starts on `day`, and which desired rows they already are. */
+  const layout = (day: string) => {
+    const affected = enabled.filter((r) => !r.effectiveTo || r.effectiveTo > day);
+    const inEffect = affected.filter((r) => r.start <= day);
+    const kept = new Set<string>();
+    const remaining: DesiredRow[] = [];
+    for (const d of input.desired) {
+      const free = (r: PlannedRow) => !kept.has(r.id) && rowMatches(r, d, unit);
+      const same = inEffect.find((r) => r.id === d.id && free(r)) ?? inEffect.find(free);
+      if (same) kept.add(same.id);
+      else remaining.push(d);
     }
-    unmatched.delete(same.id);
-    if (same.effectiveTo) plan.patches.push({ id: same.id, changes: { effectiveTo: null } });
+    const changing = affected.filter((r) => !kept.has(r.id));
+    return { affected, kept, remaining, changing };
+  };
+
+  let day = applyFrom;
+  if (rule === "start-next-day") {
+    for (;;) {
+      const last = layout(day)
+        .changing.flatMap((r) => logged(r.id))
+        .sort()
+        .at(-1);
+      const next = last && addDaysToKey(last, 1) > day ? addDaysToKey(last, 1) : day;
+      if (next === day) break;
+      day = next;
+    }
+  }
+  const { affected, kept, remaining, changing } = layout(day);
+  const plan: ScheduleChangePlan = { patches: [], inserts: [], tombstones: [], logMoves: [], startsOn: day };
+
+  // 1. Unchanged rows stay, open-ended.
+  for (const r of affected) {
+    if (kept.has(r.id) && r.effectiveTo) plan.patches.push({ id: r.id, changes: { effectiveTo: null } });
   }
 
   // 2. Pair each changed row with the row it was edited from: by id, else
-  // by time order (a row edited from a pending change continues the row
-  // that change replaces).
+  // by time order (rows in effect on the day first).
+  const free = new Set(changing.map((r) => r.id));
   const pairs: { desired: DesiredRow; from?: PlannedRow }[] = [];
   const unpaired: DesiredRow[] = [];
   for (const d of remaining) {
-    const from = current.find((r) => r.id === d.id && unmatched.has(r.id));
+    const from = changing.find((r) => r.id === d.id && free.has(r.id));
     if (from) {
-      unmatched.delete(from.id);
+      free.delete(from.id);
       pairs.push({ desired: d, from });
     } else {
       unpaired.push(d);
     }
   }
-  const leftovers = current
-    .filter((r) => unmatched.has(r.id))
-    .sort((a, b) => a.time.localeCompare(b.time));
+  const leftovers = changing
+    .filter((r) => free.has(r.id))
+    .sort((a, b) => Number(a.start > day) - Number(b.start > day) || a.time.localeCompare(b.time));
   unpaired.sort((a, b) => a.time.localeCompare(b.time));
   unpaired.forEach((d, i) => {
     const from = leftovers[i];
-    if (from) unmatched.delete(from.id);
+    if (from) free.delete(from.id);
     pairs.push({ desired: d, ...(from && { from }) });
   });
-
-  const loggedOnOrAfter = (id: string) =>
-    (input.loggedDates.get(id) ?? []).filter((k) => k >= applyFrom).sort();
-
-  /** The day the change of `row` starts, and the logs that move with it. */
-  const changeDayOf = (row: PlannedRow, canMove: boolean): { day: string; moved: string[] } => {
-    const logged = loggedOnOrAfter(row.id);
-    if (logged.length === 0) return { day: applyFrom, moved: [] };
-    if (rule === "move-logs" && canMove) return { day: applyFrom, moved: logged };
-    const day = addDaysToKey(logged[logged.length - 1]!, 1);
-    plan.deferred.push({ scheduleId: row.id, startsOn: day });
-    return { day, moved: [] };
-  };
 
   for (const { desired, from } of pairs) {
     const content = contentOf(desired);
     if (!from) {
-      plan.inserts.push({ content, effectiveFrom: applyFrom });
+      plan.inserts.push({ content, effectiveFrom: day });
       continue;
     }
-    const { day, moved } = changeDayOf(from, true);
     if (from.start >= day) {
-      // Never applied before the change day (a "move-logs" log on it already
-      // belongs to it): nothing to keep, edit in place.
+      // Never applied before the change day: nothing to keep, edit in place
+      // (a "move-logs" log on it stays with it, which is the move).
       plan.patches.push({
         id: from.id,
-        changes: { ...content, ...(from.effectiveTo && { effectiveTo: null }) },
+        changes: {
+          ...content,
+          ...(from.effectiveFrom && from.effectiveFrom !== day && { effectiveFrom: day }),
+          ...(from.effectiveTo && { effectiveTo: null }),
+        },
       });
       continue;
     }
     if (from.effectiveTo !== day) plan.patches.push({ id: from.id, changes: { effectiveTo: day } });
     plan.inserts.push({ content, effectiveFrom: day, replaces: from.id });
+    const moved = logged(from.id).filter((k) => k >= day);
     if (moved.length > 0) {
       plan.logMoves.push({ fromScheduleId: from.id, insertIndex: plan.inserts.length - 1, dates: moved });
     }
   }
 
-  // 3. Removed rows end at the change day. A logged dose keeps its row.
-  for (const row of current) {
-    if (!unmatched.has(row.id)) continue;
-    const { day } = changeDayOf(row, false);
-    if (row.start >= day) plan.tombstones.push(row.id);
-    else if (row.effectiveTo !== day) plan.patches.push({ id: row.id, changes: { effectiveTo: day } });
+  // 3. Removed rows end at the change day. A logged dose keeps its row
+  // through its day (only "move-logs" can leave one after the change day).
+  for (const row of changing) {
+    if (!free.has(row.id)) continue;
+    const last = logged(row.id).at(-1);
+    const end = last && addDaysToKey(last, 1) > day ? addDaysToKey(last, 1) : day;
+    if (row.start >= end && !last) plan.tombstones.push(row.id);
+    else if (row.effectiveTo !== end) plan.patches.push({ id: row.id, changes: { effectiveTo: end } });
   }
-
-  // 4. A pending change is replaced by this one.
-  for (const row of upcoming) plan.tombstones.push(row.id);
 
   return plan;
 }

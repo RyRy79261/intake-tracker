@@ -435,11 +435,14 @@ export async function updateTitrationPlan(
             }
             if (existing.status === "active") {
               // A running titration: the change applies from a date, so the
-              // days before it keep their time and dose.
+              // days before it keep their time and dose. The drawer sends
+              // every entry; one the user did not change keeps its rows (and
+              // a pending change keeps its date).
               await writeScheduleChange(w, existing.id, entry.schedules, {
                 ...(input.applyFrom !== undefined && { applyFrom: input.applyFrom }),
                 ...(input.changeDayRule !== undefined && { rule: input.changeDayRule }),
-                ...(existing.unit && { closedUnit: existing.unit }),
+                ...(existing.unit && { closedUnit: existing.unit, unit }),
+                skipIfNewest: true,
               });
             } else {
               await reconcileSchedules(w, existing.id, entry.schedules, { tz, deviceId: sf.deviceId });

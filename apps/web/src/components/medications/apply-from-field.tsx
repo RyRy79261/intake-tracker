@@ -31,7 +31,7 @@ export function describeScheduleChange(outcome: ScheduleChangeOutcome, todayKey:
       : `A dose is already logged. The change starts ${day}.`;
   }
   if (outcome.applyFrom === todayKey) return "The change starts today.";
-  return `The change starts ${formatChangeDay(outcome.applyFrom, todayKey)}. Until then, the old schedule stays.`;
+  return `The change starts ${formatChangeDay(outcome.applyFrom, todayKey)}. Days before it keep their schedule.`;
 }
 
 /** The "Apply from" date of a schedule edit (Medisafe "edit the med"). */

@@ -49,10 +49,23 @@ async function editTimeFrom(page: Page, applyFrom: string) {
   await field.fill(applyFrom);
   await d.getByRole('button', { name: 'Save schedule' }).click();
   await expect(d.getByRole('button', { name: 'Save schedule' })).toBeHidden();
+  // The drawer stays open after the save, also when the save replaced the
+  // dose's schedule row; the dose dialog under it follows the dose.
+  await expect(d).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(d).toBeHidden();
-  // The dose dialog under it closes too.
-  if (await page.getByRole('dialog').count()) await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toHaveCount(1);
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+}
+
+/** Tapping the dose again opens only the dose dialog, not the edit drawer. */
+async function expectDoseDialogOnly(page: Page) {
+  await win(page).getByRole('button', { name: /^Brand1(, .*)?\. Open dose$/ }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(1);
+  await expect(page.getByRole('dialog').getByRole('button', { name: 'Edit Generic1' })).toBeVisible();
+  await expect(drawer(page)).toHaveCount(0);
+  await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog')).toHaveCount(0);
 }
 
@@ -66,6 +79,7 @@ test.describe('Medications: Apply from schedule edits', () => {
 
     await editTimeFrom(page, DAY);
     await expect(page.getByText('The change starts today.', { exact: true })).toBeVisible();
+    await expectDoseDialogOnly(page);
 
     await expectSlots(page, YESTERDAY, ['08:30'], 'missed');
     await expectSlots(page, TODAY, ['09:00']);
@@ -82,7 +96,7 @@ test.describe('Medications: Apply from schedule edits', () => {
     await seedSlot(page, 1);
 
     await editTimeFrom(page, '2026-10-20');
-    await expect(page.getByText('The change starts tomorrow. Until then, the old schedule stays.', { exact: true })).toBeVisible();
+    await expect(page.getByText('The change starts tomorrow. Days before it keep their schedule.', { exact: true })).toBeVisible();
 
     await expectSlots(page, YESTERDAY, ['08:30'], 'missed');
     await expectSlots(page, TODAY, ['08:30']);
