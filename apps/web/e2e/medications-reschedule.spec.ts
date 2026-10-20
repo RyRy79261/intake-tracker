@@ -154,6 +154,34 @@ test.describe('Today: rescheduling', () => {
     await expect(group.getByTestId('dose-origin')).toHaveText('From Monday, Oct 19, 08:30');
     await expect(group.getByTestId('dose-status')).toHaveText('Rescheduled for 09:00, today');
   });
+
+  test("tomorrow's dose cannot move to today; its own day is fine", async ({ page }) => {
+    await prepare(page, '09:00');
+    const [dose] = await seedSlot(page, 1);
+
+    await win(page).getByRole('button', { name: /^Tue\s*20$/ }).click();
+    await expect(win(page).getByText('Tomorrow, Oct 20, 2026')).toBeVisible();
+    // Right after the switch the list can still hold Monday's rows for a
+    // moment; a dialog opened on one closes again. Open until Tuesday's shows.
+    await expect(async () => {
+      await openDose(page, 'Brand1');
+      await expect(page.getByRole('dialog')).toContainText('Tuesday, Oct 20', { timeout: 1_000 });
+    }).toPass();
+    await page.getByRole('dialog').getByRole('button', { name: 'Reschedule', exact: true }).click();
+    await expect(resched(page)).toBeVisible();
+    await expect(resched(page).getByRole('button', { name: 'Today' })).toBeDisabled();
+
+    await resched(page).getByLabel('Reschedule date').fill(DAY);
+    await resched(page).getByLabel('Reschedule time').fill('20:00');
+    await expect(resched(page).getByRole('alert')).toHaveText(
+      'Pick Tuesday, Oct 20 or a later day. The dose cannot be taken before its day.',
+    );
+    await expect(resched(page).getByRole('button', { name: 'Reschedule', exact: true })).toBeDisabled();
+    expect((await doseLogs(page)).get(dose!.scheduleId)).toBeUndefined();
+
+    await rescheduleTo(page, NEXT_DAY, '07:00');
+    await expect.poll(async () => (await doseLogs(page)).get(dose!.scheduleId)?.remindAt).toBe(berlin('07:00', NEXT_DAY));
+  });
 });
 
 /**

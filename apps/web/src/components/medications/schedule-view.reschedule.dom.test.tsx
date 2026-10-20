@@ -115,9 +115,8 @@ describe("the reschedule sheet from the dose dialog", () => {
     expect(within(sheet).getByRole("heading", { name: "Reschedule for" })).toBeInTheDocument();
     // Default: 30 minutes from now.
     expect(within(sheet).getByLabelText("Reschedule time")).toHaveValue("12:30");
+    // A quick pick with no warning saves in one tap.
     await user.click(within(sheet).getByRole("button", { name: "+1 hour" }));
-    expect(within(sheet).getByLabelText("Reschedule time")).toHaveValue("13:00");
-    await user.click(within(sheet).getByRole("button", { name: "Reschedule" }));
 
     await waitFor(async () => {
       expect((await logsOf(a))[0]).toMatchObject({ status: "rescheduled", remindAt: at(13, 0) });
@@ -158,9 +157,14 @@ describe("the reschedule sheet from the dose dialog", () => {
     const sheet = await screen.findByTestId("reschedule-sheet");
 
     const time = within(sheet).getByLabelText("Reschedule time");
+    // 11:45: inside the 30-minute reminder period, so the dose still waits.
+    await user.clear(time);
+    await user.type(time, "11:45");
+    expect(await within(sheet).findByText("This time has passed. Its first reminder may not fire.")).toBeInTheDocument();
+    // 11:00: the period has ended too.
     await user.clear(time);
     await user.type(time, "11:00");
-    expect(await within(sheet).findByText("This time has passed. The reminder fires at once.")).toBeInTheDocument();
+    expect(await within(sheet).findByText("This time has passed. The dose shows as missed.")).toBeInTheDocument();
 
     await user.clear(time);
     await user.type(time, "21:00");
@@ -169,6 +173,52 @@ describe("the reschedule sheet from the dose dialog", () => {
     await waitFor(async () => {
       const log = (await logsOf(a)).find((l) => l.scheduleId === a.schedule.id);
       expect(log).toMatchObject({ status: "rescheduled", remindAt: at(21, 0) });
+    });
+  });
+
+  it("the next-dose warning names the day when that dose is not today", async () => {
+    const a = regimen("A");
+    await renderDay([a]);
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: /^A brand, .*Open dose$/ }));
+    await user.click(await screen.findByRole("button", { name: "Reschedule" }));
+    const sheet = await screen.findByTestId("reschedule-sheet");
+    await user.click(within(sheet).getByRole("button", { name: "Tomorrow" }));
+    const time = within(sheet).getByLabelText("Reschedule time");
+    await user.clear(time);
+    await user.type(time, "09:00");
+    expect(await within(sheet).findByText("This is after your next A brand dose at 08:30, tomorrow.")).toBeInTheDocument();
+  });
+
+  it("a quick pick with a warning fills in the time and waits for Reschedule", async () => {
+    const a = regimen("A");
+    const noon = makePhaseSchedule(a.phase.id, {
+      dosage: 50,
+      time: "12:20",
+      anchorTimezone: getDeviceTimezone(),
+      createdAt: new Date(2026, 0, 1).getTime(),
+    });
+    await renderWithFixtures(<ScheduleView selectedDate={TODAY} onAddMed={() => {}} />, {
+      seed: {
+        prescriptions: [a.prescription],
+        medicationPhases: [a.phase],
+        phaseSchedules: [a.schedule, noon],
+        inventoryItems: [a.inventory],
+      },
+    });
+    const user = userEvent.setup();
+    const [morningRow] = await screen.findAllByRole("button", { name: /^A brand, .*Open dose$/ });
+    await user.click(morningRow!);
+    await user.click(await screen.findByRole("button", { name: "Reschedule" }));
+    const sheet = await screen.findByTestId("reschedule-sheet");
+    await user.click(within(sheet).getByRole("button", { name: "+30 min" }));
+    expect(await within(sheet).findByText("This is after your next A brand dose at 12:20.")).toBeInTheDocument();
+    expect(within(sheet).getByLabelText("Reschedule time")).toHaveValue("12:30");
+    expect(await db.doseLogs.count()).toBe(0);
+    await user.click(within(sheet).getByRole("button", { name: "Reschedule" }));
+    await waitFor(async () => {
+      const log = (await logsOf(a)).find((l) => l.scheduleId === a.schedule.id);
+      expect(log).toMatchObject({ status: "rescheduled", remindAt: at(12, 30) });
     });
   });
 
@@ -219,7 +269,6 @@ describe('"Reschedule" in the "Mark all doses" modal', () => {
     await user.click(within(modal).getByRole("button", { name: "Reschedule" }));
     const sheet = await screen.findByTestId("reschedule-sheet");
     await user.click(within(sheet).getByRole("button", { name: "+2 hours" }));
-    await user.click(within(sheet).getByRole("button", { name: "Reschedule" }));
 
     // jsdom never ends the sheet's exit animation, so the modal stays
     // aria-hidden behind it: look past that.
@@ -264,8 +313,31 @@ describe('"Reschedule" in the "Mark all doses" modal', () => {
     // Default: the dose time + 30 minutes, on that day.
     expect(within(sheet).getByLabelText("Reschedule time")).toHaveValue("09:00");
     expect(within(sheet).getByLabelText("Reschedule date")).toHaveValue("2026-10-21");
+    // Today is before the doses' day: the chip is off.
+    expect(within(sheet).getByRole("button", { name: "Today" })).toBeDisabled();
     await user.click(within(sheet).getByRole("button", { name: "+15 min" }));
-    expect(within(sheet).getByLabelText("Reschedule time")).toHaveValue("08:45");
+    await waitFor(async () => {
+      expect((await logsOf(a))[0]).toMatchObject({ status: "rescheduled", remindAt: at(8, 45, 2) });
+      expect((await logsOf(b))[0]).toMatchObject({ status: "rescheduled", remindAt: at(8, 45, 2) });
+    });
+  });
+
+  it("a future day's dose cannot move to a day before its own", async () => {
+    const a = regimen("A");
+    await renderDay([a], [], new Date(2026, 9, 21));
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: /^A brand[,.] .*Open dose$/ }));
+    await user.click(await screen.findByRole("button", { name: "Reschedule" }));
+    const sheet = await screen.findByTestId("reschedule-sheet");
+    const date = within(sheet).getByLabelText("Reschedule date");
+    expect(date).toHaveAttribute("min", "2026-10-21");
+    await user.clear(date);
+    await user.type(date, "2026-10-20");
+    expect(
+      await within(sheet).findByText("Pick Wednesday, Oct 21 or a later day. The dose cannot be taken before its day."),
+    ).toBeInTheDocument();
+    expect(within(sheet).getByRole("button", { name: "Reschedule" })).toBeDisabled();
+    expect(await db.doseLogs.count()).toBe(0);
   });
 });
 

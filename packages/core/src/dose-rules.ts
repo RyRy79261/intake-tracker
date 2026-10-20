@@ -188,8 +188,9 @@ export type RescheduleWarning =
 
 /**
  * The warnings for a new reminder instant. There is no time limit: any
- * instant can be saved. "past": the instant is not after now (the reminder
- * fires at once). "after-next-dose": the instant is at or after the next
+ * instant can be saved. "past": the instant is not after now (its first
+ * reminder is not posted, and once its reminder period has ended the dose
+ * shows as missed). "after-next-dose": the instant is at or after the next
  * scheduled dose of the same medicine, so the user could take two doses
  * close together.
  */

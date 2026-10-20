@@ -137,6 +137,25 @@ describe("no time limit: warnings only", () => {
     expect((await rescheduleDose({ ...key!, remindAt: at(9, 0, 1) })).success).toBe(true);
   });
 
+  it("a future day's dose cannot move to a day before its own (it could not be taken there)", async () => {
+    const [[key]] = await seed([["08:30"]], TOMORROW);
+    const res = await rescheduleDose({ ...key!, remindAt: at(20, 0) });
+    expect(res).toMatchObject({ success: false, error: "Pick the dose's own day or a later day." });
+    expect(await logOf(key!)).toBeUndefined();
+    // The bulk path refuses it too, and changes nothing.
+    const bulk = await rescheduleDoses([key!], at(20, 0));
+    expect(bulk.success).toBe(false);
+    expect(await db.doseLogs.count()).toBe(0);
+    // Its own day at an earlier time is fine.
+    expect((await rescheduleDose({ ...key!, remindAt: at(0, 30, 1) })).success).toBe(true);
+  });
+
+  it("today's dose cannot move to yesterday", async () => {
+    const [[key]] = await seed([["08:30"]]);
+    expect((await rescheduleDose({ ...key!, remindAt: at(22, 0, -1) })).success).toBe(false);
+    expect(await logOf(key!)).toBeUndefined();
+  });
+
   it("after the next dose of the same med: the warning shows and the save still happens", async () => {
     const [[morning]] = await seed([["08:30", "20:30"]]);
     const res = await rescheduleDose({ ...morning!, remindAt: at(21, 0) });
@@ -391,6 +410,26 @@ describe('"From earlier days"', () => {
     expect(await db.doseLogs.count()).toBe(1);
     expect(await logOf(key!)).toMatchObject({ status: "taken", actionTimestamp: at(0, 35, 1) });
     expect(await getCarriedOverDoses(TOMORROW)).toEqual([]);
+  });
+
+  it("a dose moved to 23:50 still shows after midnight while it waits, then leaves after its period", async () => {
+    const [[key]] = await seed([["08:30"]]);
+    await rescheduleDose({ ...key!, remindAt: at(23, 50) });
+
+    setNow(at(0, 5, 1));
+    const carried = withLiveStatus(await getCarriedOverDoses(TOMORROW, undefined, PERIOD), Date.now(), PERIOD)!;
+    expect(carried.map((s) => [s.scheduleId, s.scheduledDate, s.status])).toEqual([
+      [key!.scheduleId, TODAY, "pending"],
+    ]);
+
+    // 00:21: the period after 23:50 has ended. The read may still list it;
+    // the live status is missed, so the group (pending only) drops it.
+    setNow(at(0, 21, 1));
+    const later = withLiveStatus(await getCarriedOverDoses(TOMORROW, undefined, PERIOD), Date.now(), PERIOD)!;
+    expect(later.filter((s) => s.status === "pending")).toEqual([]);
+    // A dose moved to 23:00 never reaches into the next day with a 30-minute period.
+    await rescheduleDose({ ...key!, remindAt: at(23, 0) });
+    expect(await getCarriedOverDoses(TOMORROW, undefined, PERIOD)).toEqual([]);
   });
 
   it("is missed (and leaves the group) after the period from remindAt", async () => {

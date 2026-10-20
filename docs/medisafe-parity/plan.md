@@ -481,15 +481,16 @@ Write per action:
 - **There is no time limit** (owner decision 7). A dose or a slot can be rescheduled to any date and time. This matches Medisafe (no stated limit). The old 2-minute minimum and the 24-hour maximum are removed.
 - Warnings, not errors. Save is always allowed:
   - When the new instant is at or after the NEXT scheduled dose of the same med (for example the 20:30 dose): "This is after your next Brand dose at 20:30." This guards against a double dose without blocking a real need.
-  - When the new instant is not after now: "This time has passed. The reminder fires at once."
+  - When the new instant is not after now: "This time has passed. Its first reminder may not fire." A reminder never fires late, so only the repeats still to come fire. When the reminder period after the new instant has also ended: "This time has passed. The dose shows as missed."
+  - The next-dose warning names the day when that dose is not today: "This is after your next Brand dose at 08:30, tomorrow."
 - Reschedule is allowed for any open dose on any day. A carried-over dose (section 5.6) can be rescheduled again.
-- The only hard rule is the one in section 5.2: a taken dose cannot be rescheduled. Untake it first.
+- The only hard rules: a taken dose cannot be rescheduled (section 5.2; untake it first), and a dose cannot move to a day before its own day. On that earlier day it could not be taken (the future-day guard, owner decision 7), and on its own day it would already be missed. The sheet sets the date picker's minimum to the dose's day and turns off "Today" for a future-day dose; the service refuses with "Pick the dose's own day or a later day."
 - The service and the UI use the same warning function, so the user sees the warning before save.
 
 ### 5.4 Reschedule sheet
 
 - Title: "Reschedule for".
-- Quick picks (one tap each): "+15 min", "+30 min", "+1 hour", "+2 hours". On today, each pick is relative to now. On a future day, each pick is relative to the scheduled time.
+- Quick picks (one tap each): "+15 min", "+30 min", "+1 hour", "+2 hours". A pick saves at once. When the picked time has a warning (section 5.3), the pick only fills in the fields and shows the warning; the user then taps "Reschedule". On today, each pick is relative to now. On a future day, each pick is relative to the scheduled time.
 - A time picker and a date picker. Quick days "Today" and "Tomorrow" are one tap; the date picker allows any date.
 - Default value: the current `remindAt` if it is still in the future, else now + 30 minutes (today) or the scheduled time + 30 minutes (future day).
 - A picked wall time that does not exist because of DST resolves to the shifted instant (`zonedTimeToEpoch` rule). The sheet shows the resolved time.
@@ -513,7 +514,7 @@ Write per action:
 - Take on it records the full instant from the time-taken sheet or now. There is no "HH:MM" guess.
 - The missed rule (section 5.8) uses `remindAt`, not the calendar day. So the dose does not turn missed at midnight.
 - Past-day rule from the 2026-09 audit stays: a dose with no log on a past day is missed. A rescheduled dose whose reminder period after `remindAt` has not ended is the only exception. This exception goes into `resolveDoseStatus` too (it gets an optional `remindAt` and `now`), so analytics, export and MCP do not count the carried-over dose as missed.
-- `getDailyDoseSchedule(today)` adds one read for the group: logs with status "rescheduled", `scheduledDate` before today, and `remindAt` on today. The set is small. Use an existing index if one fits. Else add a Dexie version with an index on `status` (repeat all store definitions). The sys-bar badge and the notification tap use the same list.
+- `getDailyDoseSchedule(today)` adds one read for the group: logs with status "rescheduled", `scheduledDate` before today, and `remindAt` on today, or `remindAt` before today while its reminder period reaches into today (a dose moved to 23:50 still waits, and its reminders still fire, at 00:05). The set is small. Use an existing index if one fits. Else add a Dexie version with an index on `status` (repeat all store definitions). The sys-bar badge and the notification tap use the same list.
 - After midnight, the week strip on yesterday still shows the dose under 22:00 with "Rescheduled for 00:30, today".
 - Voice: "I took my 22:00 meds" after midnight already picks the previous day (12-hour rule in `voice-medication.ts`). Keep that test green.
 
@@ -551,7 +552,7 @@ Rule:
 - The shared reminder builder (`lib/medication-reminder-builder.ts`) emits an occurrence at `remindAt` instead of the scheduled instant for that dose.
 - Repeat reminders count from `remindAt`, through the reminder period (section 6.6).
 - In a slot, rescheduled doses form their own reminder group at `remindAt` (section 6.4).
-- Push server (`lib/push-db.ts`): change the handled list to `('taken','skipped')`. The server is dormant (section 6.2), but it must not be wrong.
+- Push server (`lib/push-db.ts`): the server is dormant (section 6.2), but it must not be wrong. It sends only at the weekly slot times (`push_schedules`), so it cannot send at `remindAt`. The handled list is taken, skipped, and rescheduled with a `remind_at`: a moved dose gets no push at its old time. Known limit while the server is dormant: no server push fires at `remindAt`; the device's local reminders do.
 - A reschedule or snooze of a dose whose notification is on screen removes the dose from that notification (section 6.3, "Posted notifications").
 
 ### 5.10 "From now on" schedule change

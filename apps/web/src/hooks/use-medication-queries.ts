@@ -128,12 +128,12 @@ export function useDailyDoseSchedule(dateStr: string) {
 export function useCarriedOverDoses(dateStr: string) {
   const todayKey = useTodayKey();
   const isToday = dateStr === todayKey;
+  const period = useSettingsStore((s) => s.reminderPeriodMinutes);
   const slots = useLiveQuery(
-    () => (isToday ? getCarriedOverDoses(dateStr) : Promise.resolve([])),
-    [dateStr, isToday],
+    () => (isToday ? getCarriedOverDoses(dateStr, undefined, period) : Promise.resolve([])),
+    [dateStr, isToday, period],
   );
   const now = useNow();
-  const period = useSettingsStore((s) => s.reminderPeriodMinutes);
   return useMemo(() => {
     const live = withLiveStatus(slots, now, period);
     // The group lasts until the dose is taken, skipped or missed.

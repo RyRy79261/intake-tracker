@@ -730,6 +730,11 @@ export async function unskipDose(input: UnskipDoseInput): Promise<ServiceResult<
 async function rescheduleInTx(w: SyncedWriter, input: RescheduleDoseInput): Promise<DoseChange> {
   const { prescriptionId, phaseId, scheduleId, date, time, remindAt } = input;
   if (!Number.isFinite(remindAt)) throw new DoseRuleError("Invalid time");
+  // A dose cannot move to a day before its own: there it could not be taken
+  // (the future-day guard), and on its own day it would already be missed.
+  if (toLocalDateKey(remindAt) < date) {
+    throw new DoseRuleError("Pick the dose's own day or a later day.");
+  }
   const prev = await getDoseLogRaw(scheduleId, date);
   if (prev?.status === "taken") throw new DoseRuleError("Untake the dose first.");
   const logId = prev?.id ?? (await newScheduledDoseLogId(scheduleId, date));

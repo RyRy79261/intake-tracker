@@ -1,16 +1,19 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { isRescheduleWaiting } from "@intake/core/dose-rules";
 import { Drawer, DrawerContent, DrawerTitle } from "@intake/ui/drawer";
 import { Button } from "@intake/ui/button";
 import { cn } from "@/lib/utils";
 import { toLocalDateKey } from "@/lib/date-utils";
 import { useNow } from "@/hooks/use-now";
+import { useSettingsStore } from "@/stores/settings-store";
 import { pickedInstant } from "@/components/medications/taken-time-sheet";
 import {
   doseDisplayName,
   formatDoseDate,
   formatDoseInstant,
+  rescheduleDaySuffix,
 } from "@/lib/medication-ui-utils";
 import {
   getRescheduleWarnings,
@@ -60,26 +63,47 @@ function quickPickBase(slots: readonly DoseSlot[], future: boolean, now: number)
   return Math.min(...slots.map((s) => s.scheduledAt));
 }
 
-/** The text of one warning, with the medicine's name. */
+/** The earliest day the doses can move to: their own day (the latest of them). */
+export function earliestRescheduleDate(slots: readonly DoseSlot[]): string {
+  return slots.reduce((max, s) => (s.scheduledDate > max ? s.scheduledDate : max), "");
+}
+
+/**
+ * The text of one warning, with the medicine's name. A time that has passed
+ * gets no first reminder (the reminders never fire late); once its reminder
+ * period has ended too, the dose shows as missed at once. The next dose
+ * names its day when it is not today.
+ */
 export function rescheduleWarningText(
   warning: DoseRescheduleWarning,
   slots: readonly DoseSlot[],
+  ctx: { at: number; now: number; reminderPeriodMinutes: number },
 ): string {
-  if (warning.kind === "past") return "This time has passed. The reminder fires at once.";
+  if (warning.kind === "past") {
+    return isRescheduleWaiting("rescheduled", ctx.at, ctx.now, ctx.reminderPeriodMinutes)
+      ? "This time has passed. Its first reminder may not fire."
+      : "This time has passed. The dose shows as missed.";
+  }
   const slot = slots.find((s) => s.prescriptionId === warning.prescriptionId);
   const name = slot ? doseDisplayName(slot) : "medicine";
-  return `This is after your next ${name} dose at ${formatDoseInstant(warning.nextDoseAt)}.`;
+  const day = rescheduleDaySuffix(warning.nextDoseAt, toLocalDateKey(ctx.now), ctx.now);
+  return `This is after your next ${name} dose at ${formatDoseInstant(warning.nextDoseAt)}${day}.`;
 }
 
 /**
  * "Reschedule for": move the dose (or every open dose of a slot) to a new
- * date and time. Quick picks add 15 minutes to 2 hours; "Today" and
- * "Tomorrow" set the day; the pickers allow any date and time. There is no
- * limit. A time that has passed, or one after the next dose of the same
- * medicine, shows a warning, but Reschedule is always allowed.
+ * date and time. A quick pick (15 minutes to 2 hours) saves in one tap; when
+ * that time has a warning, it fills in the fields instead so the user sees
+ * the warning first. "Today" and "Tomorrow" set the day; the pickers allow
+ * any date and time from the dose's own day on. A time that has passed, or
+ * one after the next dose of the same medicine, shows a warning, but
+ * Reschedule is still allowed. A day before the dose's own day is refused:
+ * the dose could not be taken there (a future-day dose cannot be taken).
  */
 export function RescheduleSheet({ open, slots, future, onCancel, onConfirm }: RescheduleSheetProps) {
   const now = useNow();
+  const reminderPeriodMinutes = useSettingsStore((s) => s.reminderPeriodMinutes);
+  const [picking, setPicking] = useState(false);
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
   const [wasOpen, setWasOpen] = useState(false);
@@ -93,10 +117,14 @@ export function RescheduleSheet({ open, slots, future, onCancel, onConfirm }: Re
       setDate(toLocalDateKey(start));
       setTime(hhmm(start));
       setWarnings([]);
+      setPicking(false);
     }
   }
 
-  const at = pickedInstant(date, time);
+  const pickedAt = pickedInstant(date, time);
+  const minDate = earliestRescheduleDate(slots);
+  const tooEarly = pickedAt !== null && toLocalDateKey(pickedAt) < minDate;
+  const at = tooEarly ? null : pickedAt;
 
   // The same warning function as the save, so the user sees it first.
   useEffect(() => {
@@ -120,6 +148,20 @@ export function RescheduleSheet({ open, slots, future, onCancel, onConfirm }: Re
   const tomorrow = toLocalDateKey(tomorrowDate);
   const base = quickPickBase(slots, future, now);
 
+  // One tap saves, unless the time needs a warning: then it only fills in.
+  const quickPick = async (instant: number) => {
+    if (picking) return;
+    setInstant(instant);
+    if (toLocalDateKey(instant) < minDate) return;
+    setPicking(true);
+    const clear = await getRescheduleWarnings(slots.map(keyOf), instant, Date.now()).then(
+      (w) => w.length === 0,
+      () => false,
+    );
+    if (clear) onConfirm(instant);
+    else setPicking(false);
+  };
+
   const chip =
     "h-10 rounded-none border border-input bg-background px-2 font-mono text-[0.8125rem] text-foreground hover:bg-foreground/5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring";
 
@@ -142,7 +184,7 @@ export function RescheduleSheet({ open, slots, future, onCancel, onConfirm }: Re
                 key={pick.label}
                 type="button"
                 className={chip}
-                onClick={() => setInstant(base + pick.minutes * MINUTE_MS)}
+                onClick={() => void quickPick(base + pick.minutes * MINUTE_MS)}
               >
                 {pick.label}
               </button>
@@ -155,6 +197,7 @@ export function RescheduleSheet({ open, slots, future, onCancel, onConfirm }: Re
               <input
                 type="date"
                 value={date}
+                min={minDate || undefined}
                 onChange={(e) => setDate(e.target.value)}
                 aria-label="Reschedule date"
                 className="h-12 w-full rounded-none border border-input bg-background px-2 font-mono text-base text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
@@ -174,8 +217,9 @@ export function RescheduleSheet({ open, slots, future, onCancel, onConfirm }: Re
           <div className="grid grid-cols-2 gap-2">
             <button
               type="button"
+              disabled={today < minDate}
               aria-pressed={date === today}
-              className={cn(chip, date === today && "border-meds text-meds")}
+              className={cn(chip, date === today && "border-meds text-meds", "disabled:opacity-40")}
               onClick={() => setDate(today)}
             >
               Today
@@ -190,7 +234,11 @@ export function RescheduleSheet({ open, slots, future, onCancel, onConfirm }: Re
             </button>
           </div>
 
-          {at === null ? (
+          {tooEarly ? (
+            <p className="text-[0.8125rem] text-bp" role="alert">
+              Pick {formatDoseDate(minDate)} or a later day. The dose cannot be taken before its day.
+            </p>
+          ) : at === null ? (
             <p className="text-[0.8125rem] text-bp">Enter a date and a time.</p>
           ) : (
             // The resolved instant: a time that does not exist (DST) shows shifted.
@@ -202,7 +250,7 @@ export function RescheduleSheet({ open, slots, future, onCancel, onConfirm }: Re
           {at !== null &&
             warnings.map((w) => (
               <p key={`${w.kind}-${w.prescriptionId}`} role="status" className="text-[0.8125rem] text-sodium">
-                {rescheduleWarningText(w, slots)}
+                {rescheduleWarningText(w, slots, { at, now, reminderPeriodMinutes })}
               </p>
             ))}
 
@@ -210,7 +258,7 @@ export function RescheduleSheet({ open, slots, future, onCancel, onConfirm }: Re
             <Button variant="outline" onClick={onCancel}>
               Cancel
             </Button>
-            <Button disabled={at === null} onClick={() => at !== null && onConfirm(at)}>
+            <Button disabled={at === null || picking} onClick={() => at !== null && onConfirm(at)}>
               Reschedule
             </Button>
           </div>

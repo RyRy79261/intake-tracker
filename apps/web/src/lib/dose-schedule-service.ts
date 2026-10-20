@@ -13,7 +13,7 @@ import { isActiveBrand } from "@/lib/inventory-service";
 import { isValidPillStrength } from "@intake/core/compound";
 import { toLocalDateKey } from "@/lib/date-utils";
 import { resolveDoseStatus, type ResolvedDoseStatus } from "@/lib/dose-status";
-import { dueInstant } from "@intake/core/dose-rules";
+import { DEFAULT_REMINDER_PERIOD_MINUTES, dueInstant } from "@intake/core/dose-rules";
 import { isLive } from "@intake/core/lifecycle";
 import { selectEffectivePhase, selectEffectivePhases } from "@intake/core/effective-phase";
 
@@ -390,12 +390,20 @@ export async function getDailyDoseSchedule(
  * Doses of earlier days that are rescheduled into `dateStr` ("From earlier
  * days" on Today). Each is the dose of its own day (same log, same key), so
  * an action on it writes that log. A 22:00 dose moved to 00:30 shows here
- * after midnight; a dose moved two days ahead shows on that day.
+ * after midnight; a dose moved two days ahead shows on that day. A dose
+ * moved to just before midnight (23:50) shows here too while its reminder
+ * period reaches into `dateStr`: it is still waiting and its reminders still
+ * fire. The caller drops a dose once it is missed (live status).
  */
 export async function getCarriedOverDoses(
   dateStr: string,
   timezone?: string,
+  reminderPeriodMinutes: number = DEFAULT_REMINDER_PERIOD_MINUTES,
 ): Promise<DoseSlot[]> {
+  const dayStart = new Date(`${dateStr}T00:00:00`).getTime();
+  const periodMs = Math.max(0, reminderPeriodMinutes) * 60_000;
+  const reachesDay = (remindAt: number) =>
+    toLocalDateKey(remindAt) === dateStr || (remindAt < dayStart && remindAt + periodMs >= dayStart);
   const logs = (await db.doseLogs.where("status").equals("rescheduled").toArray()).filter(
     (log) =>
       isLive(log) &&
@@ -403,7 +411,7 @@ export async function getCarriedOverDoses(
       !!log.scheduleId &&
       log.scheduledDate < dateStr &&
       log.remindAt != null &&
-      toLocalDateKey(log.remindAt) === dateStr,
+      reachesDay(log.remindAt),
   );
   if (logs.length === 0) return [];
   const byDate = new Map<string, Set<string>>();
