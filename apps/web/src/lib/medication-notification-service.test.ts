@@ -203,7 +203,9 @@ describe("checkDoseReminders after a reschedule", () => {
       setItem: (k: string, v: string) => void store.set(k, v),
       removeItem: (k: string) => void store.delete(k),
     });
-    onTestFinished(() => vi.unstubAllGlobals());
+    onTestFinished(() => {
+      vi.unstubAllGlobals();
+    });
     const { rx, phase, schedule } = await seed();
     // Monday's 08:00 dose moved to Thursday 10:00 Berlin (08:00 UTC).
     await db.doseLogs.add(
