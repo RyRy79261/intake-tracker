@@ -3,7 +3,10 @@ import {
   addDaysToKey,
   isEmptyPlan,
   isNewestRegimen,
+  pendingChangeDays,
+  planPendingMove,
   planScheduleChange,
+  type PendingMoveInput,
   scheduleInEffectOn,
   type PlannedRow,
   type ScheduleChangeInput,
@@ -349,5 +352,124 @@ describe("planScheduleChange", () => {
   it("a disabled row is left alone", () => {
     const p = plan({ rows: [row("off", "08:30", { enabled: false })], desired: [] });
     expect(isEmptyPlan(p)).toBe(true);
+  });
+});
+
+describe("planPendingMove (a date-only edit of a pending change)", () => {
+  const TODAY = "2026-10-19";
+  // 08:00 until Thursday the 22nd, 09:00 from it.
+  const current = row("cur", "08:00", { effectiveTo: "2026-10-22" });
+  const pending = row("new", "09:00", { effectiveFrom: "2026-10-22", start: "2026-10-22" });
+  const move = (input: Partial<PendingMoveInput>) =>
+    planPendingMove({
+      rows: [current, pending],
+      today: TODAY,
+      to: "2026-10-24",
+      loggedDates: new Map(),
+      rule: "start-next-day",
+      ...input,
+    });
+
+  it("lists the pending change days after today", () => {
+    expect(pendingChangeDays([current, pending], TODAY)).toEqual(["2026-10-22"]);
+    expect(pendingChangeDays([current, pending], "2026-10-22")).toEqual([]);
+    expect(pendingChangeDays([row("a", "08:00")], TODAY)).toEqual([]);
+  });
+
+  it("later: the current row ends and the pending row starts on the new day", () => {
+    const m = move({});
+    expect(m).toMatchObject({ kind: "planned", from: "2026-10-22" });
+    if (m.kind !== "planned") throw new Error("expected a plan");
+    expect(m.plan.startsOn).toBe("2026-10-24");
+    expect(m.plan.patches).toEqual([
+      { id: "cur", changes: { effectiveTo: "2026-10-24" } },
+      { id: "new", changes: { effectiveFrom: "2026-10-24" } },
+    ]);
+    expect(m.plan.inserts).toEqual([]);
+    expect(m.plan.tombstones).toEqual([]);
+  });
+
+  it("later: an unchanged row and older history stay as they are", () => {
+    const evening = row("eve", "20:00");
+    const history = row("old", "07:00", { effectiveTo: "2026-10-01" });
+    const m = move({ rows: [history, current, pending, evening] });
+    if (m.kind !== "planned") throw new Error("expected a plan");
+    expect(m.plan.patches.map((p) => p.id)).toEqual(["cur", "new"]);
+  });
+
+  it("later: a removed time (a row that only ends) ends on the new day", () => {
+    const m = move({ rows: [row("eve", "20:00", { effectiveTo: "2026-10-22" }), row("am", "08:00")] });
+    if (m.kind !== "planned") throw new Error("expected a plan");
+    expect(m.plan.patches).toEqual([{ id: "eve", changes: { effectiveTo: "2026-10-24" } }]);
+  });
+
+  it("later: a dose of the pending change logged before the new day refuses the move", () => {
+    const m = move({ loggedDates: new Map([["new", ["2026-10-23", "2026-10-26"]]]) });
+    expect(m).toEqual({ kind: "refused", from: "2026-10-22", reason: "logged-dose", limit: "2026-10-23" });
+    // A log on or after the new day stays with its row: the move goes ahead.
+    expect(move({ loggedDates: new Map([["new", ["2026-10-24"]]]) }).kind).toBe("planned");
+  });
+
+  it("earlier: the pending row starts and the current row ends on the new day", () => {
+    const m = move({ to: "2026-10-20" });
+    if (m.kind !== "planned") throw new Error("expected a plan");
+    expect(m.plan.startsOn).toBe("2026-10-20");
+    expect(m.plan.patches).toEqual(
+      expect.arrayContaining([
+        { id: "new", changes: { time: "09:00", dosage: 5, daysOfWeek: ALL, effectiveFrom: "2026-10-20" } },
+        { id: "cur", changes: { effectiveTo: "2026-10-20" } },
+      ]),
+    );
+    expect(m.plan.inserts).toEqual([]);
+  });
+
+  it("earlier: a dose logged on the current row keeps the change-day rule", () => {
+    const m = move({ to: TODAY, loggedDates: new Map([["cur", [TODAY]]]) });
+    if (m.kind !== "planned") throw new Error("expected a plan");
+    expect(m.plan.startsOn).toBe("2026-10-20");
+  });
+
+  it("the same day writes nothing; no pending change is none", () => {
+    const m = move({ to: "2026-10-22" });
+    expect(m.kind === "planned" && isEmptyPlan(m.plan)).toBe(true);
+    expect(move({ rows: [row("a", "08:00")] })).toEqual({ kind: "none" });
+  });
+
+  describe("two pending changes (tomorrow, then Thursday)", () => {
+    const rows = [
+      row("cur", "08:00", { effectiveTo: "2026-10-20" }),
+      row("mid", "09:00", { effectiveFrom: "2026-10-20", effectiveTo: "2026-10-22", start: "2026-10-20" }),
+      row("new", "10:00", { effectiveFrom: "2026-10-22", start: "2026-10-22" }),
+    ];
+
+    it("moves the newest one later", () => {
+      const m = move({ rows });
+      if (m.kind !== "planned") throw new Error("expected a plan");
+      expect(m.from).toBe("2026-10-22");
+      expect(m.plan.patches).toEqual([
+        { id: "mid", changes: { effectiveTo: "2026-10-24" } },
+        { id: "new", changes: { effectiveFrom: "2026-10-24" } },
+      ]);
+    });
+
+    it("moves the newest one earlier, but not past the one before it", () => {
+      const m = move({ rows, to: "2026-10-21" });
+      if (m.kind !== "planned") throw new Error("expected a plan");
+      expect(m.plan.patches).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ id: "new", changes: expect.objectContaining({ effectiveFrom: "2026-10-21" }) }),
+          { id: "mid", changes: { effectiveTo: "2026-10-21" } },
+        ]),
+      );
+      expect(m.plan.patches.some((p) => p.id === "cur")).toBe(false);
+      for (const to of ["2026-10-20", TODAY]) {
+        expect(move({ rows, to })).toEqual({
+          kind: "refused",
+          from: "2026-10-22",
+          reason: "earlier-change",
+          limit: "2026-10-20",
+        });
+      }
+    });
   });
 });

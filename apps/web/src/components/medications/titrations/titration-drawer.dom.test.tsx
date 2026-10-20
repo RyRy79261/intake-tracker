@@ -10,6 +10,7 @@ vi.mock("@/hooks/use-medication-queries", () => ({
   useCreateTitrationPlan: vi.fn(),
   useUpdateTitrationPlan: vi.fn(),
   usePhasesForTitrationPlan: vi.fn(() => []),
+  useNewestPendingChangeDay: vi.fn(() => undefined),
   usePhasesForPrescription: vi.fn(() => []),
   useSchedulesForPhase: vi.fn(() => []),
 }));

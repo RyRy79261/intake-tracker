@@ -271,6 +271,110 @@ export function planScheduleChange(input: ScheduleChangeInput): ScheduleChangePl
   return plan;
 }
 
+// ---------------------------------------------------------------------------
+// Moving a pending change
+// ---------------------------------------------------------------------------
+
+/**
+ * The days after `today` on which a saved change starts, in date order. A
+ * change starts where an enabled row starts or ends (a removed time only
+ * ends).
+ */
+export function pendingChangeDays(
+  rows: readonly (ScheduleWindowLike & { enabled: boolean })[],
+  today: string,
+): string[] {
+  const days = new Set<string>();
+  for (const r of rows) {
+    if (r.enabled !== true) continue;
+    for (const k of [r.effectiveFrom, r.effectiveTo]) if (k && k > today) days.add(k);
+  }
+  return [...days].sort();
+}
+
+export interface PendingMoveInput {
+  rows: readonly PlannedRow[];
+  today: string;
+  /** The new day of the newest pending change. */
+  to: string;
+  /** Per row id, the date keys (>= today) that have a logged dose. */
+  loggedDates: ReadonlyMap<string, readonly string[]>;
+  rule: ChangeDayRule;
+  unit?: string | undefined;
+}
+
+export type PendingMove =
+  /** No change is pending: nothing to move. */
+  | { kind: "none" }
+  /** The move is not allowed; see `reason`. */
+  | {
+      kind: "refused";
+      from: string;
+      /**
+       * `"earlier-change"`: `to` is on or before the change before it
+       * (`limit`); a move must not pass it.
+       * `"logged-dose"`: a row of the pending change has a dose logged on
+       * `limit`, before `to`; the latest day it can move to is `limit`.
+       */
+      reason: "earlier-change" | "logged-dose";
+      limit: string;
+    }
+  /** The writes that move the change from `from`; `plan.startsOn` is its new day. */
+  | { kind: "planned"; from: string; plan: ScheduleChangePlan };
+
+/**
+ * Move the newest pending change to `to` without changing what it says (an
+ * "Apply from" edit of the date only).
+ *
+ * - Later: the rows that end at the old day end at `to`, and the rows that
+ *   start there start at `to`, so the days in between keep the schedule
+ *   before the change. A row of the change with a dose logged before `to`
+ *   is never dropped: the move is refused.
+ * - Earlier: the same as an edit from `to` (planScheduleChange), so the
+ *   change-day rule applies to a dose logged on the rows it closes.
+ * - With several pending changes, the newest moves, and never onto or before
+ *   the one before it (refused).
+ */
+export function planPendingMove(input: PendingMoveInput): PendingMove {
+  const { rows, today, to, loggedDates, rule, unit } = input;
+  const days = pendingChangeDays(rows, today);
+  const from = days.at(-1);
+  if (!from) return { kind: "none" };
+  const empty = (startsOn: string): ScheduleChangePlan => ({
+    patches: [],
+    inserts: [],
+    tombstones: [],
+    logMoves: [],
+    startsOn,
+  });
+  if (to === from) return { kind: "planned", from, plan: empty(from) };
+  const before = days.at(-2);
+  if (before && to <= before) return { kind: "refused", from, reason: "earlier-change", limit: before };
+
+  const enabled = rows.filter((r) => r.enabled === true);
+  if (to < from) {
+    const desired = enabled
+      .filter((r) => !r.effectiveTo)
+      .map((r) => ({ id: r.id, ...contentOf(r) }));
+    const plan = planScheduleChange({ rows, desired, applyFrom: to, loggedDates, rule, unit });
+    return { kind: "planned", from, plan };
+  }
+
+  const starting = enabled.filter((r) => r.effectiveFrom === from);
+  const firstLogged = starting
+    .flatMap((r) => loggedDates.get(r.id) ?? [])
+    .filter((k) => k >= from && k < to)
+    .sort()[0];
+  if (firstLogged) return { kind: "refused", from, reason: "logged-dose", limit: firstLogged };
+
+  const plan = empty(to);
+  for (const r of enabled) {
+    if (r.effectiveTo === from) plan.patches.push({ id: r.id, changes: { effectiveTo: to } });
+  }
+  for (const r of starting) plan.patches.push({ id: r.id, changes: { effectiveFrom: to } });
+  return { kind: "planned", from, plan };
+}
+
 /** True when the plan writes nothing. */
 export function isEmptyPlan(plan: ScheduleChangePlan): boolean {
   return (

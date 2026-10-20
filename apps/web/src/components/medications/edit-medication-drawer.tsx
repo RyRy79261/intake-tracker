@@ -227,7 +227,11 @@ function ScheduleTab({ prescription }: { prescription: Prescription }) {
   // a change pending, the form shows the newest one, so the date starts at
   // its day.
   const pendingFrom = pendingChange?.steps.at(-1)?.startsOn;
-  const [applyFrom, setApplyFromState] = useState(todayKey);
+  const defaultApplyFrom = pendingFrom && pendingFrom > todayKey ? pendingFrom : todayKey;
+  const [applyFromState, setApplyFromState] = useState(todayKey);
+  // Untouched, the date is the default (also on the render before the
+  // hydrate effect, so the field never shows a stale day).
+  const applyFrom = dirty ? applyFromState : defaultApplyFrom;
   const setApplyFrom = (value: string) => {
     setApplyFromState(value);
     setScheduleDirty(true);
@@ -238,7 +242,7 @@ function ScheduleTab({ prescription }: { prescription: Prescription }) {
   // unless the user has unsaved edits in progress.
   useEffect(() => {
     if (dirty) return;
-    setApplyFromState(pendingFrom && pendingFrom > todayKey ? pendingFrom : todayKey);
+    setApplyFromState(defaultApplyFrom);
     setUnit(maintenancePhase?.unit ?? "mg");
     setFoodInstruction(maintenancePhase?.foodInstruction ?? "none");
     setRows(
@@ -253,7 +257,7 @@ function ScheduleTab({ prescription }: { prescription: Prescription }) {
             }))
         : [],
     );
-  }, [maintenancePhase, dbSchedules, dirty, pendingFrom, todayKey]);
+  }, [maintenancePhase, dbSchedules, dirty, defaultApplyFrom]);
 
   const markScheduleDirty = () => {
     setScheduleDirty(true);
@@ -504,7 +508,9 @@ function ScheduleTab({ prescription }: { prescription: Prescription }) {
         </Button>
       </div>
 
-      {scheduleDirty && maintenancePhase && (
+      {/* With a change pending the date shows too: changing only it moves
+          the change to that day, earlier or later. */}
+      {(scheduleDirty || pendingChange) && maintenancePhase && (
         <ApplyFromField value={applyFrom} onChange={setApplyFrom} todayKey={todayKey} />
       )}
 

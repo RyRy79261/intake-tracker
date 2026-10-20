@@ -16,6 +16,7 @@ import { AlertTriangle, Plus, TrendingUp } from "lucide-react";
 import { Spinner } from "@intake/ui/spinner";
 import {
   useCreateTitrationPlan,
+  useNewestPendingChangeDay,
   usePhasesForPrescription,
   usePhasesForTitrationPlan,
   useSchedulesForPhase,
@@ -57,10 +58,22 @@ export function TitrationDrawer({
   // started is edited as a whole.
   const isRunning = editingPlan?.status === "active";
   const todayKey = toLocalDateKey();
-  const [applyFrom, setApplyFrom] = useState(todayKey);
+  // With a change pending, the form shows the newest one, so the date starts
+  // at its day; a different date moves it there (earlier or later).
+  const pendingFrom = useNewestPendingChangeDay(isRunning ? editingPhases.map((p) => p.id) : []);
+  const initialApplyFrom = pendingFrom && pendingFrom > todayKey ? pendingFrom : todayKey;
+  const [applyFrom, setApplyFromState] = useState(todayKey);
+  const [applyFromTouched, setApplyFromTouched] = useState(false);
+  const setApplyFrom = (value: string) => {
+    setApplyFromState(value);
+    setApplyFromTouched(true);
+  };
   useEffect(() => {
-    if (open) setApplyFrom(toLocalDateKey());
+    if (open) setApplyFromTouched(false);
   }, [open]);
+  useEffect(() => {
+    if (open && !applyFromTouched) setApplyFromState(initialApplyFrom);
+  }, [open, applyFromTouched, initialApplyFrom]);
 
   const form = useTitrationDrawerForm();
   const {
@@ -208,7 +221,7 @@ export function TitrationDrawer({
           ...(notes.trim() ? { notes: notes.trim() } : {}),
           ...(warningsList.length > 0 ? { warnings: warningsList } : {}),
           entries: entryData,
-          ...(isRunning && { applyFrom }),
+          ...(isRunning && { applyFrom, ...(applyFrom !== initialApplyFrom && { movePending: true }) }),
         },
         {
           onSuccess,

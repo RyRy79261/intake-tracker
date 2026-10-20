@@ -114,4 +114,30 @@ test.describe('Medications: Apply from schedule edits', () => {
     await expectSlots(page, TOMORROW, ['09:00'], 'pending');
     await expectSlots(page, YESTERDAY, ['08:30'], 'missed');
   });
+
+  test('a pending change moved later: the day in between keeps 08:30', async ({ page }) => {
+    await prepare(page, '10:00');
+    await seedSlot(page, 1);
+    await editTimeFrom(page, '2026-10-20');
+
+    // Reopen the drawer and change only the date, to the 21st.
+    await win(page).getByRole('button', { name: /^Brand1(, .*)?\. Open dose$/ }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Edit Generic1' }).click();
+    const d = drawer(page);
+    await expect(d.getByText('A change starts tomorrow.', { exact: true })).toBeVisible();
+    const field = d.getByLabel('Apply from');
+    await expect(field).toHaveValue('2026-10-20');
+    await field.fill('2026-10-21');
+    await d.getByRole('button', { name: 'Save schedule' }).click();
+    await expect(page.getByText('The change starts Wednesday, Oct 21. Days before it keep their schedule.', { exact: true })).toBeVisible();
+    await expect(d.getByText('A change starts Wednesday, Oct 21.', { exact: true })).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(d).toBeHidden();
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+
+    await expectSlots(page, TODAY, ['08:30']);
+    await expectSlots(page, TOMORROW, ['08:30'], 'pending');
+    await expectSlots(page, '21', ['09:00'], 'pending');
+  });
 });

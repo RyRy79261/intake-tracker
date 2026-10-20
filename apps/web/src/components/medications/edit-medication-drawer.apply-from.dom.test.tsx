@@ -134,7 +134,7 @@ describe("Schedule tab: Apply from", () => {
     );
     expect(await screen.findByText("A change starts Thursday, Oct 22.")).toBeInTheDocument();
     await user.click(screen.getByRole("radio", { name: "After eating" }));
-    expect(screen.queryByLabelText("Apply from")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Apply from")).toHaveValue(IN_3);
     await user.click(screen.getByRole("button", { name: /save schedule/i }));
 
     await vi.waitFor(async () =>
@@ -156,6 +156,58 @@ describe("Schedule tab: Apply from", () => {
     );
     fireEvent.change(await screen.findByDisplayValue("09:00"), { target: { value: "10:00" } });
     expect(await screen.findByLabelText("Apply from")).toHaveValue(IN_3);
+  });
+
+  it("a date-only change moves a pending change later; the days in between keep the old time", async () => {
+    const user = userEvent.setup();
+    const s = seed();
+    const IN_5 = toLocalDateKey(at(12, 0, 5));
+    const next = makePhaseSchedule(s.phase.id, { time: "09:00", dosage: 10, effectiveFrom: IN_3, createdAt: at(9, 0) });
+    s.schedule.effectiveTo = IN_3;
+    s.seed.phaseSchedules.push(next);
+    await renderWithFixtures(
+      <PrescriptionViewDrawer prescription={s.prescription} open onOpenChange={() => {}} />,
+      { seed: s.seed },
+    );
+    const applyFrom = await screen.findByLabelText("Apply from");
+    expect(applyFrom).toHaveValue(IN_3);
+    fireEvent.change(applyFrom, { target: { value: IN_5 } });
+    await user.click(screen.getByRole("button", { name: /save schedule/i }));
+
+    await vi.waitFor(() =>
+      expect(toastSpy).toHaveBeenCalledWith({
+        title: "Schedule saved",
+        description: "The change starts Saturday, Oct 24. Days before it keep their schedule.",
+      }),
+    );
+    expect(await db.phaseSchedules.get(s.schedule.id)).toMatchObject({ time: "08:00", effectiveTo: IN_5 });
+    expect(await db.phaseSchedules.get(next.id)).toMatchObject({ time: "09:00", effectiveFrom: IN_5 });
+    expect(await db.phaseSchedules.count()).toBe(2);
+    expect(await screen.findByText("A change starts Saturday, Oct 24.")).toBeInTheDocument();
+  });
+
+  it("a date-only change before an earlier pending change is refused with a plain message", async () => {
+    const user = userEvent.setup();
+    const s = seed();
+    const IN_1 = toLocalDateKey(at(12, 0, 1));
+    s.schedule.effectiveTo = IN_1;
+    s.seed.phaseSchedules.push(
+      makePhaseSchedule(s.phase.id, { time: "09:00", dosage: 10, effectiveFrom: IN_1, effectiveTo: IN_3, createdAt: at(9, 0) }),
+      makePhaseSchedule(s.phase.id, { time: "10:00", dosage: 10, effectiveFrom: IN_3, createdAt: at(9, 5) }),
+    );
+    await renderWithFixtures(
+      <PrescriptionViewDrawer prescription={s.prescription} open onOpenChange={() => {}} />,
+      { seed: s.seed },
+    );
+    fireEvent.change(await screen.findByLabelText("Apply from"), { target: { value: TODAY } });
+    await user.click(screen.getByRole("button", { name: /save schedule/i }));
+    await vi.waitFor(() =>
+      expect(toastSpy).toHaveBeenCalledWith({
+        title: "Schedule not saved",
+        description: "Pick a date after Tuesday, Oct 20. Another change starts that day.",
+        variant: "destructive",
+      }),
+    );
   });
 
   it("a removed time from a future date names the change and what runs until then", async () => {

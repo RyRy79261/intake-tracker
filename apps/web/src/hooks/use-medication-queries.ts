@@ -263,6 +263,24 @@ export function usePendingScheduleChange(phaseId: string | undefined) {
   );
 }
 
+/**
+ * The newest day a saved change starts, over the given phases (the titration
+ * drawer's "Apply from" starts there). `undefined` when none is pending.
+ */
+export function useNewestPendingChangeDay(phaseIds: readonly string[]) {
+  const key = phaseIds.join(",");
+  return useLiveQuery(
+    async () => {
+      const days = await Promise.all(
+        key ? key.split(",").map(async (id) => (await getPendingScheduleChange(id))?.steps.at(-1)?.startsOn) : [],
+      );
+      return days.filter((d): d is string => !!d).sort().at(-1) ?? null;
+    },
+    [key],
+    null,
+  ) ?? undefined;
+}
+
 // ============================================================================
 // Mutation Hooks — useMutation (no invalidation needed, useLiveQuery detects changes)
 // ============================================================================

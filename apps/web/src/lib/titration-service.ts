@@ -364,6 +364,11 @@ export interface UpdateTitrationPlanInput {
   applyFrom?: string;
   /** Test seam: the change-day rule (default DEFAULT_CHANGE_DAY_RULE). */
   changeDayRule?: ChangeDayRule;
+  /**
+   * The user changed the "Apply from" date: an entry whose schedules are
+   * unchanged moves its newest pending change to `applyFrom`.
+   */
+  movePending?: boolean;
 }
 
 /**
@@ -443,6 +448,7 @@ export async function updateTitrationPlan(
                 ...(input.changeDayRule !== undefined && { rule: input.changeDayRule }),
                 ...(existing.unit && { closedUnit: existing.unit, unit }),
                 skipIfNewest: true,
+                ...(input.movePending && { movePending: true }),
               });
             } else {
               await reconcileSchedules(w, existing.id, entry.schedules, { tz, deviceId: sf.deviceId });
@@ -490,10 +496,9 @@ export async function updateTitrationPlan(
     const updated = await db.titrationPlans.get(plan.id);
     return ok(updated!);
   } catch (e) {
-    return err(
-      e instanceof Error && e.message.startsWith("Pick ") ? e.message : "Failed to update titration plan",
-      e,
-    );
+    // A "Pick ..." refusal is for the user as it is (no technical detail).
+    if (e instanceof Error && e.message.startsWith("Pick ")) return err(e.message);
+    return err("Failed to update titration plan", e);
   }
 }
 

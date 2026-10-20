@@ -8,11 +8,14 @@ import { isLive } from "@intake/core/lifecycle";
 import {
   isEmptyPlan,
   isNewestRegimen,
+  pendingChangeDays,
+  planPendingMove,
   planScheduleChange,
   scheduleInEffectOn,
   type ChangeDayRule,
   type DesiredRow,
   type PlannedRow,
+  type ScheduleChangePlan,
 } from "@intake/core/schedule-window";
 import { syncedWrite, type SyncedWriter } from "@/lib/synced-write";
 import { toLocalDateKey } from "@/lib/date-utils";
@@ -71,14 +74,7 @@ export async function getPendingScheduleChange(
   const live = (await db.phaseSchedules.where("phaseId").equals(phaseId).toArray()).filter(
     (s) => isLive(s) && s.enabled === true,
   );
-  // A change starts where a row starts or ends: a removed time only ends.
-  const days = [
-    ...new Set(
-      live
-        .flatMap((s) => [s.effectiveFrom, s.effectiveTo])
-        .filter((k): k is string => !!k && k > todayKey),
-    ),
-  ].sort();
+  const days = pendingChangeDays(live, todayKey);
   const startsOn = days[0];
   if (!startsOn) return undefined;
   const onDay = (key: string) =>
@@ -113,6 +109,12 @@ export interface ScheduleChangeOptions {
    * re-saving what it shows), so a pending change keeps its date.
    */
   skipIfNewest?: boolean;
+  /**
+   * When `desired` is the newest regimen and a change is pending, move the
+   * newest pending change to `applyFrom` (a date-only edit), earlier or
+   * later. Takes precedence over `skipIfNewest`.
+   */
+  movePending?: boolean;
 }
 
 /**
@@ -139,6 +141,15 @@ export interface ScheduleChangeOutcome {
 }
 
 const DATE_KEY = /^\d{4}-\d{2}-\d{2}$/;
+
+/** "Sunday, Oct 25" for a refusal message. */
+function formatKey(dateKey: string): string {
+  return new Date(`${dateKey}T12:00:00`).toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "short",
+    day: "numeric",
+  });
+}
 
 /** A user-action log: the dose of that day belongs to its row. */
 function isLoggedDose(log: { status: string; kind?: string; deletedAt?: number | null }): boolean {
@@ -179,16 +190,19 @@ export async function writeScheduleChange(
     ...(s.effectiveTo && { effectiveTo: s.effectiveTo }),
     ...(opts.closedUnit && { unit: scheduleDoseUnit(s, opts.closedUnit) }),
   }));
-  if (opts.skipIfNewest && isNewestRegimen(rows, desired, opts.unit)) {
+  const newest = isNewestRegimen(rows, desired, opts.unit);
+  if (opts.skipIfNewest && !opts.movePending && newest) {
     return { applyFrom, unchanged: true };
   }
 
+  // Logs from today: a move later checks the days it takes from a pending
+  // change, which are before `applyFrom`.
   const loggedDates = new Map<string, string[]>();
   const logIdsBySlot = new Map<string, string[]>();
   for (const s of live) {
     const logs = await db.doseLogs
       .where("[scheduleId+scheduledDate]")
-      .between([s.id, applyFrom], [s.id, "\uffff"], true, true)
+      .between([s.id, today], [s.id, "\uffff"], true, true)
       .toArray();
     for (const log of logs.filter(isLoggedDose)) {
       const dates = loggedDates.get(s.id) ?? [];
@@ -201,14 +215,24 @@ export async function writeScheduleChange(
     }
   }
 
-  const plan = planScheduleChange({
-    rows,
-    desired,
-    applyFrom,
-    loggedDates,
-    rule,
-    ...(opts.closedUnit && opts.unit && { unit: opts.unit }),
-  });
+  const unit = opts.closedUnit && opts.unit ? opts.unit : undefined;
+  let plan: ScheduleChangePlan | undefined;
+  if (opts.movePending && newest) {
+    const move = planPendingMove({ rows, today, to: applyFrom, loggedDates, rule, unit });
+    if (move.kind === "refused") {
+      throw new Error(
+        move.reason === "earlier-change"
+          ? `Pick a date after ${formatKey(move.limit)}. Another change starts that day.`
+          : `Pick ${formatKey(move.limit)} or earlier. A dose of the new schedule is already logged that day.`,
+      );
+    }
+    if (move.kind === "planned") {
+      plan = move.plan;
+      // A logged dose kept the change where it was: say so, write nothing.
+      if (isEmptyPlan(plan) && plan.startsOn > applyFrom) return { applyFrom, deferredTo: plan.startsOn };
+    }
+  }
+  plan ??= planScheduleChange({ rows, desired, applyFrom, loggedDates, rule, ...(unit && { unit }) });
   if (isEmptyPlan(plan)) return { applyFrom, unchanged: true };
   const byId = new Map(live.map((s) => [s.id, s]));
 

@@ -238,6 +238,9 @@ export async function updatePhase(input: UpdatePhaseInput): Promise<ServiceResul
           ...(applyFrom !== undefined && { applyFrom }),
           ...(changeDayRule !== undefined && { rule: changeDayRule }),
           ...(phase.unit && { closedUnit: phase.unit, unit: updates.unit ?? phase.unit }),
+          // The same rows with another date move a pending change to that
+          // date (the drawer sends the schedule only when it changed).
+          ...(applyFrom !== undefined && { movePending: true }),
         });
       } else if (schedules) {
         // Tombstoned schedules are history: an id pointing at one becomes a
@@ -318,7 +321,9 @@ export async function updatePhase(input: UpdatePhaseInput): Promise<ServiceResul
     });
     return ok(outcome);
   } catch (e) {
-    return err(e instanceof Error && e.message.startsWith("Pick ") ? e.message : "Failed to update phase", e);
+    // A "Pick ..." refusal is for the user as it is (no technical detail).
+    if (e instanceof Error && e.message.startsWith("Pick ")) return err(e.message);
+    return err("Failed to update phase", e);
   }
 }
 
