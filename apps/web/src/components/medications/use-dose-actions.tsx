@@ -2,6 +2,7 @@
 
 import { useCallback, useState, type ReactNode } from "react";
 import {
+  DoseRuleError,
   useCancelReschedule,
   useEditDoseTime,
   useRescheduleDoses,
@@ -297,7 +298,9 @@ export function useDoseActions() {
           onlyOpen: !opts.single,
         }));
       } catch (e) {
-        toast({ title: e instanceof Error && e.message ? e.message : SAVE_FAILED, variant: "destructive" });
+        // unwrap folds the cause into the message; show only a rule's own text.
+        const cause = e instanceof Error ? e.cause : undefined;
+        toast({ title: cause instanceof DoseRuleError ? cause.message : SAVE_FAILED, variant: "destructive" });
         return "failed";
       }
       const when = formatRescheduleTime(remindAt, targets[0]!.scheduledDate);

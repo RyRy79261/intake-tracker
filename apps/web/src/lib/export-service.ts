@@ -268,7 +268,9 @@ function doseRows(
       l.pillStrength,
       l.skipReason,
       l.rescheduledTo,
-      l.remindAt != null ? new Date(l.remindAt).toISOString() : undefined,
+      l.remindAt != null && Number.isFinite(new Date(l.remindAt).getTime())
+        ? new Date(l.remindAt).toISOString()
+        : undefined,
       l.note,
     ],
   }));

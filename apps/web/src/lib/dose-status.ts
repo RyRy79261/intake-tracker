@@ -41,8 +41,11 @@ export function resolveDoseStatus(
 ): ResolvedDoseStatus {
   if (logStatus === "taken") return "taken";
   if (logStatus === "skipped") return "skipped";
+  // A rescheduled dose is judged by its new time, whatever its own day
+  // (it can move to an earlier day, so this comes before the date rule).
+  if (logStatus === "rescheduled" && reschedule?.remindAt != null && Number.isFinite(reschedule.remindAt)) {
+    return isRescheduleWaiting(logStatus, reschedule.remindAt, reschedule.now) ? "pending" : "missed";
+  }
   if (scheduledDate >= todayKey) return "pending";
-  return reschedule && isRescheduleWaiting(logStatus, reschedule.remindAt, reschedule.now)
-    ? "pending"
-    : "missed";
+  return "missed";
 }

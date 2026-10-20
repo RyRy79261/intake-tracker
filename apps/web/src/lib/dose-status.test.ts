@@ -45,4 +45,12 @@ describe("resolveDoseStatus: a dose carried over from an earlier day", () => {
     expect(resolveDoseStatus("pending", "2026-10-19", "2026-10-20", { remindAt, now: remindAt })).toBe("missed");
     expect(resolveDoseStatus(undefined, "2026-10-19", "2026-10-20", { remindAt, now: remindAt })).toBe("missed");
   });
+  it("judges a dose moved to an earlier day by its new time", () => {
+    // Tomorrow's dose moved to 00:30 today: missed once the period ends.
+    expect(resolveDoseStatus("rescheduled", "2026-10-21", "2026-10-20", { remindAt, now: remindAt + 10 * 60_000 })).toBe("pending");
+    expect(resolveDoseStatus("rescheduled", "2026-10-21", "2026-10-20", { remindAt, now: remindAt + 31 * 60_000 })).toBe("missed");
+  });
+  it("keeps a future dose that is not rescheduled pending", () => {
+    expect(resolveDoseStatus(undefined, "2026-10-21", "2026-10-20", { remindAt, now: remindAt + 31 * 60_000 })).toBe("pending");
+  });
 });

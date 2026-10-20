@@ -56,6 +56,7 @@ import {
   unskipDoses,
   setSkipReason,
   revertDoseChanges,
+  DoseRuleError,
   type DoseChange,
   type DoseKey,
   type TakeDoseInput,
@@ -97,7 +98,7 @@ export type {
   DoseSlot, CreatePhaseInput, CreateTitrationPlanInput, DoseLog, UntakeDoseInput, DoseChange, DoseKey,
   DoseRescheduleWarning,
 };
-export { getRescheduleWarnings };
+export { getRescheduleWarnings, DoseRuleError };
 
 // ============================================================================
 // Read Hooks — useLiveQuery (no invalidation needed)

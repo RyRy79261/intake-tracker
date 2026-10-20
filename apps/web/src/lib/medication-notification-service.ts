@@ -91,8 +91,12 @@ export async function checkDoseReminders(now: number = Date.now()): Promise<void
   let slotTime: string | undefined;
   for (const o of occurrences) {
     // Keyed by the dose's own date, not the UTC date. A rescheduled dose
-    // gets its own key, so it reminds again at its new time.
-    const doseKey = `${o.dateKey}-${o.dose.scheduleId}${o.scheduledAt !== undefined ? `@${o.at}` : ""}`;
+    // gets its own key, so it reminds again at its new time. That key is
+    // dated by the reminder instant, so the 2-day cleanup below never drops
+    // it while the reminder is still due (a dose can move days ahead).
+    const doseKey = o.scheduledAt !== undefined
+      ? `${toLocalDateKey(o.at)}-${o.dose.scheduleId}@${o.at}`
+      : `${o.dateKey}-${o.dose.scheduleId}`;
     if (state.notifiedDoses.includes(doseKey)) continue;
     // One notification per slot: later slots wait for the next tick.
     if (slotTime !== undefined && o.localTime !== slotTime) continue;
