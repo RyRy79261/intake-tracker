@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.43.0](https://github.com/RyRy79261/intake-tracker/compare/v1.42.0...v1.43.0) (2026-10-20)
+
+
+### Features
+
+* **meds:** mark all doses sheet, late window and same-day missed ([#446](https://github.com/RyRy79261/intake-tracker/issues/446)) ([02ef8da](https://github.com/RyRy79261/intake-tracker/commit/02ef8da623861e598bde4922585552c6af4b0632))
+
 ## [1.42.0](https://github.com/RyRy79261/intake-tracker/compare/v1.41.0...v1.42.0) (2026-10-19)
 
 
