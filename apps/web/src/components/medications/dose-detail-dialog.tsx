@@ -5,7 +5,7 @@ import { Drawer, DrawerContent, DrawerTitle } from "@intake/ui/drawer";
 import { Button } from "@intake/ui/button";
 import { PillIcon } from "@/components/medications/pill-icon";
 import { PrescriptionViewDrawer } from "@/components/medications/edit-medication-drawer";
-import { useLastTakenDose, useRescheduleDose } from "@/hooks/use-medication-queries";
+import { useLastTakenDose } from "@/hooks/use-medication-queries";
 import {
   doseDisplayName,
   doseStatusLine,
@@ -14,12 +14,12 @@ import {
   formatDoseInstant,
   formatDoseTime,
   formatPillCount,
+  isRescheduledSlot,
 } from "@/lib/medication-ui-utils";
 import { isCombo, formatComboDose, formatCompoundFull } from "@intake/core/compound";
 import { isOpenDoseStatus, needsTakenTimePrompt, type SlotDay } from "@intake/core/dose-rules";
 import { Info, X, RotateCcw, Clock, Calendar, Check, Pencil, Package } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { toast } from "@intake/ui/use-toast";
 import { toLocalDateKey } from "@/lib/date-utils";
 import { useSettingsStore } from "@/stores/settings-store";
 import type { DoseActions } from "@/components/medications/use-dose-actions";
@@ -60,7 +60,8 @@ function lastTakenLabel(timestamp: number, now: number): string {
  * schedule, the dose, the pills left and the last taken time; then the
  * actions for the dose's state (Skip / Take / Reschedule when open, Untake
  * and Change time when taken, Unskip / Take / Reschedule when skipped). A
- * dose of a future day cannot be taken or skipped.
+ * dose of a future day can only be rescheduled. A rescheduled dose shows its
+ * new time and "Cancel reschedule".
  */
 export function DoseDetailDialog({
   open,
@@ -71,11 +72,8 @@ export function DoseDetailDialog({
   actions,
   onOpenInfo,
 }: DoseDetailDialogProps) {
-  const [showReschedule, setShowReschedule] = useState(false);
-  const [rescheduleTime, setRescheduleTime] = useState("");
   const [editOpen, setEditOpen] = useState(false);
   const lateWindow = useSettingsStore((s) => s.lateWindowMinutes);
-  const rescheduleMut = useRescheduleDose();
   const lastTaken = useLastTakenDose(slot?.prescriptionId, slot?.existingLog?.id);
   const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const longPressed = useRef(false);
@@ -94,7 +92,8 @@ export function DoseDetailDialog({
   const name = doseDisplayName(slot);
   const isFuture = day === "future";
   const open_ = isOpenDoseStatus(status);
-  const statusLine = doseStatusLine(slot);
+  const statusLine = doseStatusLine(slot, now);
+  const rescheduled = isRescheduledSlot(slot);
   const late = !isFuture && open_ && needsTakenTimePrompt(slot.dueAt, now, lateWindow);
 
   // Close only after a write; a cancelled sheet keeps the dialog open. A
@@ -108,40 +107,21 @@ export function DoseDetailDialog({
   const handleUntake = async () => finish(await actions.untake([slot]));
   const handleUnskip = async () => finish(await actions.unskip([slot]));
   const handleChangeTime = async () => finish(await actions.changeTime(slot));
+  const handleReschedule = async () => finish(await actions.reschedule([slot], { single: true }));
+  const handleCancelReschedule = async () => finish(await actions.cancelReschedule(slot));
 
   const clearPress = () => {
     if (pressTimer.current) clearTimeout(pressTimer.current);
     pressTimer.current = null;
   };
 
-  const handleReschedule = async () => {
-    if (!rescheduleTime) return;
-    try {
-      await rescheduleMut.mutateAsync({
-        prescriptionId: slot.prescriptionId,
-        phaseId: slot.phaseId,
-        scheduleId: slot.scheduleId,
-        date: slot.scheduledDate,
-        time: slot.localTime,
-        newTime: rescheduleTime,
-        dosageMg: slot.dosageMg,
-      });
-    } catch {
-      toast({ title: "Could not save. No dose changed.", variant: "destructive" });
-      return;
-    }
-    setShowReschedule(false);
-    onOpenChange(false);
-  };
-
   // Strength shown next to the name in the header: the scheduled dose, per
   // compound for a combination drug.
   const headerStrength = formatComboDose(schedule.dosage, phase.unit, inventory);
-  const scheduledTime = slot.existingLog?.status === "rescheduled"
-    ? schedule.time
-    : slot.localTime;
-  // Reschedule (the old picker) stays on today until rescheduling is rebuilt.
-  const canReschedule = day === "today" && status !== "taken";
+  // Any open or skipped dose of any day can be moved; a taken one is untaken first.
+  const canReschedule = status !== "taken";
+  // "Cancel reschedule" while the log still holds a reschedule.
+  const canCancelReschedule = slot.existingLog?.status === "rescheduled" && status !== "taken" && status !== "skipped";
 
   const takeButton = (
     <Button
@@ -199,6 +179,7 @@ export function DoseDetailDialog({
                       status === "taken" && "text-meds",
                       status === "skipped" && "text-muted-foreground",
                       status === "missed" && "text-sodium",
+                      rescheduled && "text-meds",
                     )}
                   >
                     {statusLine}
@@ -240,9 +221,10 @@ export function DoseDetailDialog({
               <div className="flex items-center gap-2">
                 <Calendar className="h-4 w-4" />
                 <span>
-                  Scheduled for {formatDoseTime(scheduledTime)}, {formatDoseDate(slot.scheduledDate)}
+                  Scheduled for {formatDoseTime(slot.localTime)}, {formatDoseDate(slot.scheduledDate)}
                 </span>
               </div>
+
               <div className="flex items-center gap-2">
                 <Info className="h-4 w-4" />
                 <span>
@@ -280,62 +262,45 @@ export function DoseDetailDialog({
               )}
             </div>
 
-            {!showReschedule && (
-              <div className="grid grid-cols-[repeat(auto-fit,minmax(96px,1fr))] gap-2">
-                {!isFuture && open_ && (
-                  <Button variant="outline" onClick={handleSkip}>
-                    <X aria-hidden="true" />
-                    <span>Skip</span>
-                  </Button>
-                )}
-                {!isFuture && status === "skipped" && (
-                  <Button variant="outline" onClick={handleUnskip}>
-                    <RotateCcw aria-hidden="true" />
-                    <span>Unskip</span>
-                  </Button>
-                )}
-                {status === "taken" ? (
-                  <Button variant="outline" onClick={handleUntake} className="border-bp text-bp hover:text-bp">
-                    <RotateCcw aria-hidden="true" />
-                    <span>Untake</span>
-                  </Button>
-                ) : (
-                  !isFuture && takeButton
-                )}
-                {canReschedule && (
-                  <Button variant="outline" onClick={() => setShowReschedule(true)}>
-                    <Clock aria-hidden="true" />
-                    <span>Reschedule</span>
-                  </Button>
-                )}
-              </div>
-            )}
+            <div className="grid grid-cols-[repeat(auto-fit,minmax(96px,1fr))] gap-2">
+              {!isFuture && open_ && (
+                <Button variant="outline" onClick={handleSkip}>
+                  <X aria-hidden="true" />
+                  <span>Skip</span>
+                </Button>
+              )}
+              {!isFuture && status === "skipped" && (
+                <Button variant="outline" onClick={handleUnskip}>
+                  <RotateCcw aria-hidden="true" />
+                  <span>Unskip</span>
+                </Button>
+              )}
+              {status === "taken" ? (
+                <Button variant="outline" onClick={handleUntake} className="border-bp text-bp hover:text-bp">
+                  <RotateCcw aria-hidden="true" />
+                  <span>Untake</span>
+                </Button>
+              ) : (
+                !isFuture && takeButton
+              )}
+              {canReschedule && (
+                <Button variant="outline" onClick={handleReschedule}>
+                  <Clock aria-hidden="true" />
+                  <span>Reschedule</span>
+                </Button>
+              )}
+            </div>
 
-            {status === "taken" && !showReschedule && (
+            {status === "taken" && (
               <Button variant="ghost" className="mt-1 h-9 w-full" onClick={handleChangeTime}>
                 Change time
               </Button>
             )}
 
-            {showReschedule && (
-              <div className="space-y-3">
-                <p className="text-sm font-medium">Reschedule to:</p>
-                <input
-                  type="time"
-                  value={rescheduleTime}
-                  onChange={(e) => setRescheduleTime(e.target.value)}
-                  aria-label="Reschedule to"
-                  className="h-12 w-full rounded-none border border-input bg-background px-3 text-center font-mono text-xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-                />
-                <div className="grid grid-cols-2 gap-2">
-                  <Button variant="outline" onClick={() => setShowReschedule(false)}>
-                    Cancel
-                  </Button>
-                  <Button disabled={!rescheduleTime} onClick={handleReschedule}>
-                    Confirm
-                  </Button>
-                </div>
-              </div>
+            {canCancelReschedule && (
+              <Button variant="ghost" className="mt-1 h-9 w-full" onClick={handleCancelReschedule}>
+                Cancel reschedule
+              </Button>
             )}
           </div>
         </DrawerContent>

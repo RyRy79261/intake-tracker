@@ -8,6 +8,10 @@ import { getActiveInventoryForPrescription } from "@/lib/inventory-service";
 import { toLocalDateKey } from "@/lib/date-utils";
 import { isLive } from "@intake/core/lifecycle";
 import { syncedWrite, type SyncedWriter } from "@/lib/synced-write";
+import { selectSlotLog } from "@/lib/dose-log-read";
+import { reopenedStatus, rescheduleWarnings, type RescheduleWarning } from "@intake/core/dose-rules";
+import { zonedWallClockToInstant } from "@/lib/timezone";
+import { buildReminderOccurrences, readReminderDoses } from "@/lib/medication-reminder-builder";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -40,8 +44,14 @@ export interface SkipDoseInput extends DoseKey {
 }
 
 export interface RescheduleDoseInput extends DoseKey {
-  newTime: string;
+  /** The new reminder instant (epoch ms). Any instant: there is no limit. */
+  remindAt: number;
 }
+
+export type CancelRescheduleInput = DoseKey;
+
+/** A reschedule warning for one medicine. It never blocks the save. */
+export type DoseRescheduleWarning = RescheduleWarning & { prescriptionId: string };
 
 export interface EditDoseTimeInput extends Omit<DoseKey, "dosageMg"> {
   /** The time the dose was actually taken (epoch ms). */
@@ -132,38 +142,8 @@ export function scheduledDoseLogId(scheduleId: string, date: string): string {
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-8${hex.slice(13, 16)}-${variant}${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
 }
 
-const SLOT_LOG_RANK: Record<DoseStatus, number> = {
-  taken: 3,
-  skipped: 2,
-  rescheduled: 1,
-  pending: 0,
-};
-
-/**
- * Pick THE log for one dose slot out of every log stored for it. Older builds
- * (and two offline devices) could leave several live logs for one slot, so the
- * choice must not depend on IndexedDB iteration order: the strongest status
- * wins, then the newest write, then the larger id.
- */
-export function selectSlotLog(logs: readonly DoseLog[]): DoseLog | undefined {
-  let best: DoseLog | undefined;
-  for (const log of logs) {
-    if (!isLive(log) || log.kind === "prn") continue;
-    if (!best) {
-      best = log;
-      continue;
-    }
-    const byRank = SLOT_LOG_RANK[log.status] - SLOT_LOG_RANK[best.status];
-    if (
-      byRank > 0 ||
-      (byRank === 0 && log.updatedAt > best.updatedAt) ||
-      (byRank === 0 && log.updatedAt === best.updatedAt && log.id > best.id)
-    ) {
-      best = log;
-    }
-  }
-  return best;
-}
+// Lives in dose-log-read so the reminder builder can use it too.
+export { selectSlotLog };
 
 // ---------------------------------------------------------------------------
 // Internal helpers
@@ -188,7 +168,7 @@ async function newScheduledDoseLogId(scheduleId: string, date: string): Promise<
 }
 
 type PatchableField =
-  | "rescheduledTo" | "skipReason" | "note" | "inventoryItemId" | "actionTimestamp"
+  | "rescheduledTo" | "remindAt" | "skipReason" | "note" | "inventoryItemId" | "actionTimestamp"
   | "doseAmount" | "doseUnit" | "pillsConsumed" | "pillStrength";
 
 /** Fields to write on a slot's log; an explicit `undefined` clears the field. */
@@ -338,12 +318,20 @@ export async function getDoseLog(
 // bulk functions share. A bulk action runs every step in ONE synced write:
 // all doses change or none do.
 
+/** A rule the user broke; its message is shown as it is. */
+export class DoseRuleError extends Error {}
+
+/** The message to show for a failed dose write. */
+function failMessage(e: unknown, fallback: string): string {
+  return e instanceof DoseRuleError ? e.message : fallback;
+}
+
 /** Refuse to take or skip a dose of a day after today. */
 function assertNotFutureDay(date: string, verb: "take" | "skip"): void {
   // A dose cannot be taken ahead of its day: it would debit stock for a pill
   // that is still in the bottle, and the dose is not due yet.
   if (date > toLocalDateKey()) {
-    throw new Error(`Cannot ${verb} a dose scheduled for a future date`);
+    throw new DoseRuleError(`Cannot ${verb} a dose scheduled for a future date`);
   }
 }
 
@@ -471,9 +459,9 @@ async function skipInTx(w: SyncedWriter, input: SkipDoseInput): Promise<DoseChan
 
 /**
  * Reverse a taken dose inside a synced write: its pills go back to stock.
- * The log goes back to open: "rescheduled" if it carries a reschedule
- * override, else "pending" (the Today screen then shows it open or missed by
- * the time). The log is not soft-deleted: its id is deterministic and the
+ * The log goes back to open: "rescheduled" while its `remindAt` is still
+ * ahead (the reminder is armed again), else "pending" (the Today screen then
+ * shows it open or missed by the original time). The log is not soft-deleted: its id is deterministic and the
  * server never resurrects a tombstone, so a later re-take could not sync.
  */
 async function untakeInTx(w: SyncedWriter, input: UntakeDoseInput): Promise<DoseChange> {
@@ -484,7 +472,7 @@ async function untakeInTx(w: SyncedWriter, input: UntakeDoseInput): Promise<Dose
 
   const after = await writeSlotLog(
     w, prev, logId, { prescriptionId, phaseId, scheduleId, date, time },
-    prev?.rescheduledTo ? "rescheduled" : "pending",
+    reopenedStatus(prev?.remindAt, w.now),
     // Clear a reason left by an earlier skip: the slot is no longer skipped.
     { pillsConsumed: 0, skipReason: undefined },
   );
@@ -497,8 +485,8 @@ async function untakeInTx(w: SyncedWriter, input: UntakeDoseInput): Promise<Dose
 }
 
 /**
- * Reverse a skip inside a synced write: the dose is open again and its
- * reason is cleared. Null when the dose is not skipped.
+ * Reverse a skip inside a synced write: the dose is open again ("rescheduled"
+ * while its `remindAt` is ahead) and its reason is cleared. Null when the dose is not skipped.
  */
 async function unskipInTx(w: SyncedWriter, input: UnskipDoseInput): Promise<DoseChange | null> {
   const { prescriptionId, phaseId, scheduleId, date, time } = input;
@@ -507,7 +495,7 @@ async function unskipInTx(w: SyncedWriter, input: UnskipDoseInput): Promise<Dose
 
   const after = await writeSlotLog(
     w, prev, prev.id, { prescriptionId, phaseId, scheduleId, date, time },
-    prev.rescheduledTo ? "rescheduled" : "pending",
+    reopenedStatus(prev.remindAt, w.now),
     { skipReason: undefined },
   );
   await w.audit("dose_untaken", { prescriptionId, date, time, unskipped: true });
@@ -528,7 +516,7 @@ export async function takeDose(input: TakeDoseInput): Promise<ServiceResult<Dose
     });
     return ok(log);
   } catch (e) {
-    return err(e instanceof Error && e.message.startsWith("Cannot") ? e.message : "Failed to take dose", e);
+    return err(failMessage(e, "Failed to take dose"), e);
   }
 }
 
@@ -718,7 +706,7 @@ export async function skipDose(input: SkipDoseInput): Promise<ServiceResult<Dose
     const log = await syncedWrite(DOSE_TABLES, async (w) => (await skipInTx(w, input)).after);
     return ok(log);
   } catch (e) {
-    return err(e instanceof Error && e.message.startsWith("Cannot") ? e.message : "Failed to skip dose", e);
+    return err(failMessage(e, "Failed to skip dose"), e);
   }
 }
 
@@ -733,39 +721,133 @@ export async function unskipDose(input: UnskipDoseInput): Promise<ServiceResult<
 }
 
 /**
- * Reschedule a dose to a new time. If previously taken, reverses its stock.
- * The slot keeps ONE log, marked "rescheduled" with `rescheduledTo` as the
- * time override; the schedule view builds the slot at that time. (Writing a
- * second "pending" log at the new time left two logs fighting over the slot.)
+ * Move one occurrence of a dose to a new reminder instant, inside a synced
+ * write. The dose keeps its key and its original time; only `remindAt`
+ * changes. A taken dose is refused: untake it first (the old silent un-take
+ * is gone). A skipped dose is open again, its reason cleared. There is no
+ * time limit and a future day is allowed.
  */
-export async function rescheduleDose(input: RescheduleDoseInput): Promise<ServiceResult<DoseLog>> {
+async function rescheduleInTx(w: SyncedWriter, input: RescheduleDoseInput): Promise<DoseChange> {
+  const { prescriptionId, phaseId, scheduleId, date, time, remindAt } = input;
+  if (!Number.isFinite(remindAt)) throw new DoseRuleError("Invalid time");
+  const prev = await getDoseLogRaw(scheduleId, date);
+  if (prev?.status === "taken") throw new DoseRuleError("Untake the dose first.");
+  const logId = prev?.id ?? (await newScheduledDoseLogId(scheduleId, date));
+
+  const after = await writeSlotLog(
+    w, prev, logId, { prescriptionId, phaseId, scheduleId, date, time }, "rescheduled",
+    // The old "HH:MM" override is no longer written; clear it so it cannot
+    // come back. A skip reason goes too: the dose is open again.
+    { remindAt, rescheduledTo: undefined, skipReason: undefined },
+  );
+  await w.audit("dose_rescheduled", {
+    prescriptionId, date, time, remindAt, previousRemindAt: prev?.remindAt,
+  });
+  return { key: input, before: prev, after };
+}
+
+/**
+ * Cancel a reschedule inside a synced write: the dose is due at its
+ * original time again. Null when the dose is not rescheduled.
+ */
+async function cancelRescheduleInTx(
+  w: SyncedWriter,
+  input: CancelRescheduleInput,
+): Promise<DoseChange | null> {
+  const { prescriptionId, phaseId, scheduleId, date, time } = input;
+  const prev = await getDoseLogRaw(scheduleId, date);
+  if (prev?.status !== "rescheduled") return null;
+  const after = await writeSlotLog(
+    w, prev, prev.id, { prescriptionId, phaseId, scheduleId, date, time }, "pending",
+    { remindAt: undefined, rescheduledTo: undefined },
+  );
+  await w.audit("dose_rescheduled", { prescriptionId, date, time, cancelled: true });
+  return { key: input, before: prev, after };
+}
+
+/** When a dose is scheduled: its schedule's wall clock on its date in the anchor zone. */
+async function scheduledInstantOf(key: DoseKey): Promise<number | null> {
+  const schedule = await db.phaseSchedules.get(key.scheduleId);
+  if (!schedule) return null;
   try {
-    const { prescriptionId, phaseId, scheduleId, date, time, newTime, dosageMg } = input;
+    return zonedWallClockToInstant(key.date, schedule.time, schedule.anchorTimezone || getDeviceTimezone());
+  } catch {
+    return null;
+  }
+}
 
-    const log = await syncedWrite(DOSE_TABLES, async (w) => {
-      const prev = await getDoseLogRaw(scheduleId, date);
-      const logId = prev?.id ?? (await newScheduledDoseLogId(scheduleId, date));
+/** The next scheduled dose of the same medicine after this one (epoch ms), if any. */
+async function nextDoseOf(
+  key: DoseKey,
+  scheduledAt: number,
+  doses: Awaited<ReturnType<typeof readReminderDoses>>,
+): Promise<number | null> {
+  const same = doses.filter((d) => d.prescriptionId === key.prescriptionId);
+  const next = buildReminderOccurrences(same, {
+    from: scheduledAt + 1,
+    days: 8,
+    deviceTz: getDeviceTimezone(),
+  }).find((o) => !(o.dose.scheduleId === key.scheduleId && o.dateKey === key.date));
+  return next?.at ?? null;
+}
 
-      // Reverse stock if previously taken
-      const pillsConsumed = await restoreTakenStock(w, prev, dosageMg);
+/**
+ * The warnings for moving these doses to `remindAt`, one list for the sheet
+ * and the save: "This time has passed" (once) and, per medicine, "This is
+ * after your next dose". Warnings never block a save.
+ */
+export async function getRescheduleWarnings(
+  entries: readonly DoseKey[],
+  remindAt: number,
+  now: number = Date.now(),
+): Promise<DoseRescheduleWarning[]> {
+  const out: DoseRescheduleWarning[] = [];
+  if (!Number.isFinite(remindAt)) return out;
+  // The database on screen: the warning is about the doses the user sees.
+  const doses = entries.length > 0 ? await readReminderDoses() : [];
+  const seen = new Set<string>();
+  let past = false;
+  for (const entry of entries) {
+    const scheduledAt = await scheduledInstantOf(entry);
+    const nextAt = scheduledAt === null ? null : await nextDoseOf(entry, scheduledAt, doses);
+    for (const warning of rescheduleWarnings(remindAt, now, nextAt)) {
+      if (warning.kind === "past") {
+        if (!past) out.unshift({ ...warning, prescriptionId: entry.prescriptionId });
+        past = true;
+      } else if (!seen.has(entry.prescriptionId)) {
+        seen.add(entry.prescriptionId);
+        out.push({ ...warning, prescriptionId: entry.prescriptionId });
+      }
+    }
+  }
+  return out;
+}
 
-      const doseLog = await writeSlotLog(
-        w, prev, logId, { prescriptionId, phaseId, scheduleId, date, time }, "rescheduled",
-        // Clear a reason left by an earlier skip: the slot is no longer skipped.
-        { rescheduledTo: newTime, pillsConsumed: 0, skipReason: undefined },
-      );
-
-      await w.audit("dose_rescheduled", {
-        prescriptionId, date, time, newTime, dosageMg, pillsConsumed,
-        inventoryItemId: prev?.inventoryItemId,
-      });
-
-      return doseLog;
-    });
-
-    return ok(log);
+/**
+ * Reschedule one dose to a new instant. The dose stays under its original
+ * time; its reminder moves. Returns the log and the warnings (they never
+ * block). A taken dose is refused: "Untake the dose first."
+ */
+export async function rescheduleDose(
+  input: RescheduleDoseInput,
+): Promise<ServiceResult<{ log: DoseLog; warnings: DoseRescheduleWarning[] }>> {
+  try {
+    const warnings = await getRescheduleWarnings([input], input.remindAt);
+    const change = await syncedWrite(DOSE_TABLES, (w) => rescheduleInTx(w, input));
+    return ok({ log: change.after, warnings });
   } catch (e) {
-    return err("Failed to reschedule dose", e);
+    return err(failMessage(e, "Failed to reschedule dose"), e);
+  }
+}
+
+/** Cancel a reschedule: the dose is due at its original time again. */
+export async function cancelReschedule(
+  input: CancelRescheduleInput,
+): Promise<ServiceResult<DoseChange | null>> {
+  try {
+    return ok(await syncedWrite(DOSE_TABLES, (w) => cancelRescheduleInTx(w, input)));
+  } catch (e) {
+    return err("Failed to cancel the reschedule", e);
   }
 }
 
@@ -793,7 +875,7 @@ async function runBulk<K extends DoseKey>(
     });
     return ok(changes);
   } catch (e) {
-    return err(e instanceof Error && e.message.startsWith("Cannot") ? e.message : "Could not save. No dose changed.", e);
+    return err(failMessage(e, "Could not save. No dose changed."), e);
   }
 }
 
@@ -852,6 +934,35 @@ export function unskipDoses<K extends DoseKey>(
 }
 
 /**
+ * Reschedule every open dose in `entries` to one instant ("Reschedule" in
+ * the "Mark all doses" modal). A taken or skipped dose never changes. With
+ * `onlyOpen: false` a skipped dose moves too (Reschedule on one skipped
+ * dose); a taken dose is still refused. One synced write: all doses move or
+ * none do.
+ */
+export async function rescheduleDoses<K extends DoseKey>(
+  entries: readonly K[],
+  remindAt: number,
+  opts: { onlyOpen?: boolean } = {},
+): Promise<ServiceResult<{ changes: DoseChange<K>[]; warnings: DoseRescheduleWarning[] }>> {
+  const onlyOpen = opts.onlyOpen ?? true;
+  const open: K[] = [];
+  for (const entry of entries) if (!onlyOpen || !(await isMarked(entry))) open.push(entry);
+  let warnings: DoseRescheduleWarning[];
+  try {
+    warnings = await getRescheduleWarnings(open, remindAt);
+  } catch (e) {
+    return err("Could not save. No dose changed.", e);
+  }
+  const res = await runBulk(open, async (w, entry) => {
+    // Checked again inside the write: another device may have marked it.
+    if (onlyOpen && (await isMarked(entry))) return null;
+    return rescheduleInTx(w, { ...entry, remindAt });
+  });
+  return res.success ? ok({ changes: res.data, warnings }) : res;
+}
+
+/**
  * Give skipped doses their reason after the skip was written (the reason
  * sheet opens after the skip). A dose that is no longer skipped is left
  * alone. Returns how many doses got the reason.
@@ -897,6 +1008,7 @@ export async function revertDoseChanges(
           !isLive(current) ||
           current.status !== after.status ||
           current.actionTimestamp !== after.actionTimestamp ||
+          current.remindAt !== after.remindAt ||
           (current.pillsConsumed ?? 0) !== (after.pillsConsumed ?? 0)
         ) {
           stale++;
@@ -910,6 +1022,7 @@ export async function revertDoseChanges(
               actionTimestamp: before.actionTimestamp,
               timezone: before.timezone,
               rescheduledTo: before.rescheduledTo,
+              remindAt: before.remindAt,
               skipReason: before.skipReason,
               inventoryItemId: before.inventoryItemId,
               pillsConsumed: before.pillsConsumed,
@@ -923,11 +1036,18 @@ export async function revertDoseChanges(
               status: "pending",
               actionTimestamp: w.now,
               skipReason: undefined,
+              remindAt: undefined,
               pillsConsumed: 0,
               inventoryItemId: undefined,
             });
         await w.audit(
-          before?.status === "taken" ? "dose_taken" : before?.status === "skipped" ? "dose_skipped" : "dose_untaken",
+          before?.status === "taken"
+            ? "dose_taken"
+            : before?.status === "skipped"
+              ? "dose_skipped"
+              : before?.status === "rescheduled" || after.status === "rescheduled"
+                ? "dose_rescheduled"
+                : "dose_untaken",
           { prescriptionId: key.prescriptionId, date: key.date, time: key.time, undo: true },
         );
         reverted++;
@@ -1008,6 +1128,6 @@ export async function applyDoseSteps(steps: readonly DoseStep[]): Promise<Servic
     });
     return ok(changed);
   } catch (e) {
-    return err(e instanceof Error && e.message.startsWith("Cannot") ? e.message : "Could not save. No dose changed.", e);
+    return err(failMessage(e, "Could not save. No dose changed."), e);
   }
 }

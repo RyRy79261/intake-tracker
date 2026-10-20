@@ -716,7 +716,8 @@ export async function listMedications(userId: string) {
 /**
  * The most recent dose logs. `status` follows the app's rule
  * (resolveDoseStatus): a scheduled dose still outstanding ("pending" or
- * "rescheduled") on a day before today, in the user's zone, is "missed".
+ * "rescheduled") on a day before today, in the user's zone, is "missed",
+ * unless it is rescheduled and still waiting for its new time.
  * `loggedStatus` is the status as stored.
  */
 export async function listRecentDoses(
@@ -746,6 +747,7 @@ export async function listRecentDoses(
       scheduledTime: doseLogs.scheduledTime,
       status: doseLogs.status,
       actionTimestamp: doseLogs.actionTimestamp,
+      remindAt: doseLogs.remindAt,
       skipReason: doseLogs.skipReason,
       note: doseLogs.note,
       // What was taken. The snapshot (frozen at log time) wins; doseMg is a
@@ -798,7 +800,12 @@ export async function listRecentDoses(
     doses: rows.map(({ status, ...row }) => ({
       ...row,
       status:
-        row.kind === "prn" ? status : resolveDoseStatus(status, row.scheduledDate, todayKey),
+        row.kind === "prn"
+          ? status
+          : resolveDoseStatus(status, row.scheduledDate, todayKey, {
+              remindAt: row.remindAt,
+              now: opts.now ?? Date.now(),
+            }),
       loggedStatus: status,
     })),
   };

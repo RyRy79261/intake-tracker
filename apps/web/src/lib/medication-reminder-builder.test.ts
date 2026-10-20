@@ -9,6 +9,8 @@ import {
   makeTitrationPlan,
 } from "@/__tests__/fixtures/db-fixtures";
 import {
+  applyDoseLogs,
+  isSlotHandled,
   loadReminderDoses,
   loadHandledSlots,
   buildReminderOccurrences,
@@ -232,5 +234,50 @@ describe("reminder reads while a manual preview's sample database is swapped in"
       resetActiveDatabase();
       await preview.delete();
     }
+  });
+});
+
+describe("reminders after a reschedule", () => {
+  const BERLIN = "Europe/Berlin";
+
+  it("a rescheduled dose is not handled; taken and skipped are", () => {
+    expect(isSlotHandled({ status: "rescheduled", deletedAt: null })).toBe(false);
+    expect(isSlotHandled({ status: "taken", deletedAt: null })).toBe(true);
+    expect(isSlotHandled({ status: "skipped", deletedAt: null })).toBe(true);
+  });
+
+  it("a DST change between the reschedule and the reminder keeps the same instant", () => {
+    // Saturday 2026-10-24 08:30 Berlin (CEST) moved to Sunday 10:00 Berlin,
+    // after the clocks went back (CET). The stored instant is what fires.
+    const d = dose({ scheduleId: "s", time: "08:30", anchorTimezone: BERLIN });
+    const from = zonedTimeToEpoch("2026-10-24", "00:00", BERLIN);
+    const remindAt = zonedTimeToEpoch("2026-10-25", "10:00", BERLIN);
+    expect(remindAt).toBe(Date.UTC(2026, 9, 25, 9, 0));
+    const occurrences = buildReminderOccurrences([d], { from, days: 1, deviceTz: BERLIN });
+    const log = makeDoseLog("rx", "ph", "s", { scheduledDate: "2026-10-24", status: "rescheduled", remindAt });
+    const end = from + 3 * 24 * 60 * 60 * 1000;
+
+    const [inBerlin] = applyDoseLogs(occurrences, [d], [log], { from, end, deviceTz: BERLIN });
+    expect(inBerlin).toMatchObject({ at: remindAt, localTime: "10:00", dateKey: "2026-10-24" });
+
+    // The device travelled: the instant does not move, only how it reads.
+    const [inNewYork] = applyDoseLogs(occurrences, [d], [log], { from, end, deviceTz: "America/New_York" });
+    expect(inNewYork).toMatchObject({ at: remindAt, localTime: "05:00" });
+  });
+
+  it("drops a dose rescheduled past the window, and keeps one just past with the look-back", () => {
+    const d = dose({ scheduleId: "s", time: "08:00", anchorTimezone: BERLIN });
+    const from = TUESDAY;
+    const occurrences = buildReminderOccurrences([d], { from: from - 3_600_000, days: 1, deviceTz: BERLIN });
+    const later = makeDoseLog("rx", "ph", "s", {
+      scheduledDate: "2026-09-29", status: "rescheduled", remindAt: from + 5 * 24 * 3_600_000,
+    });
+    const end = from + 24 * 3_600_000;
+    expect(applyDoseLogs(occurrences, [d], [later], { from, end, deviceTz: BERLIN })
+      .filter((o) => o.dateKey === "2026-09-29")).toEqual([]);
+
+    const justPast = { ...later, remindAt: from - 10 * 60_000 };
+    expect(applyDoseLogs(occurrences, [d], [justPast], { from, end, deviceTz: BERLIN, lookbackMs: 30 * 60_000 })
+      .map((o) => o.at)).toContain(from - 10 * 60_000);
   });
 });

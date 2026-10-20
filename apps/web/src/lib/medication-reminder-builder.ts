@@ -24,6 +24,7 @@ import { isLive } from "@intake/core/lifecycle";
 import { selectEffectivePhases } from "@intake/core/effective-phase";
 import { formatComboDose } from "@intake/core/compound";
 import { isActiveBrand } from "@/lib/inventory-service";
+import { effectiveRemindAt, selectSlotLog } from "@/lib/dose-log-read";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -56,6 +57,11 @@ export interface ReminderOccurrence {
   localTime: string;
   /** Device-local weekday of `at` (0 = Sunday). */
   localWeekday: number;
+  /**
+   * Set for a rescheduled dose: `at` is its `remindAt`, and this is when it
+   * was scheduled. Its repeat reminders count from `at`.
+   */
+  scheduledAt?: number;
 }
 
 export interface PushScheduleEntry {
@@ -201,10 +207,18 @@ function formatDosage(
  * swapped in, this waits for the real one (`readRealDatabase`).
  */
 export function loadReminderDoses(): Promise<ReminderDose[]> {
-  return readRealDatabase(readReminderDoses);
+  return readRealDatabase(readDoses);
 }
 
-async function readReminderDoses(): Promise<ReminderDose[]> {
+/**
+ * The same doses from the database on screen (a manual preview's sample
+ * database too). For screens that act on what they show, never for reminders.
+ */
+export function readReminderDoses(): Promise<ReminderDose[]> {
+  return readDoses();
+}
+
+async function readDoses(): Promise<ReminderDose[]> {
   const [prescriptions, phases, schedules, inventory] = await Promise.all([
     db.prescriptions.toArray(),
     db.medicationPhases.toArray(),
@@ -284,12 +298,116 @@ export function buildReminderOccurrences(
 }
 
 /**
- * True when the slot has been dealt with (taken, skipped or rescheduled), so
- * no reminder or follow-up should fire for it.
+ * True when the slot has been dealt with (taken or skipped), so no reminder
+ * or follow-up should fire for it. A rescheduled dose is NOT handled: it
+ * reminds at its new time.
  */
 export function isSlotHandled(log: Pick<DoseLog, "status" | "deletedAt"> | undefined): boolean {
   if (!log || !isLive(log)) return false;
-  return log.status === "taken" || log.status === "skipped" || log.status === "rescheduled";
+  return log.status === "taken" || log.status === "skipped";
+}
+
+/**
+ * The reminders the dose logs leave: a taken or skipped dose has none; a
+ * rescheduled dose reminds at its `remindAt` instead of its scheduled time
+ * (also when it was scheduled outside the window, for example yesterday at
+ * 22:00, moved to 00:30). A rescheduled dose is kept while
+ * `from - lookbackMs <= remindAt < end`, so a caller that repeats a reminder
+ * can still fire the repeats of one that is just past. Pure.
+ *
+ * @param logs every live log of the occurrences' slots, and every
+ *   rescheduled log whose `remindAt` falls in the window
+ */
+export function applyDoseLogs(
+  occurrences: readonly ReminderOccurrence[],
+  doses: readonly ReminderDose[],
+  logs: readonly DoseLog[],
+  opts: { from: number; end: number; deviceTz: string; lookbackMs?: number },
+): ReminderOccurrence[] {
+  const lower = opts.from - (opts.lookbackMs ?? 0);
+  const todayKey = zonedParts(opts.from, opts.deviceTz).dateKey;
+  const bySlot = new Map<string, DoseLog[]>();
+  for (const log of logs) {
+    if (!log.scheduleId || log.kind === "prn") continue;
+    const key = `${log.scheduleId}|${log.scheduledDate}`;
+    const bucket = bySlot.get(key) ?? [];
+    bucket.push(log);
+    bySlot.set(key, bucket);
+  }
+  const slotLog = (key: string) => selectSlotLog(bySlot.get(key) ?? []);
+  const moved = (o: ReminderOccurrence, remindAt: number, scheduledAt: number): ReminderOccurrence => {
+    const local = zonedParts(remindAt, opts.deviceTz);
+    return { ...o, at: remindAt, localTime: local.time, localWeekday: local.weekday, scheduledAt };
+  };
+
+  const out: ReminderOccurrence[] = [];
+  const seen = new Set<string>();
+  for (const o of occurrences) {
+    const key = `${o.dose.scheduleId}|${o.dateKey}`;
+    seen.add(key);
+    const log = slotLog(key);
+    if (isSlotHandled(log)) continue;
+    const remindAt = effectiveRemindAt(log, o.at, todayKey, opts.deviceTz);
+    if (remindAt === undefined) {
+      out.push(o);
+    } else if (remindAt >= lower && remindAt < opts.end) {
+      out.push(moved(o, remindAt, o.at));
+    }
+  }
+
+  // Rescheduled into the window from a slot outside it.
+  const doseById = new Map(doses.map((d) => [d.scheduleId, d]));
+  for (const key of bySlot.keys()) {
+    if (seen.has(key)) continue;
+    const log = slotLog(key);
+    if (log?.status !== "rescheduled" || log.remindAt == null || !isLive(log)) continue;
+    if (log.remindAt < lower || log.remindAt >= opts.end) continue;
+    const dose = doseById.get(log.scheduleId!);
+    if (!dose) continue;
+    const tz = isValidTimeZone(dose.anchorTimezone) ? dose.anchorTimezone : opts.deviceTz;
+    const scheduledAt = zonedTimeToEpoch(log.scheduledDate, dose.time, tz);
+    out.push(moved({ dose, dateKey: log.scheduledDate, at: scheduledAt, localTime: "", localWeekday: 0 }, log.remindAt, scheduledAt));
+  }
+
+  return out.sort((a, b) => a.at - b.at || a.dose.scheduleId.localeCompare(b.dose.scheduleId));
+}
+
+/**
+ * The occurrences to remind about in `[from, from + days)`, after the dose
+ * logs: taken and skipped doses drop out, rescheduled doses move to their
+ * `remindAt` (see applyDoseLogs). Reads the real database only.
+ */
+export function loadReminderOccurrences(
+  doses: readonly ReminderDose[],
+  opts: { from: number; days: number; deviceTz: string; lookbackMs?: number },
+): Promise<ReminderOccurrence[]> {
+  return readRealDatabase(async () => {
+    const occurrences = buildReminderOccurrences(doses, opts);
+    const end = opts.from + opts.days * DAY_MS;
+    const lower = opts.from - (opts.lookbackMs ?? 0);
+    const keys = [...new Set(occurrences.map((o) => `${o.dose.scheduleId}|${o.dateKey}`))];
+    const [slotLogs, rescheduled] = await Promise.all([
+      keys.length === 0
+        ? Promise.resolve([] as DoseLog[])
+        : db.doseLogs
+            .where("[scheduleId+scheduledDate]")
+            .anyOf(keys.map((k) => k.split("|") as [string, string]))
+            .toArray(),
+      db.doseLogs.where("status").equals("rescheduled").toArray(),
+    ]);
+    const inWindow = rescheduled.filter(
+      (l) => isLive(l) && l.remindAt != null && l.remindAt >= lower && l.remindAt < end,
+    );
+    // The moved dose's own slot logs, so a later take on it still counts.
+    const movedKeys = inWindow
+      .filter((l) => l.scheduleId)
+      .map((l) => [l.scheduleId!, l.scheduledDate] as [string, string]);
+    const movedSlotLogs = movedKeys.length === 0
+      ? []
+      : await db.doseLogs.where("[scheduleId+scheduledDate]").anyOf(movedKeys).toArray();
+    const logs = [...slotLogs, ...movedSlotLogs].filter(isLive);
+    return applyDoseLogs(occurrences, doses, logs, { ...opts, end });
+  });
 }
 
 /**

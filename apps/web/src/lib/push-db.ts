@@ -157,7 +157,8 @@ export async function releaseSentNotification(
 
 /**
  * The subset of `scheduleIds` whose dose on `scheduledDate` is already dealt
- * with (taken, skipped or rescheduled) in the synced dose_logs.
+ * with (taken or skipped) in the synced dose_logs. A rescheduled dose is
+ * not handled: it still owes a reminder (at its new time).
  */
 export async function getHandledScheduleIds(
   userId: string,
@@ -172,7 +173,7 @@ export async function getHandledScheduleIds(
     WHERE user_id = ${userId}
       AND scheduled_date = ${scheduledDate}
       AND schedule_id = ANY(${scheduleIds})
-      AND status IN ('taken', 'skipped', 'rescheduled')
+      AND status IN ('taken', 'skipped')
       AND deleted_at IS NULL
   `;
   return new Set(rows.map((r) => r.schedule_id as string));

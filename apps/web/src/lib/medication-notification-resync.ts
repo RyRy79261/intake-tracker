@@ -44,6 +44,8 @@ async function readReminderInputs(): Promise<object> {
     // Logging or skipping a dose suppresses its pending reminder and
     // follow-ups, so recent dose logs count too.
     db.doseLogs.where("scheduledDate").aboveOrEqual(yesterday).toArray(),
+    // A rescheduled dose of any earlier day reminds at its new time.
+    db.doseLogs.where("status").equals("rescheduled").toArray(),
   ]);
   return {};
 }

@@ -3,7 +3,7 @@
 import type { CSSProperties } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth-guard";
-import { useDailyDoseSchedule } from "@/hooks/use-medication-queries";
+import { useCarriedOverDoses, useDailyDoseSchedule } from "@/hooks/use-medication-queries";
 import { useTodayKey } from "@/hooks/use-today-key";
 import { useNow } from "@/hooks/use-now";
 import { isOpenDoseStatus } from "@intake/core/dose-rules";
@@ -25,13 +25,17 @@ import { cn } from "@/lib/utils";
 
 /**
  * Today's doses that are due now and still open (not taken or skipped).
- * Tonight's doses do not count until their time comes.
+ * Tonight's doses do not count until their time comes; a rescheduled dose
+ * counts from its new time, also one carried over from an earlier day.
  */
 export function useDueDoseCount(): number {
   const todayKey = useTodayKey();
   const slots = useDailyDoseSchedule(todayKey);
+  const carried = useCarriedOverDoses(todayKey);
   const now = useNow();
-  return slots?.filter((s) => isOpenDoseStatus(s.status) && s.dueAt <= now).length ?? 0;
+  const due = (list: typeof slots) =>
+    list?.filter((s) => isOpenDoseStatus(s.status) && s.dueAt <= now).length ?? 0;
+  return due(slots) + due(carried);
 }
 
 /** "Ryan Noble" -> "RN"; an email or single word -> its first letter. */

@@ -7,11 +7,13 @@ import {
   type InventoryItem,
 } from "@/lib/db";
 import { getDeviceTimezone, resolveScheduleLocalTime, zonedWallClockToInstant } from "@/lib/timezone";
-import { calculatePillsConsumed, isCleanFraction, selectSlotLog } from "@/lib/dose-log-service";
+import { calculatePillsConsumed, isCleanFraction } from "@/lib/dose-log-service";
+import { effectiveRemindAt, selectSlotLog } from "@/lib/dose-log-read";
 import { isActiveBrand } from "@/lib/inventory-service";
 import { isValidPillStrength } from "@intake/core/compound";
 import { toLocalDateKey } from "@/lib/date-utils";
 import { resolveDoseStatus, type ResolvedDoseStatus } from "@/lib/dose-status";
+import { dueInstant } from "@intake/core/dose-rules";
 import { isLive } from "@intake/core/lifecycle";
 import { selectEffectivePhase, selectEffectivePhases } from "@intake/core/effective-phase";
 
@@ -28,11 +30,22 @@ export interface DoseSlot {
   scheduleId: string;
   scheduledDate: string; // YYYY-MM-DD
   scheduleTimeUTC: number; // minutes from midnight UTC
-  localTime: string; // "HH:MM" in device timezone for display
   /**
-   * When the dose is due (epoch ms): the schedule's wall clock on this date
-   * in its anchor zone, or the reschedule time of a rescheduled dose. The
-   * late-window and missed rules compare instants, never minutes of the day.
+   * "HH:MM" in device timezone for display: the ORIGINAL dose time. A
+   * rescheduled dose stays under it ("Rescheduled for 10:00").
+   */
+  localTime: string;
+  /** When the dose is scheduled (epoch ms): the schedule's wall clock on this date in its anchor zone. */
+  scheduledAt: number;
+  /**
+   * The reminder instant of a rescheduled dose (epoch ms). Set only while
+   * the log is "rescheduled"; a legacy "HH:MM" reschedule is converted.
+   */
+  remindAt?: number;
+  /**
+   * When the dose is due (epoch ms): `remindAt` while rescheduled, else
+   * `scheduledAt` (dueInstant). The late-window and missed rules compare
+   * instants, never minutes of the day.
    */
   dueAt: number;
   dosageMg: number; // from PhaseSchedule.dosage
@@ -66,14 +79,16 @@ function getTodayDateStr(): string {
 
 /**
  * Determine dose slot status based on existing log and date. The shared rule
- * (resolveDoseStatus): an outstanding dose on a past day is missed.
+ * (resolveDoseStatus): an outstanding dose on a past day is missed, unless it
+ * is rescheduled and still waiting for its new time.
  */
 function deriveStatus(
   log: DoseLog | undefined,
   dateStr: string,
   todayStr: string,
+  remindAt: number | undefined,
 ): DoseSlotStatus {
-  return resolveDoseStatus(log?.status, dateStr, todayStr);
+  return resolveDoseStatus(log?.status, dateStr, todayStr, { remindAt, now: Date.now() });
 }
 
 /**
@@ -148,20 +163,15 @@ function deviceInstant(dateStr: string, hhmm: string): number {
 }
 
 /**
- * When a dose is due: the schedule's wall clock on the date in its anchor
- * zone (the same instant `localTime` shows), or for a rescheduled dose the
- * new time it was moved to (picked on the device's clock).
+ * When a dose is scheduled: the schedule's wall clock on the date in its
+ * anchor zone (the same instant `localTime` shows).
  */
-function slotDueAt(
+function slotScheduledAt(
   schedule: PhaseSchedule,
   dateStr: string,
   tz: string,
   localTime: string,
-  log: DoseLog | undefined,
 ): number {
-  if (log?.status === "rescheduled" && log.rescheduledTo) {
-    return deviceInstant(dateStr, log.rescheduledTo);
-  }
   try {
     const instant = zonedWallClockToInstant(dateStr, schedule.time, schedule.anchorTimezone || tz);
     if (instant !== null) return instant;
@@ -170,6 +180,8 @@ function slotDueAt(
   }
   return deviceInstant(dateStr, localTime);
 }
+
+export { effectiveRemindAt };
 
 // ---------------------------------------------------------------------------
 // Main function
@@ -253,7 +265,8 @@ export async function getDailyDoseSchedule(
     const scheduleById = new Map(allSchedules.map((s) => [s.id, s]));
     const phaseById = new Map(allPhases.map((p) => [p.id, p]));
     for (const [scheduleId, log] of logMap) {
-      if (shown.has(scheduleId) || (log.status !== "taken" && log.status !== "skipped")) continue;
+      // A rescheduled dose stays too: it can still wait in "From earlier days".
+      if (shown.has(scheduleId) || log.status === "pending") continue;
       const schedule = scheduleById.get(scheduleId);
       const phase = schedule && phaseById.get(schedule.phaseId);
       if (!schedule || !phase) continue;
@@ -292,10 +305,16 @@ export async function getDailyDoseSchedule(
 
     const existingLog = logMap.get(schedule.id);
 
-    const status = deriveStatus(existingLog, dateStr, todayStr);
     // Wall-clock `time` in the anchor zone, resolved with this date's offset,
     // so the slot does not drift across DST (scheduleTimeUTC is a stale cache).
     const localTime = resolveScheduleLocalTime(schedule, dateStr, tz);
+    const scheduledAt = slotScheduledAt(schedule, dateStr, tz, localTime);
+    const remindAt = effectiveRemindAt(existingLog, scheduledAt, todayStr, tz);
+    const dueAt = dueInstant(
+      remindAt !== undefined ? { status: "rescheduled", remindAt } : undefined,
+      scheduledAt,
+    );
+    const status = deriveStatus(existingLog, dateStr, todayStr, remindAt);
     const dosageMg = schedule.dosage;
 
     const inventory = inventoryByPrescription.get(prescription.id);
@@ -339,9 +358,11 @@ export async function getDailyDoseSchedule(
       scheduleId: schedule.id,
       scheduledDate: dateStr,
       scheduleTimeUTC: schedule.scheduleTimeUTC,
-      // A rescheduled dose sits at its new time.
-      localTime: existingLog?.rescheduledTo ?? localTime,
-      dueAt: slotDueAt(schedule, dateStr, tz, localTime, existingLog),
+      // A rescheduled dose stays under its original time.
+      localTime,
+      scheduledAt,
+      ...(remindAt !== undefined && { remindAt }),
+      dueAt,
       dosageMg: shownDose,
       unit: snapshot?.doseUnit ?? phase.unit,
       status,
@@ -359,6 +380,50 @@ export async function getDailyDoseSchedule(
   slots.sort((a, b) => a.localTime.localeCompare(b.localTime));
 
   return slots;
+}
+
+// ---------------------------------------------------------------------------
+// "From earlier days"
+// ---------------------------------------------------------------------------
+
+/**
+ * Doses of earlier days that are rescheduled into `dateStr` ("From earlier
+ * days" on Today). Each is the dose of its own day (same log, same key), so
+ * an action on it writes that log. A 22:00 dose moved to 00:30 shows here
+ * after midnight; a dose moved two days ahead shows on that day.
+ */
+export async function getCarriedOverDoses(
+  dateStr: string,
+  timezone?: string,
+): Promise<DoseSlot[]> {
+  const logs = (await db.doseLogs.where("status").equals("rescheduled").toArray()).filter(
+    (log) =>
+      isLive(log) &&
+      log.kind !== "prn" &&
+      !!log.scheduleId &&
+      log.scheduledDate < dateStr &&
+      log.remindAt != null &&
+      toLocalDateKey(log.remindAt) === dateStr,
+  );
+  if (logs.length === 0) return [];
+  const byDate = new Map<string, Set<string>>();
+  for (const log of logs) {
+    const ids = byDate.get(log.scheduledDate) ?? new Set<string>();
+    ids.add(log.scheduleId!);
+    byDate.set(log.scheduledDate, ids);
+  }
+  const out: DoseSlot[] = [];
+  for (const [date, ids] of byDate) {
+    const slots = await getDailyDoseSchedule(date, timezone);
+    // The day's own log is the one shown (selectSlotLog); it must still be
+    // the rescheduled one.
+    out.push(
+      ...slots.filter(
+        (s) => ids.has(s.scheduleId) && s.existingLog?.status === "rescheduled" && s.remindAt !== undefined,
+      ),
+    );
+  }
+  return out.sort((a, b) => a.dueAt - b.dueAt || a.scheduledAt - b.scheduledAt);
 }
 
 // ---------------------------------------------------------------------------

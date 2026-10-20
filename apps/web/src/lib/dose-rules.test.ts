@@ -3,7 +3,11 @@ import {
   LATE_WINDOW_ALWAYS,
   LATE_WINDOW_NEVER,
   bulkDoseTargets,
+  dueInstant,
+  isRescheduleWaiting,
   needsTakenTimePrompt,
+  reopenedStatus,
+  rescheduleWarnings,
   reminderRepeatCount,
   resolveLiveDoseStatus,
   slotActions,
@@ -93,7 +97,7 @@ describe("slotActions: the button table of section 4.4", () => {
 
   it("all open, today", () => {
     expect(slotActions(s("pending", "missed"), "today")).toEqual({
-      skipAll: true, unskipAll: false, takeAll: true, untakeAll: false, reschedule: false,
+      skipAll: true, unskipAll: false, takeAll: true, untakeAll: false, reschedule: true,
     });
   });
   it("some taken, some open: Untake all is a text button above the bar", () => {
@@ -116,10 +120,63 @@ describe("slotActions: the button table of section 4.4", () => {
       unskipAll: true, untakeAll: "primary", takeAll: false, skipAll: false,
     });
   });
-  it("a future day has no take or skip, and Reschedule waits for PR 2", () => {
+  it("a future day has only Reschedule", () => {
     expect(slotActions(s("pending", "pending"), "future")).toEqual({
-      skipAll: false, unskipAll: false, takeAll: false, untakeAll: false, reschedule: false,
+      skipAll: false, unskipAll: false, takeAll: false, untakeAll: false, reschedule: true,
     });
-    expect(slotActions(s("pending"), "future", { allowReschedule: true }).reschedule).toBe(true);
+  });
+  it("Reschedule shows only while a dose is open", () => {
+    expect(slotActions(s("taken", "pending"), "today").reschedule).toBe(true);
+    expect(slotActions(s("taken", "skipped"), "today").reschedule).toBe(false);
+  });
+});
+
+describe("rescheduling rules", () => {
+  it("dueInstant: remindAt counts only while the dose is rescheduled", () => {
+    expect(dueInstant({ status: "rescheduled", remindAt: at(10, 0) }, DUE)).toBe(at(10, 0));
+    expect(dueInstant({ status: "taken", remindAt: at(10, 0) }, DUE)).toBe(DUE);
+    expect(dueInstant({ status: "pending", remindAt: at(10, 0) }, DUE)).toBe(DUE);
+    expect(dueInstant({ status: "rescheduled" }, DUE)).toBe(DUE);
+    expect(dueInstant(undefined, DUE)).toBe(DUE);
+  });
+
+  it("a dose rescheduled to 10:00 with no action is missed after 10:30, not after 09:00", () => {
+    const due = dueInstant({ status: "rescheduled", remindAt: at(10, 0) }, DUE);
+    expect(resolveLiveDoseStatus("rescheduled", due, at(9, 1), 30)).toBe("pending");
+    expect(resolveLiveDoseStatus("rescheduled", due, at(10, 30), 30)).toBe("pending");
+    expect(resolveLiveDoseStatus("rescheduled", due, at(10, 31), 30)).toBe("missed");
+  });
+
+  it("reopenedStatus: rescheduled while remindAt is ahead, else pending", () => {
+    expect(reopenedStatus(at(10, 0), at(9, 0))).toBe("rescheduled");
+    expect(reopenedStatus(at(10, 0), at(10, 0))).toBe("pending");
+    expect(reopenedStatus(undefined, at(9, 0))).toBe("pending");
+  });
+
+  it("no time limit: now + 1 min, now - 1 hour (warning) and original + 3 days all save", () => {
+    const now = at(9, 0);
+    expect(rescheduleWarnings(now + 60_000, now)).toEqual([]);
+    expect(rescheduleWarnings(now - 3_600_000, now)).toEqual([{ kind: "past" }]);
+    expect(rescheduleWarnings(at(8, 30, 3), now)).toEqual([]);
+  });
+
+  it("warns at or after the next dose of the same med", () => {
+    const now = at(9, 0);
+    expect(rescheduleWarnings(at(20, 30), now, at(20, 30))).toEqual([
+      { kind: "after-next-dose", nextDoseAt: at(20, 30) },
+    ]);
+    expect(rescheduleWarnings(at(20, 29), now, at(20, 30))).toEqual([]);
+  });
+
+  it("isRescheduleWaiting: until the period after remindAt ends", () => {
+    expect(isRescheduleWaiting("rescheduled", at(0, 30, 1), at(0, 40, 1))).toBe(true);
+    expect(isRescheduleWaiting("rescheduled", at(0, 30, 1), at(1, 1, 1))).toBe(false);
+    expect(isRescheduleWaiting("rescheduled", at(9, 0, 2), at(12, 0))).toBe(true);
+    expect(isRescheduleWaiting("pending", at(0, 30, 1), at(0, 40, 1))).toBe(false);
+  });
+
+  it("bulk reschedule targets only the open doses", () => {
+    const doses = [{ status: "taken" }, { status: "skipped" }, { status: "pending" }, { status: "missed" }];
+    expect(bulkDoseTargets(doses, "reschedule").map((d) => d.status)).toEqual(["pending", "missed"]);
   });
 });

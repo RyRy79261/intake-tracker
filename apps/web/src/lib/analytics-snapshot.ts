@@ -21,6 +21,7 @@ import { db, type DoseLog, type PhaseSchedule } from "@/lib/db";
 import { getActivePrescriptions } from "@/lib/prescription-service";
 import { toLocalDateKey } from "@/lib/date-utils";
 import { resolveDoseStatus } from "@/lib/dose-status";
+import { isRescheduleWaiting } from "@intake/core/dose-rules";
 import { isLive } from "@intake/core/lifecycle";
 import { selectEffectivePhase } from "@intake/core/effective-phase";
 import type { DataPoint, TimeRange, TrendDirection } from "@intake/types/analytics";
@@ -149,12 +150,25 @@ function scheduledAdherence(
   now: number,
 ): { dosesTaken: number; dosesDue: number; dosesSkipped: number; dosesMissed: number } {
   // Per date, the best status logged for each schedule slot.
-  const statusByDate = new Map<string, Map<string, string>>();
+  // A rescheduled dose still waiting for its new time ("From earlier days")
+  // is kept too: it is not missed yet.
+  const statusByDate = new Map<string, Map<string, { status: string; remindAt?: number }>>();
+  const rank = (status: string | undefined) =>
+    status === "taken" ? 3 : status === "skipped" ? 2 : status === "rescheduled" ? 1 : 0;
   for (const log of logs) {
-    if (log.kind === "prn" || (log.status !== "taken" && log.status !== "skipped")) continue;
-    if (log.phaseId !== phaseId || !log.scheduleId) continue;
-    const bySlot = statusByDate.get(log.scheduledDate) ?? new Map<string, string>();
-    if (bySlot.get(log.scheduleId) !== "taken") bySlot.set(log.scheduleId, log.status);
+    if (log.kind === "prn" || log.phaseId !== phaseId || !log.scheduleId) continue;
+    const kept =
+      log.status === "taken" ||
+      log.status === "skipped" ||
+      isRescheduleWaiting(log.status, log.remindAt, now);
+    if (!kept) continue;
+    const bySlot = statusByDate.get(log.scheduledDate) ?? new Map();
+    if (rank(log.status) > rank(bySlot.get(log.scheduleId)?.status)) {
+      bySlot.set(log.scheduleId, {
+        status: log.status,
+        ...(log.remindAt !== undefined && { remindAt: log.remindAt }),
+      });
+    }
     statusByDate.set(log.scheduledDate, bySlot);
   }
 
@@ -181,7 +195,10 @@ function scheduledAdherence(
     );
     const logged = statusByDate.get(dateKey);
     for (const s of due) {
-      const status = resolveDoseStatus(logged?.get(s.id), dateKey, todayKey);
+      const log = logged?.get(s.id);
+      const status = resolveDoseStatus(log?.status, dateKey, todayKey, { remindAt: log?.remindAt, now });
+      // Still waiting for its new time: neither due nor missed yet.
+      if (status === "pending") continue;
       dosesDue += 1;
       if (status === "taken") dosesTaken += 1;
       else if (status === "skipped") dosesSkipped += 1;

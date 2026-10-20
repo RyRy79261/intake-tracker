@@ -33,3 +33,16 @@ describe("resolveDoseStatus", () => {
     expect(resolveDoseStatus(undefined, "2026-09-27", TODAY)).toBe("pending");
   });
 });
+
+describe("resolveDoseStatus: a dose carried over from an earlier day", () => {
+  const remindAt = Date.UTC(2026, 9, 20, 0, 30);
+  it("is pending until the period after remindAt ends, not missed at midnight", () => {
+    const ctx = (now: number) => ({ remindAt, now });
+    expect(resolveDoseStatus("rescheduled", "2026-10-19", "2026-10-20", ctx(remindAt + 10 * 60_000))).toBe("pending");
+    expect(resolveDoseStatus("rescheduled", "2026-10-19", "2026-10-20", ctx(remindAt + 31 * 60_000))).toBe("missed");
+  });
+  it("only for a rescheduled log", () => {
+    expect(resolveDoseStatus("pending", "2026-10-19", "2026-10-20", { remindAt, now: remindAt })).toBe("missed");
+    expect(resolveDoseStatus(undefined, "2026-10-19", "2026-10-20", { remindAt, now: remindAt })).toBe("missed");
+  });
+});

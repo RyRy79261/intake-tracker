@@ -276,6 +276,63 @@ describe("local-notifications", () => {
       ]);
     });
 
+    it("a rescheduled dose reminds at remindAt and every interval through the period (10:00, 10:10, 10:20, 10:30)", async () => {
+      useSettingsStore.setState({ reminderFollowUpInterval: 10, reminderPeriodMinutes: 30 });
+      const { rx, phase, schedule } = await seedRegimen({ daysOfWeek: [1] });
+      // Monday 08:00 Berlin moved to 10:00 Berlin (08:00 UTC).
+      await db.doseLogs.add(
+        makeDoseLog(rx.id, phase.id, schedule.id, {
+          scheduledDate: "2026-09-28",
+          status: "rescheduled",
+          remindAt: Date.UTC(2026, 8, 28, 8, 0),
+        }),
+      );
+
+      await sync();
+
+      const monday = scheduled()
+        .filter((n) => n.schedule.at.toISOString().startsWith("2026-09-28"))
+        .map((n) => n.schedule.at.toISOString());
+      expect(monday).toEqual([
+        "2026-09-28T08:00:00.000Z",
+        "2026-09-28T08:10:00.000Z",
+        "2026-09-28T08:20:00.000Z",
+        "2026-09-28T08:30:00.000Z",
+      ]);
+    });
+
+    it("a dose rescheduled from an earlier day into the window reminds at its new time", async () => {
+      const { rx, phase, schedule } = await seedRegimen({ daysOfWeek: [0] });
+      // Sunday's 08:00 dose moved to Monday 09:00 Berlin (07:00 UTC).
+      await db.doseLogs.add(
+        makeDoseLog(rx.id, phase.id, schedule.id, {
+          scheduledDate: "2026-09-27",
+          status: "rescheduled",
+          remindAt: Date.UTC(2026, 8, 28, 7, 0),
+        }),
+      );
+
+      await sync();
+
+      const times = scheduled().map((n) => n.schedule.at.toISOString());
+      expect(times[0]).toBe("2026-09-28T07:00:00.000Z");
+    });
+
+    it("a rescheduled dose that was then taken gets no reminder", async () => {
+      const { rx, phase, schedule } = await seedRegimen({ daysOfWeek: [1] });
+      await db.doseLogs.add(
+        makeDoseLog(rx.id, phase.id, schedule.id, {
+          scheduledDate: "2026-09-28",
+          status: "taken",
+          remindAt: Date.UTC(2026, 8, 28, 8, 0),
+        }),
+      );
+
+      await sync();
+
+      expect(scheduled().map((n) => n.schedule.at.toISOString().slice(0, 10))).not.toContain("2026-09-28");
+    });
+
     it("limits follow-ups to the follow-up horizon but keeps every main reminder", async () => {
       useSettingsStore.setState({ reminderFollowUpInterval: 10, reminderPeriodMinutes: 20 });
       await seedRegimen({ daysOfWeek: [0, 1, 2, 3, 4, 5, 6] });

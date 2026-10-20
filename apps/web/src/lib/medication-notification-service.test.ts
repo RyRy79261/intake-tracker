@@ -166,3 +166,31 @@ describe("checkRefillAlerts", () => {
     );
   });
 });
+
+describe("checkDoseReminders after a reschedule", () => {
+  beforeEach(() => {
+    mockShowNotification.mockReset().mockResolvedValue(true);
+  });
+
+  it("is quiet at the old time and reminds at the new time", async () => {
+    const { rx, phase, schedule } = await seed();
+    // 08:00 Berlin moved to 10:00 Berlin (08:00 UTC).
+    await db.doseLogs.add(
+      makeDoseLog(rx.id, phase.id, schedule.id, {
+        scheduledDate: "2026-09-28",
+        status: "rescheduled",
+        remindAt: Date.UTC(2026, 8, 28, 8, 0),
+      }),
+    );
+
+    await checkDoseReminders(NOW);
+    expect(mockShowNotification).not.toHaveBeenCalled();
+
+    await checkDoseReminders(Date.UTC(2026, 8, 28, 8, 2));
+    expect(mockShowNotification).toHaveBeenCalledWith("Time for your 10:00 medications", {
+      body: "Metoprolol 50mg",
+      tag: "dose-10:00",
+      requireInteraction: true,
+    });
+  });
+});

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Drawer, DrawerContent, DrawerDescription, DrawerTitle } from "@intake/ui/drawer";
 import { Button } from "@intake/ui/button";
-import { Check, RotateCcw, X } from "lucide-react";
+import { Check, Clock, RotateCcw, X } from "lucide-react";
 import { DoseRow } from "@/components/medications/dose-row";
 import { needsTakenTimePrompt, slotActions, isOpenDoseStatus, type SlotDay } from "@intake/core/dose-rules";
 import { formatDoseDate, formatDoseTime, medsCount } from "@/lib/medication-ui-utils";
@@ -30,8 +30,8 @@ const RESULT_MS = 1000;
 
 /**
  * "Mark all doses" for one dose time: the slot's doses and the bulk
- * actions Skip all, Take all and Untake all (Unskip all in place of Skip all
- * once every dose is marked). A bulk action changes only the doses with no
+ * actions Skip all, Take all, Untake all and Reschedule (Unskip all in place
+ * of Skip all once every dose is marked; only Reschedule on a future day). A bulk action changes only the doses with no
  * user action yet; a taken or skipped dose is changed from its own dialog.
  * After an action the result shows for a second, then the modal closes and
  * the Today screen offers Undo.
@@ -175,6 +175,12 @@ export function MarkAllDosesSheet({
               >
                 <RotateCcw aria-hidden="true" />
                 Untake all
+              </Button>
+            )}
+            {buttons.reschedule && (
+              <Button variant="outline" disabled={busy} onClick={() => run(() => actions.reschedule(slots))}>
+                <Clock aria-hidden="true" />
+                Reschedule
               </Button>
             )}
           </div>

@@ -1220,4 +1220,34 @@ describe("MCP query fns — dose status matches the app (real Postgres)", () => 
       ["2026-09-22", "taken", "taken"],
     ]);
   });
+
+  it("listRecentDoses keeps a dose rescheduled from an earlier day pending until its new time has passed", async () => {
+    const refs = await seedMedChain(ctx.testUserId);
+    await ctx.db.insert(schema.doseLogs).values([
+      // Waiting: its new reminder is 10 minutes after now.
+      doseLogFixture(ctx.testUserId, refs, {
+        scheduledDate: "2026-09-24",
+        status: "rescheduled",
+        remindAt: NOW + 10 * 60_000,
+        actionTimestamp: 3_000,
+      }),
+      // Its new time ended more than 30 minutes ago.
+      doseLogFixture(ctx.testUserId, refs, {
+        scheduledDate: "2026-09-23",
+        status: "rescheduled",
+        remindAt: NOW - 31 * 60_000,
+        actionTimestamp: 2_000,
+      }),
+    ]);
+
+    const { doses } = await queries.listRecentDoses(ctx.testUserId, 50, {
+      timezone: "Europe/Berlin",
+      now: NOW,
+    });
+
+    expect(doses.map((d) => [d.scheduledDate, d.status, d.remindAt])).toEqual([
+      ["2026-09-24", "pending", NOW + 10 * 60_000],
+      ["2026-09-23", "missed", NOW - 31 * 60_000],
+    ]);
+  });
 });

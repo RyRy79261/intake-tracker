@@ -246,7 +246,8 @@ function doseRows(
   missed: DoseSlot[],
   medNames: Map<string, string>,
 ): Cell[][] {
-  const todayKey = toLocalDateKey();
+  const now = Date.now();
+  const todayKey = toLocalDateKey(now);
   const rows: { date: string; time: string; row: Cell[] }[] = doseLogs.map((l) => ({
     date: l.scheduledDate,
     time: l.scheduledTime,
@@ -256,7 +257,9 @@ function doseRows(
       l.prescriptionId
         ? (medNames.get(l.prescriptionId) ?? l.prescriptionId)
         : (l.medicineName ?? ""),
-      l.kind === "prn" ? l.status : resolveDoseStatus(l.status, l.scheduledDate, todayKey),
+      l.kind === "prn"
+        ? l.status
+        : resolveDoseStatus(l.status, l.scheduledDate, todayKey, { remindAt: l.remindAt, now }),
       l.kind ?? "scheduled",
       l.actionTimestamp != null ? new Date(l.actionTimestamp).toISOString() : undefined,
       l.doseAmount ?? l.doseMg,
@@ -265,6 +268,7 @@ function doseRows(
       l.pillStrength,
       l.skipReason,
       l.rescheduledTo,
+      l.remindAt != null ? new Date(l.remindAt).toISOString() : undefined,
       l.note,
     ],
   }));
@@ -435,6 +439,7 @@ function buildSections(
         "pill_strength",
         "skip_reason",
         "rescheduled_to",
+        "remind_at",
         "note",
       ],
       rows: doseRows(doseLogs, missedDoses, medNames),

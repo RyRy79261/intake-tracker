@@ -274,6 +274,27 @@ describe("recalculateScheduleTimezones", () => {
     expect(logsAfter[0]!.status).toBe("taken");
     expect(logsAfter[0]!.scheduledDate).toBe("2023-11-14");
   });
+
+  it("a pending reschedule keeps its absolute instant when the schedule moves zone", async () => {
+    const { schedule, rx, phase } = await seedSchedule({
+      anchorTimezone: "Africa/Johannesburg",
+      scheduleTimeUTC: 390,
+    });
+    const remindAt = 1700010000000;
+    await db.doseLogs.add(
+      makeDoseLog(rx.id, phase.id, schedule.id, {
+        scheduledDate: "2023-11-14",
+        status: "rescheduled",
+        remindAt,
+        timezone: "Africa/Johannesburg",
+      }),
+    );
+
+    await recalculateScheduleTimezones("Europe/Berlin");
+
+    const [log] = await db.doseLogs.toArray();
+    expect(log).toMatchObject({ status: "rescheduled", remindAt });
+  });
 });
 
 // ---------------------------------------------------------------------------
