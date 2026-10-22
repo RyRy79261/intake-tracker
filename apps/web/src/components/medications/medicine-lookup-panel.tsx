@@ -21,9 +21,12 @@ import {
   GROUP_LABELS,
   groupValue,
   groupWhy,
+  hasOwnLook,
+  lookText,
   normalizeLookupResult,
   OPTION_GROUPS,
   optionText,
+  pillLook,
   shapeValue,
   type LookupGroup,
   type LookupOption,
@@ -478,14 +481,20 @@ function LookupResultView({
     r.foodInstruction === "none"
       ? r.foodNote || FOOD_LABELS.none
       : FOOD_LABELS[r.foodInstruction] + (r.foodNote ? `. ${r.foodNote}` : "");
-  const shape = shapeValue(r);
-  const hex = colorHex(r);
+  const mainLook = pillLook(r, null);
+  const shape = shapeValue(mainLook);
+  const hex = colorHex(mainLook);
+  // The picked strength's look, for the single-group line.
+  const pickedLook = pillLook(r, option);
+  const pickedShape = shapeValue(pickedLook);
+  const pickedHex = colorHex(pickedLook);
+  const strengthLooks = r.options.filter(hasOwnLook);
 
   const apply = () => {
     const picked = rows.filter((x) => x.on).map((x) => x.g);
     if (!picked.length) return;
     onApply({ groups: picked, result: r, option });
-    set({ applied: picked.map((g) => appliedLabel(g, r)), open: false });
+    set({ applied: picked.map((g) => appliedLabel(g, r, option)), open: false });
   };
 
   return (
@@ -560,6 +569,25 @@ function LookupResultView({
                       {r.pillDescription}
                     </span>
                   </span>
+                </dd>
+              </>
+            )}
+            {strengthLooks.length > 0 && (
+              <>
+                <dt>Each strength</dt>
+                <dd>
+                  {strengthLooks.map((o) => {
+                    const look = pillLook(r, o);
+                    const s = shapeValue(look);
+                    return (
+                      <span key={o.label} className="flex items-center gap-2">
+                        {s && <PillIcon shape={s} color={colorHex(look) ?? "#9E9E9E"} size={18} />}
+                        <span>
+                          <b className="font-mono font-semibold">{o.label}</b> {lookText(look)}
+                        </span>
+                      </span>
+                    );
+                  })}
                 </dd>
               </>
             )}
@@ -661,7 +689,9 @@ function LookupResultView({
           <b>{GROUP_LABELS[rows[0].g]}:</b>
           {rows[0].v ? (
             <>
-              {rows[0].g === "appearance" && shape && <PillIcon shape={shape} color={hex ?? "#9E9E9E"} size={22} />}
+              {rows[0].g === "appearance" && pickedShape && (
+                <PillIcon shape={pickedShape} color={pickedHex ?? "#9E9E9E"} size={22} />
+              )}
               <span>{rows[0].v}</span>
             </>
           ) : (

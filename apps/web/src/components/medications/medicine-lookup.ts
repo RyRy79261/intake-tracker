@@ -47,6 +47,17 @@ export interface LookupOption {
   compounds: CompoundStrength[];
   /** Unit of the compound strengths. */
   unit: string;
+  /** What the pill at this strength looks like; "" when not found. */
+  pillColor: string;
+  pillShape: string;
+  markings: string;
+}
+
+/** A pill's look: colour and shape as the AI wrote them, and its markings. */
+export interface PillLook {
+  color: string;
+  shape: string;
+  markings: string;
 }
 
 /** A search result with every list defaulted and the brand resolved. */
@@ -111,6 +122,9 @@ export function normalizeLookupResult(raw: Partial<MedicineSearchResult>, query:
       label: o.label,
       compounds: o.compounds.map((c) => ({ name: c.name, strength: c.strength })),
       unit: "mg",
+      pillColor: o.pillColor?.trim() ?? "",
+      pillShape: o.pillShape?.trim() ?? "",
+      markings: o.markings?.trim() ?? "",
     }));
   // Plain strengths only describe a single drug: a combination with no
   // per-compound breakdown gets no options (its compounds are named only).
@@ -121,7 +135,16 @@ export function normalizeLookupResult(raw: Partial<MedicineSearchResult>, query:
           const parsed = parseStrength(s);
           if (!parsed) return [];
           const name = r.genericName || r.activeIngredients[0] || "";
-          return [{ label: s, compounds: [{ name, strength: parsed.value }], unit: parsed.unit }];
+          return [
+            {
+              label: s,
+              compounds: [{ name, strength: parsed.value }],
+              unit: parsed.unit,
+              pillColor: "",
+              pillShape: "",
+              markings: "",
+            },
+          ];
         });
 
   return { ...r, query, none, brand, options };
@@ -159,15 +182,66 @@ export function plainIndication(r: LookupResult): string {
   return (r.commonIndications[0] ?? "").replace(/\s*\([^)]*\)/g, "").trim();
 }
 
-/** A pill colour the form can show, as its hex. */
-export function colorHex(r: LookupResult): string | undefined {
-  return r.pillColor ? COLOR_NAME_MAP[r.pillColor.toLowerCase()] : undefined;
+/** Whether a strength has a look of its own in the result. */
+export function hasOwnLook(o: LookupOption | null): o is LookupOption {
+  return !!o && !!(o.pillColor || o.pillShape || o.markings);
 }
 
-/** A pill shape the form can show. */
-export function shapeValue(r: LookupResult): PillShape | undefined {
-  const s = r.pillShape.toLowerCase();
-  return PILL_SHAPES.some((p) => p.value === s) ? (s as PillShape) : undefined;
+const NO_LOOK: PillLook = { color: "", shape: "", markings: "" };
+
+/**
+ * The look of the picked strength. The main look (the most common
+ * strength) stands in only when nothing is picked or the result has no
+ * look per strength (an older reply): when other strengths have a look,
+ * a picked strength without one has no look, not another strength's.
+ */
+export function pillLook(r: LookupResult, o: LookupOption | null): PillLook {
+  if (hasOwnLook(o)) return { color: o.pillColor, shape: o.pillShape, markings: o.markings };
+  if (o && r.options.some(hasOwnLook)) return NO_LOOK;
+  return { color: r.pillColor, shape: r.pillShape, markings: r.visualIdentification ?? "" };
+}
+
+/** "White round, marked C 6.25", or "" when there is no colour or shape. */
+export function lookText(look: PillLook): string {
+  if (!look.shape && !look.color) return "";
+  const mark = look.markings ? `, marked ${look.markings}` : "";
+  return `${cap(look.color)} ${look.shape}`.trim() + mark;
+}
+
+/** The words of a free-text look, last first ("light brown" → brown, light). */
+const lookWords = (text: string) =>
+  text.toLowerCase().split(/[^a-z]+/).filter(Boolean).reverse();
+
+/**
+ * A pill colour the form can show, as its hex. The AI writes colours the
+ * way the leaflet does ("Light brown", "Yellowish beige"), so the last word
+ * the form knows wins: the main colour comes last in English.
+ */
+export function colorHex(look: PillLook): string | undefined {
+  for (const w of lookWords(look.color)) {
+    const hex = COLOR_NAME_MAP[w] ?? COLOR_NAME_MAP[w.replace(/ish$/, "")];
+    if (hex) return hex;
+  }
+  return undefined;
+}
+
+/** Leaflet shape words with no shape of their own in the form. */
+const SHAPE_SYNONYMS: Record<string, PillShape> = {
+  oblong: "capsule",
+  elongated: "capsule",
+  circular: "round",
+  rhombus: "diamond",
+  rectangular: "tablet",
+  square: "tablet",
+};
+
+/** A pill shape the form can show ("Oblong (capsule-shaped)" → capsule). */
+export function shapeValue(look: PillLook): PillShape | undefined {
+  for (const w of lookWords(look.shape).reverse()) {
+    if (PILL_SHAPES.some((p) => p.value === w)) return w as PillShape;
+    if (SHAPE_SYNONYMS[w]) return SHAPE_SYNONYMS[w];
+  }
+  return undefined;
 }
 
 /** The text a group would fill in, or "" when the result has nothing for it. */
@@ -183,11 +257,8 @@ export function groupValue(g: LookupGroup, r: LookupResult, o: LookupOption | nu
       return o ? o.label + (o.compounds.length > 1 ? ` = ${optionText(o)}` : "") : "";
     case "compounds":
       return o && o.compounds.length > 1 ? optionText(o) : "";
-    case "appearance": {
-      if (!r.pillShape && !r.pillColor) return "";
-      const mark = r.visualIdentification ? `, marked ${r.visualIdentification}` : "";
-      return `${cap(r.pillColor)} ${r.pillShape}`.trim() + mark;
-    }
+    case "appearance":
+      return lookText(pillLook(r, o));
     case "indication":
       return plainIndication(r);
     case "food":
@@ -206,12 +277,12 @@ export function groupWhy(g: LookupGroup, r: LookupResult): string {
 }
 
 /** What was filled in, for the "Filled in from AI lookup" summary. */
-export function appliedLabel(g: LookupGroup, r: LookupResult): string {
+export function appliedLabel(g: LookupGroup, r: LookupResult, o: LookupOption | null = null): string {
   switch (g) {
     case "names":
       return "name and brand";
     case "appearance":
-      return r.visualIdentification ? "shape, colour and markings" : "shape and colour";
+      return pillLook(r, o).markings ? "shape, colour and markings" : "shape and colour";
     default:
       return GROUP_LABELS[g].toLowerCase();
   }
@@ -232,13 +303,15 @@ function singleStrength(o: LookupOption): string {
   return parseStrength(o.label) ? o.label : `${nf(optionSum(o))} ${o.unit}`;
 }
 
-function appearancePatch(r: LookupResult): Partial<AddMedicationFormState> {
+function appearancePatch(r: LookupResult, o: LookupOption | null): Partial<AddMedicationFormState> {
   const p: Partial<AddMedicationFormState> = {};
-  const hex = colorHex(r);
-  const shape = shapeValue(r);
+  const look = pillLook(r, o);
+  const hex = colorHex(look);
+  const shape = shapeValue(look);
   if (hex) p.pillColor = hex;
   if (shape) p.pillShape = shape;
-  if (r.visualIdentification) p.visualIdentification = r.visualIdentification;
+  // Always set: markings from an earlier apply (another strength) must not stay.
+  p.visualIdentification = look.markings;
   return p;
 }
 
@@ -288,7 +361,7 @@ export function applyToNewPrescription(
     p.dosageAmount = 1;
     p.customDosage = "";
   }
-  if (on("appearance")) Object.assign(p, appearancePatch(r));
+  if (on("appearance")) Object.assign(p, appearancePatch(r, o));
   if (on("indication")) p.indication = plainIndication(r);
   if (on("food")) {
     p.foodInstruction = r.foodInstruction;
@@ -323,7 +396,7 @@ export function applyToNewBrand(
       p.dosageStrength = o.compounds.length > 1 ? `${nf(optionSum(o))} ${o.unit}` : singleStrength(o);
     }
   }
-  if (on("appearance")) Object.assign(p, appearancePatch(r));
+  if (on("appearance")) Object.assign(p, appearancePatch(r, o));
   return p;
 }
 

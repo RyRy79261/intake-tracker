@@ -115,7 +115,7 @@ describe("AiInsightsConsentToggle mounted twice", () => {
         <div data-testid="settings-copy">
           <AiInsightsConsentToggle
             field="shareConditionsWithAI"
-            label="Share conditions with AI insights"
+            label="Share conditions with AI"
             noun="conditions"
           />
         </div>
@@ -130,10 +130,10 @@ describe("AiInsightsConsentToggle mounted twice", () => {
     // and that label points at it rather than at the first copy's switch.
     const settingsCopy = screen.getByTestId("settings-copy");
     const settingsSwitch = within(settingsCopy).getByRole("switch", {
-      name: "Share conditions with AI insights",
+      name: "Share conditions with AI",
     });
     const label = within(settingsCopy).getByText(
-      "Share conditions with AI insights",
+      "Share conditions with AI",
     );
     expect(label).toHaveAttribute("for", settingsSwitch.id);
     expect(document.getElementById(settingsSwitch.id)).toBe(settingsSwitch);

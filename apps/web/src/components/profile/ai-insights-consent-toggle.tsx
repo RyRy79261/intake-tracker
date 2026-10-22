@@ -29,6 +29,8 @@ interface Props {
   label: string;
   /** Short noun for the data being shared, e.g. "conditions", "medications". */
   noun: string;
+  /** What the AI uses the data for, after "used in". Defaults to AI insights. */
+  uses?: string;
 }
 
 /** Build a typed single-field update without an unsafe computed-key cast. */
@@ -42,12 +44,12 @@ function fieldUpdate(field: ToggleField, value: boolean): ProfileUpdates {
  * Disclaimer body — shared between the first-time consent prompt and the
  * informational re-open. Rendered as the dialog's accessible description.
  */
-function DisclaimerBody({ noun }: { noun: string }) {
+function DisclaimerBody({ noun, uses }: { noun: string; uses: string }) {
   return (
     <DialogDescription className="space-y-2 pt-1 text-left">
       <span className="block">
-        Turning this on shares your {noun} with the AI when it generates
-        insights. Enabling it is your consent to include that data.
+        Turning this on shares your {noun} with the AI, used in {uses}.
+        Enabling it is your consent to include that data.
       </span>
       <span className="block">
         AI insights are only an attempt to guess what your data might mean —
@@ -71,7 +73,7 @@ function DisclaimerBody({ noun }: { noun: string }) {
  * and covers every sharing toggle thereafter. Rendered on the profile page and
  * in Settings → Privacy & Security.
  */
-export function AiInsightsConsentToggle({ field, label, noun }: Props) {
+export function AiInsightsConsentToggle({ field, label, noun, uses = "AI insights" }: Props) {
   const profile = useUserProfile();
   const { mutate: save } = useSaveProfile();
   const [dialog, setDialog] = useState<null | "consent" | "info">(null);
@@ -120,7 +122,7 @@ export function AiInsightsConsentToggle({ field, label, noun }: Props) {
           </div>
           <p className="text-[0.8125rem] text-muted-foreground">
             {enabled
-              ? `Your ${noun} are included when generating AI insights.`
+              ? `Your ${noun} are used in ${uses}.`
               : // Not "stay on this device": the profile backs up and syncs.
                 `Your ${noun} are not sent to the AI.`}
           </p>
@@ -150,7 +152,7 @@ export function AiInsightsConsentToggle({ field, label, noun }: Props) {
                 ? `Share ${noun} with AI?`
                 : "About AI insights"}
             </DialogTitle>
-            <DisclaimerBody noun={noun} />
+            <DisclaimerBody noun={noun} uses={uses} />
           </DialogHeader>
           {dialog === "consent" ? (
             <DialogFooter className="gap-2">

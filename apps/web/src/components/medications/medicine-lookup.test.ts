@@ -7,7 +7,10 @@ import {
   defaultOption,
   groupValue,
   groupWhy,
+  colorHex,
   normalizeLookupResult,
+  pillLook,
+  shapeValue,
 } from "@/components/medications/medicine-lookup";
 import type { MedicineSearchResult } from "@/hooks/use-medicine-search";
 
@@ -58,7 +61,14 @@ describe("normalizeLookupResult", () => {
   it("builds single-drug options from plain strengths, keeping the unit", () => {
     const r = normalizeLookupResult({ ...BISOPROLOL, dosageStrengths: ["100 mcg"] }, "Bisoprolol");
     expect(r.options).toEqual([
-      { label: "100 mcg", compounds: [{ name: "Bisoprolol", strength: 100 }], unit: "mcg" },
+      {
+        label: "100 mcg",
+        compounds: [{ name: "Bisoprolol", strength: 100 }],
+        unit: "mcg",
+        pillColor: "",
+        pillShape: "",
+        markings: "",
+      },
     ]);
   });
 
@@ -221,5 +231,82 @@ describe("apply mapping per host", () => {
       indication: "Heart failure",
     });
     expect(applyToDetails(["indication"], r)).toEqual({ indication: "Heart failure" });
+  });
+});
+
+describe("each strength's look", () => {
+  // Carvedilol: the strengths look different from each other.
+  const CARVEDILOL: Partial<MedicineSearchResult> = {
+    brandNames: ["Dilatrend"],
+    genericName: "Carvedilol",
+    activeIngredients: ["Carvedilol"],
+    strengthOptions: [
+      { label: "6.25 mg", pillColor: "yellow", pillShape: "oval", markings: "BM F1", compounds: [{ name: "Carvedilol", strength: 6.25 }] },
+      { label: "25 mg", pillColor: "white", pillShape: "round", markings: "", compounds: [{ name: "Carvedilol", strength: 25 }] },
+      { label: "12.5 mg", compounds: [{ name: "Carvedilol", strength: 12.5 }] },
+    ],
+    pillColor: "white",
+    pillShape: "round",
+    visualIdentification: "BM F4",
+  };
+  const r = normalizeLookupResult(CARVEDILOL, "Dilatrend");
+
+  it("keeps each strength's colour, shape and markings", () => {
+    expect(r.options[0]).toMatchObject({ pillColor: "yellow", pillShape: "oval", markings: "BM F1" });
+    // An older reply without them gives blanks, not undefined.
+    expect(r.options[2]).toMatchObject({ pillColor: "", pillShape: "", markings: "" });
+  });
+
+  it("uses the picked strength's look, never another strength's", () => {
+    expect(pillLook(r, r.options[0]!)).toEqual({ color: "yellow", shape: "oval", markings: "BM F1" });
+    // 12.5 mg has no look of its own: the main look is another strength's.
+    expect(pillLook(r, r.options[2]!)).toEqual({ color: "", shape: "", markings: "" });
+    expect(groupValue("appearance", r, r.options[2]!)).toBe("");
+    // Nothing picked: the main look.
+    expect(pillLook(r, null)).toEqual({ color: "white", shape: "round", markings: "BM F4" });
+    expect(groupValue("appearance", r, r.options[0]!)).toBe("Yellow oval, marked BM F1");
+    expect(groupValue("appearance", r, r.options[1]!)).toBe("White round");
+  });
+
+  it("fills the form with the picked strength's look", () => {
+    const p = applyToNewPrescription(["appearance"], r, r.options[0]!);
+    expect(p).toMatchObject({ pillColor: "#FFC107", pillShape: "oval", visualIdentification: "BM F1" });
+    // The 25 mg has no markings: the form's markings are cleared, so none
+    // stay from the main look or an earlier apply.
+    const q = applyToNewBrand(["appearance"], r, r.options[1]!, { isCombination: false, compounds: [] });
+    expect(q).toMatchObject({ pillColor: "#FFFFFF", pillShape: "round", visualIdentification: "" });
+  });
+
+  it("keeps the main look when no strength has a look of its own", () => {
+    const old = normalizeLookupResult({ ...CARVEDILOL, strengthOptions: [
+      { label: "6.25 mg", compounds: [{ name: "Carvedilol", strength: 6.25 }] },
+    ] }, "Dilatrend");
+    expect(pillLook(old, old.options[0]!)).toEqual({ color: "white", shape: "round", markings: "BM F4" });
+  });
+
+  it("counts a strength with only markings as having a look", () => {
+    const marked = normalizeLookupResult({ ...CARVEDILOL, strengthOptions: [
+      { label: "6.25 mg", markings: "BM F1", compounds: [{ name: "Carvedilol", strength: 6.25 }] },
+    ] }, "Dilatrend");
+    expect(pillLook(marked, marked.options[0]!)).toEqual({ color: "", shape: "", markings: "BM F1" });
+  });
+});
+
+describe("leaflet colour and shape words", () => {
+  const look = (color: string, shape: string) => ({ color, shape, markings: "" });
+
+  it("maps a described colour to the closest one the form has", () => {
+    expect(colorHex(look("Light brown", ""))).toBe("#795548");
+    expect(colorHex(look("Yellowish beige", ""))).toBe("#795548");
+    expect(colorHex(look("Yellowish", ""))).toBe("#FFC107");
+    expect(colorHex(look("White", ""))).toBe("#FFFFFF");
+    expect(colorHex(look("Mauve", ""))).toBeUndefined();
+  });
+
+  it("maps a described shape to one the form has", () => {
+    expect(shapeValue(look("", "Oblong (capsule-shaped)"))).toBe("capsule");
+    expect(shapeValue(look("", "Round, biconvex"))).toBe("round");
+    expect(shapeValue(look("", "oval"))).toBe("oval");
+    expect(shapeValue(look("", "Heart-shaped"))).toBeUndefined();
   });
 });
