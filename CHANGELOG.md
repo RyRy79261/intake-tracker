@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.44.0](https://github.com/RyRy79261/intake-tracker/compare/v1.43.0...v1.44.0) (2026-10-20)
+
+
+### Features
+
+* **meds:** reschedule a dose or a slot to any time ([#448](https://github.com/RyRy79261/intake-tracker/issues/448)) ([dd431c9](https://github.com/RyRy79261/intake-tracker/commit/dd431c950b35560969ef4d5ea6c84787d289aa61))
+
 ## [1.43.0](https://github.com/RyRy79261/intake-tracker/compare/v1.42.0...v1.43.0) (2026-10-20)
 
 
