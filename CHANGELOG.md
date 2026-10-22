@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.45.0](https://github.com/RyRy79261/intake-tracker/compare/v1.44.0...v1.45.0) (2026-10-22)
+
+
+### Features
+
+* **meds:** "Apply from" schedule edits keep past days ([#450](https://github.com/RyRy79261/intake-tracker/issues/450)) ([8ed4581](https://github.com/RyRy79261/intake-tracker/commit/8ed4581a90f59248f0f896c6685d7266bfc00a3b))
+* **meds:** medicine lookup uses your conditions, shows each strength's look ([#452](https://github.com/RyRy79261/intake-tracker/issues/452)) ([581631a](https://github.com/RyRy79261/intake-tracker/commit/581631a3b15e631f2c02d54c835ff352a66e5ceb))
+
 ## [1.44.0](https://github.com/RyRy79261/intake-tracker/compare/v1.43.0...v1.44.0) (2026-10-20)
 
 
