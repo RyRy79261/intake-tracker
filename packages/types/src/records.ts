@@ -355,6 +355,18 @@ export interface PhaseSchedule {
   daysOfWeek: number[];
   enabled: boolean;
   unit?: string; // dosage unit for display, e.g. "mg"
+  /**
+   * First day the row applies ("YYYY-MM-DD", device-local date key, the same
+   * key as `DoseLog.scheduledDate`). Set by an "Apply from" edit. A row
+   * without it applies from the day it was created (`createdAt`).
+   */
+  effectiveFrom?: string;
+  /**
+   * First day the row no longer applies ("YYYY-MM-DD", exclusive). An
+   * "Apply from" edit closes the old row at the new row's `effectiveFrom`.
+   * A row without it applies until it is deleted (`deletedAt`).
+   */
+  effectiveTo?: string;
   createdAt: number;
   updatedAt: number;
   deletedAt: number | null;

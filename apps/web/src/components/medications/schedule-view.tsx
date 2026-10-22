@@ -55,6 +55,11 @@ export function ScheduleView({ selectedDate, onAddMed, onOpenInfo }: ScheduleVie
   const actions = useDoseActions();
   const [markAllTime, setMarkAllTime] = useState<string | null>(null);
   const [openDoseId, setOpenDoseId] = useState<string | null>(null);
+  // The open dose's medicine and day: an "Apply from" edit replaces its
+  // schedule row (new id), and the dialog follows the dose to the new row.
+  const [openDoseAnchor, setOpenDoseAnchor] = useState<{ prescriptionId: string; scheduledDate: string } | null>(
+    null,
+  );
 
   const groups = useMemo<TimeGroup[]>(() => {
     if (!slots) return [];
@@ -171,17 +176,39 @@ export function ScheduleView({ selectedDate, onAddMed, onOpenInfo }: ScheduleVie
     (slot: DoseSlot) => void actions.take([slot], { single: true, ask: true }),
     [actions],
   );
-  const handleOpenDose = useCallback((slot: DoseSlot) => setOpenDoseId(doseId(slot)), []);
+  const handleOpenDose = useCallback((slot: DoseSlot) => {
+    setOpenDoseId(doseId(slot));
+    setOpenDoseAnchor({ prescriptionId: slot.prescriptionId, scheduledDate: slot.scheduledDate });
+  }, []);
   const handleMarkAllOpenChange = useCallback((open: boolean) => {
     if (!open) setMarkAllTime(null);
   }, []);
   const handleDoseOpenChange = useCallback((open: boolean) => {
-    if (!open) setOpenDoseId(null);
+    if (!open) {
+      setOpenDoseId(null);
+      setOpenDoseAnchor(null);
+    }
   }, []);
 
   const markAllGroup = groups.find((g) => g.time === markAllTime);
-  const openDose =
+  const byId =
     slots?.find((s) => doseId(s) === openDoseId) ?? carried?.find((s) => doseId(s) === openDoseId) ?? null;
+  // The row was replaced: the medicine's only dose of that day is the same dose.
+  const sameDose =
+    !byId && openDoseId && openDoseAnchor
+      ? (slots ?? []).filter(
+          (s) => s.prescriptionId === openDoseAnchor.prescriptionId && s.scheduledDate === openDoseAnchor.scheduledDate,
+        )
+      : [];
+  const openDose = byId ?? (sameDose.length === 1 ? sameDose[0]! : null);
+  // A dose that is gone for good closes its dialog, so it does not reopen
+  // on its own if a row with its id comes back.
+  const doseGone = !!openDoseId && !!slots && !!carried && !openDose;
+  useEffect(() => {
+    if (!doseGone) return;
+    setOpenDoseId(null);
+    setOpenDoseAnchor(null);
+  }, [doseGone]);
   // A later day's dose rescheduled to today (or earlier) is due today: it
   // can be taken or skipped now, like the service allows.
   const movedIn = (s: DoseSlot) =>

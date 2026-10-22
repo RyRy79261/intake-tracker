@@ -16,6 +16,8 @@ import { resolveDoseStatus, type ResolvedDoseStatus } from "@/lib/dose-status";
 import { DEFAULT_REMINDER_PERIOD_MINUTES, dueInstant } from "@intake/core/dose-rules";
 import { isLive } from "@intake/core/lifecycle";
 import { selectEffectivePhase, selectEffectivePhases } from "@intake/core/effective-phase";
+import { scheduleInEffectOn } from "@intake/core/schedule-window";
+import { scheduleDoseUnit, scheduleStartKey } from "@/lib/medication-schedule-service";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -107,12 +109,21 @@ function phaseLiveOn(phase: MedicationPhase, dateStr: string): boolean {
 }
 
 /**
- * Whether a schedule applied on a date: added on or before it, and either
- * still live and enabled or removed after it. A removed schedule's `enabled`
- * says nothing about the days it ran (the v23 tombstone repair cleared it).
+ * Whether a schedule applies on a date of the current regimen (today or
+ * later): it has started, and an "Apply from" edit has not closed it.
+ */
+function scheduleAppliesOn(schedule: PhaseSchedule, dateStr: string): boolean {
+  return scheduleStartKey(schedule) <= dateStr && scheduleInEffectOn(schedule, dateStr);
+}
+
+/**
+ * Whether a schedule applied on a past date: started on or before it, not
+ * closed by an "Apply from" edit, and either still live and enabled or
+ * removed after it. A removed schedule's `enabled` says nothing about the
+ * days it ran (the v23 tombstone repair cleared it).
  */
 function scheduleLiveOn(schedule: PhaseSchedule, dateStr: string): boolean {
-  if (toLocalDateKey(schedule.createdAt) > dateStr) return false;
+  if (!scheduleAppliesOn(schedule, dateStr)) return false;
   if (isLive(schedule)) return schedule.enabled === true;
   return dateStr < toLocalDateKey(schedule.deletedAt!);
 }
@@ -228,8 +239,9 @@ export async function getDailyDoseSchedule(
     ? selectPhasesLiveOn(dateStr, allPhases, allSchedules)
     : selectEffectivePhases(allPhases, allSchedules).map(({ phase, schedules }) => ({
         phase,
-        // A schedule added today has no slot on the days before it.
-        schedules: schedules.filter((s) => toLocalDateKey(s.createdAt) <= dateStr),
+        // A schedule added today has no slot on the days before it, and an
+        // "Apply from" edit splits the days between the old and new rows.
+        schedules: schedules.filter((s) => scheduleAppliesOn(s, dateStr)),
       }));
   const phaseMap = new Map(effective.map(({ phase }) => [phase.id, phase]));
 
@@ -364,7 +376,7 @@ export async function getDailyDoseSchedule(
       ...(remindAt !== undefined && { remindAt }),
       dueAt,
       dosageMg: shownDose,
-      unit: snapshot?.doseUnit ?? phase.unit,
+      unit: snapshot?.doseUnit ?? scheduleDoseUnit(schedule, phase.unit),
       status,
       ...(existingLog !== undefined && { existingLog }),
       prescription,

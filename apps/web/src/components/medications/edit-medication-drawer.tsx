@@ -10,7 +10,8 @@ import { Label } from "@intake/ui/label";
 import { Textarea } from "@intake/ui/textarea";
 import {
   usePhasesForPrescription,
-  useSchedulesForPhase,
+  useLatestSchedulesForPhase,
+  usePendingScheduleChange,
   useUpdatePrescription,
   useDeletePrescription,
   usePrescriptions,
@@ -19,9 +20,11 @@ import {
   useInventoryForPrescription,
   useUpdateInventoryItem,
   useAdjustStock,
+  scheduleDoseUnit,
+  type PendingScheduleChange,
 } from "@/hooks/use-medication-queries";
 import { getMaintenancePhase, getActiveTitrationPhase } from "@/lib/medication-ui-utils";
-import type { Prescription, FoodInstruction, InventoryItem, PillShape, CompoundStrength } from "@/lib/db";
+import type { Prescription, FoodInstruction, InventoryItem, PillShape, CompoundStrength, PhaseSchedule } from "@/lib/db";
 import { Plus, Clock, Edit2, Check, X, Trash2 } from "lucide-react";
 import { Spinner } from "@intake/ui/spinner";
 import { WarnBox } from "@/components/medications/ward-bits";
@@ -41,7 +44,15 @@ import { DoseAmountInput, DosePreviewLine } from "@/components/medications/dose-
 import { PillIcon } from "@/components/medications/pill-icon";
 import { PILL_SHAPES, PRESET_COLORS } from "@/components/medications/add-medication-steps/types";
 import { cn } from "@/lib/utils";
-import { weekDayOrder } from "@/lib/date-utils";
+import { toLocalDateKey, weekDayOrder } from "@/lib/date-utils";
+import { formatDoseTime } from "@/lib/medication-ui-utils";
+import {
+  ApplyFromField,
+  describeScheduleChange,
+  formatChangeDay,
+  isApplyFromValid,
+} from "@/components/medications/apply-from-field";
+import { useToast } from "@intake/ui/use-toast";
 import { useSettingsStore } from "@/stores/settings-store";
 
 const SELECT_CLASS =
@@ -120,6 +131,59 @@ export function PrescriptionViewDrawer({ prescription, open, onOpenChange }: Pre
   );
 }
 
+/** "08:30 50 mg, 20:00 50 mg", or "No doses". */
+function regimenText(schedules: readonly PhaseSchedule[], phaseUnit: string): string {
+  if (schedules.length === 0) return "No doses";
+  return [...schedules]
+    .sort((a, b) => a.time.localeCompare(b.time))
+    .map((s) => `${formatDoseTime(s.time)} ${s.dosage} ${scheduleDoseUnit(s, phaseUnit)}`.trim())
+    .join(", ");
+}
+
+/**
+ * The saved changes that have not started. One change: its day and the
+ * schedule until then (the form shows the change). More: each day with its
+ * schedule, and which one the form shows.
+ */
+function PendingChangeNotice({
+  change,
+  phaseUnit,
+  todayKey,
+}: {
+  change: PendingScheduleChange;
+  phaseUnit: string;
+  todayKey: string;
+}) {
+  const last = change.steps.at(-1);
+  if (change.steps.length <= 1 || !last) {
+    return (
+      <div className="border border-line bg-background p-2.5 text-[0.8125rem]" role="status">
+        <p className="font-medium">A change starts {formatChangeDay(change.startsOn, todayKey)}.</p>
+        <p className="text-muted-foreground">
+          Until then: <span className="font-mono">{regimenText(change.until, phaseUnit)}</span>
+        </p>
+      </div>
+    );
+  }
+  return (
+    <div className="border border-line bg-background p-2.5 text-[0.8125rem]" role="status">
+      <p className="font-medium">{change.steps.length} changes are saved.</p>
+      <p className="text-muted-foreground">
+        Now: <span className="font-mono">{regimenText(change.until, phaseUnit)}</span>
+      </p>
+      {change.steps.map((step) => (
+        <p key={step.startsOn} className="text-muted-foreground">
+          From {formatChangeDay(step.startsOn, todayKey)}:{" "}
+          <span className="font-mono">{regimenText(step.schedules, phaseUnit)}</span>
+        </p>
+      ))}
+      <p className="text-muted-foreground">
+        The form shows the schedule from {formatChangeDay(last.startsOn, todayKey)}.
+      </p>
+    </div>
+  );
+}
+
 // ============================================================================
 // Schedule Tab — edit the maintenance ("baseline") schedule directly.
 // Formal dosage changes go through the Titrations tab; this is for minor tweaks.
@@ -139,7 +203,10 @@ function ScheduleTab({ prescription }: { prescription: Prescription }) {
   const phases = usePhasesForPrescription(prescription.id);
   const maintenancePhase = getMaintenancePhase(phases);
   const activeTitration = getActiveTitrationPhase(phases);
-  const dbSchedules = useSchedulesForPhase(maintenancePhase?.id);
+  // The newest regimen, also a change that starts later: edits build on it.
+  const dbSchedules = useLatestSchedulesForPhase(maintenancePhase?.id);
+  const pendingChange = usePendingScheduleChange(maintenancePhase?.id);
+  const { toast } = useToast();
   const weekStartsOn = useSettingsStore((s) => s.weekStartsOn);
   const updatePhase = useUpdatePhase();
   const startNewPhase = useStartNewPhase();
@@ -152,11 +219,30 @@ function ScheduleTab({ prescription }: { prescription: Prescription }) {
   const [foodInstruction, setFoodInstruction] = useState<FoodInstruction>("none");
   const [rows, setRows] = useState<SchedRow[]>([]);
   const [dirty, setDirty] = useState(false);
+  // The rows, the unit or the date changed: only then is the schedule sent,
+  // so a food-instruction save never moves a pending change.
+  const [scheduleDirty, setScheduleDirty] = useState(false);
+  const todayKey = toLocalDateKey();
+  // "Apply from": days before it keep the old time, dose and weekdays. With
+  // a change pending, the form shows the newest one, so the date starts at
+  // its day.
+  const pendingFrom = pendingChange?.steps.at(-1)?.startsOn;
+  const defaultApplyFrom = pendingFrom && pendingFrom > todayKey ? pendingFrom : todayKey;
+  const [applyFromState, setApplyFromState] = useState(todayKey);
+  // Untouched, the date is the default (also on the render before the
+  // hydrate effect, so the field never shows a stale day).
+  const applyFrom = dirty ? applyFromState : defaultApplyFrom;
+  const setApplyFrom = (value: string) => {
+    setApplyFromState(value);
+    setScheduleDirty(true);
+    setDirty(true);
+  };
 
   // Hydrate from the DB whenever the maintenance phase or its schedules change,
   // unless the user has unsaved edits in progress.
   useEffect(() => {
     if (dirty) return;
+    setApplyFromState(defaultApplyFrom);
     setUnit(maintenancePhase?.unit ?? "mg");
     setFoodInstruction(maintenancePhase?.foodInstruction ?? "none");
     setRows(
@@ -171,19 +257,23 @@ function ScheduleTab({ prescription }: { prescription: Prescription }) {
             }))
         : [],
     );
-  }, [maintenancePhase, dbSchedules, dirty]);
+  }, [maintenancePhase, dbSchedules, dirty, defaultApplyFrom]);
 
+  const markScheduleDirty = () => {
+    setScheduleDirty(true);
+    setDirty(true);
+  };
   const updateRow = (i: number, patch: Partial<SchedRow>) => {
     setRows((prev) => prev.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
-    setDirty(true);
+    markScheduleDirty();
   };
   const addRow = () => {
     setRows((prev) => [...prev, { time: "20:00", dosage: "", daysOfWeek: [...ALL_DAYS] }]);
-    setDirty(true);
+    markScheduleDirty();
   };
   const removeRow = (i: number) => {
     setRows((prev) => prev.filter((_, idx) => idx !== i));
-    setDirty(true);
+    markScheduleDirty();
   };
   const toggleDay = (i: number, day: number) => {
     setRows((prev) =>
@@ -198,7 +288,7 @@ function ScheduleTab({ prescription }: { prescription: Prescription }) {
         };
       }),
     );
-    setDirty(true);
+    markScheduleDirty();
   };
 
   // Changing the unit converts every dose so the amount taken stays the same
@@ -213,7 +303,7 @@ function ScheduleTab({ prescription }: { prescription: Prescription }) {
       }),
     );
     setUnit(next);
-    setDirty(true);
+    markScheduleDirty();
   };
 
   const isRowValid = (r: SchedRow) => {
@@ -226,22 +316,42 @@ function ScheduleTab({ prescription }: { prescription: Prescription }) {
   const allRowsValid = rows.length > 0 && rows.every(isRowValid);
   const unitMismatch = !!activeBrand && !unitsMatch(unit, activeBrand.unit);
   const isSaving = updatePhase.isPending || startNewPhase.isPending;
-  const canSave = dirty && allRowsValid && !unitMismatch && !isSaving;
+  const applyFromValid = !maintenancePhase || !scheduleDirty || isApplyFromValid(applyFrom, todayKey);
+  const canSave = dirty && allRowsValid && !unitMismatch && applyFromValid && !isSaving;
 
   const handleSave = async () => {
-    if (!allRowsValid || unitMismatch) return;
+    if (!allRowsValid || unitMismatch || !applyFromValid) return;
     if (maintenancePhase) {
-      await updatePhase.mutateAsync({
-        id: maintenancePhase.id,
-        unit,
-        foodInstruction,
-        schedules: validRows.map((r) => ({
-          ...(r.id ? { id: r.id } : {}),
-          time: r.time,
-          dosage: parseFloat(r.dosage),
-          daysOfWeek: r.daysOfWeek,
-        })),
-      });
+      let outcome;
+      try {
+        outcome = await updatePhase.mutateAsync({
+          id: maintenancePhase.id,
+          unit,
+          foodInstruction,
+          ...(scheduleDirty && {
+            applyFrom,
+            schedules: validRows.map((r) => ({
+              ...(r.id ? { id: r.id } : {}),
+              time: r.time,
+              dosage: parseFloat(r.dosage),
+              daysOfWeek: r.daysOfWeek,
+            })),
+          }),
+        });
+      } catch (e) {
+        toast({
+          title: "Schedule not saved",
+          description: e instanceof Error ? e.message : "Try again.",
+          variant: "destructive",
+        });
+        return;
+      }
+      if (outcome.scheduleChange && !outcome.scheduleChange.unchanged) {
+        toast({
+          title: "Schedule saved",
+          description: describeScheduleChange(outcome.scheduleChange, toLocalDateKey()),
+        });
+      }
     } else {
       await startNewPhase.mutateAsync({
         prescriptionId: prescription.id,
@@ -257,9 +367,13 @@ function ScheduleTab({ prescription }: { prescription: Prescription }) {
       });
     }
     setDirty(false);
+    setScheduleDirty(false);
   };
 
-  const handleReset = () => setDirty(false);
+  const handleReset = () => {
+    setDirty(false);
+    setScheduleDirty(false);
+  };
 
   return (
     <div className="flex flex-col gap-4 pb-2">
@@ -277,6 +391,14 @@ function ScheduleTab({ prescription }: { prescription: Prescription }) {
         Edit the day-to-day schedule for minor tweaks. For a planned dose
         increase or decrease, create a plan in the Titrations tab instead.
       </p>
+
+      {pendingChange && (
+        <PendingChangeNotice
+          change={pendingChange}
+          phaseUnit={maintenancePhase?.unit ?? ""}
+          todayKey={todayKey}
+        />
+      )}
 
       {/* Unit */}
       <div className="space-y-1.5">
@@ -385,6 +507,12 @@ function ScheduleTab({ prescription }: { prescription: Prescription }) {
           <Plus /> Add time
         </Button>
       </div>
+
+      {/* With a change pending the date shows too: changing only it moves
+          the change to that day, earlier or later. */}
+      {(scheduleDirty || pendingChange) && maintenancePhase && (
+        <ApplyFromField value={applyFrom} onChange={setApplyFrom} todayKey={todayKey} />
+      )}
 
       {dirty && (
         <div className="sticky bottom-0 flex gap-2 border-t border-line bg-panel pt-2.5">

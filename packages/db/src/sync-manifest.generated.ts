@@ -126,7 +126,7 @@ export const SYNC_TABLES: Record<SyncTableName, SyncTableFacts> = {
   phaseSchedules: {
     integerFields: ["scheduleTimeUTC", "createdAt", "updatedAt", "deletedAt"],
     floatFields: ["dosage"],
-    nullableFields: ["unit", "deletedAt"],
+    nullableFields: ["unit", "effectiveFrom", "effectiveTo", "deletedAt"],
     hasTimezone: false,
     fkParents: [["phaseId", "medicationPhases"]],
   },

@@ -58,6 +58,16 @@ describe("zonedTimeToEpoch", () => {
 });
 
 describe("buildReminderOccurrences", () => {
+  it("judges an Apply from window by the device date of the reminder", () => {
+    // Berlin 20:30 on Oct 20 is 03:30 on Oct 21 in Tokyo. The change starts
+    // Oct 21 on the device, so that reminder is the new row's, not the old one's.
+    const old = dose({ scheduleId: "old", time: "20:30", effectiveTo: "2026-10-21" });
+    const next = dose({ scheduleId: "new", time: "20:30", effectiveFrom: "2026-10-21" });
+    const from = Date.UTC(2026, 9, 20, 12, 0);
+    const occ = buildReminderOccurrences([old, next], { from, days: 1, deviceTz: "Asia/Tokyo" });
+    expect(occ.map((o) => o.dose.scheduleId)).toEqual(["new"]);
+  });
+
   it("reports the device-local time and weekday of each occurrence", () => {
     const [first] = buildReminderOccurrences([dose({ daysOfWeek: [3] })], {
       from: TUESDAY,

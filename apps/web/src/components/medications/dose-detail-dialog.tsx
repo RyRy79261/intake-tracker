@@ -24,6 +24,7 @@ import { toLocalDateKey } from "@/lib/date-utils";
 import { useSettingsStore } from "@/stores/settings-store";
 import type { DoseActions } from "@/components/medications/use-dose-actions";
 import type { DoseSlot } from "@/hooks/use-medication-queries";
+import type { Prescription } from "@/lib/db";
 
 interface DoseDetailDialogProps {
   open: boolean;
@@ -72,7 +73,9 @@ export function DoseDetailDialog({
   actions,
   onOpenInfo,
 }: DoseDetailDialogProps) {
-  const [editOpen, setEditOpen] = useState(false);
+  // The medicine being edited. Kept apart from `slot`: an "Apply from" save
+  // can replace the dose's schedule row, and the drawer must stay open.
+  const [editing, setEditing] = useState<Prescription | null>(null);
   const lateWindow = useSettingsStore((s) => s.lateWindowMinutes);
   const lastTaken = useLastTakenDose(slot?.prescriptionId, slot?.existingLog?.id);
   const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -86,7 +89,17 @@ export function DoseDetailDialog({
     onOpenChange(false);
   }, [closeWhenFree, sheetOpen, onOpenChange]);
 
-  if (!slot) return null;
+  const editDrawer = editing && (
+    <PrescriptionViewDrawer
+      prescription={editing}
+      open
+      onOpenChange={(o) => {
+        if (!o) setEditing(null);
+      }}
+    />
+  );
+
+  if (!slot) return editDrawer || null;
 
   const { status, prescription, phase, schedule, inventory } = slot;
   const name = doseDisplayName(slot);
@@ -117,7 +130,7 @@ export function DoseDetailDialog({
 
   // Strength shown next to the name in the header: the scheduled dose, per
   // compound for a combination drug.
-  const headerStrength = formatComboDose(schedule.dosage, phase.unit, inventory);
+  const headerStrength = formatComboDose(schedule.dosage, slot.unit, inventory);
   // Any open or skipped dose of any day can be moved; a taken one is untaken first.
   const canReschedule = status !== "taken";
   // "Cancel reschedule" while the log still holds a reschedule.
@@ -203,7 +216,7 @@ export function DoseDetailDialog({
                 <button
                   type="button"
                   aria-label={`Edit ${prescription.genericName}`}
-                  onClick={() => setEditOpen(true)}
+                  onClick={() => setEditing(prescription)}
                   className="flex h-11 w-11 items-center justify-center text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:-outline-offset-4 focus-visible:outline-ring"
                 >
                   <Pencil className="h-5 w-5" />
@@ -238,7 +251,7 @@ export function DoseDetailDialog({
                 <div className="flex items-center gap-2">
                   <Info className="h-4 w-4" />
                   <span>
-                    {inventory!.brandName}: {formatCompoundFull(inventory!.compounds, phase.unit)} per pill
+                    {inventory!.brandName}: {formatCompoundFull(inventory!.compounds, slot.unit)} per pill
                   </span>
                 </div>
               )}
@@ -306,7 +319,7 @@ export function DoseDetailDialog({
         </DrawerContent>
       </Drawer>
 
-      <PrescriptionViewDrawer prescription={prescription} open={editOpen} onOpenChange={setEditOpen} />
+      {editDrawer}
     </>
   );
 }

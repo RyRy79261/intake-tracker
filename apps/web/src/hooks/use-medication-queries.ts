@@ -22,7 +22,11 @@ import {
   updateSchedule,
   deleteSchedule,
   getSchedulesForPhase,
+  getLatestSchedulesForPhase,
+  getPendingScheduleChange,
 } from "@/lib/medication-schedule-service";
+export type { ScheduleChangeOutcome, PendingScheduleChange } from "@/lib/medication-schedule-service";
+export { scheduleDoseUnit } from "@/lib/medication-schedule-service";
 import { startNewPhase, updatePhase, activatePhase, type CreatePhaseInput, type UpdatePhaseInput } from "@/lib/medication-service";
 import {
   getTitrationPlans,
@@ -232,12 +236,49 @@ export function useAllInventoryItems() {
   return useLiveQuery(() => getAllInventoryItems(), [], []);
 }
 
+/** The phase's schedules in effect today. */
 export function useSchedulesForPhase(phaseId: string | undefined) {
   return useLiveQuery(
     () => phaseId ? getSchedulesForPhase(phaseId) : [],
     [phaseId],
     []
   );
+}
+
+/** The phase's newest schedules, also a change that starts later ("Apply from"). */
+export function useLatestSchedulesForPhase(phaseId: string | undefined) {
+  return useLiveQuery(
+    () => phaseId ? getLatestSchedulesForPhase(phaseId) : [],
+    [phaseId],
+    []
+  );
+}
+
+/** A saved schedule change that starts after today, if any. */
+export function usePendingScheduleChange(phaseId: string | undefined) {
+  return useLiveQuery(
+    async () => (phaseId ? (await getPendingScheduleChange(phaseId)) ?? null : null),
+    [phaseId],
+    null,
+  );
+}
+
+/**
+ * The newest day a saved change starts, over the given phases (the titration
+ * drawer's "Apply from" starts there). `undefined` when none is pending.
+ */
+export function useNewestPendingChangeDay(phaseIds: readonly string[]) {
+  const key = phaseIds.join(",");
+  return useLiveQuery(
+    async () => {
+      const days = await Promise.all(
+        key ? key.split(",").map(async (id) => (await getPendingScheduleChange(id))?.steps.at(-1)?.startsOn) : [],
+      );
+      return days.filter((d): d is string => !!d).sort().at(-1) ?? null;
+    },
+    [key],
+    null,
+  ) ?? undefined;
 }
 
 // ============================================================================

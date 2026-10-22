@@ -15,6 +15,7 @@ import {
   useInventoryForPrescription,
   usePhasesForPrescription,
   useSchedulesForPhase,
+  useLatestSchedulesForPhase,
 } from "@/hooks/use-medication-queries";
 import type { Prescription } from "@/lib/db";
 import type { RxEntry } from "@/components/medications/titrations/types";
@@ -205,7 +206,8 @@ export function EditPhaseScheduleLoader({
   entryIdx: number;
   onLoad: (schedules: RxEntry["schedules"]) => void;
 }) {
-  const schedules = useSchedulesForPhase(phaseId);
+  // The newest rows, also a change that starts later ("Apply from").
+  const schedules = useLatestSchedulesForPhase(phaseId);
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {

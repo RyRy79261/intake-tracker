@@ -24,6 +24,7 @@ import { resolveDoseStatus } from "@/lib/dose-status";
 import { isRescheduleWaiting } from "@intake/core/dose-rules";
 import { isLive } from "@intake/core/lifecycle";
 import { selectEffectivePhase } from "@intake/core/effective-phase";
+import { scheduleInEffectOn } from "@intake/core/schedule-window";
 import type { DataPoint, TimeRange, TrendDirection } from "@intake/types/analytics";
 import {
   MAX_MEDICATION_NAME_CHARS,
@@ -191,7 +192,10 @@ function scheduledAdherence(
       (s) =>
         s.daysOfWeek.includes(dow) &&
         slotTime(day, s.time) >= phaseStart &&
-        toLocalDateKey(s.createdAt) <= dateKey,
+        // An "Apply from" edit: the old row until its change day, the new
+        // row from it.
+        (s.effectiveFrom || toLocalDateKey(s.createdAt)) <= dateKey &&
+        scheduleInEffectOn(s, dateKey),
     );
     const logged = statusByDate.get(dateKey);
     for (const s of due) {
@@ -273,7 +277,12 @@ export async function buildMedicationSummary(
       const phaseSchedules = schedules.filter(
         (s) => s.phaseId === phase.id && s.enabled === true && isLive(s),
       );
-      const { dose, frequency } = describeRegimen(phaseSchedules, phase.unit);
+      // The dose and frequency in effect today.
+      const todayKey = toLocalDateKey(now);
+      const { dose, frequency } = describeRegimen(
+        phaseSchedules.filter((s) => scheduleInEffectOn(s, todayKey)),
+        phase.unit,
+      );
       meds.push({
         name,
         phaseType: phase.type,

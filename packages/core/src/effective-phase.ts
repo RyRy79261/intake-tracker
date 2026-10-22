@@ -10,7 +10,9 @@
  *      are candidates.
  *   2. Per prescription, a titration phase linked to a titration plan wins
  *      over any other candidate. Otherwise the first candidate seen is kept.
- *   3. The chosen phase's schedules are its live, `enabled` ones.
+ *   3. The chosen phase's schedules are its live, `enabled` ones. Given a
+ *      date key, only the rows whose "Apply from" window holds that date
+ *      (schedule-window).
  *
  * This mirrors the precedence `getDailyDoseSchedule` has always used. Whether
  * the prescription itself is active is the caller's concern — filter the
@@ -20,6 +22,7 @@
  * Drizzle rows — where optional fields arrive as `null` — can reuse it.
  */
 import { isLive } from "./lifecycle";
+import { scheduleInEffectOn, type ScheduleWindowLike } from "./schedule-window";
 
 /** The phase fields the precedence rules read. */
 export interface PhaseLike {
@@ -32,7 +35,7 @@ export interface PhaseLike {
 }
 
 /** The schedule fields the precedence rules read. */
-export interface ScheduleLike {
+export interface ScheduleLike extends ScheduleWindowLike {
   phaseId: string;
   enabled: boolean;
   deletedAt?: number | null | undefined;
@@ -70,12 +73,14 @@ export function selectEffectivePhase<P extends PhaseLike>(
 
 /**
  * Pick the effective phase for every prescription present in `phases` and
- * attach its live, enabled schedules. Prescriptions with no live active phase
- * are omitted. Result order follows each prescription's first appearance.
+ * attach its live, enabled schedules (in effect on `opts.onDate` when
+ * given). Prescriptions with no live active phase are omitted. Result order
+ * follows each prescription's first appearance.
  */
 export function selectEffectivePhases<P extends PhaseLike, S extends ScheduleLike>(
   phases: readonly P[],
   schedules: readonly S[],
+  opts: { onDate?: string } = {},
 ): EffectivePhase<P, S>[] {
   const byPrescription = new Map<string, P[]>();
   for (const phase of phases) {
@@ -92,7 +97,11 @@ export function selectEffectivePhases<P extends PhaseLike, S extends ScheduleLik
       prescriptionId,
       phase,
       schedules: schedules.filter(
-        (s) => s.phaseId === phase.id && s.enabled === true && isLive(s),
+        (s) =>
+          s.phaseId === phase.id &&
+          s.enabled === true &&
+          isLive(s) &&
+          (opts.onDate === undefined || scheduleInEffectOn(s, opts.onDate)),
       ),
     });
   }

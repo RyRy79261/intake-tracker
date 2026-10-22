@@ -10,6 +10,8 @@
  */
 import { isLive } from "@intake/core/lifecycle";
 import { selectEffectivePhase } from "@intake/core/effective-phase";
+import { scheduleInEffectOn, type ScheduleWindowLike } from "@intake/core/schedule-window";
+import { toLocalDateKey } from "@/lib/date-utils";
 import { db, type InventoryItem, type Prescription } from "@/lib/db";
 import { isActiveBrand } from "@/lib/inventory-service";
 
@@ -29,7 +31,7 @@ export interface RefillPhaseLike {
 }
 
 /** The schedule fields the refill decision reads. */
-export interface RefillScheduleLike {
+export interface RefillScheduleLike extends ScheduleWindowLike {
   phaseId: string;
   dosage: number;
   daysOfWeek: number[];
@@ -61,6 +63,8 @@ export function computeRefillStatus(
   inventory: RefillInventoryLike,
   effectivePhase: RefillPhaseLike | undefined | null,
   schedules: readonly RefillScheduleLike[],
+  /** The day whose regimen counts ("Apply from" edits); default today. */
+  todayKey: string = toLocalDateKey(),
 ): RefillStatus {
   const stock = inventory.currentStock ?? 0;
 
@@ -69,7 +73,13 @@ export function computeRefillStatus(
     !effectivePhase?.unit || !inventory.unit || effectivePhase.unit === inventory.unit;
   if (effectivePhase && unitsMatch && inventory.strength > 0) {
     const dailyDosage = schedules
-      .filter((s) => s.phaseId === effectivePhase.id && s.enabled === true && isLive(s))
+      .filter(
+        (s) =>
+          s.phaseId === effectivePhase.id &&
+          s.enabled === true &&
+          isLive(s) &&
+          scheduleInEffectOn(s, todayKey),
+      )
       .reduce((acc, s) => acc + s.dosage * (s.daysOfWeek.length / 7), 0);
     dailyPills = dailyDosage / inventory.strength;
   }

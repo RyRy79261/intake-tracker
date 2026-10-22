@@ -16,6 +16,7 @@ import { AlertTriangle, Plus, TrendingUp } from "lucide-react";
 import { Spinner } from "@intake/ui/spinner";
 import {
   useCreateTitrationPlan,
+  useNewestPendingChangeDay,
   usePhasesForPrescription,
   usePhasesForTitrationPlan,
   useSchedulesForPhase,
@@ -29,7 +30,8 @@ import { aiClient } from "@/lib/ai-client";
 import { useAuthGate } from "@/components/auth-guard";
 import { RxEntryCard, EditPhaseScheduleLoader } from "@/components/medications/titrations/rx-entry-card";
 import { DAY_LABELS_LONG } from "@/components/medications/titrations/types";
-import { sortDaysForDisplay } from "@/lib/date-utils";
+import { sortDaysForDisplay, toLocalDateKey } from "@/lib/date-utils";
+import { ApplyFromField, isApplyFromValid } from "@/components/medications/apply-from-field";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useTitrationDrawerForm } from "@/components/medications/titrations/use-titration-drawer-form";
 
@@ -52,6 +54,26 @@ export function TitrationDrawer({
   const weekStartsOn = useSettingsStore((s) => s.weekStartsOn);
 
   const editingPhases = usePhasesForTitrationPlan(editingPlan?.id);
+  // A running plan's dose changes apply from a date; a plan that has not
+  // started is edited as a whole.
+  const isRunning = editingPlan?.status === "active";
+  const todayKey = toLocalDateKey();
+  // With a change pending, the form shows the newest one, so the date starts
+  // at its day; a different date moves it there (earlier or later).
+  const pendingFrom = useNewestPendingChangeDay(isRunning ? editingPhases.map((p) => p.id) : []);
+  const initialApplyFrom = pendingFrom && pendingFrom > todayKey ? pendingFrom : todayKey;
+  const [applyFrom, setApplyFromState] = useState(todayKey);
+  const [applyFromTouched, setApplyFromTouched] = useState(false);
+  const setApplyFrom = (value: string) => {
+    setApplyFromState(value);
+    setApplyFromTouched(true);
+  };
+  useEffect(() => {
+    if (open) setApplyFromTouched(false);
+  }, [open]);
+  useEffect(() => {
+    if (open && !applyFromTouched) setApplyFromState(initialApplyFrom);
+  }, [open, applyFromTouched, initialApplyFrom]);
 
   const form = useTitrationDrawerForm();
   const {
@@ -181,6 +203,8 @@ export function TitrationDrawer({
     };
 
     // Guard against empty/invalid startDate producing NaN timestamps.
+    if (isRunning && !isApplyFromValid(applyFrom, todayKey)) return;
+
     const parsedStart = startDate ? new Date(startDate + "T00:00:00").getTime() : NaN;
     const startDateField =
       !startNow && Number.isFinite(parsedStart)
@@ -197,8 +221,17 @@ export function TitrationDrawer({
           ...(notes.trim() ? { notes: notes.trim() } : {}),
           ...(warningsList.length > 0 ? { warnings: warningsList } : {}),
           entries: entryData,
+          ...(isRunning && { applyFrom, ...(applyFrom !== initialApplyFrom && { movePending: true }) }),
         },
-        { onSuccess },
+        {
+          onSuccess,
+          onError: (e) =>
+            toast({
+              title: "Plan not saved",
+              description: e instanceof Error ? e.message : "Try again.",
+              variant: "destructive",
+            }),
+        },
       );
     } else {
       createMutation.mutate(
@@ -281,6 +314,10 @@ export function TitrationDrawer({
               </p>
             )}
           </div>
+
+          {isRunning && (
+            <ApplyFromField value={applyFrom} onChange={setApplyFrom} todayKey={todayKey} />
+          )}
 
           <div className="space-y-2">
             <div className="flex items-center justify-between">
@@ -369,7 +406,12 @@ export function TitrationDrawer({
           <Button
             className="w-full"
             onClick={handleSubmit}
-            disabled={!canSubmit || createMutation.isPending || updateMutation.isPending}
+            disabled={
+              !canSubmit ||
+              (isRunning && !isApplyFromValid(applyFrom, todayKey)) ||
+              createMutation.isPending ||
+              updateMutation.isPending
+            }
           >
             {(createMutation.isPending || updateMutation.isPending)
               ? (isEditing ? "Saving..." : "Creating...")

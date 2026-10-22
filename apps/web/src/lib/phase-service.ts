@@ -8,6 +8,8 @@ import { buildPhase, buildInventory, buildSchedules, buildTransaction } from "@/
 import { isLive } from "@intake/core/lifecycle";
 import { selectEffectivePhase } from "@intake/core/effective-phase";
 import { syncedWrite } from "@/lib/synced-write";
+import { writeScheduleChange, type ScheduleChangeOutcome } from "@/lib/medication-schedule-service";
+import type { ChangeDayRule } from "@intake/core/schedule-window";
 
 export interface AddMedicationToPrescriptionInput {
   prescriptionId: string;
@@ -47,6 +49,19 @@ export interface UpdatePhaseInput {
   notes?: string;
   status?: "active" | "completed" | "cancelled" | "pending";
   schedules?: { id?: string; time: string; daysOfWeek: number[]; dosage: number }[];
+  /**
+   * First day the new schedules apply ("YYYY-MM-DD", default today, not
+   * before today). Days before it keep the old rows. Ignored for a phase
+   * that has not started (pending): its rows are edited in place.
+   */
+  applyFrom?: string;
+  /** Test seam: the change-day rule (default DEFAULT_CHANGE_DAY_RULE). */
+  changeDayRule?: ChangeDayRule;
+}
+
+export interface UpdatePhaseOutcome {
+  /** Set when the schedules changed through "Apply from". */
+  scheduleChange?: ScheduleChangeOutcome;
 }
 
 // ---------------------------------------------------------------------------
@@ -205,16 +220,29 @@ export async function startNewPhase(input: CreatePhaseInput): Promise<ServiceRes
   }
 }
 
-export async function updatePhase(input: UpdatePhaseInput): Promise<ServiceResult<void>> {
+export async function updatePhase(input: UpdatePhaseInput): Promise<ServiceResult<UpdatePhaseOutcome>> {
   try {
-    await syncedWrite(["medicationPhases", "phaseSchedules"], async (w) => {
-      const { id, schedules, ...updates } = input;
+    const outcome = await syncedWrite(["medicationPhases", "phaseSchedules", "doseLogs"], async (w) => {
+      const { id, schedules, applyFrom, changeDayRule, ...updates } = input;
+      const result: UpdatePhaseOutcome = {};
+      const phase = await db.medicationPhases.get(id);
 
       if (Object.keys(updates).length > 0) {
         await w.patch("medicationPhases", id, updates);
       }
 
-      if (schedules) {
+      if (schedules && phase && phase.status !== "pending") {
+        // A started phase: the change applies from a date, so the days
+        // before it keep their time, dose and weekdays.
+        result.scheduleChange = await writeScheduleChange(w, id, schedules, {
+          ...(applyFrom !== undefined && { applyFrom }),
+          ...(changeDayRule !== undefined && { rule: changeDayRule }),
+          ...(phase.unit && { closedUnit: phase.unit, unit: updates.unit ?? phase.unit }),
+          // The same rows with another date move a pending change to that
+          // date (the drawer sends the schedule only when it changed).
+          ...(applyFrom !== undefined && { movePending: true }),
+        });
+      } else if (schedules) {
         // Tombstoned schedules are history: an id pointing at one becomes a
         // new schedule rather than resurrecting the old row.
         const existingSchedules = (await db.phaseSchedules.where("phaseId").equals(id).toArray()).filter(isLive);
@@ -284,10 +312,17 @@ export async function updatePhase(input: UpdatePhaseInput): Promise<ServiceResul
         action: "phase_updated",
         updatedFields: Object.keys(updates),
         schedulesModified: !!schedules,
+        ...(result.scheduleChange && {
+          applyFrom: result.scheduleChange.applyFrom,
+          ...(result.scheduleChange.deferredTo && { deferredTo: result.scheduleChange.deferredTo }),
+        }),
       });
+      return result;
     });
-    return ok(undefined);
+    return ok(outcome);
   } catch (e) {
+    // A "Pick ..." refusal is for the user as it is (no technical detail).
+    if (e instanceof Error && e.message.startsWith("Pick ")) return err(e.message);
     return err("Failed to update phase", e);
   }
 }

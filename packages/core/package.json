@@ -21,7 +21,8 @@
     "./daily-totals": "./src/daily-totals.ts",
     "./sodium": "./src/sodium.ts",
     "./voice-items": "./src/voice-items.ts",
-    "./dose-rules": "./src/dose-rules.ts"
+    "./dose-rules": "./src/dose-rules.ts",
+    "./schedule-window": "./src/schedule-window.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

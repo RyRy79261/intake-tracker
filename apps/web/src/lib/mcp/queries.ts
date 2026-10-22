@@ -222,10 +222,12 @@ export async function getTodaySummary(
 
 /**
  * Loads the effective regimen (active prescriptions, the effective phase of
- * each, and that phase's live enabled schedules) — the same selection the
- * app's dose schedule makes, via the shared precedence helper.
+ * each, and that phase's live enabled schedules in effect on `dateKey`) — the
+ * same selection the app's dose schedule makes, via the shared precedence
+ * helper. An "Apply from" edit shows the old row until its change day and
+ * the new row from it.
  */
-async function loadEffectiveRegimen(userId: string) {
+async function loadEffectiveRegimen(userId: string, dateKey: string) {
   const presc = await db
     .select({
       id: prescriptions.id,
@@ -291,6 +293,8 @@ async function loadEffectiveRegimen(userId: string) {
             unit: phaseSchedules.unit,
             daysOfWeek: phaseSchedules.daysOfWeek,
             enabled: phaseSchedules.enabled,
+            effectiveFrom: phaseSchedules.effectiveFrom,
+            effectiveTo: phaseSchedules.effectiveTo,
             deletedAt: phaseSchedules.deletedAt,
           })
           .from(phaseSchedules)
@@ -304,7 +308,7 @@ async function loadEffectiveRegimen(userId: string) {
           )
           .orderBy(asc(phaseSchedules.time), asc(phaseSchedules.id));
 
-  return { presc, effective: selectEffectivePhases(phases, schedules) };
+  return { presc, effective: selectEffectivePhases(phases, schedules, { onDate: dateKey }) };
 }
 
 type SlotStatus = "taken" | "skipped" | "outstanding";
@@ -332,7 +336,7 @@ async function getDoseDay(
   timezone: string,
 ) {
   const [{ presc, effective }, logs] = await Promise.all([
-    loadEffectiveRegimen(userId),
+    loadEffectiveRegimen(userId, date),
     db
       .select({
         prescriptionId: doseLogs.prescriptionId,
@@ -688,8 +692,19 @@ export async function querySubstanceHistory(
 // Medication queries
 // ─────────────────────────────────────────────────────────────────────────
 
-export async function listMedications(userId: string) {
-  const { presc, effective } = await loadEffectiveRegimen(userId);
+export async function listMedications(
+  userId: string,
+  opts: { timezone?: string | undefined; now?: number } = {},
+) {
+  // The regimen in effect today, in the user's zone.
+  const timezone = await getUserTimeZone(userId, opts.timezone);
+  const today = new Intl.DateTimeFormat("en-CA", {
+    timeZone: timezone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(opts.now ?? Date.now());
+  const { presc, effective } = await loadEffectiveRegimen(userId, today);
   const byPrescription = new Map(effective.map((e) => [e.prescriptionId, e]));
 
   // One phase per prescription: while a titration plan runs, its titration
