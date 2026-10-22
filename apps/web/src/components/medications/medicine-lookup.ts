@@ -184,17 +184,21 @@ export function plainIndication(r: LookupResult): string {
 
 /** Whether a strength has a look of its own in the result. */
 export function hasOwnLook(o: LookupOption | null): o is LookupOption {
-  return !!o && !!(o.pillColor || o.pillShape);
+  return !!o && !!(o.pillColor || o.pillShape || o.markings);
 }
 
+const NO_LOOK: PillLook = { color: "", shape: "", markings: "" };
+
 /**
- * The look of the picked strength when the result has one, else the
- * medicine's main look (the most common strength).
+ * The look of the picked strength. The main look (the most common
+ * strength) stands in only when nothing is picked or the result has no
+ * look per strength (an older reply): when other strengths have a look,
+ * a picked strength without one has no look, not another strength's.
  */
 export function pillLook(r: LookupResult, o: LookupOption | null): PillLook {
-  return hasOwnLook(o)
-    ? { color: o.pillColor, shape: o.pillShape, markings: o.markings }
-    : { color: r.pillColor, shape: r.pillShape, markings: r.visualIdentification ?? "" };
+  if (hasOwnLook(o)) return { color: o.pillColor, shape: o.pillShape, markings: o.markings };
+  if (o && r.options.some(hasOwnLook)) return NO_LOOK;
+  return { color: r.pillColor, shape: r.pillShape, markings: r.visualIdentification ?? "" };
 }
 
 /** "White round, marked C 6.25", or "" when there is no colour or shape. */
@@ -306,7 +310,8 @@ function appearancePatch(r: LookupResult, o: LookupOption | null): Partial<AddMe
   const shape = shapeValue(look);
   if (hex) p.pillColor = hex;
   if (shape) p.pillShape = shape;
-  if (look.markings) p.visualIdentification = look.markings;
+  // Always set: markings from an earlier apply (another strength) must not stay.
+  p.visualIdentification = look.markings;
   return p;
 }
 

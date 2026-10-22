@@ -257,9 +257,12 @@ describe("each strength's look", () => {
     expect(r.options[2]).toMatchObject({ pillColor: "", pillShape: "", markings: "" });
   });
 
-  it("uses the picked strength's look, else the main look", () => {
+  it("uses the picked strength's look, never another strength's", () => {
     expect(pillLook(r, r.options[0]!)).toEqual({ color: "yellow", shape: "oval", markings: "BM F1" });
-    expect(pillLook(r, r.options[2]!)).toEqual({ color: "white", shape: "round", markings: "BM F4" });
+    // 12.5 mg has no look of its own: the main look is another strength's.
+    expect(pillLook(r, r.options[2]!)).toEqual({ color: "", shape: "", markings: "" });
+    expect(groupValue("appearance", r, r.options[2]!)).toBe("");
+    // Nothing picked: the main look.
     expect(pillLook(r, null)).toEqual({ color: "white", shape: "round", markings: "BM F4" });
     expect(groupValue("appearance", r, r.options[0]!)).toBe("Yellow oval, marked BM F1");
     expect(groupValue("appearance", r, r.options[1]!)).toBe("White round");
@@ -268,10 +271,24 @@ describe("each strength's look", () => {
   it("fills the form with the picked strength's look", () => {
     const p = applyToNewPrescription(["appearance"], r, r.options[0]!);
     expect(p).toMatchObject({ pillColor: "#FFC107", pillShape: "oval", visualIdentification: "BM F1" });
-    // The 25 mg has no markings: none are carried over from the main look.
+    // The 25 mg has no markings: the form's markings are cleared, so none
+    // stay from the main look or an earlier apply.
     const q = applyToNewBrand(["appearance"], r, r.options[1]!, { isCombination: false, compounds: [] });
-    expect(q).toMatchObject({ pillColor: "#FFFFFF", pillShape: "round" });
-    expect(q.visualIdentification).toBeUndefined();
+    expect(q).toMatchObject({ pillColor: "#FFFFFF", pillShape: "round", visualIdentification: "" });
+  });
+
+  it("keeps the main look when no strength has a look of its own", () => {
+    const old = normalizeLookupResult({ ...CARVEDILOL, strengthOptions: [
+      { label: "6.25 mg", compounds: [{ name: "Carvedilol", strength: 6.25 }] },
+    ] }, "Dilatrend");
+    expect(pillLook(old, old.options[0]!)).toEqual({ color: "white", shape: "round", markings: "BM F4" });
+  });
+
+  it("counts a strength with only markings as having a look", () => {
+    const marked = normalizeLookupResult({ ...CARVEDILOL, strengthOptions: [
+      { label: "6.25 mg", markings: "BM F1", compounds: [{ name: "Carvedilol", strength: 6.25 }] },
+    ] }, "Dilatrend");
+    expect(pillLook(marked, marked.options[0]!)).toEqual({ color: "", shape: "", markings: "BM F1" });
   });
 });
 

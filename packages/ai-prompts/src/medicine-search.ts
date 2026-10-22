@@ -19,7 +19,8 @@ Be precise with medical information.
 FOOD: choose "foodInstruction" from what the official label or patient leaflet says.
 - "after": take it with or after a meal (the label says "take with food" or "with a meal").
 - "before": take it on an empty stomach, before a meal.
-- "none": only when the label says food does not matter. Do not choose "none" just because you are not sure: search the label first.
+- "none": when the label says food does not matter. Do not choose "none" just because you are not sure: search the label first.
+- If you cannot find what the label says, choose "none" and say so in "foodNote": "The food rule was not found. Check the package leaflet." Never guess "before" or "after".
 "foodNote" is one or two short sentences. Say what to do, then why, in the user's words. Do not write about how you decided. If the kind of meal matters (for example, the meal must contain some fat), say so and give a plain example. Example: "Take it during or just after a meal. Food makes the medicine act more slowly, so you are less likely to feel dizzy."
 
 APPEARANCE: the pill often looks different for each strength. Search for the appearance of each marketed strength of the searched brand, and put it in that strength's "pillColor", "pillShape" and "markings" in "strengthOptions". The last section of the package leaflet ("What X looks like", in German "Wie sieht X aus") usually describes every strength in one place, so search for the leaflet first. The top-level "pillColor", "pillShape" and "visualIdentification" describe the most common strength. Do not describe the other strengths in "pillDescription": it is for the general look only.
