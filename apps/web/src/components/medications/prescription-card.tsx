@@ -315,7 +315,9 @@ export function PrescriptionCard({ prescription, expanded: controlledExpanded, o
               color={activeInventory.pillColor ?? "#94a3b8"}
               size={18}
             />
-            <b className="text-xs font-semibold leading-tight [overflow-wrap:anywhere]">
+            {/* One line: a long brand name ("… 20 mg Filmtabletten 20") ends
+                in an ellipsis. The full name is in the title and aria-label. */}
+            <b className="truncate text-xs font-semibold leading-tight" title={activeInventory.brandName}>
               {activeInventory.brandName}
             </b>
             <span className="whitespace-nowrap font-mono text-[0.6875rem] text-muted-foreground">

@@ -87,6 +87,9 @@ function makeRequest(body: unknown): NextRequest {
 describe("POST /api/ai/medicine-search", () => {
   beforeEach(() => {
     messagesCreate.mockReset();
+    // A fresh route module per test, so each one gets its own rate limiter
+    // (15 calls a minute, keyed on the one test user).
+    vi.resetModules();
   });
   afterEach(() => {
     vi.clearAllMocks();
@@ -125,6 +128,31 @@ describe("POST /api/ai/medicine-search", () => {
       messages: { content: string }[];
     };
     expect(promptArg.messages[0]?.content).toContain("South Africa");
+  });
+
+  it("conditions: shared conditions reach the prompt; none sent, none mentioned", async () => {
+    messagesCreate.mockResolvedValue(toolResponse(fullToolInput()));
+
+    const { POST } = await import("@/app/api/ai/medicine-search/route");
+    const res = await POST(
+      makeRequest({ query: "carvedilol", conditions: ["Fast heart rate", "Heart failure"] }),
+    );
+    expect(res.status).toBe(200);
+    const withConditions = messagesCreate.mock.calls[0]?.[0] as { messages: { content: string }[] };
+    expect(withConditions.messages[0]?.content).toContain("My conditions: Fast heart rate, Heart failure");
+
+    await POST(makeRequest({ query: "carvedilol" }));
+    const without = messagesCreate.mock.calls[1]?.[0] as { messages: { content: string }[] };
+    expect(without.messages[0]?.content).not.toContain("conditions");
+  });
+
+  it("input validation: more than 20 conditions → 400, AI never called", async () => {
+    const { POST } = await import("@/app/api/ai/medicine-search/route");
+    const res = await POST(
+      makeRequest({ query: "carvedilol", conditions: Array.from({ length: 21 }, (_, i) => `c${i}`) }),
+    );
+    expect(res.status).toBe(400);
+    expect(messagesCreate).not.toHaveBeenCalled();
   });
 
   it("Zod defaults: a sparse tool result is filled in, not rejected", async () => {
@@ -217,7 +245,8 @@ describe("POST /api/ai/medicine-search", () => {
     expect(params.tool_choice?.type ?? "auto").toBe("auto");
     expect(params.tools.map((t) => t.name)).toEqual(["web_search", "medicine_search_result"]);
     expect(params.tools.find((t) => t.name === "medicine_search_result")?.strict).toBe(true);
-    expect(params.output_config).toEqual({ effort: "high" });
+    // Medium, the owner's choice for this route (see the tier-policy test).
+    expect(params.output_config).toEqual({ effort: "medium" });
     expect(params).not.toHaveProperty("temperature");
   });
 
@@ -258,6 +287,15 @@ describe("POST /api/ai/medicine-search", () => {
   it("appearance: without a completed web search, colour/shape/markings are not returned for autofill", async () => {
     messagesCreate.mockResolvedValueOnce(toolResponse(fullToolInput({
       visualIdentification: "debossed 'PD 155'",
+      strengthOptions: [
+        {
+          label: "10 mg",
+          pillColor: "white",
+          pillShape: "oval",
+          markings: "PD 155",
+          compounds: [{ name: "Atorvastatin", strength: 10 }],
+        },
+      ],
     })));
 
     const { POST } = await import("@/app/api/ai/medicine-search/route");
@@ -270,11 +308,14 @@ describe("POST /api/ai/medicine-search", () => {
       visualIdentification?: string;
       pillDescription: string;
       appearanceVerified: boolean;
+      strengthOptions: { pillColor: string; pillShape: string; markings: string }[];
     };
     expect(body.appearanceVerified).toBe(false);
     expect(body.pillColor).toBe("");
     expect(body.pillShape).toBe("");
     expect(body.visualIdentification).toBeUndefined();
+    // Each strength's look is a guess from memory too.
+    expect(body.strengthOptions[0]).toMatchObject({ pillColor: "", pillShape: "", markings: "" });
     // The free-text description is still shown on the search result card.
     expect(body.pillDescription).toBe("white oval tablet");
   });

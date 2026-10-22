@@ -43,6 +43,10 @@ export interface ParseResponse {
 export interface MedicineStrengthOption {
   label: string;
   compounds: { name: string; strength: number }[];
+  /** This strength's pill look; empty when not found. Older replies omit them. */
+  pillColor?: string;
+  pillShape?: string;
+  markings?: string;
 }
 
 /** POST /api/ai/medicine-search */
@@ -170,7 +174,7 @@ export interface InsightsResponse {
 export interface AiRoutes {
   "/api/ai/parse": { body: { input: string }; result: ParseResponse };
   "/api/ai/medicine-search": {
-    body: { query: string; country?: string };
+    body: { query: string; country?: string; conditions?: string[] };
     result: MedicineSearchResult;
   };
   "/api/ai/substance-lookup": {

@@ -15,6 +15,8 @@ import { SYSTEM_PROMPT, MEDICINE_SEARCH_TOOL } from "@intake/ai-prompts/medicine
 const MedicineSearchRequestSchema = z.object({
   query: z.string().min(1, "Query is required").max(200, "Query too long"),
   country: z.string().max(100).optional(),
+  /** The user's own conditions, sent only when they opted in to sharing. */
+  conditions: z.array(z.string().min(1).max(120)).max(20).optional(),
 });
 
 const CompoundStrengthSchema = z.object({
@@ -24,6 +26,9 @@ const CompoundStrengthSchema = z.object({
 
 const StrengthOptionSchema = z.object({
   label: z.string(),
+  pillColor: z.string().default(""),
+  pillShape: z.string().default(""),
+  markings: z.string().default(""),
   compounds: z.array(CompoundStrengthSchema).default([]),
 });
 
@@ -52,6 +57,9 @@ export const medicineSearchTask = {
   rateLimit: 15,
   request: MedicineSearchRequestSchema,
   tier: "premium",
+  // The owner's choice (2026-10-22): Opus 5.5 at medium is accurate enough
+  // for a lookup they check before saving, and it answers sooner.
+  effort: "medium",
   // Room for adaptive thinking, the search traffic AND the tool call:
   // thinking can't be turned off on the premium model and its tokens share
   // this ceiling.
@@ -59,14 +67,21 @@ export const medicineSearchTask = {
   tool: MEDICINE_SEARCH_TOOL,
   retryInstruction: "Now return the result via the medicine_search_result tool.",
   search: { mode: "allowed" },
-  prompt: ({ query, country }) => {
+  prompt: ({ query, country, conditions }) => {
     const sanitized = sanitizeForAI(query.trim());
     const sanitizedCountry = country ? sanitizeForAI(country.trim()) : "";
+    const safeConditions = (conditions ?? [])
+      .map((c) => sanitizeForAI(c.trim()))
+      .filter((c) => c.length > 0);
+    const lookup = sanitizedCountry
+      ? `Look up this medication and provide detailed pharmaceutical information, focusing specifically on brands and availability in ${sanitizedCountry}: "${sanitized}"`
+      : `Look up this medication and provide detailed pharmaceutical information: "${sanitized}"`;
     return {
       system: SYSTEM_PROMPT,
-      user: sanitizedCountry
-        ? `Look up this medication and provide detailed pharmaceutical information, focusing specifically on brands and availability in ${sanitizedCountry}: "${sanitized}"`
-        : `Look up this medication and provide detailed pharmaceutical information: "${sanitized}"`,
+      user:
+        safeConditions.length > 0
+          ? `${lookup}\n\nMy conditions: ${safeConditions.join(", ")}`
+          : lookup,
     };
   },
   output: zodOutput(MedicineSearchResponseSchema),
@@ -76,10 +91,13 @@ export const medicineSearchTask = {
   // autofill a guess. The free-text description stays for the result card.
   respond: (out, { searched }) => {
     const { visualIdentification, ...rest } = out;
+    if (searched) return { ...rest, visualIdentification, appearanceVerified: true };
     return {
       ...rest,
-      ...(searched ? { visualIdentification } : { pillColor: "", pillShape: "" }),
-      appearanceVerified: searched,
+      pillColor: "",
+      pillShape: "",
+      strengthOptions: rest.strengthOptions.map((o) => ({ ...o, pillColor: "", pillShape: "", markings: "" })),
+      appearanceVerified: false,
     };
   },
   messages: { failed: "Failed to process request" },

@@ -150,8 +150,9 @@ export function MedicalContextSection({
         )}
         <AiInsightsConsentToggle
           field="shareConditionsWithAI"
-          label="Share conditions with AI insights"
+          label="Share conditions with AI"
           noun="conditions"
+          uses="AI insights and medicine lookups"
         />
         <AiInsightsConsentToggle
           field="shareMedicationsWithAI"

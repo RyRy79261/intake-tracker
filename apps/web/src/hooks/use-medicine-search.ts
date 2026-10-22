@@ -3,6 +3,7 @@
 import { useMutation } from "@tanstack/react-query";
 import { aiClient, type AiError, type MedicineSearchResult } from "@/lib/ai-client";
 import { useSettingsStore } from "@/stores/settings-store";
+import { getUserProfile } from "@/lib/profile-service";
 
 export type { MedicineSearchResult, MedicineStrengthOption } from "@/lib/ai-client";
 
@@ -46,6 +47,17 @@ export function regionContext(): string | undefined {
   return country;
 }
 
+/**
+ * The user's conditions, so the lookup can say what the medicine is most
+ * likely for in their case. Only when they opted in to sharing them.
+ */
+export async function sharedConditions(): Promise<string[] | undefined> {
+  const profile = await getUserProfile();
+  return profile.shareConditionsWithAI && profile.conditions.length > 0
+    ? profile.conditions
+    : undefined;
+}
+
 /** POST /api/ai/medicine-search. Cancellable through `signal`. */
 export async function searchMedicine({
   query,
@@ -53,9 +65,14 @@ export async function searchMedicine({
   timeoutMs,
 }: MedicineSearchVariables): Promise<MedicineSearchResult> {
   const country = regionContext();
+  const conditions = await sharedConditions();
   const result = await aiClient.call(
     "/api/ai/medicine-search",
-    { query, ...(country !== undefined && { country }) },
+    {
+      query,
+      ...(country !== undefined && { country }),
+      ...(conditions !== undefined && { conditions }),
+    },
     { ...(signal && { signal }), ...(timeoutMs !== undefined && { timeoutMs }) },
   );
   if (result.ok) return result.data;

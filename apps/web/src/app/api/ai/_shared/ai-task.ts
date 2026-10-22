@@ -47,10 +47,12 @@ export type AiTier = "quality" | "premium";
  * budget of at least {@link MIN_MAX_TOKENS}, because thinking shares it.
  * The tier-policy test pins these per route.
  */
+export type AiEffort = "low" | "medium" | "high";
+
 export const TIER_POLICY = {
   quality: { effort: "high" },
   premium: { effort: "high" },
-} as const satisfies Record<AiTier, { effort: "low" | "medium" | "high" }>;
+} as const satisfies Record<AiTier, { effort: AiEffort }>;
 
 /** Smallest first-turn `max_tokens` that leaves room for adaptive thinking. */
 export const MIN_MAX_TOKENS = 4096;
@@ -100,6 +102,11 @@ export interface AiTaskSpec<Req, Out, Res> {
   rateLimit: number;
   request: z.ZodType<Req>;
   tier: AiTier;
+  /**
+   * Effort for this route when it differs from its tier's. Set only where
+   * the owner chose it, and pinned in the tier-policy test.
+   */
+  effort?: AiEffort;
   /** First-turn `max_tokens` (the shared helper doubles it once on a cut-off). */
   maxTokens: number | ((req: Req) => number);
   /** `max_tokens` for the turn that asks for the tool. Defaults to `maxTokens`. */
@@ -251,7 +258,7 @@ async function runAiTask<Req, Out, Res>(
   const params: Anthropic.Messages.MessageCreateParamsNonStreaming = {
     model: CLAUDE_MODELS[spec.tier],
     max_tokens: typeof spec.maxTokens === "function" ? spec.maxTokens(req) : spec.maxTokens,
-    output_config: { effort: TIER_POLICY[spec.tier].effort },
+    output_config: { effort: spec.effort ?? TIER_POLICY[spec.tier].effort },
     system: prompt.system,
     // web_search stays declared on the follow-up turn too: the replayed
     // assistant turn may hold server_tool_use blocks.

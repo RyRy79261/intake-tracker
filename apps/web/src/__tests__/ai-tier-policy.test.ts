@@ -10,7 +10,9 @@
  *   - no `thinking`: it can't be turned off and `budget_tokens` is a 400;
  *   - `tool_choice` is `auto` on every turn: a forced choice is a 400;
  *   - `output_config.effort` is set on every request (defaults differ per
- *     model and were recalibrated), and it is `high`: accuracy first;
+ *     model and were recalibrated), and it is `high`: accuracy first. The
+ *     one exception is the medicine lookup at `medium`: the owner judged
+ *     Opus 5.5 accurate enough there and wanted it faster (2026-10-22);
  *   - the first turn has at least MIN_MAX_TOKENS, since adaptive thinking
  *     shares the budget.
  *
@@ -89,6 +91,8 @@ interface Case {
   retryMaxTokens: number;
   search: "off" | "allowed" | "required";
   rateLimit: number;
+  /** Unset: `high`, the default for every route. */
+  effort?: "medium";
 }
 
 const CASES: Case[] = [
@@ -113,6 +117,7 @@ const CASES: Case[] = [
     retryMaxTokens: 8192,
     search: "allowed",
     rateLimit: 15,
+    effort: "medium",
   },
   {
     name: "substance-lookup (caffeine)",
@@ -292,12 +297,12 @@ describe("AI task tier policy", () => {
       expect(options.every((o) => o.maxRetries === 0)).toBe(true);
     });
 
-    it("sends only what the pinned model accepts, at high effort, on every turn", async () => {
+    it("sends only what the pinned model accepts, at its pinned effort, on every turn", async () => {
       const { requests } = await capture(c);
       expect(requests.length).toBe(c.search === "required" ? 4 : 2);
       for (const r of requests) {
         expect(r.model).toBe(CLAUDE_MODELS[c.tier]);
-        expect(r.output_config).toEqual({ effort: "high" });
+        expect(r.output_config).toEqual({ effort: c.effort ?? "high" });
         expect(r.tool_choice).toEqual({ type: "auto" });
         for (const banned of ["temperature", "top_p", "top_k", "thinking"]) {
           expect(r).not.toHaveProperty(banned);
