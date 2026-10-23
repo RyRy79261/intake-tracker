@@ -853,3 +853,92 @@ describe("VoicePanel — medications", () => {
     expect(await db.inventoryItems.count()).toBe(1);
   });
 });
+
+describe("VoicePanel — a spoken interaction question", () => {
+  it("shows the interaction report, not the review list, and logs nothing", async () => {
+    await db.prescriptions.add(makePrescription({ genericName: "Bisoprolol", isActive: true }));
+    let lookupBody: unknown = null;
+    let parsed = false;
+    server.use(
+      http.post("*/api/ai/voice-transcribe", () =>
+        HttpResponse.json({ text: "Look up the interactions of sudo fed rin" }),
+      ),
+      http.post("*/api/ai/voice-parse", () => {
+        parsed = true;
+        return HttpResponse.json({ items: [] });
+      }),
+      http.post("*/api/ai/voice-interactions", () =>
+        HttpResponse.json({
+          substances: [{ heard: "sudo fed rin", name: "Pseudoephedrine", unsure: true }],
+        }),
+      ),
+      http.post("*/api/ai/interaction-check", async ({ request }) => {
+        lookupBody = await request.json();
+        return HttpResponse.json({
+          interactions: [
+            {
+              substance: "Pseudoephedrine",
+              medication: "Bisoprolol",
+              severity: "AVOID",
+              description: "It pushes your heart rate up.",
+            },
+          ],
+          summary: "Do not take. It raises blood pressure and heart rate.",
+        });
+      }),
+    );
+    const onCommitted = vi.fn();
+    const user = userEvent.setup();
+    await renderWithFixtures(<VoicePanel onCommitted={onCommitted} />);
+
+    await user.click(screen.getByRole("button", { name: "mock-record" }));
+
+    expect(await screen.findByTestId("interaction-headline")).toHaveTextContent(
+      "Do not take Pseudoephedrine",
+    );
+    const verdict = screen.getByTestId("interaction-verdict");
+    expect(verdict).toHaveTextContent("Do not take. It raises blood pressure and heart rate.");
+    expect(verdict).toHaveTextContent("Clashes with Bisoprolol");
+    expect(verdict).toHaveTextContent("Heard “sudo fed rin”. Best guess: Pseudoephedrine");
+    expect(lookupBody).toEqual({
+      mode: "lookup",
+      substance: "Pseudoephedrine",
+      activePrescriptions: [{ genericName: "Bisoprolol" }],
+    });
+    expect(parsed).toBe(false);
+    expect(screen.queryByText(/Items \(/)).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Done" }));
+    expect(onCommitted).toHaveBeenCalledOnce();
+  });
+
+  it("“What can't I take?” lists the notes saved on the medicines, with no check", async () => {
+    await db.prescriptions.add(
+      makePrescription({
+        genericName: "Furosemide",
+        isActive: true,
+        contraindications: ["Ibuprofen: it stops the water tablet working."],
+      }),
+    );
+    let checked = false;
+    server.use(
+      http.post("*/api/ai/voice-transcribe", () =>
+        HttpResponse.json({ text: "What can't I take with my meds?" }),
+      ),
+      http.post("*/api/ai/voice-interactions", () => HttpResponse.json({ substances: [] })),
+      http.post("*/api/ai/interaction-check", () => {
+        checked = true;
+        return HttpResponse.json({ interactions: [] });
+      }),
+    );
+    const user = userEvent.setup();
+    await renderWithFixtures(<VoicePanel />);
+
+    await user.click(screen.getByRole("button", { name: "mock-record" }));
+
+    expect(await screen.findByText("What you can't take")).toBeInTheDocument();
+    expect(screen.getByText("Ibuprofen: it stops the water tablet working.")).toBeInTheDocument();
+    expect(screen.getByText("Because of Furosemide")).toBeInTheDocument();
+    expect(checked).toBe(false);
+  });
+});

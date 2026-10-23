@@ -31,7 +31,7 @@ const FOOD: ReadonlySet<string> = new Set(["before", "after", "none"]);
 const SEVERITY_ORDER: Record<InteractionSeverity, number> = { AVOID: 0, CAUTION: 1, OK: 2 };
 
 /** The description `withUnassessedMedications` gives a skipped medication. */
-const NOT_ASSESSED_PREFIX = "Not assessed:";
+export const NOT_ASSESSED_PREFIX = "Not assessed:";
 
 /** The stored "About this medicine", or null when none is usable. */
 export function normalizeMedicineInfo(raw: unknown): MedicineInfo | null {

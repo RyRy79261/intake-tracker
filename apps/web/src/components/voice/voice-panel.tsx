@@ -7,6 +7,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@intake/ui/card";
 import { useToast } from "@intake/ui/use-toast";
 import { VoiceRecorder } from "@/components/voice/voice-recorder";
 import { ParsedItemRow, type ParsedItemNote } from "@/components/voice/parsed-item-row";
+import { InteractionReport } from "@/components/voice/interaction-report";
+import { isInteractionQuestion } from "@/lib/voice-interaction-intent";
 import { useLogParsedEntry } from "@/hooks/use-parsed-entry";
 import {
   isMedicationItem,
@@ -154,6 +156,11 @@ export function VoicePanel({ onCommitted, initialClip }: VoicePanelProps) {
   const [error, setError] = useState<string | null>(null);
   const [reasoning, setReasoning] = useState<string | null>(null);
   const [notices, setNotices] = useState<string[]>([]);
+  /**
+   * A question about drug interactions ("can I take ibuprofen?"), not
+   * something to log: the panel shows the interaction report instead.
+   */
+  const [question, setQuestion] = useState<{ text: string; ctx: VoiceMedicationContext } | null>(null);
   const nextRowId = useRef(0);
 
   // The medication list and the dose slots of the days medication rows may
@@ -189,6 +196,12 @@ export function VoicePanel({ onCommitted, initialClip }: VoicePanelProps) {
   // Save waits for every refresh: a row mid-refresh still holds the values
   // the user asked to replace.
   const anyRefreshing = rows.some((r) => r.refreshing);
+  // Rows still waiting from an earlier recording, read inside the recorder
+  // callback (which does not re-run on every row change).
+  const rowsLeftRef = useRef(0);
+  useEffect(() => {
+    rowsLeftRef.current = rows.filter((r) => !r.saved).length;
+  }, [rows]);
 
   const handleRecorded = useCallback(
     async (blob: Blob, mimeType: string) => {
@@ -220,6 +233,15 @@ export function VoicePanel({ onCommitted, initialClip }: VoicePanelProps) {
         const transcribed = await aiClient.call("/api/ai/voice-transcribe", form);
         if (!transcribed.ok) throw new Error(transcribed.error.message);
         const { text } = transcribed.data;
+        if (isInteractionQuestion(text)) {
+          // Nothing to log: the report reads and answers the question.
+          const ctx =
+            medicationContextRef.current ??
+            (await loadVoiceMedicationContext(medicationDates([], spokenAt)));
+          setQuestion({ text, ctx });
+          setStage(rowsLeftRef.current > 0 ? "ready" : "idle");
+          return;
+        }
         setTranscript(text);
 
         setStage("parsing");
@@ -491,6 +513,20 @@ export function VoicePanel({ onCommitted, initialClip }: VoicePanelProps) {
   };
 
   const hasItems = rows.length > 0;
+
+  if (question !== null) {
+    return (
+      <InteractionReport
+        transcript={question.text}
+        prescriptions={question.ctx.prescriptions}
+        onDone={() => {
+          setQuestion(null);
+          onCommitted?.();
+        }}
+        onAskAgain={() => setQuestion(null)}
+      />
+    );
+  }
 
   return (
     <div className="flex h-full flex-col">

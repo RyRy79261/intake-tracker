@@ -97,6 +97,27 @@ export type InteractionCheckBody =
   | { mode: "conflict"; newMedication: string; activePrescriptions: ActivePrescription[] }
   | { mode: "lookup"; substance: string; activePrescriptions: ActivePrescription[] };
 
+/** One substance named in a spoken interaction question. */
+export interface VoiceInteractionSubstance {
+  /** The words as transcribed. */
+  heard: string;
+  /** The corrected generic name. */
+  name: string;
+  /** The brand the user said, if any. */
+  brand?: string;
+  /** The name is a best guess from unclear speech. */
+  unsure: boolean;
+}
+
+/** POST /api/ai/voice-interactions */
+export interface VoiceInteractionsResult {
+  substances: VoiceInteractionSubstance[];
+  /** Substances past the per-question limit, left out. */
+  overCap?: number;
+  /** A short note when the question was not clear. */
+  note?: string;
+}
+
 /** POST /api/ai/medicine-about (normalised by lib/medicine-about). */
 export interface MedicineAboutResponse {
   drugClass: string;
@@ -197,6 +218,10 @@ export interface AiRoutes {
     };
     result: VoiceParseResponse;
   };
+  "/api/ai/voice-interactions": {
+    body: { transcript: string; medications?: string[] };
+    result: VoiceInteractionsResult;
+  };
   "/api/ai/voice-transcribe": { body: FormData; result: { text: string } };
   "/api/analytics/insights": { body: AnalyticsInsightsRequest; result: InsightsResponse };
   "/api/analytics/insights/deep": {
@@ -220,6 +245,7 @@ export const AI_ROUTE_MAX_DURATION_S: Record<AiRoute, number | null> = {
   "/api/ai/titration-warnings": 60,
   "/api/ai/nutrient-analysis": 90,
   "/api/ai/voice-parse": 60,
+  "/api/ai/voice-interactions": 60,
   "/api/ai/voice-transcribe": null,
   "/api/analytics/insights": 90,
   "/api/analytics/insights/deep": null,

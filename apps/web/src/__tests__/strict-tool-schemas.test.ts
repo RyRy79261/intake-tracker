@@ -32,6 +32,7 @@ import { MEDICINE_SEARCH_TOOL } from "@intake/ai-prompts/medicine-search";
 import { MEDICINE_ABOUT_TOOL } from "@intake/ai-prompts/medicine-about";
 import { INTERACTION_CHECK_TOOL } from "@intake/ai-prompts/interaction-check";
 import { TITRATION_WARNINGS_TOOL } from "@intake/ai-prompts/titration-warnings";
+import { VOICE_INTERACTIONS_TOOL } from "@intake/ai-prompts/voice-interactions";
 
 const MAX_OPTIONAL_PARAMETERS = 24;
 const MAX_UNION_PARAMETERS = 16;
@@ -104,6 +105,7 @@ const PREMIUM_TOOLS = [
   MEDICINE_ABOUT_TOOL,
   INTERACTION_CHECK_TOOL,
   TITRATION_WARNINGS_TOOL,
+  VOICE_INTERACTIONS_TOOL,
 ];
 
 describe.each([
