@@ -8,7 +8,7 @@ import { FAKE_MIC, mockSignedIn, readTable } from "./helpers/voice";
  * on its own, and nothing is logged. "What can't I take?" lists the notes
  * saved on the medicines.
  *
- * Offline: the session check and every AI call are mocked.
+ * Offline: no sync, and the session check and every AI call are mocked.
  */
 test.use(FAKE_MIC);
 
@@ -61,6 +61,9 @@ const answer = (substance: string, severity: "AVOID" | "OK", summary: string) =>
 test.describe("Voice: interaction questions", () => {
   test.beforeEach(async ({ page }) => {
     await mockSignedIn(page);
+    // Offline: in CI the session is real, and a synced medicine would reach
+    // the other specs that share the test account (and theirs would reach us).
+    await page.route("**/api/sync/**", (route) => route.abort());
     await page.route("**/api/ai/voice-parse", (route) => route.fulfill({ status: 500, json: {} }));
   });
 
