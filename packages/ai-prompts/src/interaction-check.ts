@@ -61,7 +61,7 @@ export const INTERACTION_CHECK_TOOL = {
       },
       summary: {
         type: "string",
-        description: "One-line overall safety summary." + STE_FIELD_SUFFIX,
+        description: "One short, blunt sentence that tells the user what to do. Start with \"Do not take.\" when any medication is AVOID, \"Careful.\" when the worst is CAUTION, or \"OK.\" when all are OK. Then say the main reason, for example: \"Do not take. It raises blood pressure and works against your heart medicines.\"" + STE_FIELD_SUFFIX,
       },
     },
     required: ["interactions", "drugClass", "summary"],

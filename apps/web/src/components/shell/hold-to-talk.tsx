@@ -224,7 +224,7 @@ export function HoldToTalk({ className, variant = "cell" }: { className?: string
               <p className="mb-2 mt-3 min-h-[3em] text-[1.0625rem] text-muted-foreground" aria-live="polite">
                 {recorder.state === "requesting"
                   ? "Waiting for the microphone…"
-                  : "Say what you ate or drank"}
+                  : "Say what you ate or drank, or ask “can I take …?”"}
               </p>
               <p className="text-[0.8125rem] text-muted-foreground" aria-live="polite">
                 {cancelling
