@@ -15,6 +15,7 @@
     "./nutrient-analysis": "./src/nutrient-analysis.ts",
     "./titration-warnings": "./src/titration-warnings.ts",
     "./voice-parse": "./src/voice-parse.ts",
+    "./voice-interactions": "./src/voice-interactions.ts",
     "./plain-language": "./src/plain-language.ts"
   },
   "scripts": {

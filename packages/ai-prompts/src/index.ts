@@ -23,3 +23,4 @@ export * as interactionCheck from "./interaction-check";
 export * as nutrientAnalysis from "./nutrient-analysis";
 export * as titrationWarnings from "./titration-warnings";
 export * as voiceParse from "./voice-parse";
+export * as voiceInteractions from "./voice-interactions";

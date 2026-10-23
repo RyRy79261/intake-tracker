@@ -65,6 +65,7 @@ import { medicineAboutTask } from "@/app/api/ai/medicine-about/task";
 import { titrationWarningsTask } from "@/app/api/ai/titration-warnings/task";
 import { nutrientAnalysisTask } from "@/app/api/ai/nutrient-analysis/task";
 import { voiceParseTask } from "@/app/api/ai/voice-parse/task";
+import { voiceInteractionsTask } from "@/app/api/ai/voice-interactions/task";
 import { insightsTask } from "@/app/api/analytics/insights/task";
 import * as parseRoute from "@/app/api/ai/parse/route";
 import * as medicineSearchRoute from "@/app/api/ai/medicine-search/route";
@@ -74,6 +75,7 @@ import * as medicineAboutRoute from "@/app/api/ai/medicine-about/route";
 import * as titrationWarningsRoute from "@/app/api/ai/titration-warnings/route";
 import * as nutrientAnalysisRoute from "@/app/api/ai/nutrient-analysis/route";
 import * as voiceParseRoute from "@/app/api/ai/voice-parse/route";
+import * as voiceInteractionsRoute from "@/app/api/ai/voice-interactions/route";
 import * as insightsRoute from "@/app/api/analytics/insights/route";
 
 const NOW = 1_700_000_000_000;
@@ -203,6 +205,17 @@ const CASES: Case[] = [
     rateLimit: 20,
   },
   {
+    name: "voice-interactions",
+    spec: voiceInteractionsTask,
+    maxDuration: voiceInteractionsRoute.maxDuration,
+    body: { transcript: "Can I take ibuprofen?", medications: ["Bisoprolol"] },
+    tier: "quality",
+    maxTokens: 4096,
+    retryMaxTokens: 4096,
+    search: "off",
+    rateLimit: 20,
+  },
+  {
     name: "analytics insights",
     spec: insightsTask,
     maxDuration: insightsRoute.maxDuration,
@@ -230,6 +243,7 @@ const MAX_DURATIONS: Record<string, number> = {
   "nutrient-analysis": 90,
   "voice-parse": 60,
   "voice-parse (refresh)": 60,
+  "voice-interactions": 60,
   "analytics insights": 90,
 };
 
@@ -266,6 +280,7 @@ describe("AI task tier policy", () => {
         "/api/ai/titration-warnings",
         "/api/ai/nutrient-analysis",
         "/api/ai/voice-parse",
+        "/api/ai/voice-interactions",
         "/api/analytics/insights",
       ]),
     );
