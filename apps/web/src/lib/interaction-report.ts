@@ -39,9 +39,13 @@ export function verdictOf(result: InteractionResult): SubstanceVerdict {
 }
 
 /** The report's one-line answer over every checked substance. */
-export function reportHeadline(results: { name: string; verdict: Verdict }[]): string {
+export function reportHeadline(results: { name: string; verdict: Verdict }[], unchecked = 0): string {
   const avoid = results.filter((r) => r.verdict === "avoid").map((r) => r.name);
   if (avoid.length > 0) return `Do not take ${joinOr(avoid)}`;
+  // A check that failed is never read as safe.
+  if (unchecked > 0) {
+    return `Careful. ${unchecked} could not be checked. Ask your pharmacist about ${unchecked === 1 ? "it" : "them"}.`;
+  }
   if (results.some((r) => r.verdict === "caution")) return "Careful. Read each one below.";
   return results.length === 1 ? "OK to take" : "OK to take all of these";
 }

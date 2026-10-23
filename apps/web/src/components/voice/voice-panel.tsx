@@ -199,7 +199,9 @@ export function VoicePanel({ onCommitted, initialClip }: VoicePanelProps) {
   // Rows still waiting from an earlier recording, read inside the recorder
   // callback (which does not re-run on every row change).
   const rowsLeftRef = useRef(0);
-  rowsLeftRef.current = rows.filter((r) => !r.saved).length;
+  useEffect(() => {
+    rowsLeftRef.current = rows.filter((r) => !r.saved).length;
+  }, [rows]);
 
   const handleRecorded = useCallback(
     async (blob: Blob, mimeType: string) => {

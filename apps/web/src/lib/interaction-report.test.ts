@@ -65,6 +65,13 @@ describe("reportHeadline", () => {
     ).toBe("Do not take Pseudoephedrine or Ibuprofen");
   });
 
+  it("never says OK when a check failed", () => {
+    expect(reportHeadline([{ name: "A", verdict: "ok" }], 1)).toBe(
+      "Careful. 1 could not be checked. Ask your pharmacist about it.",
+    );
+    expect(reportHeadline([{ name: "A", verdict: "avoid" }], 1)).toBe("Do not take A");
+  });
+
   it("says careful, or OK", () => {
     expect(reportHeadline([{ name: "A", verdict: "caution" }])).toBe("Careful. Read each one below.");
     expect(reportHeadline([{ name: "A", verdict: "ok" }])).toBe("OK to take");

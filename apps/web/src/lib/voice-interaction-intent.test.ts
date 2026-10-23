@@ -11,6 +11,7 @@ describe("isInteractionQuestion", () => {
     "What can’t I take?",
     "Is it safe to take paracetamol?",
     "Can I mix alcohol with bisoprolol?",
+    "Does grapefruit mix with my meds?",
   ])("asks: %s", (text) => {
     expect(isInteractionQuestion(text)).toBe(true);
   });
@@ -21,6 +22,8 @@ describe("isInteractionQuestion", () => {
     "Blood pressure 120 over 80, heart rate 64",
     "I'm going to take a walk",
     "I drank 500 ml of water",
+    "I had porridge mixed with honey",
+    "A protein shake mixing with milk",
   ])("logs: %s", (text) => {
     expect(isInteractionQuestion(text)).toBe(false);
   });

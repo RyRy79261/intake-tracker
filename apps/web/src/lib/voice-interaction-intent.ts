@@ -9,7 +9,8 @@ const QUESTION_PATTERNS = [
   /\bcontra[\s-]?indicat/i,
   /\bcan(?:'t|not| ?not)? i (?:take|have|use|mix)\b/i,
   /\b(?:safe|ok|okay|alright) (?:for me )?to (?:take|have|use|mix)\b/i,
-  /\bmix(?:ed|ing)? (?:\w+ )?with\b/i,
+  // "Does alcohol mix with …?", not "porridge mixed with honey".
+  /\b(?:does|do|will|would|is|are)\b[^.?!]*\bmix(?:es)? with\b/i,
 ];
 
 export function isInteractionQuestion(transcript: string): boolean {

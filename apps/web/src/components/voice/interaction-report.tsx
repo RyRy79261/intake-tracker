@@ -164,10 +164,11 @@ export function InteractionReport({ transcript, prescriptions: allPrescriptions,
   const done = rows.filter((r) => r.result || r.error).length;
   const working = phase.kind === "reading" || (phase.kind === "checking" && done < rows.length);
   const verdicts = rows.flatMap((r) => (r.result ? [{ name: r.name, verdict: verdictOf(r.result).verdict }] : []));
-  const allIn = phase.kind === "checking" && done === rows.length && verdicts.length > 0;
+  const unchecked = rows.filter((r) => !r.result).length;
+  const allIn = phase.kind === "checking" && rows.length > 0 && done === rows.length;
   const worst = verdicts.some((v) => v.verdict === "avoid")
     ? "avoid"
-    : verdicts.some((v) => v.verdict === "caution")
+    : verdicts.some((v) => v.verdict === "caution") || unchecked > 0
       ? "caution"
       : "ok";
 
@@ -208,7 +209,7 @@ export function InteractionReport({ transcript, prescriptions: allPrescriptions,
             className={cn("mb-3 px-3 py-2 text-base font-semibold text-on-domain", VERDICT_BG[worst])}
             data-testid="interaction-headline"
           >
-            {reportHeadline(verdicts)}
+            {reportHeadline(verdicts, unchecked)}
           </p>
         )}
 
