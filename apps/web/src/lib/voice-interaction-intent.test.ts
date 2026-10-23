@@ -12,6 +12,7 @@ describe("isInteractionQuestion", () => {
     "Is it safe to take paracetamol?",
     "Can I mix alcohol with bisoprolol?",
     "Does grapefruit mix with my meds?",
+    "Does ibuprofen mix well with my meds?",
   ])("asks: %s", (text) => {
     expect(isInteractionQuestion(text)).toBe(true);
   });
