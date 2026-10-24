@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.46.0](https://github.com/RyRy79261/intake-tracker/compare/v1.45.0...v1.46.0) (2026-10-23)
+
+
+### Features
+
+* **voice:** ask about drug interactions by voice ([#454](https://github.com/RyRy79261/intake-tracker/issues/454)) ([ac1cf49](https://github.com/RyRy79261/intake-tracker/commit/ac1cf497584959757129d5af0d13a0885926b73a))
+
+
+### Bug Fixes
+
+* **deps:** bump next to 16.4.2 for October 2026 security release ([#455](https://github.com/RyRy79261/intake-tracker/issues/455)) ([95afe63](https://github.com/RyRy79261/intake-tracker/commit/95afe63923f4205ac353725869c73eaea4395121))
+
 ## [1.45.0](https://github.com/RyRy79261/intake-tracker/compare/v1.44.0...v1.45.0) (2026-10-22)
 
 
