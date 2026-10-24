@@ -31,7 +31,7 @@
   "dependencies": {
     "@intake/types": "workspace:*",
     "simple-statistics": "^7.12.0",
-    "zod": "^4.6.5"
+    "zod": "^4.6.6"
   },
   "devDependencies": {
     "@intake/typescript-config": "workspace:*",
