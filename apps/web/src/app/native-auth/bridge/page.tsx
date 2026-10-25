@@ -54,8 +54,8 @@ export default function NativeSignInBridge() {
         const link = buildReturnLink(data.code, navigator.userAgent);
         if (cancelled) return;
         setAppLink(link);
-        // Auto-return; the visible button is the reliable fallback if the
-        // Custom Tab blocks the app launch on a programmatic navigation.
+        // Auto-return; Chrome may block it (no user gesture after the async
+        // mint) and then stays on this page, so the button is the sure path.
         window.location.replace(link);
       } catch {
         if (!cancelled) setError("Something went wrong finishing sign-in.");

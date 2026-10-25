@@ -61,16 +61,13 @@ describe("NativeSignInBridge page", () => {
     await waitFor(() => expect(window.location.replace).toHaveBeenCalled());
     const expected =
       "intent://intake-tracker.ryanjnoble.dev/auth/native-done?code=a%2Fb" +
-      "#Intent;scheme=https;package=dev.ryanjnoble.intaketracker;" +
-      `S.browser_fallback_url=${encodeURIComponent(`${APP_ORIGIN}/auth/native-done`)};end`;
+      "#Intent;scheme=https;package=dev.ryanjnoble.intaketracker;end";
     expect(window.location.replace).toHaveBeenCalledWith(expected);
     const link = await screen.findByRole("link", { name: /return to intake tracker/i });
     expect(link).toHaveAttribute("href", expected);
   });
 
-  it("keeps the code out of the browser fallback URL", () => {
-    const link = buildReturnLink("secret", "Linux; Android 14");
-    const fallback = link.split("S.browser_fallback_url=")[1];
-    expect(fallback).not.toContain("secret");
+  it("has no browser fallback, so a blocked launch keeps the return button on screen", () => {
+    expect(buildReturnLink("c", "Linux; Android 14")).not.toContain("browser_fallback_url");
   });
 });
