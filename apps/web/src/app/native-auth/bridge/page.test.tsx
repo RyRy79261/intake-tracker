@@ -2,6 +2,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, waitFor, cleanup } from "@testing-library/react";
 import NativeSignInBridge from "@/app/native-auth/bridge/page";
+import { buildReturnLink } from "@/lib/native-auth-link";
 
 const APP_ORIGIN = "https://intake-tracker.ryanjnoble.dev";
 
@@ -49,5 +50,27 @@ describe("NativeSignInBridge page", () => {
     render(<NativeSignInBridge />);
     expect(await screen.findByText(/sign-in error/i)).toBeInTheDocument();
     expect(window.location.replace).not.toHaveBeenCalled();
+  });
+
+  it("targets the app package on Android so a Chrome-installed web copy can't take the code", async () => {
+    vi.spyOn(navigator, "userAgent", "get").mockReturnValue(
+      "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 Chrome/130.0 Mobile Safari/537.36",
+    );
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonRes(200, { code: "a/b" })));
+    render(<NativeSignInBridge />);
+    await waitFor(() => expect(window.location.replace).toHaveBeenCalled());
+    const expected =
+      "intent://intake-tracker.ryanjnoble.dev/auth/native-done?code=a%2Fb" +
+      "#Intent;scheme=https;package=dev.ryanjnoble.intaketracker;" +
+      `S.browser_fallback_url=${encodeURIComponent(`${APP_ORIGIN}/auth/native-done`)};end`;
+    expect(window.location.replace).toHaveBeenCalledWith(expected);
+    const link = await screen.findByRole("link", { name: /return to intake tracker/i });
+    expect(link).toHaveAttribute("href", expected);
+  });
+
+  it("keeps the code out of the browser fallback URL", () => {
+    const link = buildReturnLink("secret", "Linux; Android 14");
+    const fallback = link.split("S.browser_fallback_url=")[1];
+    expect(fallback).not.toContain("secret");
   });
 });
