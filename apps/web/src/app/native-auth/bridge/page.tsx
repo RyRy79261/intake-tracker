@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { buildReturnLink } from "@/lib/native-auth-link";
 
 /**
  * Native Google sign-in — STEP 2 (runs in the Custom Tab after the OAuth
@@ -22,9 +23,6 @@ import { useEffect, useState } from "react";
  * `output: export` build; the cookie-reading lives in /api/native-auth/mint,
  * which the export stashes out.
  */
-
-// Production origin: the App Link host that assetlinks.json delegates to the app.
-const APP_ORIGIN = "https://intake-tracker.ryanjnoble.dev";
 
 export default function NativeSignInBridge() {
   const [appLink, setAppLink] = useState<string | null>(null);
@@ -53,11 +51,11 @@ export default function NativeSignInBridge() {
           if (!cancelled) setError("Sign-in didn't complete. Please try again from the app.");
           return;
         }
-        const link = `${APP_ORIGIN}/auth/native-done?code=${encodeURIComponent(data.code)}`;
+        const link = buildReturnLink(data.code, navigator.userAgent);
         if (cancelled) return;
         setAppLink(link);
-        // Auto-return; the visible button is the reliable fallback if the
-        // Custom Tab doesn't fire the App Link on a programmatic navigation.
+        // Auto-return; Chrome may block it (no user gesture after the async
+        // mint) and then stays on this page, so the button is the sure path.
         window.location.replace(link);
       } catch {
         if (!cancelled) setError("Something went wrong finishing sign-in.");
