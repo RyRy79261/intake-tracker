@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.46.1](https://github.com/RyRy79261/intake-tracker/compare/v1.46.0...v1.46.1) (2026-10-26)
+
+
+### Bug Fixes
+
+* **native:** send the Google sign-in code to the app, not the Chrome web copy ([#459](https://github.com/RyRy79261/intake-tracker/issues/459)) ([06e1df9](https://github.com/RyRy79261/intake-tracker/commit/06e1df94740579da3cbb772615650176dba12fd3))
+
 ## [1.46.0](https://github.com/RyRy79261/intake-tracker/compare/v1.45.0...v1.46.0) (2026-10-23)
 
 
