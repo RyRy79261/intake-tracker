@@ -25,12 +25,12 @@
   "dependencies": {
     "@intake/core": "workspace:*",
     "@intake/types": "workspace:*",
-    "zod": "^4.6.5"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@intake/eslint-config": "workspace:*",
     "@intake/typescript-config": "workspace:*",
-    "eslint": "^10.11.0",
+    "eslint": "^10.13.0",
     "typescript": "^6.0.3"
   }
 }
