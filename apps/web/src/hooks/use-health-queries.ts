@@ -10,6 +10,7 @@ import {
   undoDeleteWeightRecord,
   addBloodPressureRecord,
   getBloodPressureRecords,
+  getBloodPressureRecordsByDateRange,
   updateBloodPressureRecord,
   deleteBloodPressureRecord,
   undoDeleteBloodPressureRecord,
@@ -124,6 +125,17 @@ export function useDeleteWeight() {
  */
 export function useBloodPressureRecords(limit: number = 5) {
   return useLiveQuery(() => getBloodPressureRecords(limit), [limit]);
+}
+
+/**
+ * Hook to get blood pressure records in [start, end] (inclusive, ms).
+ * Pass `enabled: false` to skip the query (returns undefined).
+ */
+export function useBloodPressureRecordsInRange(start: number, end: number, enabled = true) {
+  return useLiveQuery(
+    () => (enabled ? getBloodPressureRecordsByDateRange(start, end) : Promise.resolve(undefined)),
+    [start, end, enabled],
+  );
 }
 
 /**

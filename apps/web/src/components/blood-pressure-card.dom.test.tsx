@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 import { describe, it, expect } from "vitest";
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { BloodPressureCard } from "@/components/blood-pressure-card";
+import { TRENDS_OPEN_KEY } from "@/components/bp-derived-trends";
 import { renderWithFixtures } from "@/__tests__/react-test-utils";
 import { bloodPressureSeries } from "@/__tests__/fixtures/scenarios";
 /* eslint-disable-next-line no-restricted-imports -- test asserts the stored rows */
@@ -101,6 +102,70 @@ describe("BloodPressureCard", () => {
       expect(stored?.heartRate).toBeNull();
       expect(stored?.note).toBeNull();
     });
+  });
+
+  it("shows calculated MAP and PPP for the latest reading in the header", async () => {
+    await renderWithFixtures(<BloodPressureCard />, {
+      seed: { bloodPressureRecords: bloodPressureSeries(1) },
+    });
+
+    // 118/76: MAP = 76 + 42/3 = 90, PPP = 42/118 = 36%.
+    expect(await screen.findByTestId("bp-map")).toHaveTextContent("MAP 90");
+    expect(screen.getByTestId("bp-ppp")).toHaveTextContent("PPP 36%");
+  });
+
+  it("flags a PPP under 25% and a MAP under 65", async () => {
+    await renderWithFixtures(<BloodPressureCard />, {
+      seed: { bloodPressureRecords: bloodPressureSeries(1, { systolic: 80, diastolic: 62 }) },
+    });
+
+    // 80/62: PPP = 18/80 = 23%, MAP = 62 + 6 = 68.
+    const ppp = await screen.findByTestId("bp-ppp");
+    expect(ppp).toHaveClass("text-bp");
+    expect(ppp).toHaveTextContent("PPP 23% low");
+    expect(ppp).toHaveAccessibleName(/percent, low$/);
+    expect(screen.getByTestId("bp-map")).not.toHaveClass("text-bp");
+    expect(screen.getByTestId("bp-map")).not.toHaveTextContent("low");
+  });
+
+  it("flags a MAP under 65 with text as well as colour", async () => {
+    await renderWithFixtures(<BloodPressureCard />, {
+      seed: { bloodPressureRecords: bloodPressureSeries(1, { systolic: 80, diastolic: 50 }) },
+    });
+
+    // 80/50: MAP = 50 + 10 = 60.
+    const map = await screen.findByTestId("bp-map");
+    expect(map).toHaveClass("text-bp");
+    expect(map).toHaveTextContent("MAP 60 low");
+    expect(map).toHaveAccessibleName(/calculated, low$/);
+  });
+
+  it("keeps the 14-day trends collapsed until opened, and remembers the choice", async () => {
+    const user = userEvent.setup();
+    localStorage.removeItem(TRENDS_OPEN_KEY);
+    await renderWithFixtures(<BloodPressureCard />, {
+      seed: { bloodPressureRecords: bloodPressureSeries(3) },
+    });
+
+    const toggle = await screen.findByRole("button", { name: /14-day trends/i });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByTestId("bp-derived-trends")).not.toBeInTheDocument();
+
+    await user.click(toggle);
+    const panel = await screen.findByTestId("bp-derived-trends");
+    expect(within(panel).getByRole("img", { name: /proportional pulse pressure/i })).toBeInTheDocument();
+    expect(localStorage.getItem(TRENDS_OPEN_KEY)).toBe("1");
+
+    await user.click(within(panel).getByRole("button", { name: /what are these/i }));
+    expect(within(panel).getByText(/Stevenson 1989/)).toBeInTheDocument();
+    localStorage.removeItem(TRENDS_OPEN_KEY);
+  });
+
+  it("hides the trends toggle when there are no readings", async () => {
+    await renderWithFixtures(<BloodPressureCard />);
+
+    await screen.findByLabelText(/systolic/i);
+    expect(screen.queryByRole("button", { name: /14-day trends/i })).not.toBeInTheDocument();
   });
 
   it("inline edit rejects an out-of-range reading", async () => {
