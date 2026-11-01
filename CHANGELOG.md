@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.47.0](https://github.com/RyRy79261/intake-tracker/compare/v1.46.1...v1.47.0) (2026-11-01)
+
+
+### Features
+
+* **bp:** show calculated MAP and proportional pulse pressure ([#465](https://github.com/RyRy79261/intake-tracker/issues/465)) ([93bcd9f](https://github.com/RyRy79261/intake-tracker/commit/93bcd9f0b6dc5ac997d71e33e6249dac06944563))
+
 ## [1.46.1](https://github.com/RyRy79261/intake-tracker/compare/v1.46.0...v1.46.1) (2026-10-26)
 
 
