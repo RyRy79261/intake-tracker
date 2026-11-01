@@ -218,6 +218,8 @@ export function BloodPressureCard() {
     ? deriveBloodPressure(latestReading.systolic, latestReading.diastolic)
     : null;
   const pulsePressure = derived?.pulsePressure ?? null;
+  const mapLow = derived !== null && derived.meanArterialPressure < MAP_LOW_THRESHOLD;
+  const pppLow = derived !== null && derived.proportionalPulsePressure < PPP_LOW_THRESHOLD;
 
   return (
     <ModuleCard
@@ -250,19 +252,21 @@ export function BloodPressureCard() {
               <>
                 <br />
                 <span
-                  className={derived.meanArterialPressure < MAP_LOW_THRESHOLD ? "text-bp" : undefined}
-                  aria-label={`Mean arterial pressure ${Math.round(derived.meanArterialPressure)} mmHg, calculated`}
+                  className={mapLow ? "text-bp" : undefined}
+                  aria-label={`Mean arterial pressure ${Math.round(derived.meanArterialPressure)} mmHg, calculated${mapLow ? ", low" : ""}`}
                   data-testid="bp-map"
                 >
                   MAP {Math.round(derived.meanArterialPressure)}
+                  {mapLow && " low"}
                 </span>
                 {" · "}
                 <span
-                  className={derived.proportionalPulsePressure < PPP_LOW_THRESHOLD ? "text-bp" : undefined}
-                  aria-label={`Proportional pulse pressure ${Math.round(derived.proportionalPulsePressure * 100)} percent`}
+                  className={pppLow ? "text-bp" : undefined}
+                  aria-label={`Proportional pulse pressure ${Math.round(derived.proportionalPulsePressure * 100)} percent${pppLow ? ", low" : ""}`}
                   data-testid="bp-ppp"
                 >
                   PPP {Math.round(derived.proportionalPulsePressure * 100)}%
+                  {pppLow && " low"}
                 </span>
               </>
             )}

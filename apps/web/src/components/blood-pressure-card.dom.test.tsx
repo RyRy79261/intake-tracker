@@ -120,8 +120,24 @@ describe("BloodPressureCard", () => {
     });
 
     // 80/62: PPP = 18/80 = 23%, MAP = 62 + 6 = 68.
-    expect(await screen.findByTestId("bp-ppp")).toHaveClass("text-bp");
+    const ppp = await screen.findByTestId("bp-ppp");
+    expect(ppp).toHaveClass("text-bp");
+    expect(ppp).toHaveTextContent("PPP 23% low");
+    expect(ppp).toHaveAccessibleName(/percent, low$/);
     expect(screen.getByTestId("bp-map")).not.toHaveClass("text-bp");
+    expect(screen.getByTestId("bp-map")).not.toHaveTextContent("low");
+  });
+
+  it("flags a MAP under 65 with text as well as colour", async () => {
+    await renderWithFixtures(<BloodPressureCard />, {
+      seed: { bloodPressureRecords: bloodPressureSeries(1, { systolic: 80, diastolic: 50 }) },
+    });
+
+    // 80/50: MAP = 50 + 10 = 60.
+    const map = await screen.findByTestId("bp-map");
+    expect(map).toHaveClass("text-bp");
+    expect(map).toHaveTextContent("MAP 60 low");
+    expect(map).toHaveAccessibleName(/calculated, low$/);
   });
 
   it("keeps the 14-day trends collapsed until opened, and remembers the choice", async () => {

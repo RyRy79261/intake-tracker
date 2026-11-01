@@ -8,7 +8,8 @@ import {
   deriveBloodPressure,
   type DailyDerivedBloodPressure,
 } from "@intake/core/bp-derived";
-import { logicalDaysRange } from "@intake/core/logical-day";
+import { logicalDayKey, logicalDayStart, shiftDayKey } from "@intake/core/logical-day";
+import { useNowTick } from "@intake/ui/use-now-tick";
 import { SubToggle } from "@/components/domain-scope";
 import { useBloodPressureRecordsInRange } from "@/hooks/use-health-queries";
 import { getDeviceTimezone } from "@/lib/timezone";
@@ -45,15 +46,21 @@ interface SparklineProps {
   label: string;
 }
 
-/** A small single-series line, scaled to [lo, hi], last point emphasised. */
+/**
+ * A small single-series line, last point emphasised. [lo, hi] is the usual
+ * range; it widens to fit any value outside it, so a fall below the range
+ * still shows as a fall instead of a flat line on the floor.
+ */
 function Sparkline({ values, lo, hi, reference, label }: SparklineProps) {
   if (values.length < 2) {
     return <p className="h-[26px] text-[0.6875rem] leading-[26px] text-muted-foreground">Needs 2 days</p>;
   }
   const w = 100;
   const h = 26;
+  const min = Math.min(lo, ...values, ...(reference !== undefined ? [reference] : []));
+  const max = Math.max(hi, ...values);
   const x = (i: number) => (i / (values.length - 1)) * w;
-  const y = (v: number) => h - 2 - ((Math.min(hi, Math.max(lo, v)) - lo) / (hi - lo)) * (h - 4);
+  const y = (v: number) => h - 2 - ((v - min) / (max - min)) * (h - 4);
   const points = values.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
   const last = values[values.length - 1]!;
   return (
@@ -99,6 +106,7 @@ function Tile({ label, value, unit, note, flagged, children }: TileProps) {
       <span className={cn("num text-lg font-semibold", flagged && "text-bp")}>
         {value}
         <small className="text-xs font-normal text-muted-foreground">{unit}</small>
+        {flagged && <small className="ml-1 text-[0.6875rem] font-semibold uppercase tracking-[0.06em]">low</small>}
       </span>
       {children}
       <span className="text-[0.6875rem] text-muted-foreground">{note}</span>
@@ -110,11 +118,16 @@ function TrendsPanel({ latest }: { latest: { systolic: number; diastolic: number
   const dayStartHour = useSettingsStore((s) => s.dayStartHour);
   const tz = getDeviceTimezone();
   const [showWhy, setShowWhy] = useState(false);
+  // Re-read the logical day every minute so an open panel rolls over at the
+  // day boundary even when no new reading arrives.
+  useNowTick();
+  const today = logicalDayKey(Date.now(), dayStartHour, tz);
   const { start, end } = useMemo(
-    () => logicalDaysRange(Date.now(), TREND_DAYS, dayStartHour, tz),
-    // Recompute when the latest reading changes so a new day rolls in.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [dayStartHour, tz, latest],
+    () => ({
+      start: logicalDayStart(shiftDayKey(today, -(TREND_DAYS - 1)), dayStartHour, tz),
+      end: logicalDayStart(shiftDayKey(today, 1), dayStartHour, tz) - 1,
+    }),
+    [today, dayStartHour, tz],
   );
   const records = useBloodPressureRecordsInRange(start, end);
   const days: DailyDerivedBloodPressure[] = useMemo(
