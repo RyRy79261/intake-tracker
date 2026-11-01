@@ -41,6 +41,12 @@ import {
 } from "@/lib/date-utils";
 import { getBPCategory } from "@/lib/constants";
 import { useFieldId, useOnLogged } from "@/components/log-form-scope";
+import { BloodPressureDerivedTrends } from "@/components/bp-derived-trends";
+import {
+  MAP_LOW_THRESHOLD,
+  PPP_LOW_THRESHOLD,
+  deriveBloodPressure,
+} from "@intake/core/bp-derived";
 
 // Format BP reading
 function formatBPReading(record: BloodPressureRecord): string {
@@ -208,9 +214,10 @@ export function BloodPressureCard() {
     }
   };
 
-  const pulsePressure = latestReading
-    ? latestReading.systolic - latestReading.diastolic
+  const derived = latestReading
+    ? deriveBloodPressure(latestReading.systolic, latestReading.diastolic)
     : null;
+  const pulsePressure = derived?.pulsePressure ?? null;
 
   return (
     <ModuleCard
@@ -239,10 +246,32 @@ export function BloodPressureCard() {
                 </span>
               </>
             )}
+            {derived && (
+              <>
+                <br />
+                <span
+                  className={derived.meanArterialPressure < MAP_LOW_THRESHOLD ? "text-bp" : undefined}
+                  aria-label={`Mean arterial pressure ${Math.round(derived.meanArterialPressure)} mmHg, calculated`}
+                  data-testid="bp-map"
+                >
+                  MAP {Math.round(derived.meanArterialPressure)}
+                </span>
+                {" · "}
+                <span
+                  className={derived.proportionalPulsePressure < PPP_LOW_THRESHOLD ? "text-bp" : undefined}
+                  aria-label={`Proportional pulse pressure ${Math.round(derived.proportionalPulsePressure * 100)} percent`}
+                  data-testid="bp-ppp"
+                >
+                  PPP {Math.round(derived.proportionalPulsePressure * 100)}%
+                </span>
+              </>
+            )}
           </>
         ) : null
       }
     >
+        <BloodPressureDerivedTrends latest={latestReading} />
+
         <div className="space-y-3">
           {/* Primary inputs: Systolic / Diastolic (always visible) */}
           <div className="grid grid-cols-2 gap-3">
