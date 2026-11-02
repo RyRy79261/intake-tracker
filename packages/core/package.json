@@ -31,7 +31,7 @@
   },
   "dependencies": {
     "@intake/types": "workspace:*",
-    "simple-statistics": "^7.12.1",
+    "simple-statistics": "^8.0.0",
     "zod": "^4.6.7"
   },
   "devDependencies": {
