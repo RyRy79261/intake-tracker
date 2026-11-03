@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.48.0](https://github.com/RyRy79261/intake-tracker/compare/v1.47.0...v1.48.0) (2026-11-03)
+
+
+### Features
+
+* **journal:** medical journal with voice entries, a doctor's printout, and text encrypted at rest ([#471](https://github.com/RyRy79261/intake-tracker/issues/471)) ([deb7905](https://github.com/RyRy79261/intake-tracker/commit/deb79059a233a7a5019ebdf1d33b675af7a736c5))
+
 ## [1.47.0](https://github.com/RyRy79261/intake-tracker/compare/v1.46.1...v1.47.0) (2026-11-01)
 
 
