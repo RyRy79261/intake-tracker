@@ -4,6 +4,7 @@ import { describe, it, expect } from "vitest";
 import {
   VOICE_ITEM_KINDS,
   VOICE_ITEM_SPEC,
+  isVoiceItemKind,
   voiceItemProblem,
   voiceToolItemProperties,
   type NumberFieldSpec,
@@ -13,7 +14,7 @@ import {
 import { extractVoiceItems } from "@/app/api/ai/voice-parse/schema";
 import { PARSE_TOOL } from "@intake/ai-prompts/voice-parse";
 import { validateVoiceItem } from "@/lib/voice-validation";
-import type { VoiceParsedItem } from "@/lib/voice-types";
+import { keepKnownItems, type VoiceParsedItem } from "@/lib/voice-types";
 
 /**
  * The seam between the route and the review row: an item the route returns
@@ -170,5 +171,22 @@ describe("voice item contract: layering", () => {
       "utf8",
     );
     expect(source).not.toMatch(/from "@\/(lib|components|hooks|stores)\//);
+  });
+});
+
+describe("a kind this build does not know (#473)", () => {
+  it("is told apart from every kind it does", () => {
+    for (const kind of VOICE_ITEM_KINDS) expect(isVoiceItemKind(kind)).toBe(true);
+    for (const kind of ["from_the_future", "constructor", "toString", "", undefined, null, 3]) {
+      expect(isVoiceItemKind(kind)).toBe(false);
+    }
+  });
+
+  it("is left out of the review and counted", () => {
+    const water = { kind: "water", ml: 250 };
+    expect(keepKnownItems([water, { kind: "from_the_future" }, { kind: undefined }])).toEqual({
+      items: [water],
+      unknown: 2,
+    });
   });
 });

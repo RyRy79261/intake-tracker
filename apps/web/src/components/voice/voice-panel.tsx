@@ -13,6 +13,7 @@ import { useLogParsedEntry } from "@/hooks/use-parsed-entry";
 import {
   isMedicationItem,
   isRefreshable,
+  keepKnownItems,
   type RefreshableItem,
   type VoiceParsedItem,
   type VoiceParseResponse,
@@ -85,8 +86,13 @@ function refreshText(item: RefreshableItem): string {
 }
 
 /** Plain-language notices about what the parse left out. */
-function parseNotices(data: VoiceParseResponse): string[] {
+function parseNotices(data: VoiceParseResponse, unknownKinds: number): string[] {
   const notices: string[] = [];
+  if (unknownKinds > 0) {
+    notices.push(
+      `${unknownKinds} ${unknownKinds === 1 ? "item needs" : "items need"} the newest version of the app — reload it, then record ${unknownKinds === 1 ? "it" : "them"} again.`,
+    );
+  }
   if (data.transcriptTruncated) {
     notices.push(
       "The recording was too long — the end of the transcript was not parsed. Record anything missing separately.",
@@ -259,6 +265,9 @@ export function VoicePanel({ onCommitted, initialClip }: VoicePanelProps) {
         });
         if (!parsed.ok) throw new Error(parsed.error.message);
         const data = parsed.data;
+        // An app left open across a deploy can be sent a kind it has no
+        // editor for; those are left out with a notice to reload.
+        const known = keepKnownItems(data.items);
         // Collapse a drink the parser split into two items before the review
         // list is built, so the user approves one row per drink instead of
         // having a correction applied invisibly at save time (issue #322).
@@ -266,7 +275,7 @@ export function VoicePanel({ onCommitted, initialClip }: VoicePanelProps) {
         // the clock the parser was given ("an hour ago" is an hour before the
         // recording ended, not before the reply arrived).
         const reconciled = reconcileLiquidItems(
-          data.items.map((item) => normalizeSpokenTiming(item, spokenAt, timeZone)),
+          known.items.map((item) => normalizeSpokenTiming(item, spokenAt, timeZone)),
         );
         // Voice caffeine follows the user's preset for a named drink, so the
         // same moka books the same caffeine whichever way it was logged.
@@ -296,10 +305,10 @@ export function VoicePanel({ onCommitted, initialClip }: VoicePanelProps) {
         const items = priced.items;
         setRows((prev) => [...prev, ...newRows]);
         setReasoning(data.reasoning ?? null);
-        setNotices(parseNotices(data));
+        setNotices(parseNotices(data, known.unknown));
         setStage("ready");
 
-        if (items.length === 0) {
+        if (items.length === 0 && known.unknown === 0) {
           toast({
             title: "No items detected",
             description: "The transcript didn't contain extractable health metrics.",
