@@ -1,5 +1,5 @@
 /** The routes that show the shell's bars: Home, the app deep links and Settings. */
-const CHROME_ROUTES: ReadonlySet<string> = new Set(["/profile", "/", "/medications", "/analytics", "/settings"]);
+const CHROME_ROUTES: ReadonlySet<string> = new Set(["/profile", "/", "/medications", "/journal", "/analytics", "/settings"]);
 
 /** Routes that show the Ward Console shell's sys-bar and bottom bar. */
 export function isChromeRoute(pathname: string | null): boolean {
@@ -31,9 +31,10 @@ export type ShellIconName =
   | "wee"
   | "bowel"
   | "back"
-  | "book";
+  | "book"
+  | "journal";
 
-export type ShellAppId = "meds" | "metrics" | "history" | "profile" | "help";
+export type ShellAppId = "meds" | "journal" | "metrics" | "history" | "profile" | "help";
 
 /** Default window size on wide screens (read by the window manager, PR 3). */
 export type ShellAppSize = "S" | "M" | "L";
@@ -58,6 +59,7 @@ export interface ShellApp {
  */
 export const SHELL_APPS: Record<ShellAppId, ShellApp> = {
   meds: { id: "meds", title: "Medications", icon: "pill", color: "var(--color-meds)", size: "M", path: "/medications" },
+  journal: { id: "journal", title: "Journal", icon: "journal", color: "var(--color-journal)", size: "M", path: "/journal" },
   metrics: { id: "metrics", title: "Metrics", icon: "metrics", color: null, size: "L", path: "/analytics" },
   history: { id: "history", title: "History", icon: "history", color: null, size: "M", path: "/history" },
   profile: { id: "profile", title: "Profile", icon: "profile", color: null, size: "M", path: "/profile" },
@@ -65,14 +67,14 @@ export const SHELL_APPS: Record<ShellAppId, ShellApp> = {
 };
 
 /** Apps with their own sys-bar button, in order (Profile is the avatar). */
-export const SYS_BAR_APPS = ["meds", "metrics", "history"] as const satisfies readonly ShellAppId[];
+export const SYS_BAR_APPS = ["meds", "journal", "metrics", "history"] as const satisfies readonly ShellAppId[];
 
 // ---------------------------------------------------------------------------
 // Ward Console windows
 // ---------------------------------------------------------------------------
 
 /** Apps that open as a window. History is not one: it opens Metrics › Records. */
-export type WindowAppId = "meds" | "metrics" | "profile" | "help";
+export type WindowAppId = "meds" | "journal" | "metrics" | "profile" | "help";
 
 /** Per-window state, e.g. `{ tab: "records" }` for Metrics. */
 export type WindowState = Record<string, string | number | boolean | null>;
@@ -84,7 +86,7 @@ export function resolveWindowApp(
 ): { app: WindowAppId; st: WindowState } | null {
   // History = Metrics on Records, unfiltered unless the caller filters it.
   if (app === "history") return { app: "metrics", st: { filter: "all", ...st, tab: "records" } };
-  if (app === "meds" || app === "metrics" || app === "profile" || app === "help") return { app, st: { ...st } };
+  if (app === "meds" || app === "journal" || app === "metrics" || app === "profile" || app === "help") return { app, st: { ...st } };
   return null;
 }
 
@@ -95,6 +97,7 @@ export function resolveWindowApp(
  */
 const WINDOW_ROUTE_APPS: Readonly<Record<string, ShellAppId>> = {
   "/medications": "meds",
+  "/journal": "journal",
   "/analytics": "metrics",
   "/history": "history",
   "/profile": "profile",
@@ -132,6 +135,7 @@ export function windowHref(app: WindowAppId, st?: WindowState): string {
     const slug = typeof st?.slug === "string" && st.slug ? st.slug : null;
     return slug ? `/help/${encodeURIComponent(slug)}` : "/help";
   }
+  if (app === "journal") return "/journal";
   return app === "meds" ? "/medications" : "/profile";
 }
 

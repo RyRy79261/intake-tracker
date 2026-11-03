@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isPlaceId, isPlaceMissingSide, parsePlaceList } from "@intake/core/journal";
 import { REFRESHABLE_KINDS, voiceItemSchema, type VoiceItem } from "@intake/core/voice-items";
 
 /**
@@ -149,6 +150,17 @@ export type VoiceExtractResult =
  * only when there is no usable items array, or items were present but none
  * survived validation.
  */
+/**
+ * A journal item keeps only the body places on the list (and sided places the
+ * model named without a side, which the review asks about). Anything else the
+ * model wrote there is dropped rather than shown as a place.
+ */
+function withKnownPlaces(item: VoiceParsedItem & { kind: "journal_entry" }): VoiceParsedItem {
+  const { places: raw, ...rest } = item;
+  const places = parsePlaceList(raw).filter((id) => isPlaceId(id) || isPlaceMissingSide(id));
+  return places.length > 0 ? { ...rest, places: places.join(",") } : rest;
+}
+
 export function extractVoiceItems(
   input: unknown,
   /**
@@ -171,7 +183,8 @@ export function extractVoiceItems(
       // value; all three leave the response with no `when` key.
       const { when, ...rest } = parsed.data;
       const keep = when && (absoluteTimes || when.kind === "relative");
-      items.push((keep ? { ...rest, when } : rest) as VoiceParsedItem);
+      const item = (keep ? { ...rest, when } : rest) as VoiceParsedItem;
+      items.push(item.kind === "journal_entry" ? withKnownPlaces(item) : item);
     } else {
       dropped++;
     }

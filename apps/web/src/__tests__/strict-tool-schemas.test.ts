@@ -129,13 +129,13 @@ describe("voice-parse tool", () => {
   // audit, but the API can't compile it as a strict tool: the first request
   // hangs past the route's deadline and later ones are a 400 "Schema is too
   // complex" (issue #406, every voice log a 504). The optional per-item
-  // fields (24 with the medication kinds) are the cost. So the tool is not
+  // fields (24 with the medication kinds, 30 with the journal) are the cost. So the tool is not
   // strict, and the items are checked with Zod on the server instead.
   it("is not strict", () => {
     expect((PARSE_TOOL as { strict?: boolean }).strict).toBeUndefined();
     const result: Audit = { problems: [], optional: 0, unions: 0 };
     audit(PARSE_TOOL.input_schema as Schema, PARSE_TOOL.name, result);
-    expect(result.optional).toBe(24);
+    expect(result.optional).toBe(30);
     expect(PARSE_TOOL.input_schema.required).toEqual(["items", "reasoning"]);
   });
 

@@ -135,6 +135,7 @@ interface WindowStoreState {
 
 const DEFAULT_ST: Record<WindowAppId, WindowState> = {
   meds: {},
+  journal: {},
   metrics: { tab: "summary" },
   profile: {},
   /** The guide on screen; null for the index. */

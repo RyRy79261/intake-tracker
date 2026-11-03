@@ -23,7 +23,8 @@
     "./voice-items": "./src/voice-items.ts",
     "./dose-rules": "./src/dose-rules.ts",
     "./schedule-window": "./src/schedule-window.ts",
-    "./bp-derived": "./src/bp-derived.ts"
+    "./bp-derived": "./src/bp-derived.ts",
+    "./journal": "./src/journal.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

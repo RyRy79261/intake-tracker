@@ -108,6 +108,7 @@ export const VOICE_ITEM_COLOR: Record<VoiceItemKind, string> = {
   scheduled_dose: "meds",
   stock_refill: "meds",
   extra_medicine: "meds",
+  journal_entry: "journal",
 };
 
 export const VOICE_ITEM_LABEL: Record<VoiceItemKind, string> = {
@@ -123,4 +124,5 @@ export const VOICE_ITEM_LABEL: Record<VoiceItemKind, string> = {
   scheduled_dose: "Doses",
   stock_refill: "Refill",
   extra_medicine: "Medicine",
+  journal_entry: "Journal",
 };

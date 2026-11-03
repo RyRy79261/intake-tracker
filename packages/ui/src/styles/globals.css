@@ -72,6 +72,8 @@
   --color-bath: hsl(var(--bath));
   --color-meds: hsl(var(--meds));
   --color-ai: hsl(var(--ai));
+  /* The Journal domain. */
+  --color-journal: hsl(var(--journal));
   /* Settings only: the System group. Not a tracked domain. */
   --color-steel: hsl(var(--steel));
 
@@ -92,6 +94,7 @@
   --color-weight-foreground: hsl(var(--onD));
   --color-bath-foreground: hsl(var(--onD));
   --color-meds-foreground: hsl(var(--onD));
+  --color-journal-foreground: hsl(var(--onD));
   --color-ai-foreground: hsl(var(--onD));
   --color-salt-foreground: hsl(var(--onD));
   --color-eating-foreground: hsl(var(--onD));
@@ -166,6 +169,7 @@
     --bath: 53.2 75.2% 25.3%; /* #716610 */
     --meds: 175.2 87.5% 25.1%; /* #08786F */
     --ai: 235.1 61.3% 53.3%; /* #3F4BD1 */
+    --journal: 21.8 87.5% 37.6%; /* #B4490C */
     /* Settings group colour (System) — day. See settings-groups.ts. */
     --steel: 199.8 49.7% 33.5%; /* #2B6480 */
 
@@ -215,6 +219,7 @@
     --bath: 52.6 48.4% 57.5%; /* #C7BA5E */
     --meds: 174.4 63.8% 50.2%; /* #2FD1C2 */
     --ai: 232.6 100% 77.8%; /* #8E9CFF */
+    --journal: 20.8 100% 64.9%; /* #FF8A4C */
     /* Settings group colour (System) — night */
     --steel: 197.5 57.8% 67.5%; /* #7CC0DC */
 
@@ -315,6 +320,7 @@
   [data-domain="bath"] { --d: var(--bath); }
   [data-domain="meds"] { --d: var(--meds); }
   [data-domain="ai"] { --d: var(--ai); }
+  [data-domain="journal"] { --d: var(--journal); }
   [data-domain="steel"] { --d: var(--steel); }
   [data-domain="ink"] {
     --d: var(--fg);

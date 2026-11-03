@@ -165,7 +165,7 @@ test.describe("Swiping on a phone", () => {
       .toBe("");
   }
 
-  test("moves along the sys-bar: Home, Medications, Metrics, History, one window at a time", async ({ page }) => {
+  test("moves along the sys-bar: Home, Medications, Journal, Metrics, History, one window at a time", async ({ page }) => {
     await openHome(page);
     await expect(page.getByRole("navigation", { name: "Jump to" })).toBeVisible();
 
@@ -176,6 +176,9 @@ test.describe("Swiping on a phone", () => {
     await swipe(page, -250);
     await expect(windowNamed(page, "Medications")).toBeVisible();
     await expect(page).toHaveURL(/\/medications$/);
+    await swipe(page, -250);
+    await expect(windowNamed(page, "Journal")).toBeVisible();
+    await expect(page).toHaveURL(/\/journal$/);
     await swipe(page, -250);
     const metrics = windowNamed(page, "Metrics");
     await expect(metrics).toBeVisible();
@@ -188,6 +191,8 @@ test.describe("Swiping on a phone", () => {
 
     await swipe(page, 250);
     await expect(metrics.getByRole("tab", { name: "Summary" })).toHaveAttribute("data-state", "active");
+    await swipe(page, 250);
+    await expect(windowNamed(page, "Journal")).toBeVisible();
     await swipe(page, 250);
     await expect(windowNamed(page, "Medications")).toBeVisible();
     await swipe(page, 250);

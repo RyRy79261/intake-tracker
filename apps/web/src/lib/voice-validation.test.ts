@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { validateVoiceItem } from "@/lib/voice-validation";
+import { journalPlacesProblem, validateVoiceItem } from "@/lib/voice-validation";
 
 describe("validateVoiceItem", () => {
   it("accepts well-formed items of every kind", () => {
@@ -100,5 +100,33 @@ describe("validateVoiceItem", () => {
       expect(dose("taken")).toBeNull();
       expect(dose("skipped")).toMatch(/future/);
     });
+  });
+});
+
+describe("validateVoiceItem: journal entries", () => {
+  const entry = (places?: string) => ({
+    kind: "journal_entry" as const,
+    finding: "Knee pain",
+    words: "My knee hurts",
+    entryKind: "symptom" as const,
+    ...(places !== undefined && { places }),
+  });
+
+  it("passes with no place, or places from the list", () => {
+    expect(validateVoiceItem(entry())).toBeNull();
+    expect(validateVoiceItem(entry("knee-l, eyes"))).toBeNull();
+  });
+
+  it("asks for the side of a sided place", () => {
+    expect(validateVoiceItem(entry("knee"))).toBe("Which side: knee, left or right?");
+    expect(journalPlacesProblem("eyes,armpit")).toBe("Which side: armpit, left or right?");
+  });
+
+  it("refuses a place that is not on the list", () => {
+    expect(validateVoiceItem(entry("elbow-l"))).toMatch(/not on it/);
+  });
+
+  it("refuses an intensity outside 0-10", () => {
+    expect(validateVoiceItem({ ...entry(), severity: 12 })).toMatch(/Intensity/);
   });
 });

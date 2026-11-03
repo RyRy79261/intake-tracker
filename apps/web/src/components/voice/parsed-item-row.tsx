@@ -31,6 +31,7 @@ import {
   isLongAgo,
 } from "@/lib/voice-time";
 import { getDeviceTimezone } from "@/lib/timezone";
+import { JournalEntryFields } from "@/components/journal/journal-fields";
 
 /** A note shown on one review row — a merge, a preset, or a warning. */
 export interface ParsedItemNote {
@@ -122,6 +123,7 @@ const COLOR_CLASS: Record<string, ColorClass> = {
     chip: "bg-defecation text-defecation-foreground",
   },
   meds: { bar: "bg-meds", ring: "ring-meds/30", chip: "bg-meds text-meds-foreground" },
+  journal: { bar: "bg-journal", ring: "ring-journal/30", chip: "bg-journal text-journal-foreground" },
 };
 
 /**
@@ -139,6 +141,7 @@ const ROW_DOMAIN: Record<string, Domain> = {
   urination: "bath",
   defecation: "bath",
   meds: "meds",
+  journal: "journal",
 };
 
 function numberOrZero(v: string): number {
@@ -516,6 +519,16 @@ function ItemEditor({
         </div>
       );
     }
+
+    case "journal_entry":
+      // The same fields as the Journal composer.
+      return (
+        <JournalEntryFields
+          item={item}
+          onChange={(next) => onChange({ ...item, ...next })}
+          disabled={disabled}
+        />
+      );
 
     case "urination":
       // An amount is required, as on the manual card — analytics imputed a

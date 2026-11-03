@@ -40,6 +40,7 @@ export const WINDOW_SIZES: Record<ShellAppSize, readonly [number, number]> = {
  */
 export const WINDOW_MIN: Record<WindowAppId, readonly [number, number]> = {
   meds: [360, 400],
+  journal: [360, 400],
   metrics: [360, 400],
   profile: [360, 280],
   help: [360, 280],

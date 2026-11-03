@@ -6,6 +6,7 @@ import { LogDoseFab } from "@/components/medications/log-dose-fab";
 import { AddMedicationWizard } from "@/components/medications/add-medication-wizard";
 import { AnalyticsPageBody, isAnalyticsTab } from "@/components/analytics/analytics-page-body";
 import { ProfilePageBody } from "@/components/profile/profile-page-body";
+import { JournalWindowBody } from "@/components/journal/journal-window";
 import { HelpIndex } from "@/components/help/help-index";
 import { ManualView } from "@/components/help/manual-view";
 import { getManual } from "@/lib/help/manuals";
@@ -108,6 +109,7 @@ function HelpBody({ win }: WindowBodyProps) {
  */
 export const WINDOW_APPS: Record<WindowAppId, WindowApp> = {
   meds: { Body: MedsBody, Overlay: MedsOverlay, flushTop: true },
+  journal: { Body: JournalWindowBody, flushTop: true },
   metrics: { Body: MetricsBody, flushTop: true },
   profile: { Body: ProfileBody },
   help: { Body: HelpBody },

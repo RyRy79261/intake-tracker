@@ -353,3 +353,25 @@ describe("medication items", () => {
     ).toBe(false);
   });
 });
+
+describe("extractVoiceItems: journal entries", () => {
+  const journal = { kind: "journal_entry", finding: "Bruise", words: "A bruise on my right shin", entryKind: "sign", when: null };
+
+  it("keeps a journal entry with its places", () => {
+    const r = extractVoiceItems({ items: [{ ...journal, places: "lowerleg-r" }], reasoning: "" });
+    expect(r.ok && r.items).toEqual([{ kind: "journal_entry", finding: "Bruise", words: "A bruise on my right shin", entryKind: "sign", places: "lowerleg-r" }]);
+  });
+
+  it("drops places that are not on the list, and keeps a sided place heard without a side", () => {
+    const r = extractVoiceItems({ items: [{ ...journal, places: "shin, lowerleg, elbow-l" }], reasoning: "" });
+    expect(r.ok && r.items[0]).toMatchObject({ places: "lowerleg" });
+    const none = extractVoiceItems({ items: [{ ...journal, places: "somewhere" }], reasoning: "" });
+    expect(none.ok && none.items[0]).not.toHaveProperty("places");
+  });
+
+  it("drops a journal entry with no words or no kind", () => {
+    expect(extractVoiceItems({ items: [{ ...journal, words: " " }, water], reasoning: "" })).toMatchObject({ ok: true, dropped: 1 });
+    const { entryKind: _k, ...noKind } = journal;
+    expect(extractVoiceItems({ items: [noKind, water], reasoning: "" })).toMatchObject({ ok: true, dropped: 1 });
+  });
+});

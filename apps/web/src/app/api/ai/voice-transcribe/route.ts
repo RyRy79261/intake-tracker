@@ -21,7 +21,9 @@ const DOMAIN_PROMPT =
   "Health metrics dictation. Blood pressure systolic over diastolic mmHg, " +
   "heart rate bpm, weight kg, water ml, sodium mg salt pinch. " +
   "Food: slices, cheddar, toasted, sandwich, orange juice, coffee espresso. " +
-  "Caffeine mg, alcohol ABV percent beer wine spirits. Urination defecation small medium large.";
+  "Caffeine mg, alcohol ABV percent beer wine spirits. Urination defecation small medium large. " +
+  "Journal: headache, nauseous, nausea, postnasal drip, armpit, knee, shin, calf, bruise, rash, " +
+  "swelling, tingling, dizzy, out of ten.";
 
 const MAX_AUDIO_BYTES = 20 * 1024 * 1024; // 20 MB hard cap
 const ALLOWED_MIME_PREFIXES = ["audio/", "video/webm", "video/mp4"];

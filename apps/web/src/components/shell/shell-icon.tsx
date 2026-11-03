@@ -105,6 +105,13 @@ const PATHS: Record<ShellIconName, ReactElement> = {
       <path d="M20.5 5.5c-3-1.3-5.8-1.3-8.5.5v14c2.7-1.8 5.5-1.8 8.5-.5Z" />
     </>
   ),
+  // Journal: a ruled notebook.
+  journal: (
+    <>
+      <path d="M5.5 3.5h13v17h-13z" />
+      <path d="M8.5 3.5v17M11.5 8h4.5M11.5 11.5h4.5M11.5 15h3" />
+    </>
+  ),
 };
 
 interface ShellIconProps {
