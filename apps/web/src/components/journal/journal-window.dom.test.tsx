@@ -46,6 +46,24 @@ describe("Journal window", () => {
     expect(screen.getByLabelText("What did you notice?")).toHaveValue("");
   });
 
+  it("shows no intensity for an unrated entry, also one stored without the key", async () => {
+    const entry = makeJournalEntry({
+      words: "Just had whooping cough, flu shot and dual hepatitis vaccine",
+      finding: "Vaccinations",
+      kind: "symptom",
+      places: [],
+      severity: null,
+      timestamp: Date.now() - 60_000,
+    });
+    const { severity: _unrated, ...withoutKey } = entry;
+    await renderWithFixtures(<JournalWindowBody />, {
+      seed: { journalEntries: [withoutKey as typeof entry] },
+    });
+    const row = await screen.findByTestId("journal-entry");
+    expect(row).toHaveTextContent("Felt");
+    expect(row).not.toHaveTextContent(/undefined|\/10|severe/);
+  });
+
   it("never overwrites a detail the person set", async () => {
     const user = userEvent.setup();
     await renderWithFixtures(<JournalWindowBody />);

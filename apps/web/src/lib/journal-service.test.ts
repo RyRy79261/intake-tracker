@@ -74,6 +74,18 @@ describe("journal entries in the database", () => {
     expect(await db._syncQueue.where("tableName").equals("journalEntries").count()).toBe(2);
   });
 
+  it("reads an unrated entry stored without its severity key as unrated", async () => {
+    // A pull before the sync kept severity null stored it with the key missing.
+    const added = await addJournalEntry({ words: "Flu shot today", kind: "event", timestamp: NOW - 1000 });
+    if (!added.success) throw new Error("not added");
+    const { severity: _unrated, ...withoutKey } = added.data;
+    await db.journalEntries.put(withoutKey as typeof added.data);
+    expect("severity" in (await db.journalEntries.get(added.data.id))!).toBe(false);
+    const [entry] = await getJournalEntries();
+    expect(entry).toMatchObject({ words: "Flu shot today", severity: null });
+    expect((await getJournalEntriesBetween(NOW - 2000, NOW))[0]?.severity).toBeNull();
+  });
+
   it("a delete wipes the content and hides the entry", async () => {
     const added = await addJournalEntry({
       words: "Bruise on my right shin",

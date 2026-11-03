@@ -42,6 +42,9 @@ export const NULLABLE_SYNC_FIELDS = Object.fromEntries(
  */
 const NULL_TYPED_FIELDS = new Set([
   "deletedAt",
+  // JournalEntry.severity: null is "not rated". Dropped, the row read as
+  // rated "undefined/10" (issue: unrated journal entries after a pull).
+  "severity",
   "aiInsightsConsentAt",
   "homeTimezone",
   "homeTimezoneConfirmedAt",
