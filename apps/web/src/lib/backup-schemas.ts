@@ -15,6 +15,7 @@
  */
 
 import { z } from "zod";
+import { isPlaceId } from "@intake/core/journal";
 
 /** A real, finite JS number -- rejects NaN and +/-Infinity. */
 const finiteNumber = z.number().finite();
@@ -312,7 +313,8 @@ export const journalEntrySchema = baseRecord
     words: z.string().max(500),
     finding: z.string().max(60),
     kind: z.enum(["symptom", "sign", "event"]),
-    places: z.array(z.string()),
+    // Only ids on the body-place list: the journal shows any other id raw.
+    places: z.array(z.string().refine(isPlaceId)),
     severity: z.number().int().min(0).max(10).nullable(),
   })
   .passthrough();

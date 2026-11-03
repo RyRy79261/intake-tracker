@@ -321,8 +321,9 @@ the HL7 FHIR Symptoms guide, so a future export can code it.
 - Printout: the last 7–90 days, optionally only some titles, built as a PDF
   on the device.
 - Deleting an entry wipes its words, title, places and rating on the device
-  and on the server; only an empty tombstone remains for sync. It cannot be
-  undone.
+  and on the server; only an empty tombstone remains for sync. There is no
+  undo, but a backup exported before the deletion still holds the entry, and
+  importing it restores the entry on the device and in the cloud copy.
 - The MCP connector cannot read journal entries.
 
 ### Security Features
@@ -391,7 +392,7 @@ AI features require an authenticated Neon Auth session and a server-side `ANTHRO
 
 ## Claude Custom Connector (MCP)
 
-The app ships a [Model Context Protocol](https://modelcontextprotocol.io) server so you can attach **your own data** to a Claude chat as a custom connector and ask Claude to query it directly — "what was my average BP last week?", "how much water have I logged today?", "list my active medications". **Read-only**: the connector cannot insert, update, or delete records.
+The app ships a [Model Context Protocol](https://modelcontextprotocol.io) server so you can attach **your own data** to a Claude chat as a custom connector and ask Claude to query it directly — "what was my average BP last week?", "how much water have I logged today?", "list my active medications". It reads your data; with the `intake-tracker:write` scope granted it can also log meals and drinks, and delete only the entries it logged. It cannot edit records or delete entries you logged in the app.
 
 ### Prerequisites
 

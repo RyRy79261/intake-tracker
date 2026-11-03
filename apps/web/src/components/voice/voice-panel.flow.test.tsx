@@ -1018,3 +1018,26 @@ describe("VoicePanel — journal entries", () => {
     expect(screen.getByRole("button", { name: /approve journal/i })).toBeEnabled();
   });
 });
+
+describe("VoicePanel — journal entries: clearing a heard detail", () => {
+  it("saves without the intensity and place the user cleared", async () => {
+    parsedItems = [
+      { kind: "journal_entry", finding: "Knee pain", words: "My left knee, a four", entryKind: "symptom", severity: 4, places: "knee-l" },
+    ];
+    const user = userEvent.setup();
+    await renderWithFixtures(<VoicePanel />);
+    await user.click(screen.getByRole("button", { name: "mock-record" }));
+    await screen.findByText(/Items \(/);
+    await user.click(screen.getByRole("button", { name: "Clear" }));
+    await user.click(screen.getByRole("combobox", { name: /body place/i }));
+    await user.click(await screen.findByRole("option", { name: "Knee, left" }));
+    await user.keyboard("{Escape}");
+    expect(screen.getByRole("combobox", { name: /body place/i })).toHaveTextContent("Not tied to a body place");
+    await user.click(screen.getByRole("button", { name: /Approve all/i }));
+    await user.click(screen.getByRole("button", { name: /^Save/ }));
+    await waitFor(async () => {
+      expect((await db.journalEntries.toArray()).filter((e) => e.deletedAt === null)).toHaveLength(1);
+    });
+    expect((await db.journalEntries.toArray())[0]).toMatchObject({ severity: null, places: [] });
+  });
+});

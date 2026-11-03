@@ -93,6 +93,11 @@ export function IntensitySlider({
         value={value ?? 0}
         aria-valuetext={rated ? `${value} out of 10` : "Not rated"}
         onChange={(e) => onChange(Number(e.target.value))}
+        // Unrated, the native value is 0, so keys that stay at 0 fire no
+        // change event: they rate 0 here instead.
+        onKeyDown={(e) => {
+          if (!rated && ["Home", "ArrowLeft", "ArrowDown", "PageDown"].includes(e.key)) onChange(0);
+        }}
         // A tap on the faded thumb at 0 changes nothing, so it would not rate 0 otherwise.
         onPointerUp={(e) => {
           if (!rated) onChange(Number(e.currentTarget.value));

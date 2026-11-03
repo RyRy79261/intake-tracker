@@ -100,7 +100,11 @@ test.describe("Journal", () => {
     await journal(page).getByRole("button", { name: "Add to journal" }).click();
     await journal(page).getByRole("button", { name: "Delete Rash" }).click();
     const dialog = page.getByRole("alertdialog");
-    await expect(dialog).toContainText("cannot be undone");
+    await dialog.getByRole("button", { name: "Cancel" }).click();
+    await expect(dialog).toBeHidden();
+    await expect(journal(page).getByTestId("journal-entry")).toHaveCount(1);
+    await journal(page).getByRole("button", { name: "Delete Rash" }).click();
+    await expect(dialog).toContainText("no undo");
     await dialog.getByRole("button", { name: "Delete" }).click();
     await expect(journal(page).getByTestId("journal-entry")).toHaveCount(0);
     const [row] = await readTable(page, "journalEntries");

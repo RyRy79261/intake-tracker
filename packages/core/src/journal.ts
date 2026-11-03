@@ -196,7 +196,7 @@ export function journalNotices(
   // Stroke signs (FAST): sudden or one-sided weakness or numbness, a
   // drooping face, trouble speaking, sudden loss of vision. General tiredness
   // ("feeling weak") or a leg gone numb from sitting is not one of them.
-  const weakOrNumb = has(text, /\bweak|\bnumb/);
+  const weakOrNumb = has(text, /\bweak|\bnumb|(?:couldn'?t|can'?t|could not|cannot|unable to) (?:move|lift|use|feel)/);
   if (
     (weakOrNumb && has(text, /\bsudden|one side|left side|right side|half (of )?my (body|face)/)) ||
     has(text, /slurred|can'?t speak|trouble speaking|words (came out|come out) wrong|face (is |was )?droop|droop(y|ing) face|lost (my |the )?vision|vision loss|blind in one eye|went blind/)
@@ -309,6 +309,18 @@ const PLACE_WORDS: readonly (readonly [RegExp, string])[] = [
   [/\bchest\b/, "chest"], [/stomach|belly|abdomen|tummy/, "abdomen"], [/lower back/, "lowerback"], [/upper back/, "upperback"], [/\bhead/, "head"],
 ];
 
+/**
+ * The side said for the place word at [start, end): "left knee", "left inner
+ * knee", "knee on the left", "knee, right". A side word that belongs to
+ * another place ("right knee and left arm") is not taken for this one.
+ */
+function sideOf(t: string, start: number, end: number): "l" | "r" | null {
+  const before = t.slice(Math.max(0, start - 24), start).match(/\b(left|right)(?:\s+[a-z]+)?\s+$/);
+  const after = t.slice(end, end + 24).match(/^[a-z]*(?:\s+on\s+(?:the|my)|\s*,)?\s+(left|right)\b/);
+  const word = before?.[1] ?? after?.[1];
+  return word === "left" ? "l" : word === "right" ? "r" : null;
+}
+
 export interface JournalSuggestion {
   finding: string | null;
   kind: JournalEntryKind;
@@ -324,22 +336,27 @@ export function suggestJournalDetails(text: string): JournalSuggestion {
   if (/\bwoke\b|\bslept\b|overslept|\bnap\b|\bfell\b|tripped/.test(t)) kind = "event";
   if (/bruis|rash|swell|swollen|\bbump|\blump|\bcut\b|scab|\bspots?\b/.test(t)) kind = "sign";
 
-  const side = /\bleft\b/.test(t) ? "l" : /\bright\b/.test(t) ? "r" : null;
   const places: string[] = [];
   let named: string | null = null;
   for (const [re, id] of PLACE_WORDS) {
-    if (!re.test(t)) continue;
+    const m = re.exec(t);
+    if (!m) continue;
     named = id;
     const sided = BODY_PLACES.find((p) => p.id === id)?.sided;
+    const side = sided ? sideOf(t, m.index, m.index + m[0].length) : null;
     if (!sided) places.push(id);
     else if (side) places.push(`${id}-${side}`);
     if (id === "nose" && /post ?nasal/.test(t)) places.push("throat");
     break;
   }
 
+  // "7/10", "seven out of ten"; or "about a four" / "a four" ending the
+  // clause. "a 3 mile walk", "a two hours" or "a seven am" are not ratings.
   const rated =
     t.match(/\b(\d+|zero|one|two|three|four|five|six|seven|eight|nine|ten)\s*(?:\/|out of)\s*(?:10|ten)\b/) ??
-    t.match(/\b(?:about |around |like |maybe )?an? (one|two|three|four|five|six|seven|eight|nine|ten|\d+)\b(?!\s*(?:am|pm|o'?clock|hours?|minutes?|days?|times?))/);
+    t.match(
+      /\b(?:(?:about|around|like|maybe|roughly|probably)\s+)?an?\s+(one|two|three|four|five|six|seven|eight|nine|ten|\d+)(?=\s*(?:[,.;:!?)]|$)|\s+(?:and|but|or|worse|better|now|today|tonight|this|at|in|on|when|with|which|so)\b)/,
+    );
   const raw = rated?.[1];
   const value = raw === undefined ? null : (NUMBER_WORDS[raw] ?? Number(raw));
   const severity = value !== null && Number.isInteger(value) && value >= 0 && value <= 10 ? value : null;

@@ -128,7 +128,9 @@ export default function PrivacyPolicyPage() {
           The printout for your doctor is made on your device. Journal entries
           are not shared with the Claude connector or included in AI insights.
           Deleting an entry erases its words, title, body places and intensity
-          on your device and in the cloud copy; it cannot be undone.
+          on your device and in the cloud copy. There is no undo, but a backup
+          file you exported before the deletion still contains the entry, and
+          importing that file restores it.
         </p>
       </Section>
 

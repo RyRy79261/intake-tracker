@@ -74,7 +74,9 @@ Deleting a journal entry blanks its words, title, places and rating on the
 device (`retireChanges` in `src/lib/synced-write.ts`), and the push route
 blanks them again for every journal tombstone it writes, on both the full-row
 and the tombstone-stub paths. A deleted entry therefore keeps no content
-anywhere; only `id`, timestamps and `deletedAt` remain for sync. Other tables
+anywhere. For sync the row keeps `id`, its timestamps, `deletedAt`, `kind`,
+`timePrecision`, `source`, `deviceId` and `timezone`. A backup exported before
+the deletion still holds the entry; importing it restores it. Other tables
 still soft-delete and keep their content until the account is deleted.
 
 ### Backups

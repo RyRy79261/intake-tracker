@@ -128,7 +128,10 @@ export function encryptRowFields<R extends Row>(tableName: TableName, row: R, us
   const out: Row = { ...row };
   for (const field of fields) {
     const value = out[field];
-    if (typeof value !== "string" || isFieldCiphertext(value)) continue;
+    // Always encrypt: rows reach the push route from devices, which only ever
+    // hold plain text, so a value that looks like a blob ("f1: …") is the
+    // person's own words and must not be stored as it is.
+    if (typeof value !== "string") continue;
     out[field] = encryptField(value, { userId, tableName, rowId: String(row.id), field });
   }
   return out as R;

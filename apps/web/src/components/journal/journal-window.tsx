@@ -116,7 +116,10 @@ function Composer() {
   ]
     .filter(Boolean)
     .join(" · ");
-  const timestamp = showTime ? dateTimeLocalToTimestamp(customTime) : Date.now();
+  // The entry's time is read when it is saved; this render's value only
+  // dates the weight notice shown above the button.
+  const entryTime = () => (showTime ? dateTimeLocalToTimestamp(customTime) : Date.now());
+  const timestamp = entryTime();
   const notices = trimmed
     ? [
         ...journalNotices({ finding: finalTitle, words: trimmed, ...details }, { onBloodThinners }),
@@ -143,7 +146,7 @@ function Composer() {
         kind: details.kind,
         places: details.places,
         severity: details.severity,
-        timestamp,
+        timestamp: entryTime(),
         timePrecision: "exact",
         source: "manual",
       });
@@ -313,7 +316,8 @@ function LogList({ entries }: { entries: readonly JournalEntry[] }) {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete &ldquo;{pending?.finding}&rdquo;?</AlertDialogTitle>
             <AlertDialogDescription>
-              Its words are wiped from this device and from your cloud copy. This cannot be undone.
+              Its words are wiped from this device and from your cloud copy. There is no undo; only a
+              backup you exported before now still holds it.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

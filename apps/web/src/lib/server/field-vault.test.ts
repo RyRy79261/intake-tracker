@@ -90,9 +90,12 @@ describe("field-vault", () => {
       expect(encryptRowFields("dailyNotes", { id: "n1", note: "plain" }, "u1")).toEqual({ id: "n1", note: "plain" });
     });
 
-    it("does not encrypt twice", () => {
-      const once = encryptRowFields("journalEntries", row, "u1");
-      expect(encryptRowFields("journalEntries", once, "u1")).toEqual(once);
+    it("encrypts text that happens to look like a blob, and reads it back", () => {
+      const odd = { ...row, words: "f1: my first note", finding: "f1:a:b:c" };
+      const enc = encryptRowFields("journalEntries", odd, "u1");
+      expect(enc.words).not.toBe(odd.words);
+      expect(enc.finding).not.toBe(odd.finding);
+      expect(decryptRowFields("journalEntries", enc, "u1")).toEqual(odd);
     });
 
     it("decrypts back to the row", () => {

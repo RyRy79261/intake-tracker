@@ -525,7 +525,9 @@ function ItemEditor({
       return (
         <JournalEntryFields
           item={item}
-          onChange={(next) => onChange({ ...item, ...next })}
+          // The editor returns the whole item, the row's time included; a
+          // cleared intensity or place is a key it left out.
+          onChange={(next) => onChange(next as VoiceParsedItem)}
           disabled={disabled}
         />
       );

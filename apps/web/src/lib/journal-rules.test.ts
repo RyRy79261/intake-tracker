@@ -116,6 +116,7 @@ describe("journalNotices", () => {
       "My speech was slurred for a minute",
       "My face was drooping in the mirror",
       "I lost my vision in one eye briefly",
+      "Suddenly couldn't move my left arm",
     ])("%s is urgent", (words) => {
       expect(levels(journalNotices(entry("Odd episode", words), NONE))).toEqual(["urgent"]);
     });
@@ -203,5 +204,19 @@ describe("suggestJournalDetails", () => {
 
   it("leaves a sided place out until a side is said", () => {
     expect(suggestJournalDetails("Pain in my knee").places).toEqual([]);
+  });
+
+  it("takes the side said with the place, not one said with another place", () => {
+    expect(suggestJournalDetails("Pain in my right knee and left arm").places).toEqual(["knee-r"]);
+    expect(suggestJournalDetails("My left arm aches and my right knee too").places).toEqual(["knee-r"]);
+    expect(suggestJournalDetails("Pain in the knee on the left").places).toEqual(["knee-l"]);
+    expect(suggestJournalDetails("Sore knee, right side").places).toEqual(["knee-r"]);
+    expect(suggestJournalDetails("A twinge in my left inner knee").places).toEqual(["knee-l"]);
+  });
+
+  it("does not read a count as a rating", () => {
+    expect(suggestJournalDetails("I took a 3 mile walk and my knee hurts").severity).toBeNull();
+    expect(suggestJournalDetails("My knee hurts, it's a four").severity).toBe(4);
+    expect(suggestJournalDetails("Headache, about a three and getting worse").severity).toBe(3);
   });
 });

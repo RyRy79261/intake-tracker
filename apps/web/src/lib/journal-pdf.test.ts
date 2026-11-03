@@ -25,6 +25,20 @@ describe("journal printout", () => {
     expect(body[2]![3]).toBe("Knee, left");
   });
 
+  it("puts the entries into the PDF", () => {
+    const doc = buildJournalPDF({
+      rows: [makeJournalEntry({ timestamp: at("2026-11-01T13:30:00"), finding: "Nausea", words: "Felt nauseous after lunch" })],
+      fromMs: at("2026-10-20T00:00:00"),
+      toMs: at("2026-11-02T12:00:00"),
+      timeZone: "Europe/Berlin",
+      printedAt: at("2026-11-02T12:00:00"),
+    });
+    const text = doc.output();
+    expect(text).toContain("Nausea");
+    expect(text).toContain("Felt nauseous after lunch");
+    expect(text).toContain("Knee, left");
+  });
+
   it("builds a PDF, also for an empty period", () => {
     const doc = buildJournalPDF({
       rows: [],

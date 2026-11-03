@@ -478,6 +478,11 @@ describe("backup-schemas: journal entries", () => {
     expect(BACKUP_VALIDATORS.journalEntries(makeJournalEntry({ severity: 2.5 }))).toBe(false);
   });
 
+  it("rejects a body place that is not on the list, or has no side", () => {
+    expect(BACKUP_VALIDATORS.journalEntries(makeJournalEntry({ places: ["elbow-l"] }))).toBe(false);
+    expect(BACKUP_VALIDATORS.journalEntries(makeJournalEntry({ places: ["knee"] }))).toBe(false);
+  });
+
   it("rejects an unknown kind or time precision", () => {
     expect(BACKUP_VALIDATORS.journalEntries({ ...makeJournalEntry(), kind: "mood" })).toBe(false);
     expect(BACKUP_VALIDATORS.journalEntries({ ...makeJournalEntry(), timePrecision: "week" })).toBe(false);

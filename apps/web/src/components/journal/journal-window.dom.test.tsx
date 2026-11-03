@@ -73,8 +73,13 @@ describe("Journal window", () => {
     const entry = makeJournalEntry({ timestamp: Date.now() - 60_000 });
     await renderWithFixtures(<JournalWindowBody />, { seed: { journalEntries: [entry] } });
     await user.click(await screen.findByRole("button", { name: "Delete Knee pain" }));
-    const dialog = await screen.findByRole("alertdialog");
-    expect(dialog).toHaveTextContent(/cannot be undone/);
+    let dialog = await screen.findByRole("alertdialog");
+    await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
+    expect(await live()).toHaveLength(1);
+    await user.click(screen.getByRole("button", { name: "Delete Knee pain" }));
+    dialog = await screen.findByRole("alertdialog");
+    expect(dialog).toHaveTextContent(/no undo/);
     await user.click(within(dialog).getByRole("button", { name: "Delete" }));
     await waitFor(async () => expect(await live()).toHaveLength(0));
     expect(await db.journalEntries.get(entry.id)).toMatchObject({ words: "", finding: "" });
