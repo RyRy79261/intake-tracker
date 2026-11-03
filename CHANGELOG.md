@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.48.2](https://github.com/RyRy79261/intake-tracker/compare/v1.48.1...v1.48.2) (2026-11-03)
+
+
+### Bug Fixes
+
+* **journal:** keep an unrated entry unrated after a sync pull ([#477](https://github.com/RyRy79261/intake-tracker/issues/477)) ([3be0d47](https://github.com/RyRy79261/intake-tracker/commit/3be0d47e8742794e2a3c01b1972e6578869d4e5f))
+
 ## [1.48.1](https://github.com/RyRy79261/intake-tracker/compare/v1.48.0...v1.48.1) (2026-11-03)
 
 
