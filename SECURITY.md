@@ -4,7 +4,7 @@ Security documentation for the Intake Tracker health PWA. This is a reference do
 
 ## Overview
 
-Single-user health tracking PWA. All user data lives client-side in IndexedDB. The security model prioritizes access control over encryption at rest, since IndexedDB does not support transparent encryption and the app relies on `useLiveQuery` reactivity which requires plaintext-queryable data.
+Health tracking PWA. User data lives client-side in IndexedDB and, when cloud sync is on, is mirrored to Neon Postgres per user. The security model prioritizes access control over encryption at rest, since IndexedDB does not support transparent encryption and the app relies on `useLiveQuery` reactivity which requires plaintext-queryable data.
 
 ## Access Control Model
 
@@ -40,8 +40,42 @@ API routes use auth middleware from `src/lib/auth-middleware.ts` to validate the
 
 ## Encryption Model
 
-The app does not encrypt user data itself. There is no PIN-based encryption,
-no field-level encryption and no encrypted backup format.
+The app encrypts two things itself, both on the server with AES-256-GCM:
+stored AI API keys (`src/lib/key-vault.ts`) and the text of journal entries
+in Neon (`src/lib/server/field-vault.ts`). Everything else relies on HTTPS in
+transit and on the storage underneath at rest. There is no PIN-based
+encryption, no encryption on the device and no encrypted backup format.
+
+### Journal text at rest (field vault)
+
+The sync push route encrypts the `words` and `finding` columns of
+`journal_entries` before the write, and the pull route decrypts them before a
+row leaves the server, so devices and the wire see plain text and Neon holds
+only `f1:<iv>:<tag>:<ciphertext>` blobs.
+
+- Key: HKDF-SHA256 from `API_KEY_ENCRYPTION_SECRET` with its own `info`
+  label, so it never shares a key with the API-key vault.
+- AAD: the user id, table, row id and field. A blob copied to another row,
+  column or account fails to decrypt.
+- Protects against: a leaked database or backup of Neon on its own.
+- Does not protect against: the hosting platform or anything running with the
+  server's environment, which holds the key and must decrypt to serve a pull.
+  It is not end-to-end encryption; that would break the MCP connector and
+  push reminders for the other tables.
+- No rotation: rotating the secret makes stored journal text unreadable on the
+  server (a device that already has the rows keeps them; a new device receives
+  a placeholder). Re-encrypt before rotating.
+- A missing secret: journal pushes are rejected for retry ("Server could not
+  encrypt the record") rather than stored in plain text.
+
+### Deleted journal entries
+
+Deleting a journal entry blanks its words, title, places and rating on the
+device (`retireChanges` in `src/lib/synced-write.ts`), and the push route
+blanks them again for every journal tombstone it writes, on both the full-row
+and the tombstone-stub paths. A deleted entry therefore keeps no content
+anywhere; only `id`, timestamps and `deletedAt` remain for sync. Other tables
+still soft-delete and keep their content until the account is deleted.
 
 ### Backups
 
@@ -58,14 +92,15 @@ the UI ever called them.
 ### In transit
 
 Sync (`/api/sync/*`) and every other API call run over HTTPS. In cloud-sync
-mode the records are also stored server-side in Neon Postgres; the app adds
-no encryption of its own there.
+mode the records are also stored server-side in Neon Postgres; apart from
+journal text (above), the app adds no encryption of its own there.
 
 ## Data at Rest
 
 - **IndexedDB is NOT encrypted.** All record data is stored in plaintext in the browser's IndexedDB. This is a deliberate tradeoff: `useLiveQuery` requires direct IndexedDB queries, which are incompatible with transparent encryption.
 - **Access control is the primary protection.** Neon Auth prevents unauthorized access to the app.
-- **No field-level encryption.** No record field is encrypted on the device.
+- **No field-level encryption on the device.** No record field is encrypted in IndexedDB, journal entries included.
+- **Neon**: journal text is ciphertext (see Encryption Model); every other synced column is plain, protected by Neon's disk encryption and access control.
 
 ## Content Security Policy
 

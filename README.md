@@ -16,7 +16,9 @@ free but I can make it easier to set it up yourself and use it.
 - **Salt intake tracking**: Keep sodium under control (target: <1500mg/day)
 - **Food water calculator**: Calculate water content from fruits and vegetables
 - **AI-powered input**: Use natural language to log intake via Anthropic Claude API
-- **Claude custom connector (MCP)**: Attach your data to a Claude chat as a read-only MCP server — ask Claude "what was my average BP last week?" or "list my active medications" ([setup](#claude-custom-connector-mcp))
+- **Voice logging**: Hold to talk, say everything at once, then review and approve each item before it is saved
+- **Medical journal**: A written logbook of anything you notice — a symptom, something visible, or something that happened — in your own words, with an optional body place and 0–10 intensity. Prints as a dated table (PDF) to hand a doctor. Its text is encrypted at rest on the server ([details](#medical-journal))
+- **Claude custom connector (MCP)**: Attach your data to a Claude chat as an MCP server — ask Claude "what was my average BP last week?" or "list my active medications" ([setup](#claude-custom-connector-mcp))
 - **Neon Auth**: Email/password authentication with whitelist-based access control
 - **Offline support**: Works without internet connection as a PWA
 - **Data export/import**: Backup and restore your data
@@ -56,7 +58,7 @@ pnpm start
 - **State**: Zustand
 - **Auth**: Neon Auth (cookie session, email/password)
 - **PWA**: Serwist (@serwist/turbopack)
-- **Encryption**: Web Crypto API (AES-GCM)
+- **Encryption**: AES-256-GCM (Node `crypto`) on the server for stored AI API keys and journal text; see [Encryption](#encryption)
 
 ## Postgres Schema (Neon + Drizzle)
 
@@ -221,8 +223,8 @@ release builds a signed AAB and uploads it to Play automatically.
 │                      CLIENT (Browser)                        │
 ├─────────────────────────────────────────────────────────────┤
 │  ┌──────────────┐ ┌─────────────┐  ┌─────────────────────┐ │
-│  │  Neon Auth   │ │  IndexedDB  │  │   Web Crypto API    │ │
-│  │ (cookie sess)│ │  (Dexie.js) │  │  (AES-GCM ready)    │ │
+│  │  Neon Auth   │ │  IndexedDB  │  │   Sync engine       │ │
+│  │ (cookie sess)│ │  (Dexie.js) │  │  (push / pull)      │ │
 │  └──────────────┘ └─────────────┘  └─────────────────────┘ │
 │         │                │                    │             │
 │         └────────────────┴────────────────────┘             │
@@ -262,12 +264,66 @@ release builds a signed AAB and uploads it to Play automatically.
 
 ### Data Storage
 
+Every record lives in IndexedDB on the device and, when cloud sync is on, is
+mirrored to Neon Postgres by the sync engine (`/api/sync/push` and
+`/api/sync/pull`).
+
 | Data Type | Storage | Protection |
 |-----------|---------|------------|
-| Intake records | IndexedDB | Device-level |
-| Settings | localStorage | Device-level |
+| Health records (intake, BP, weight, food, medications, doses…) | IndexedDB; Neon when synced | Plain text on the device; in Neon, Neon's own disk encryption only |
+| Journal entries | IndexedDB; Neon when synced | Plain text on the device; in Neon, the words and title are AES-256-GCM ciphertext |
+| Settings | localStorage, and a synced settings row | Device-level |
 | Auth session | Neon Auth cookie (HttpOnly) | Server-validated session |
-| API keys | Server env | Never reaches browser |
+| Your own AI API keys | Neon | AES-256-GCM, bound to your user id |
+| Server AI keys | Server env | Never reaches browser |
+
+### Encryption
+
+What the app encrypts, and what it does not:
+
+- **In transit**: HTTPS (HSTS, preload) for every request.
+- **Journal text in Neon**: the push route encrypts a journal entry's words and
+  title with AES-256-GCM before writing them, and the pull route decrypts them
+  for your devices (`apps/web/src/lib/server/field-vault.ts`). The key is
+  derived with HKDF from `API_KEY_ENCRYPTION_SECRET`; each value is bound to
+  its user, row and field. A leak of the database alone reveals no journal
+  text. The server holds the key, so this is encryption at rest, not
+  end-to-end encryption.
+- **Your AI API keys in Neon**: AES-256-GCM (`apps/web/src/lib/key-vault.ts`).
+- **Not encrypted by the app**: IndexedDB on the device, the other synced
+  tables in Neon (they rely on Neon's disk encryption), backups and exports
+  (plain JSON, CSV, PDF).
+
+Do not rotate `API_KEY_ENCRYPTION_SECRET` without re-encrypting: stored keys
+and journal text would no longer decrypt (a new device would receive
+"Unreadable entry" in their place).
+
+### Medical journal
+
+The Journal window (top bar, between Medications and Metrics) is a logbook,
+not a tracker: each entry is a dated note with no "ongoing" state. An entry
+keeps exactly what you said or typed, a short title, a kind (Felt, Seen or
+Happened), and, only when they apply, body places and a 0–10 intensity
+(LOINC 72514-3). The shape follows the SOCRATES symptom history and maps onto
+the HL7 FHIR Symptoms guide, so a future export can code it.
+
+- Typed entries: the title, kind, place and rating are suggested on the
+  device as you type (`suggestJournalDetails` in `@intake/core/journal`);
+  nothing typed is sent anywhere to do it.
+- Spoken entries: the `journal_entry` voice item. The transcript goes to the
+  voice parser like any other voice log; the review screen lets you fix or
+  add every field before saving.
+- Safety notices: a short fixed list of rules (a sudden or worst-ever
+  headache, chest pain, stroke signs, bleeding from the gut or bladder → call
+  112; bruising on blood thinners, leg swelling, or more than 2 kg gained in
+  3 days → tell your doctor or heart team). They never block saving and never
+  diagnose.
+- Printout: the last 7–90 days, optionally only some titles, built as a PDF
+  on the device.
+- Deleting an entry wipes its words, title, places and rating on the device
+  and on the server; only an empty tombstone remains for sync. It cannot be
+  undone.
+- The MCP connector cannot read journal entries.
 
 ### Security Features
 
@@ -301,19 +357,23 @@ After changing, redeploy your app for changes to take effect.
 
 ### AI Feature Privacy
 
-When using the "AI Input" feature:
-- User must be authenticated AND on whitelist
-- Only food/drink descriptions are sent to Anthropic Claude
-- PII patterns are automatically stripped
-- All requests logged with user ID for audit
-- Anthropic's privacy policy applies to their processing
+When you use an AI feature (you must be signed in and on the whitelist):
+- **Food and drink parsing**: the description you typed goes to Anthropic Claude.
+- **Voice logging**: the recording goes to Groq (Whisper) for transcription, and
+  the transcript goes to Anthropic Claude to pick out the items. That includes
+  anything you say for your journal.
+- **AI Insights**: summary figures go to Anthropic; your conditions and
+  medications only when you have opted in. Journal entries are not included.
+- PII patterns are stripped from free text before it is sent.
+- Each provider's own privacy terms apply to their processing.
 
 ### GDPR Compliance Features
 
 - **Data Export**: Download all your data as JSON
-- **Data Deletion**: Clear all data with one click
-- **Data Minimization**: Auto-purge old records
-- **Audit Trail**: Track all data access
+- **Data Deletion**: Settings › Storage › Delete data marks records deleted on
+  the device and in the cloud copy; a deleted journal entry's content is wiped.
+  Delete account (in the Profile window) removes the cloud copy entirely.
+- **Audit Trail**: changes to medications, doses, imports and exports are logged on the device
 
 ### Security Headers
 
@@ -358,7 +418,7 @@ MCP_PUBLIC_URL=https://your-app.example.com
 3. Click **Connect**. Claude redirects you to the intake-tracker.
 4. Sign in with Google (skipped if you're already signed in to the app in that browser).
 5. The consent screen lists the data Claude will be able to read. Click **Approve**.
-6. You're back in Claude, the connector is now active. The 8 read-only tools (below) appear in any new chat.
+6. You're back in Claude, the connector is now active. The tools below appear in any new chat.
 
 ### Available tools
 
@@ -372,6 +432,14 @@ MCP_PUBLIC_URL=https://your-app.example.com
 | `list_medications` | active prescriptions + current phase + schedules |
 | `list_recent_doses` | most recent dose log entries |
 | `get_inventory_status` | per-prescription pill stock + refill thresholds |
+| `query_substance_history` | caffeine and alcohol history |
+| `query_urination_history` | urination history |
+| `list_titration_plans` | titration plans with their notes and warnings |
+| `log_food` *(write)* | log a meal with its water, sodium, sugar and potassium |
+| `log_drink` *(write)* | log a drink with its caffeine, alcohol and solutes |
+| `delete_logged_entry` *(write)* | remove a meal or drink Claude logged |
+
+Journal entries are not exposed to the connector.
 
 ### Revocation
 

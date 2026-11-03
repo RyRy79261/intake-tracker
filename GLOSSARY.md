@@ -33,3 +33,17 @@ Domain words used in code, reviews and plans. Use these names exactly.
 **Voice item**: one thing a voice log holds: a blood pressure reading, a weight, water, sodium, food, a caffeine or alcohol drink, a urination or a defecation. The voice item contract (`packages/core/src/voice-items.ts`) is the one place that says each kind's fields, units, ranges and which are required; the route's Zod schema, the parse tool's fields, the item types and the review check are built from it.
 
 **Parsed entry**: a voice item, or the Food card's detail form, about to be saved. The parsed-entry logger (`apps/web/src/lib/parsed-entry-service.ts`) is the only code that turns one into records: it picks the records, tags their source, rounds amounts to whole numbers and applies the sugar and potassium trackers. Drinks go through the Drink module.
+
+**Journal entry**: one dated note in the medical journal (`journalEntries`): anything the user noticed about their body or their day, kept in their own words (`words`). It has one time and no end; if something comes back, it is a new entry. Not a tracker: there is no "ongoing" state. Rules and labels in `packages/core/src/journal.ts`, writes in `apps/web/src/lib/journal-service.ts`.
+
+**Finding**: a journal entry's short title, what a doctor reads first ("Knee pain", "Woke up late"). The printout can be filtered by finding.
+
+**Entry kind**: what a journal entry is: a symptom (Felt), a sign (Seen: a bruise, a rash, swelling) or an event (Happened: woke up late, a fall). Called `kind` on the record and `entryKind` on the voice item, where `kind` is the item kind.
+
+**Body place**: where on the body a journal entry is, as an id from the place list in `packages/core/src/journal.ts` (`eyes`, `knee-l`). Sided places take the person's own left or right (`-l`, `-r`); a sided place without a side cannot be saved.
+
+**Intensity**: a journal entry's 0–10 rating (LOINC 72514-3: 0 none, 10 worst imaginable), or none when it was not rated. The words mild, moderate and severe are labels only.
+
+**Safety notice**: a fixed rule that shows a notice for a journal entry before it is saved ("Call 112", or "tell your doctor"). It never blocks saving and never names a cause.
+
+**Field vault**: the server's encryption of journal text in Neon (`apps/web/src/lib/server/field-vault.ts`). Push encrypts, pull decrypts; devices see plain text.

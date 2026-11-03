@@ -7,6 +7,7 @@ import {
   Droplets,
   HeartPulse,
   Mic,
+  NotebookPen,
   Pencil,
   Pill,
   PlusCircle,
@@ -156,15 +157,15 @@ export const MANUALS: Manual[] = [
       {
         heading: "Getting around",
         bullets: [
-          "The bar along the top opens the apps: Medications, Metrics, History and your Profile, plus Settings. Each app opens in its own window.",
+          "The bar along the top opens the apps: Medications, Journal, Metrics, History and your Profile, plus Settings. Each app opens in its own window.",
           "On a phone a window fills the screen and only one is open at a time: opening another closes it, and Home (or Back) closes it too. On a tablet windows sit side by side, and Esc closes the one in front.",
-          "On a phone, swipe left to move along the top bar: Home, Medications, Metrics, History, then Profile (when signed in). Swipe right to go back the other way.",
+          "On a phone, swipe left to move along the top bar: Home, Medications, Journal, Metrics, History, then Profile (when signed in). Swipe right to go back the other way.",
           "On a phone the bottom bar has Home and Hold to talk (when signed in). Above it on Home, the quick links (Liquids, Food, BP, Weight, Urine, Bowel) jump to each card; the card in view is marked. Tapping Home on Home goes back to the top.",
           "On a tablet the bottom bar also has Windows, to switch between or close the open windows.",
           "On a computer (a screen 1024 pixels wide or more, with a mouse or trackpad) everything is a window on a desk. Today, Liquids, Food, Blood Pressure, Weight, Urination and Defecation each have their own window, all open the first time, side by side. Drag a window by its title bar to move it. Drag any edge or corner to resize it. Click a window to bring it to the front.",
           "Double-click a title bar to fill the screen, and again to go back. Drag a window to the left or right edge to fill that half, or to the top edge to fill the screen. Dragging it away gives it its old size back. Windows stay where you put them until you close the tab.",
           "Minimising one of those seven windows (or closing it with ×) turns it into a square icon at the bottom left of the desk; click the icon to put the window back where it was. They are never lost, and where you leave them is remembered on this computer.",
-          "On a computer the top bar lists every open app window (Medications, Metrics, Profile). Click a window's button to bring it to the front, and click it again to minimise it. Home (the house) minimises the app windows, and Tidy puts the seven windows back in their starting places.",
+          "On a computer the top bar lists every open app window (Medications, Journal, Metrics, Profile). Click a window's button to bring it to the front, and click it again to minimise it. Home (the house) minimises the app windows, and Tidy puts the seven windows back in their starting places.",
           "Along the bottom of the desk: the warning triangle on the left opens Report a bug, and Hold to talk (when signed in) is the microphone button on the right. Windows cannot go under this strip.",
           "With the keyboard: Tab to a window's title, then the arrow keys move it and Shift with the arrow keys resizes it. Ctrl+` (or Alt+`) goes to the next window, with Shift to go back. Esc closes the window in front.",
           "Shaking your device opens the bug reporter — and from there you can reach this manual.",
@@ -464,6 +465,66 @@ export const MANUALS: Manual[] = [
     ],
   },
   {
+    slug: "journal",
+    title: "The medical journal",
+    domain: "health",
+    icon: NotebookPen,
+    summary: "A written logbook of anything you notice, printed as a dated table for your doctor.",
+    whereToFind: "Top bar → Journal",
+    sections: [
+      {
+        heading: "What it is for",
+        body: "Write down anything you notice about your body or your day, when you notice it: a headache, postnasal drip, pain in your knee, a strange sensation in your armpit, nausea, a bruise, or that you woke up late. Each entry keeps your own words.\n\nIt is a logbook, not a tracker. An entry has one time and nothing is marked \"ongoing\". If something comes back, write another entry; the printout shows the pattern.",
+      },
+      {
+        heading: "Writing an entry",
+        steps: [
+          "Open Journal from the top bar.",
+          "Under \"What did you notice?\", write it in your own words.",
+          "Open Details to check what the app filled in: a short title (what a doctor reads first), the kind (Felt, Seen or Happened), the intensity and the body place. Anything you change stays as you set it.",
+          "If it happened earlier, open \"When did this happen?\" and set the time.",
+          "Tap Add to journal.",
+        ],
+      },
+      {
+        heading: "Only the details that apply",
+        bullets: [
+          "Intensity is 0 to 10: 0 is none, 10 is the worst imaginable. Tap or drag the slider to rate it; leave it unrated for things such as a bruise or waking up late. Clear takes a rating off again.",
+          "Body place: search the list (\"knee\", \"armpit\"). Arms and legs take your own left or right. Pick more than one if it spreads; leave it empty for things like nausea.",
+          "Kind: Felt is a sensation, Seen is something visible such as a bruise or a rash, Happened is an event.",
+        ],
+      },
+      {
+        heading: "By voice",
+        body: "Hold to talk and say it, alongside anything else you are logging. Each thing you noticed becomes its own row in the review. If the app missed the intensity or heard the wrong place, fix it in the row before you approve. A knee or an arm heard without a side has to be given one before it can be saved.",
+      },
+      {
+        heading: "Printing for your doctor",
+        steps: [
+          "Open the Printout tab.",
+          "Pick the period (the last 7, 14, 30 or 90 days) and, if you like, only some titles — for example only \"Knee pain\" for an orthopaedist.",
+          "Check the preview, then tap Save as PDF. Share or print it from your phone.",
+        ],
+        callout: {
+          tone: "note",
+          text: "The printout says the entries are self-recorded, not clinical findings, and that \"~\" marks an approximate time.",
+        },
+      },
+      {
+        heading: "Notices that need action",
+        body: "A few entries show a notice before you save. A sudden or worst-ever headache, chest pain or pressure, sudden weakness or numbness on one side, trouble speaking or loss of vision, or blood in vomit, stool or urine says to call 112. Bruising while you take a blood thinner, new ankle or leg swelling, or a weight gain of more than 2 kg in 3 days says to tell your doctor or heart team. The notices never stop you saving and never name a cause.",
+        callout: {
+          tone: "warning",
+          text: "The journal is a record, not a diagnosis. If you are worried, contact your doctor; in an emergency, call 112.",
+        },
+      },
+      {
+        heading: "Deleting and privacy",
+        body: "Deleting an entry asks first, then erases its words, title, body places and intensity on this device and in your cloud copy. It cannot be undone.\n\nTyped entries never go to an AI service: the suggested details are worked out on your device. Spoken entries are transcribed and interpreted like any other voice log. In the cloud copy the words and titles are encrypted. Journal entries are not shared with the Claude connector or AI insights.",
+      },
+    ],
+  },
+  {
     slug: "voice-operator",
     title: "The voice operator",
     domain: "voice",
@@ -473,7 +534,7 @@ export const MANUALS: Manual[] = [
     sections: [
       {
         heading: "What it does",
-        body: "The voice operator lets you describe everything in one go — \"blood pressure 120 over 80, heart rate 65, a coffee and a glass of water\" — and the app sorts what you said into the right entries: vitals, drinks, food, weight and more.",
+        body: "The voice operator lets you describe everything in one go — \"blood pressure 120 over 80, heart rate 65, a coffee and a glass of water\" — and the app sorts what you said into the right entries: vitals, drinks, food, weight and more. Anything else you noticed (\"my knee hurts, about a four\", \"I woke up late\") becomes a journal entry.",
       },
       {
         heading: "Using it",
@@ -559,6 +620,10 @@ export const MANUALS: Manual[] = [
       {
         heading: "What is sent to AI services",
         body: "When you use an AI feature, only the text needed for that task is sent to the AI provider, and identifying details — emails, phone numbers, ID-like numbers — are removed first. Bug reports do the same with environment information and error logs.",
+      },
+      {
+        heading: "Your journal",
+        body: "Journal entries are stored on your device like everything else. In the cloud copy their words and titles are encrypted, and deleting an entry erases its content there too. Typed entries are never sent to an AI service; spoken ones are transcribed and parsed like any voice log. The journal is not shared with the Claude connector or AI insights.",
       },
       {
         heading: "Medical context consent",
