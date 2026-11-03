@@ -436,7 +436,9 @@ describe("VoicePanel review — telling the user what was left out", () => {
     // The parse route was deployed with a new kind while this app was open.
     parsedItems = [{ kind: "water", ml: 250 }, { kind: "from_the_future", note: "x" } as never];
     await recordOnce();
-    expect(screen.getByText(/1 item needs the newest version of the app/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/1 item needs the newest version of the app — save the items below, then reload/),
+    ).toBeInTheDocument();
     expect(screen.getByText(/Items \(0 approved · 1 pending/)).toBeInTheDocument();
   });
 
@@ -445,7 +447,9 @@ describe("VoicePanel review — telling the user what was left out", () => {
     parsedItems = [{ kind: "from_the_future" } as never];
     await renderWithFixtures(<VoicePanel />);
     await user.click(screen.getByRole("button", { name: "mock-record" }));
-    expect(await screen.findByText(/1 item needs the newest version/)).toBeInTheDocument();
+    expect(
+      await screen.findByText("1 item needs the newest version of the app — reload it and record it again."),
+    ).toBeInTheDocument();
     expect(screen.queryByText(/Items \(/)).not.toBeInTheDocument();
   });
 

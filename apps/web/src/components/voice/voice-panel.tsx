@@ -86,11 +86,19 @@ function refreshText(item: RefreshableItem): string {
 }
 
 /** Plain-language notices about what the parse left out. */
-function parseNotices(data: VoiceParseResponse, unknownKinds: number): string[] {
+function parseNotices(
+  data: VoiceParseResponse,
+  unknown: { count: number; othersKept: boolean },
+): string[] {
   const notices: string[] = [];
-  if (unknownKinds > 0) {
+  if (unknown.count > 0) {
+    const one = unknown.count === 1;
+    // A reload drops the review list, so rows kept from the same recording
+    // are saved first.
     notices.push(
-      `${unknownKinds} ${unknownKinds === 1 ? "item needs" : "items need"} the newest version of the app — reload it, then record ${unknownKinds === 1 ? "it" : "them"} again.`,
+      `${unknown.count} ${one ? "item needs" : "items need"} the newest version of the app — ${
+        unknown.othersKept ? "save the items below, then " : ""
+      }reload it and record ${one ? "it" : "them"} again.`,
     );
   }
   if (data.transcriptTruncated) {
@@ -305,7 +313,7 @@ export function VoicePanel({ onCommitted, initialClip }: VoicePanelProps) {
         const items = priced.items;
         setRows((prev) => [...prev, ...newRows]);
         setReasoning(data.reasoning ?? null);
-        setNotices(parseNotices(data, known.unknown));
+        setNotices(parseNotices(data, { count: known.unknown, othersKept: items.length > 0 }));
         setStage("ready");
 
         if (items.length === 0 && known.unknown === 0) {
