@@ -545,8 +545,8 @@ export function VoicePanel({ onCommitted, initialClip }: VoicePanelProps) {
             <CardContent className="space-y-4 pt-6">
               <p className="text-xs text-muted-foreground">
                 Tap record and describe everything in one go — blood pressure, heart rate,
-                food, drinks, weight, the doses you took, a refill, anything. Stop, review the extracted items, then
-                approve or reject each one.
+                food, drinks, weight, the doses you took, a refill, or anything you noticed for your journal.
+                Stop, review the extracted items, then approve or reject each one.
               </p>
               <VoiceRecorder
                 onRecorded={handleRecorded}

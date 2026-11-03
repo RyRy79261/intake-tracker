@@ -1,4 +1,6 @@
 import type { SodiumSource, SodiumSourceUnit } from "@/lib/db";
+import { parsePlaceList } from "@intake/core/journal";
+import { addJournalEntry } from "@/lib/journal-service";
 import type { MedicationKind, VoiceItem, VoiceItemOf } from "@intake/core/voice-items";
 import { ok, err, unwrap } from "@intake/core/service";
 import type { ServiceResult } from "@intake/types/service";
@@ -66,7 +68,7 @@ export interface ParsedEntryContext {
 }
 
 /** What one entry was written as. */
-export type ParsedEntryResult = { logged: "reading" | "meal" | "drink" | "dose" };
+export type ParsedEntryResult = { logged: "reading" | "meal" | "drink" | "dose" | "journal" };
 
 const WATER_CONTENT_SOURCE = "manual:food_water_content";
 
@@ -303,6 +305,20 @@ export async function logParsedEntry(
           }),
         );
         return ok({ logged: "reading" });
+      case "journal_entry":
+        unwrap(
+          await addJournalEntry({
+            words: entry.words,
+            finding: entry.finding,
+            kind: entry.entryKind,
+            places: parsePlaceList(entry.places),
+            severity: entry.severity ?? null,
+            timestamp,
+            timePrecision: entry.timePrecision ?? "exact",
+            source,
+          }),
+        );
+        return ok({ logged: "journal" });
     }
   } catch (e) {
     return err(`Failed to log ${entry.kind}`, e);

@@ -110,6 +110,7 @@ describe("voice item contract: tool schema", () => {
           "scheduled_dose",
           "stock_refill",
           "extra_medicine",
+          "journal_entry",
         ],
       },
       systolic: { type: "number" },
@@ -136,6 +137,12 @@ describe("voice item contract: tool schema", () => {
       pills: { type: "number" },
       amount: { type: "number" },
       unit: { type: "string", enum: ["mg", "mcg", "g", "ml", "tablet", "capsule"] },
+      finding: { type: "string" },
+      words: { type: "string" },
+      entryKind: { type: "string", enum: ["symptom", "sign", "event"] },
+      severity: { type: "number" },
+      places: { type: "string" },
+      timePrecision: { type: "string", enum: ["exact", "approx", "day"] },
     });
   });
 

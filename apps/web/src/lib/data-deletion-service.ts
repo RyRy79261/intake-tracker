@@ -45,6 +45,7 @@ const TIMESTAMPED_TABLES: readonly TableName[] = [
   "eatingRecords",
   "urinationRecords",
   "defecationRecords",
+  "journalEntries",
 ];
 
 export interface DeleteRange {

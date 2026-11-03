@@ -92,6 +92,7 @@ const EXPECTED_DELETION_ORDER = [
   "bloodPressureRecords",
   "weightRecords",
   "intakeRecords",
+  "journalEntries",
 ];
 
 // ────────────────────────────────────────────────────────────────────────

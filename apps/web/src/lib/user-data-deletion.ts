@@ -48,7 +48,7 @@ import {
  *   - phase_schedules        → medication_phases
  *   - medication_phases      → prescriptions, titration_plans
  *   - substance_records      → intake_records
- * `userProfile`, `insightReports` and `userSettings` are leaves (insight_jobs' reference to
+ * `journalEntries`, `userProfile`, `insightReports` and `userSettings` are leaves (insight_jobs' reference to
  * insight_reports is ON DELETE SET NULL).
  */
 export const SYNCED_DELETION_ORDER: TableName[] = [
@@ -68,6 +68,7 @@ export const SYNCED_DELETION_ORDER: TableName[] = [
   "bloodPressureRecords",
   "weightRecords",
   "intakeRecords",
+  "journalEntries",
   "userProfile",
   "insightReports",
   "userSettings",

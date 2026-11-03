@@ -606,6 +606,45 @@ export interface InsightReport {
   deviceId: string;
 }
 
+/** Felt (a symptom), Seen (a sign, such as a bruise) or Happened (an event). */
+export type JournalEntryKind = "symptom" | "sign" | "event";
+
+/** How exact the entry's time is: to the minute, roughly, or only the day. */
+export type JournalTimePrecision = "exact" | "approx" | "day";
+
+/**
+ * One medical journal entry (Dexie v28): anything noticed about the body or
+ * the day, in the person's own words, with whatever structure was said.
+ * A logbook, not a tracker: an entry has one time and no end; if something
+ * comes back, it is a new entry.
+ *
+ * `words` and `finding` are encrypted at rest on the server (see
+ * apps/web/src/lib/server/field-vault.ts); on the device and on the wire
+ * they are plain text. Deleting an entry blanks them, so a tombstone keeps
+ * no content.
+ */
+export interface JournalEntry {
+  id: string;
+  /** When it happened (Unix ms). */
+  timestamp: number;
+  timePrecision: JournalTimePrecision;
+  /** Exactly what was said or typed (at most 500 characters). */
+  words: string;
+  /** Short title a doctor reads first: "Knee pain", "Woke up late" (at most 60). */
+  finding: string;
+  kind: JournalEntryKind;
+  /** Body-place ids from @intake/core journal (e.g. "knee-l"); empty when not tied to a place. */
+  places: string[];
+  /** 0–10 numeric rating (LOINC 72514-3), or null when not rated. */
+  severity: number | null;
+  source?: HealthRecordSource; // absent = unknown
+  createdAt: number;
+  updatedAt: number;
+  deletedAt: number | null;
+  deviceId: string;
+  timezone: string;
+}
+
 /**
  * A liquid preset as stored in the synced settings row. The app's
  * `LiquidPreset` (apps/web `lib/constants`) is the full shape; the synced row

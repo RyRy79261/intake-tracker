@@ -8,11 +8,12 @@ describe("phone swipe pages", () => {
     useWindowStore.setState({ wins: [], focus: null, showHome: true, wide: false, z: 0, nextId: 1 });
   });
 
-  it("runs in the sys-bar's order: Home, Medications, Metrics, History, Profile", () => {
-    expect(SWIPE_PAGES).toEqual(["home", "meds", "metrics", "history", "profile"]);
+  it("runs in the sys-bar's order: Home, Medications, Journal, Metrics, History, Profile", () => {
+    expect(SWIPE_PAGES).toEqual(["home", "meds", "journal", "metrics", "history", "profile"]);
     expect(neighbourPage("home", 1)).toBe("meds");
     expect(neighbourPage("home", -1)).toBeNull();
-    expect(neighbourPage("meds", 1)).toBe("metrics");
+    expect(neighbourPage("meds", 1)).toBe("journal");
+    expect(neighbourPage("journal", 1)).toBe("metrics");
     expect(neighbourPage("metrics", 1)).toBe("history");
     expect(neighbourPage("history", 1)).toBe("profile");
     expect(neighbourPage("profile", 1)).toBeNull();
@@ -21,7 +22,7 @@ describe("phone swipe pages", () => {
 
   it("leaves Profile out when signed out", () => {
     const pages = swipePages(false);
-    expect(pages).toEqual(["home", "meds", "metrics", "history"]);
+    expect(pages).toEqual(["home", "meds", "journal", "metrics", "history"]);
     expect(neighbourPage("history", 1, pages)).toBeNull();
     expect(swipePages(true)).toEqual(SWIPE_PAGES);
   });
@@ -30,6 +31,8 @@ describe("phone swipe pages", () => {
     expect(currentSwipePage()).toBe("home");
     useWindowStore.getState().open("meds");
     expect(currentSwipePage()).toBe("meds");
+    useWindowStore.getState().open("journal");
+    expect(currentSwipePage()).toBe("journal");
     useWindowStore.getState().open("metrics", { tab: "summary" });
     expect(currentSwipePage()).toBe("metrics");
     // History is Metrics on Records.

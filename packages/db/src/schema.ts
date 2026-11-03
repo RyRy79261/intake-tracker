@@ -989,6 +989,61 @@ export const userSettings = pgTable(
 );
 
 // ─────────────────────────────────────────────────────────────────────────
+// Medical journal entries — mirrors the JournalEntry interface in
+// @intake/types/records. `words` and `finding` hold AES-256-GCM ciphertext
+// written by the sync push route (apps/web/src/lib/server/field-vault.ts),
+// never plain text; an empty string is a deleted entry's blanked content.
+// ─────────────────────────────────────────────────────────────────────────
+
+export const journalEntries = pgTable(
+  "journal_entries",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => usersSync.id, { onDelete: "cascade" }),
+    timestamp: bigint("timestamp", { mode: "number" }).notNull(),
+    timePrecision: text("time_precision").notNull(),
+    words: text("words").notNull(),
+    finding: text("finding").notNull(),
+    kind: text("kind").notNull(),
+    places: text("places").array().notNull(),
+    severity: integer("severity"),
+    // "manual" (form) or "voice".
+    source: text("source"),
+    createdAt: bigint("created_at", { mode: "number" }).notNull(),
+    updatedAt: bigint("updated_at", { mode: "number" }).notNull(),
+    deletedAt: bigint("deleted_at", { mode: "number" }),
+    deviceId: text("device_id").notNull(),
+    timezone: text("timezone").notNull(),
+    serverUpdatedAt: serverUpdatedAt(),
+  },
+  (t) => ({
+    kindCheck: check(
+      "journal_entries_kind_check",
+      sql`${t.kind} IN ('symptom','sign','event')`,
+    ),
+    timePrecisionCheck: check(
+      "journal_entries_time_precision_check",
+      sql`${t.timePrecision} IN ('exact','approx','day')`,
+    ),
+    severityCheck: check(
+      "journal_entries_severity_check",
+      sql`${t.severity} IS NULL OR ${t.severity} BETWEEN 0 AND 10`,
+    ),
+    userUpdatedIdx: index("idx_journal_entries_user_updated").on(
+      t.userId,
+      t.updatedAt,
+    ),
+    userServerUpdatedIdx: index("idx_journal_entries_user_server_updated").on(
+      t.userId,
+      t.serverUpdatedAt,
+      t.id,
+    ),
+  }),
+);
+
+// ─────────────────────────────────────────────────────────────────────────
 // Deep-research insight jobs — server-only state for async batch requests.
 //
 // Each row tracks one Anthropic Message Batches submission for the deep

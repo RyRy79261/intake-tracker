@@ -42,6 +42,7 @@ import {
   type IntakeRecord,
   type InventoryItem,
   type InventoryTransaction,
+  type JournalEntry,
   type MedicationPhase,
   type PhaseSchedule,
   type Prescription,
@@ -78,6 +79,7 @@ export interface SyncedRowMap {
   userProfile: UserProfile;
   insightReports: InsightReport;
   userSettings: UserSettings;
+  journalEntries: JournalEntry;
 }
 
 /** A synced table name. Every one of them has a row type above. */
@@ -108,7 +110,8 @@ export function syncOpFor(row: { deletedAt?: number | null }): SyncOp {
 /**
  * The lifecycle-flag changes that retire a tombstoned row, or `{}` when it is
  * already retired or its table has no flag. A finished phase or plan
- * (`completed`, `cancelled`) is history and keeps its status.
+ * (`completed`, `cancelled`) is history and keeps its status. A journal
+ * entry's content is blanked instead.
  */
 export function retireChanges(
   tableName: SyncedTable,
@@ -130,6 +133,17 @@ export function retireChanges(
       return row.status === "active" || row.status === "draft" || row.status === "pending"
         ? { status: "cancelled" }
         : {};
+    case "journalEntries":
+      // A deleted journal entry keeps no content: the words, title, places
+      // and rating are blanked on the device, so the tombstone that reaches
+      // the server (and every other device) is empty too.
+      return row.words === "" &&
+        row.finding === "" &&
+        Array.isArray(row.places) &&
+        row.places.length === 0 &&
+        row.severity === null
+        ? {}
+        : { words: "", finding: "", places: [], severity: null };
     default:
       return {};
   }

@@ -202,6 +202,29 @@ export const VOICE_ITEM_SPEC = {
     },
     note: NOTE,
   },
+  // A medical journal entry: anything noticed about the body or the day. The
+  // person's own words, a short title, and only the details they said.
+  // `places` is a comma-separated list of body-place ids from
+  // @intake/core/journal ("knee-l, eyes"); the review checks each id and asks
+  // for a side when one is missing (lib/voice-validation.ts).
+  journal_entry: {
+    finding: { type: "text", label: "Title", maxLength: 60, required: true },
+    words: { type: "text", label: "Your words", maxLength: 500, required: true },
+    entryKind: {
+      type: "choice",
+      label: "Kind",
+      values: ["symptom", "sign", "event"],
+      required: true,
+    },
+    severity: { type: "number", label: "Intensity", unit: "/10", min: 0, max: 10, int: true, required: false },
+    places: { type: "text", label: "Body place", maxLength: 200, required: false },
+    timePrecision: {
+      type: "choice",
+      label: "Time",
+      values: ["exact", "approx", "day"],
+      required: false,
+    },
+  },
 } as const satisfies Record<string, Record<string, VoiceFieldSpec>>;
 
 type Spec = typeof VOICE_ITEM_SPEC;

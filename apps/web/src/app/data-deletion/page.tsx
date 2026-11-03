@@ -78,8 +78,11 @@ export default function DataDeletionPage() {
           <strong>What is deleted:</strong> the health and medication records
           you logged within the time frame you choose (hydration, nutrition,
           weight, blood pressure, bathroom logs, substances, medications, dose
-          history, and notes). In cloud-sync mode the matching cloud copy is
-          deleted too.
+          history, notes and journal entries). They are marked deleted on your
+          device and, in cloud-sync mode, in the matching cloud copy, so they
+          no longer appear anywhere. A deleted journal entry&apos;s words, title,
+          body places and intensity are erased; other records keep their
+          content on our servers until you delete your account.
         </p>
         <p>
           <strong>What is kept:</strong> your account and login, and any records
@@ -98,7 +101,7 @@ export default function DataDeletionPage() {
         <p>To permanently delete your account, in the app:</p>
         <ol className="ml-4 list-decimal space-y-1.5">
           <li>
-            Open <strong>Settings → Account</strong>.
+            Open <strong>Profile</strong> (the avatar in the top bar).
           </li>
           <li>
             Tap <strong>Delete Account</strong>, type <strong>DELETE</strong> to

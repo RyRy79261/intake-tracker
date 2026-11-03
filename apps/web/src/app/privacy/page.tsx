@@ -21,7 +21,7 @@ export const metadata: Metadata = {
 // match. This is a plain-language policy, not legal advice — have it reviewed
 // before relying on it for a production listing.
 
-const EFFECTIVE_DATE = "1 June 2026";
+const EFFECTIVE_DATE = "3 November 2026";
 const CONTACT_EMAIL = "meowzit.eth@gmail.com";
 
 function Section({
@@ -86,7 +86,8 @@ export default function PrivacyPolicyPage() {
         <p>
           Intake Tracker is a single-user personal health-tracking app built to
           help one person log hydration, nutrition, vitals (such as weight and
-          blood pressure), bathroom activity, substances, and medications.
+          blood pressure), bathroom activity, substances, medications, and a
+          medical journal of symptoms and other things they notice.
           Sign-in access is restricted to an approved list of email addresses.
         </p>
       </Section>
@@ -107,6 +108,29 @@ export default function PrivacyPolicyPage() {
           your data is available across your devices. This copy contains the
           health data you choose to log. You can delete it again at any time
           (see “Deleting your data” below).
+        </p>
+        <p>
+          The words and titles of your journal entries are encrypted in that
+          database (AES-256-GCM), so a copy of the database on its own does
+          not reveal them. Our server holds the key, because it decrypts them
+          for your devices; this is not end-to-end encryption.
+        </p>
+      </Section>
+
+      <Section title="Medical journal">
+        <p>
+          The journal keeps what you write or say about your body or your day
+          (for example a symptom, a bruise, or that you woke up late), a short
+          title, and, if you add them, a body place and a 0–10 intensity. Typed
+          entries are not sent to any AI service: the suggested title and
+          details are worked out on your device. Entries you speak are
+          transcribed and interpreted like any other voice log (see below).
+          The printout for your doctor is made on your device. Journal entries
+          are not shared with the Claude connector or included in AI insights.
+          Deleting an entry erases its words, title, body places and intensity
+          on your device and in the cloud copy. There is no undo, but a backup
+          file you exported before the deletion still contains the entry, and
+          importing that file restores it.
         </p>
       </Section>
 
@@ -137,7 +161,8 @@ export default function PrivacyPolicyPage() {
             short audio clip is sent to Groq for speech-to-text transcription.
             The resulting text is then handled like anything you typed, and is
             sent with your device&apos;s current local time and time zone so
-            that &quot;an hour ago&quot; can be dated.
+            that &quot;an hour ago&quot; can be dated. This includes anything
+            you say for your journal.
           </li>
           <li>
             <strong>Medical-context insights stay off by default.</strong> AI
@@ -197,18 +222,19 @@ export default function PrivacyPolicyPage() {
         <ul className="ml-4 list-disc space-y-1.5">
           <li>
             <strong>Erase your records:</strong> in the app, go to{" "}
-            <strong>Settings → Data Management → Clear all data</strong>. This
-            removes your logged records on the device and propagates the
-            deletion to the synced cloud copy.
+            <strong>Settings → Storage → Delete data</strong>. This marks your
+            logged records as deleted on the device and in the synced cloud
+            copy; a deleted journal entry&apos;s words are erased.
           </li>
           <li>
             <strong>Remove local data:</strong> uninstalling the app (or
             clearing site data in the browser) removes the on-device copy.
           </li>
           <li>
-            <strong>Delete your account:</strong> to delete your sign-in
-            identity and any remaining server-side data (including notification
-            subscriptions), email{" "}
+            <strong>Delete your account:</strong> in the app, open{" "}
+            <strong>Profile → Delete Account</strong> to delete your sign-in
+            identity and all server-side data (including notification
+            subscriptions). If you cannot use the app, email{" "}
             <a
               className="underline underline-offset-2"
               href={`mailto:${CONTACT_EMAIL}?subject=Delete%20my%20Intake%20Tracker%20account`}
@@ -226,7 +252,8 @@ export default function PrivacyPolicyPage() {
 
       <Section title="Security">
         <p>
-          Data sent to and from our servers is transmitted over HTTPS. Please
+          Data sent to and from our servers is transmitted over HTTPS. Journal
+          text and any AI keys you save are encrypted in our database. Please
           note that on-device storage is not encrypted at rest — anyone with
           access to your unlocked device may be able to view the data stored in
           the app, so keep your device locked and protected.

@@ -74,9 +74,9 @@ async function ops(): Promise<Record<string, string>> {
 }
 
 describe("v27 schema", () => {
-  it("is the current version and changes no store", () => {
-    expect(DB_SCHEMA_VERSION).toBe(27);
-    expect(db.verno).toBe(27);
+  it("changes no store, and is superseded only by v28 (adds journalEntries)", () => {
+    expect(DB_SCHEMA_VERSION).toBe(28);
+    expect(db.verno).toBe(28);
   });
 });
 

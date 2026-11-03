@@ -24,6 +24,7 @@ export const DOMAINS = [
   "bath",
   "meds",
   "ai",
+  "journal",
 ] as const;
 
 export type Domain = (typeof DOMAINS)[number];
@@ -52,6 +53,7 @@ export const DOMAIN_TOKEN: Record<Domain, `--${Domain}`> = {
   bath: "--bath",
   meds: "--meds",
   ai: "--ai",
+  journal: "--journal",
 };
 
 /**
@@ -169,5 +171,13 @@ export const DOMAIN_CLASSES: Record<Domain, DomainClasses> = {
     tint: "bg-ai/8 hover:bg-ai/14",
     hover: "hover:bg-ai/10 hover:border-ai",
     active: "bg-ai/10 border-ai",
+  },
+  journal: {
+    text: "text-journal",
+    fill: "bg-journal",
+    border: "border-journal",
+    tint: "bg-journal/8 hover:bg-journal/14",
+    hover: "hover:bg-journal/10 hover:border-journal",
+    active: "bg-journal/10 border-journal",
   },
 };

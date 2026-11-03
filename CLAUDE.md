@@ -20,9 +20,9 @@ Package manager is **pnpm** (enforced via `preinstall` hook; npm/yarn will fail)
 
 ### Data Layer (Client-Side)
 
-All data lives in **IndexedDB via Dexie.js** (`src/lib/db.ts`). There is no server-side database for user data (push notification subscriptions use server-side Neon Postgres). The schema is at version 14 with migration logic for each version in `db.ts`.
+All data lives in **IndexedDB via Dexie.js** (`src/lib/db.ts`), mirrored to Neon Postgres by the sync engine when cloud sync is on. The schema is at version 28 with migration logic for each version in `db.ts`.
 
-**Tables:** intakeRecords, weightRecords, bloodPressureRecords, eatingRecords, urinationRecords, defecationRecords, substanceRecords, prescriptions, medicationPhases, phaseSchedules, inventoryItems, inventoryTransactions, doseLogs, titrationPlans, dailyNotes, auditLogs.
+**Tables:** intakeRecords, weightRecords, bloodPressureRecords, eatingRecords, urinationRecords, defecationRecords, substanceRecords, prescriptions, medicationPhases, phaseSchedules, inventoryItems, inventoryTransactions, doseLogs, titrationPlans, dailyNotes, auditLogs, userProfile, insightReports, userSettings, journalEntries.
 
 When adding a new Dexie version, you must repeat all existing store definitions (Dexie requires the full schema each version).
 
@@ -38,6 +38,10 @@ Workflow: edit `src/db/schema.ts`, run `pnpm db:generate` (emits a numbered SQL 
 - **After ≈ 2026-05-31:** real generated timestamps exceed every deployed migration on their own. **Never hand-edit `_journal.json` again** — `drizzle-kit generate` is the only thing that should write `when`.
 
 `src/__tests__/migration/drizzle-journal.test.ts` enforces both rules: `when` must strictly increase, and (once past the cutoff) no entry may be future-dated.
+
+### Journal and field encryption
+
+`journalEntries` (types in `@intake/types/records`, rules in `@intake/core/journal`, service `lib/journal-service.ts`, window `components/journal/`) is the one table whose text is encrypted at rest: `lib/server/field-vault.ts` encrypts its `words` and `finding` in `/api/sync/push` and decrypts them in `/api/sync/pull` (`ENCRYPTED_FIELDS`). Any new server code that reads `journal_entries` must decrypt with it, and a tombstone must keep no content (`BLANK_WHEN_DELETED`, `retireChanges`).
 
 ### Service Layer
 
@@ -57,13 +61,14 @@ Each data domain has a service file in `src/lib/` (e.g., `intake-service.ts`, `m
 
 - `/` — Main intake dashboard (water/salt tracking, health metrics)
 - `/medications` — Prescription management with multi-step wizard
+- `/journal` — Medical journal (a logbook of symptoms, signs and events, with a doctor's printout)
 - `/history` — Analytics/charts (Recharts)
 - `/settings` — App configuration
 
 ### Shell and windows
 
-`components/shell/app-chrome.tsx` wraps every page in the Ward Console shell: the sys-bar (app buttons, profile, Settings), Home (`home-page-body.tsx`, always mounted) and the bottom bar (Home, Windows on tiled screens, Hold to talk). On a phone, `quick-links.tsx` sits over the bottom bar on Home (jump to each module card) and `phone-swipe.tsx` swipes along the sys-bar order (Home, Medications, Metrics, History, Profile).
-Apps (Medications, Metrics, History, Profile, Help) open as windows over Home: `stores/window-store.ts` (Zustand, sessionStorage) holds them, `window-layer.tsx`/`window-frame.tsx` render them, and `app-registry.tsx` maps each app to its body. On a phone one window fills the screen and is the only one open (opening another closes it, `keepOnly` in the store), and Back closes it; from 768px they tile, and Esc closes the focused one.
+`components/shell/app-chrome.tsx` wraps every page in the Ward Console shell: the sys-bar (app buttons, profile, Settings), Home (`home-page-body.tsx`, always mounted) and the bottom bar (Home, Windows on tiled screens, Hold to talk). On a phone, `quick-links.tsx` sits over the bottom bar on Home (jump to each module card) and `phone-swipe.tsx` swipes along the sys-bar order (Home, Medications, Journal, Metrics, History, Profile).
+Apps (Medications, Journal, Metrics, History, Profile, Help) open as windows over Home: `stores/window-store.ts` (Zustand, sessionStorage) holds them, `window-layer.tsx`/`window-frame.tsx` render them, and `app-registry.tsx` maps each app to its body. On a phone one window fills the screen and is the only one open (opening another closes it, `keepOnly` in the store), and Back closes it; from 768px they tile, and Esc closes the focused one.
 Desktop mode (`hooks/use-shell-mode.ts`: 1024px or more with a fine pointer; touch tablets keep tiling) has free windows: each `Win` keeps `x,y,w,h,z,min,max,snap` in the store, the rules (clamp to the area, per-app minimum size, cascade, snap, tidy) are pure functions in `lib/window-geometry.ts`, and `window-frame.tsx` drags by the title bar and resizes from 8 grips with pointer capture (arrows move, Shift+arrows resize, Ctrl/Alt+` cycles).
 In desktop mode there is no Home column: the intake modules (Today, Liquids, Food, Blood Pressure, Weight, Urination, Defecation) are free windows too (`lib/desk-modules.ts` for their data and default arrangement, `stores/module-window-store.ts` for geometry in localStorage, `components/shell/module-registry.tsx` for each module's body, wrapped for a window by `components/shell/desk-modules.tsx`). A module is never closed, only minimised; they share the z-order with app windows but not browser history or the six-window limit.
 `task-strip.tsx` in the sys-bar has Home, a button per open app window and Tidy. `desk-band.tsx` replaces the bottom bar with a 72px strip windows cannot enter (`--bbh` in `app/ward-desktop.css`): Report a bug on the left, the icons of minimised modules, Hold to talk on the right when signed in.

@@ -1,6 +1,7 @@
 import type { VoiceParsedItem } from "@/lib/voice-types";
 import { parseBloodPressureForm, parseWeightForm } from "@intake/core/record-schemas";
 import { voiceItemProblem } from "@intake/core/voice-items";
+import { BODY_PLACES, isPlaceId, isPlaceMissingSide, parsePlaceList } from "@intake/core/journal";
 import { allowsFutureTime, spokenTimeError } from "@/lib/voice-time";
 import { getDeviceTimezone } from "@/lib/timezone";
 
@@ -48,5 +49,23 @@ export function validateVoiceItem(
     if (!parsed.ok) return parsed.message;
   }
   const { when: _when, at: _at, ...fields } = item;
-  return voiceItemProblem(fields);
+  const problem = voiceItemProblem(fields);
+  if (problem) return problem;
+  if (item.kind === "journal_entry") return journalPlacesProblem(item.places);
+  return null;
+}
+
+/**
+ * A journal entry's body places must each be on the list, and a sided place
+ * needs its side: "bruise on my leg" must not be saved as a guessed side.
+ */
+export function journalPlacesProblem(places: string | undefined): string | null {
+  for (const id of parsePlaceList(places)) {
+    if (isPlaceMissingSide(id)) {
+      const name = BODY_PLACES.find((p) => p.id === id)!.name;
+      return `Which side: ${name.toLowerCase()}, left or right?`;
+    }
+    if (!isPlaceId(id)) return `Pick the body place from the list ("${id}" is not on it).`;
+  }
+  return null;
 }

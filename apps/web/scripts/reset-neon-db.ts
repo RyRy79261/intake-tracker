@@ -27,6 +27,7 @@
  *   DROP TABLE IF EXISTS eating_records CASCADE
  *   DROP TABLE IF EXISTS urination_records CASCADE
  *   DROP TABLE IF EXISTS defecation_records CASCADE
+ *   DROP TABLE IF EXISTS journal_entries CASCADE
  *   DROP TABLE IF EXISTS substance_records CASCADE
  *   DROP TABLE IF EXISTS prescriptions CASCADE
  *   DROP TABLE IF EXISTS medication_phases CASCADE
@@ -59,6 +60,7 @@ const TABLES: readonly string[] = [
   "blood_pressure_records",
   "urination_records",
   "defecation_records",
+  "journal_entries",
   "audit_logs",
   "phase_schedules", // FK → medication_phases
   "inventory_items", // FK → prescriptions

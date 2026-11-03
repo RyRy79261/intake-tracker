@@ -22,6 +22,7 @@ import {
 } from "@/lib/synced-write";
 import {
   makeIntakeRecord,
+  makeJournalEntry,
   makeMedicationPhase,
   makePrescription,
   makeTitrationPlan,
@@ -212,6 +213,28 @@ describe("retireChanges", () => {
     expect(retireChanges("titrationPlans", { status: "draft" })).toEqual({ status: "cancelled" });
     expect(retireChanges("titrationPlans", { status: "completed" })).toEqual({});
     expect(retireChanges("intakeRecords", { amount: 1 })).toEqual({});
+  });
+
+  it("blanks a journal entry's content, and is done once it is blank", () => {
+    expect(retireChanges("journalEntries", makeJournalEntry() as never)).toEqual({
+      words: "",
+      finding: "",
+      places: [],
+      severity: null,
+    });
+    expect(
+      retireChanges("journalEntries", { words: "", finding: "", places: [], severity: null }),
+    ).toEqual({});
+  });
+
+  it("a tombstoned journal entry keeps no content, locally or in the queue", async () => {
+    const entry = makeJournalEntry({ id: "j1" });
+    await db.journalEntries.add(entry);
+    await syncedWrite(["journalEntries"], (w) => w.tombstone("journalEntries", "j1"), { now: BASE_TS + 10 });
+    const stored = await db.journalEntries.get("j1");
+    expect(stored).toMatchObject({ words: "", finding: "", places: [], severity: null, deletedAt: BASE_TS + 10 });
+    const queued = await db._syncQueue.where("[tableName+recordId]").equals(["journalEntries", "j1"]).toArray();
+    expect(queued.map((q) => q.op)).toEqual(["delete"]);
   });
 });
 

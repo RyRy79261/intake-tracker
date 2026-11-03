@@ -18,6 +18,7 @@ import type {
   AuditLog,
   UserProfile,
   UserSettings,
+  JournalEntry,
   InsightReport,
 } from "@/lib/db";
 import {
@@ -58,6 +59,7 @@ export interface SeedSpec {
   userProfile?: UserProfile[];
   insightReports?: InsightReport[];
   userSettings?: UserSettings[];
+  journalEntries?: JournalEntry[];
 }
 
 /**
@@ -91,6 +93,7 @@ export async function seedDatabase(spec: SeedSpec): Promise<void> {
   if (spec.userProfile) await db.userProfile.bulkAdd(spec.userProfile);
   if (spec.insightReports) await db.insightReports.bulkAdd(spec.insightReports);
   if (spec.userSettings) await db.userSettings.bulkAdd(spec.userSettings);
+  if (spec.journalEntries) await db.journalEntries.bulkAdd(spec.journalEntries);
 }
 
 /**

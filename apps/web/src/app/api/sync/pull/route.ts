@@ -44,6 +44,11 @@
  *   Decoupling pull from sync-topology.ts also keeps Plan 04 independent of
  *   Plan 05's wave-2 parallel work.
  *
+ * Health text at rest: fields encrypted by the push route
+ * (lib/server/field-vault.ts ENCRYPTED_FIELDS) are decrypted here, per row,
+ * with the caller's user id bound in. A field that no longer decrypts is sent
+ * as a placeholder rather than failing the whole pull.
+ *
  * Logging: module prefix `[sync/pull]`. Request body is never logged
  * (cursor map is harmless but the convention is to never log request bodies
  * from sync routes — keeps PHI out of logs by default).
@@ -53,6 +58,7 @@ import { z } from "zod";
 import { and, asc, eq, gt, or } from "drizzle-orm";
 import { type PgColumn, type PgTable } from "drizzle-orm/pg-core";
 import { withAuth } from "@/lib/auth-middleware";
+import { decryptRowFields } from "@/lib/server/field-vault";
 import { db as drizzleDb } from "@intake/db/client";
 import {
   PULL_SOFT_CAP,
@@ -138,7 +144,15 @@ export const POST = withAuth(async ({ request, auth }) => {
               id: last.id as string,
             }
           : undefined;
-        const payload = page.map(({ serverUpdatedAt: _stamp, ...row }) => row);
+        // Journal text is stored as ciphertext (lib/server/field-vault.ts)
+        // and leaves the server as plain text, over HTTPS only.
+        const payload = page.map(({ serverUpdatedAt: _stamp, ...row }) =>
+          decryptRowFields(tableName, row, auth.userId!, (field) =>
+            console.error(
+              `[sync/pull] Unreadable encrypted field: table=${tableName} id=${String(row.id)} field=${field}`,
+            ),
+          ),
+        );
         return [
           tableName,
           cursor

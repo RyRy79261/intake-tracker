@@ -942,3 +942,102 @@ describe("VoicePanel — a spoken interaction question", () => {
     expect(checked).toBe(false);
   });
 });
+
+describe("VoicePanel — journal entries", () => {
+  async function liveJournal() {
+    return (await db.journalEntries.toArray()).filter((e) => e.deletedAt === null);
+  }
+
+  it("saves two things said in one go as two journal entries, in the user's words", async () => {
+    await dictateAndSave([
+      {
+        kind: "journal_entry",
+        finding: "Knee pain",
+        words: "Pain in my left knee, about a four, worse on the stairs",
+        entryKind: "symptom",
+        severity: 4,
+        places: "knee-l",
+      },
+      { kind: "journal_entry", finding: "Woke up late", words: "I woke up late", entryKind: "event", timePrecision: "day" },
+    ]);
+    const rows = (await liveJournal()).sort((a, b) => a.finding.localeCompare(b.finding));
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toMatchObject({
+      finding: "Knee pain",
+      words: "Pain in my left knee, about a four, worse on the stairs",
+      kind: "symptom",
+      severity: 4,
+      places: ["knee-l"],
+      timePrecision: "exact",
+      source: "voice",
+    });
+    expect(rows[1]).toMatchObject({ finding: "Woke up late", kind: "event", severity: null, places: [], timePrecision: "day" });
+  });
+
+  it("asks for a side before saving a place heard without one", async () => {
+    parsedItems = [
+      { kind: "journal_entry", finding: "Bruise", words: "A bruise on my leg", entryKind: "sign", places: "lowerleg" },
+    ];
+    const user = userEvent.setup();
+    await renderWithFixtures(<VoicePanel />);
+    await user.click(screen.getByRole("button", { name: "mock-record" }));
+    await screen.findByText(/Items \(/);
+    expect(screen.getByText(/Which side: shin or calf, left or right\?/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /approve journal/i })).toBeDisabled();
+    // The place picker names what is missing.
+    expect(screen.getByRole("combobox", { name: /body place/i })).toHaveTextContent("Shin or calf, which side?");
+  });
+
+  it("lets a missed intensity be added with the slider", async () => {
+    parsedItems = [{ kind: "journal_entry", finding: "Headache", words: "Today I have a headache", entryKind: "symptom" }];
+    const user = userEvent.setup();
+    await renderWithFixtures(<VoicePanel />);
+    await user.click(screen.getByRole("button", { name: "mock-record" }));
+    await screen.findByText(/Items \(/);
+    expect(screen.getByText(/Not rated/)).toBeInTheDocument();
+    const slider = screen.getByRole("slider", { name: /intensity/i });
+    fireEvent.change(slider, { target: { value: "3" } });
+    expect(screen.getByText(/3/, { selector: "b" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /Approve all/i }));
+    await user.click(screen.getByRole("button", { name: /^Save/ }));
+    await waitFor(async () => {
+      expect(await liveJournal()).toHaveLength(1);
+    });
+    expect((await liveJournal())[0]).toMatchObject({ finding: "Headache", severity: 3 });
+  });
+
+  it("shows an urgent notice for a sudden severe headache, without blocking the save", async () => {
+    parsedItems = [
+      { kind: "journal_entry", finding: "Headache", words: "Sudden headache, worst ever", entryKind: "symptom", severity: 10, places: "head" },
+    ];
+    const user = userEvent.setup();
+    await renderWithFixtures(<VoicePanel />);
+    await user.click(screen.getByRole("button", { name: "mock-record" }));
+    await screen.findByText(/Items \(/);
+    expect(screen.getByRole("alert")).toHaveTextContent(/Call 112/);
+    expect(screen.getByRole("button", { name: /approve journal/i })).toBeEnabled();
+  });
+});
+
+describe("VoicePanel — journal entries: clearing a heard detail", () => {
+  it("saves without the intensity and place the user cleared", async () => {
+    parsedItems = [
+      { kind: "journal_entry", finding: "Knee pain", words: "My left knee, a four", entryKind: "symptom", severity: 4, places: "knee-l" },
+    ];
+    const user = userEvent.setup();
+    await renderWithFixtures(<VoicePanel />);
+    await user.click(screen.getByRole("button", { name: "mock-record" }));
+    await screen.findByText(/Items \(/);
+    await user.click(screen.getByRole("button", { name: "Clear" }));
+    await user.click(screen.getByRole("combobox", { name: /body place/i }));
+    await user.click(await screen.findByRole("option", { name: "Knee, left" }));
+    await user.keyboard("{Escape}");
+    expect(screen.getByRole("combobox", { name: /body place/i })).toHaveTextContent("Not tied to a body place");
+    await user.click(screen.getByRole("button", { name: /Approve all/i }));
+    await user.click(screen.getByRole("button", { name: /^Save/ }));
+    await waitFor(async () => {
+      expect((await db.journalEntries.toArray()).filter((e) => e.deletedAt === null)).toHaveLength(1);
+    });
+    expect((await db.journalEntries.toArray())[0]).toMatchObject({ severity: null, places: [] });
+  });
+});

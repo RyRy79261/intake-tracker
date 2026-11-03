@@ -9,7 +9,7 @@
  * Auth is still mocked (no real Neon Auth in Docker), but everything from the
  * Zod validation through Drizzle to Postgres is real.
  */
-import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { eq } from "drizzle-orm";
 import { setupTestDb, type TestDbContext } from "@/__tests__/helpers/test-db";
@@ -77,6 +77,7 @@ beforeEach(async () => {
     schema.bloodPressureRecords,
     schema.weightRecords,
     schema.intakeRecords,
+    schema.journalEntries,
   ];
   for (const table of tables) {
     await ctx.db.delete(table);
@@ -1019,6 +1020,102 @@ describe("sync-push integration (real Postgres)", () => {
       const body = (await res.json()) as PushResponse;
       expect(body.accepted).toHaveLength(1);
       expect(body.rejected).toHaveLength(0);
+    });
+  });
+
+  describe("journal entries", () => {
+    const secret = process.env.API_KEY_ENCRYPTION_SECRET;
+    beforeEach(() => {
+      process.env.API_KEY_ENCRYPTION_SECRET = Buffer.alloc(32, 3).toString("base64");
+    });
+    afterEach(() => {
+      if (secret === undefined) delete process.env.API_KEY_ENCRYPTION_SECRET;
+      else process.env.API_KEY_ENCRYPTION_SECRET = secret;
+    });
+
+    function journalRow(overrides: Record<string, unknown> = {}) {
+      return {
+        id: crypto.randomUUID(),
+        timestamp: BASE_TS,
+        timePrecision: "approx",
+        words: "Felt nauseous after lunch for about two hours.",
+        finding: "Nausea",
+        kind: "symptom",
+        places: [],
+        severity: 3,
+        source: "voice",
+        createdAt: BASE_TS,
+        updatedAt: BASE_TS + 1000,
+        deletedAt: null,
+        deviceId: "dev-A",
+        timezone: "Europe/Berlin",
+        ...overrides,
+      };
+    }
+
+    async function pushOne(row: Record<string, unknown>, op = "upsert") {
+      const res = await POST(makePushRequest({ ops: [{ queueId: 1, tableName: "journalEntries", op, row }] }));
+      expect(res.status).toBe(200);
+      return (await res.json()) as PushResponse;
+    }
+
+    it("stores the words and title as ciphertext in Postgres", async () => {
+      const row = journalRow();
+      const body = await pushOne(row);
+      expect(body.accepted).toHaveLength(1);
+      const { rows } = await ctx.pool.query(
+        "SELECT words, finding, places, severity, kind FROM journal_entries WHERE id = $1",
+        [row.id],
+      );
+      expect(rows[0].words).toMatch(/^f1:/);
+      expect(rows[0].finding).toMatch(/^f1:/);
+      expect(JSON.stringify(rows[0])).not.toContain("nauseous");
+      expect(rows[0]).toMatchObject({ places: [], severity: 3, kind: "symptom" });
+    });
+
+    it("a delete leaves no content in Postgres", async () => {
+      const row = journalRow({ places: ["abdomen"] });
+      await pushOne(row);
+      const body = await pushOne({ ...row, updatedAt: BASE_TS + 2000, deletedAt: BASE_TS + 2000 }, "delete");
+      expect(body.accepted).toHaveLength(1);
+      const { rows } = await ctx.pool.query(
+        "SELECT words, finding, places, severity, deleted_at FROM journal_entries WHERE id = $1",
+        [row.id],
+      );
+      expect(rows[0]).toMatchObject({ words: "", finding: "", places: [], severity: null });
+      expect(Number(rows[0].deleted_at)).toBe(BASE_TS + 2000);
+    });
+
+    it("a tombstone stub for a row the device no longer has also blanks it", async () => {
+      const row = journalRow();
+      await pushOne(row);
+      const body = await pushOne({ id: row.id, updatedAt: BASE_TS + 2000, deletedAt: BASE_TS + 2000 }, "delete");
+      expect(body.accepted).toHaveLength(1);
+      const { rows } = await ctx.pool.query("SELECT words, finding FROM journal_entries WHERE id = $1", [row.id]);
+      expect(rows[0]).toMatchObject({ words: "", finding: "" });
+    });
+
+    it("the database refuses an intensity above 10", async () => {
+      vi.spyOn(console, "error").mockImplementation(() => {});
+      const body = await pushOne(journalRow({ severity: 11 }));
+      expect(body.accepted).toHaveLength(0);
+      expect(body.rejected).toHaveLength(1);
+    });
+
+    it("pull returns the plain text to the device", async () => {
+      const row = journalRow();
+      await pushOne(row);
+      const { POST: PULL } = await import("@/app/api/sync/pull/route");
+      const res = await PULL(
+        new NextRequest("https://example.test/api/sync/pull", {
+          method: "POST",
+          body: JSON.stringify({ cursors: {}, cursorKind: "server" }),
+          headers: { "content-type": "application/json" },
+        }),
+      );
+      const pulled = (await res.json()) as { result: Record<string, { rows: Record<string, unknown>[] }> };
+      const got = pulled.result.journalEntries!.rows.find((r) => r.id === row.id);
+      expect(got).toMatchObject({ words: row.words, finding: "Nausea", places: [], severity: 3 });
     });
   });
 });

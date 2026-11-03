@@ -101,6 +101,7 @@ const TABLE_NAMES = [
   "doseLogs",
   "dailyNotes",
   "auditLogs",
+  "journalEntries",
 ] as const;
 
 // ---------------------------------------------------------------------------

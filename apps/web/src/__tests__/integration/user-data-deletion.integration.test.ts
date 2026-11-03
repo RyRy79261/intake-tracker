@@ -172,6 +172,19 @@ async function seedUser(userId: string) {
     timezone: "UTC",
     ...base(),
   });
+  await ctx.db.insert(schema.journalEntries).values({
+    id: p("journal"),
+    userId,
+    timestamp: NOW,
+    timePrecision: "exact",
+    words: "",
+    finding: "",
+    kind: "symptom",
+    places: [],
+    severity: null,
+    timezone: "UTC",
+    ...base(),
+  });
   await ctx.db.insert(schema.userProfile).values({
     id: p("profile"),
     userId,
@@ -198,6 +211,7 @@ const SYNCED_TABLES = [
   schema.bloodPressureRecords,
   schema.weightRecords,
   schema.intakeRecords,
+  schema.journalEntries,
   schema.userProfile,
   schema.insightReports,
 ] as const;
@@ -248,7 +262,7 @@ describe("user data deletion (real Postgres, dose-linked graph)", () => {
     expect(deleted.dailyNotes).toBe(1);
     expect(await countRows(ctx.testUserId)).toBe(0);
     // Another account's rows are untouched.
-    expect(await countRows(OTHER_USER)).toBe(11);
+    expect(await countRows(OTHER_USER)).toBe(12);
   });
 
   it("deleteAllUserData deletes every synced row despite dose-linked FKs", async () => {
@@ -257,7 +271,7 @@ describe("user data deletion (real Postgres, dose-linked graph)", () => {
     await deleteAllUserData(ctx.testUserId);
 
     expect(await countRows(ctx.testUserId)).toBe(0);
-    expect(await countRows(OTHER_USER)).toBe(11);
+    expect(await countRows(OTHER_USER)).toBe(12);
   });
 
   it("POST /api/sync/cleanup succeeds for a user with dose-linked data", async () => {
@@ -279,6 +293,6 @@ describe("user data deletion (real Postgres, dose-linked graph)", () => {
       .from(schema.userProfile)
       .where(eq(schema.userProfile.userId, ctx.testUserId));
     expect(profiles).toHaveLength(1);
-    expect(await countRows(OTHER_USER)).toBe(11);
+    expect(await countRows(OTHER_USER)).toBe(12);
   });
 });

@@ -3,7 +3,8 @@ import { db, type IntakeRecord, type WeightRecord, type BloodPressureRecord,
   type Prescription, type MedicationPhase, type PhaseSchedule,
   type InventoryItem, type InventoryTransaction, type DoseLog,
   type DailyNote, type AuditLog, type SubstanceRecord, type TitrationPlan,
-  type UserProfile, type InsightReport, type UserSettings } from "@/lib/db";
+  type UserProfile, type InsightReport, type UserSettings,
+  type JournalEntry } from "@/lib/db";
 
 const BASE_TS = 1700000000000; // 2023-11-14 — fixed base for determinism
 
@@ -333,6 +334,26 @@ export function makeInsightReport(overrides?: Partial<InsightReport>): InsightRe
     deviceId: "test-device",
     ...overrides,
   } as InsightReport;
+}
+
+export function makeJournalEntry(overrides?: Partial<JournalEntry>): JournalEntry {
+  return {
+    id: crypto.randomUUID(),
+    timestamp: BASE_TS,
+    timePrecision: "exact",
+    words: "Pain in my left knee, about a four, worse on the stairs.",
+    finding: "Knee pain",
+    kind: "symptom",
+    places: ["knee-l"],
+    severity: 4,
+    source: "manual",
+    createdAt: BASE_TS,
+    updatedAt: BASE_TS,
+    deletedAt: null,
+    deviceId: "test-device",
+    timezone: "Europe/Berlin",
+    ...overrides,
+  };
 }
 
 export function makeSubstanceRecord(overrides?: Partial<SubstanceRecord>): SubstanceRecord {

@@ -18,6 +18,7 @@ import {
   doseLogSchema,
   titrationPlanSchema,
   dailyNoteSchema,
+  journalEntrySchema,
   auditLogSchema,
   type BackupTableName,
 } from "@/lib/backup-schemas";
@@ -41,6 +42,7 @@ import {
   makeUserProfile,
   makeInsightReport,
   makeUserSettings,
+  makeJournalEntry,
 } from "@/__tests__/fixtures/db-fixtures";
 
 /** Fixtures stripped of any undefined-valued keys, mirroring JSON round-trip. */
@@ -160,6 +162,12 @@ const fixturesByTable: Record<BackupTableName, () => Array<Record<string, unknow
       homeTimezoneConfirmedAt: Date.now(),
     }),
     JSON.parse(JSON.stringify(makeUserSettings())),
+  ],
+  journalEntries: () => [
+    makeJournalEntry(),
+    makeJournalEntry({ kind: "event", finding: "Woke up late", places: [], severity: null, timePrecision: "day" }),
+    makeJournalEntry({ words: "", finding: "", places: [], severity: null, deletedAt: 1_700_000_100_000 }),
+    JSON.parse(JSON.stringify(makeJournalEntry())),
   ],
 };
 
@@ -406,7 +414,7 @@ describe("backup-schemas: 2026-09 schema additions", () => {
 });
 
 describe("backup-schemas: invariants", () => {
-  it("BACKUP_SCHEMAS covers exactly the 19 expected tables", () => {
+  it("BACKUP_SCHEMAS covers exactly the 20 expected tables", () => {
     expect(tableNames.sort()).toEqual(
       [
         "auditLogs",
@@ -428,6 +436,7 @@ describe("backup-schemas: invariants", () => {
         "userProfile",
         "insightReports",
         "userSettings",
+        "journalEntries",
       ].sort()
     );
   });
@@ -453,11 +462,34 @@ describe("backup-schemas: invariants", () => {
     expect(BACKUP_SCHEMAS.titrationPlans).toBe(titrationPlanSchema);
     expect(BACKUP_SCHEMAS.dailyNotes).toBe(dailyNoteSchema);
     expect(BACKUP_SCHEMAS.auditLogs).toBe(auditLogSchema);
+    expect(BACKUP_SCHEMAS.journalEntries).toBe(journalEntrySchema);
   });
 
   it("syncFieldsSchema treats all metadata fields as optional", () => {
     expect(syncFieldsSchema.safeParse({}).success).toBe(true);
     expect(syncFieldsSchema.safeParse({ createdAt: 1, deletedAt: null }).success).toBe(true);
     expect(syncFieldsSchema.safeParse({ deletedAt: 999 }).success).toBe(true);
+  });
+});
+
+describe("backup-schemas: journal entries", () => {
+  it("rejects an intensity outside 0-10 or a fraction", () => {
+    expect(BACKUP_VALIDATORS.journalEntries(makeJournalEntry({ severity: 11 }))).toBe(false);
+    expect(BACKUP_VALIDATORS.journalEntries(makeJournalEntry({ severity: 2.5 }))).toBe(false);
+  });
+
+  it("rejects a body place that is not on the list, or has no side", () => {
+    expect(BACKUP_VALIDATORS.journalEntries(makeJournalEntry({ places: ["elbow-l"] }))).toBe(false);
+    expect(BACKUP_VALIDATORS.journalEntries(makeJournalEntry({ places: ["knee"] }))).toBe(false);
+  });
+
+  it("rejects an unknown kind or time precision", () => {
+    expect(BACKUP_VALIDATORS.journalEntries({ ...makeJournalEntry(), kind: "mood" })).toBe(false);
+    expect(BACKUP_VALIDATORS.journalEntries({ ...makeJournalEntry(), timePrecision: "week" })).toBe(false);
+  });
+
+  it("rejects words longer than 500 characters or a title longer than 60", () => {
+    expect(BACKUP_VALIDATORS.journalEntries(makeJournalEntry({ words: "a".repeat(501) }))).toBe(false);
+    expect(BACKUP_VALIDATORS.journalEntries(makeJournalEntry({ finding: "a".repeat(61) }))).toBe(false);
   });
 });

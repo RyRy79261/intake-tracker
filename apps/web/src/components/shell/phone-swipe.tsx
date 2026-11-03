@@ -8,11 +8,11 @@ import { useAuthGate } from "@/components/auth-guard";
 
 /**
  * The pages a sideways swipe moves between on a phone, left to right in the
- * order of the sys-bar: Home (the logo), then Medications, Metrics, History
- * and Profile. Swiping left goes to the next one. Settings is a sheet, not a
+ * order of the sys-bar: Home (the logo), then Medications, Journal, Metrics,
+ * History and Profile. Swiping left goes to the next one. Settings is a sheet, not a
  * page, so it is not one of them.
  */
-export const SWIPE_PAGES = ["home", "meds", "metrics", "history", "profile"] as const;
+export const SWIPE_PAGES = ["home", "meds", "journal", "metrics", "history", "profile"] as const;
 export type SwipePage = (typeof SWIPE_PAGES)[number];
 
 /** The pages for this user: Profile only when signed in (the avatar is sign-in otherwise). */
@@ -33,7 +33,7 @@ export function currentSwipePage(): SwipePage | null {
   const win = !s.showHome ? s.wins.find((w) => w.id === s.focus && !w.min) : undefined;
   if (!win) return "home";
   if (win.app === "metrics") return win.st.tab === "records" ? "history" : "metrics";
-  return win.app === "meds" || win.app === "profile" ? win.app : null;
+  return win.app === "meds" || win.app === "journal" || win.app === "profile" ? win.app : null;
 }
 
 /** The page next to `page` in `pages`: -1 to the left (swipe right), 1 to the right (swipe left). */
@@ -107,8 +107,8 @@ function clear(el: HTMLElement | null): void {
 }
 
 /**
- * Phone only: swipe sideways to move between Home, Medications, Metrics,
- * History and Profile, in the sys-bar's order (swipe left for the next). The page
+ * Phone only: swipe sideways to move between Home, Medications, Journal,
+ * Metrics, History and Profile, in the sys-bar's order (swipe left for the next). The page
  * follows the finger; past the distance or speed set in Settings it slides
  * out and the next page slides in. Swipes that start on a field, a slider, a
  * chart, or content that scrolls sideways are left to that control, and

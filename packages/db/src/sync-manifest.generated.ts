@@ -14,6 +14,7 @@ export const TABLE_PUSH_ORDER = [
   "eatingRecords",
   "insightReports",
   "intakeRecords",
+  "journalEntries",
   "prescriptions",
   "titrationPlans",
   "urinationRecords",
@@ -115,6 +116,13 @@ export const SYNC_TABLES: Record<SyncTableName, SyncTableFacts> = {
     nullableFields: ["note", "doseLogId", "deletedAt"],
     hasTimezone: true,
     fkParents: [["doseLogId", "doseLogs"], ["inventoryItemId", "inventoryItems"]],
+  },
+  journalEntries: {
+    integerFields: ["timestamp", "severity", "createdAt", "updatedAt", "deletedAt"],
+    floatFields: [],
+    nullableFields: ["severity", "source", "deletedAt"],
+    hasTimezone: true,
+    fkParents: [],
   },
   medicationPhases: {
     integerFields: ["startDate", "endDate", "createdAt", "updatedAt", "deletedAt"],

@@ -127,6 +127,20 @@ for (const vp of [
       await scan(page, `${vp.label}: meds window`);
     });
 
+    test("Journal window open, with an entry and a notice", async ({ page }) => {
+      await page.goto("/");
+      await sysBar(page).getByRole("button", { name: "Journal" }).click();
+      const journal = windowNamed(page, "Journal");
+      await expect(journal).toBeVisible();
+      await journal.getByLabel("What did you notice?").fill("Swollen ankles tonight, about a three");
+      await journal.getByRole("button", { name: /^Details/ }).click();
+      await expect(journal.getByRole("slider", { name: /intensity/i })).toBeVisible();
+      await scan(page, `${vp.label}: journal window`);
+      await journal.getByRole("tab", { name: "Printout" }).click();
+      await expect(journal.getByTestId("journal-printout")).toBeVisible();
+      await scan(page, `${vp.label}: journal printout`);
+    });
+
     test("Metrics window open", async ({ page }) => {
       await page.addInitScript(() => {
         const key = "intake-tracker-settings";

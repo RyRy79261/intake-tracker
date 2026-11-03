@@ -176,7 +176,9 @@ export function SysBar() {
     >
       <div className="flex min-w-0 shrink-0 items-center gap-2 pl-1.5">
         <ShellLogo size={24} />
-        <h1 className="whitespace-nowrap text-base font-semibold">Intake Tracker</h1>
+        {/* Narrow phones need the room for the app buttons: the name stays
+            for screen readers, the logo stays on screen. */}
+        <h1 className="whitespace-nowrap text-base font-semibold max-[419px]:sr-only">Intake Tracker</h1>
       </div>
       {desktop && <TaskStrip />}
       <nav aria-label="Apps" className="ml-auto flex shrink-0 items-center gap-[2px]">
