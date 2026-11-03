@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.48.1](https://github.com/RyRy79261/intake-tracker/compare/v1.48.0...v1.48.1) (2026-11-03)
+
+
+### Bug Fixes
+
+* **voice:** leave out item kinds the open app does not know ([#474](https://github.com/RyRy79261/intake-tracker/issues/474)) ([984afd2](https://github.com/RyRy79261/intake-tracker/commit/984afd221a74ff5bce164162119ae3e424ae319b))
+
 ## [1.48.0](https://github.com/RyRy79261/intake-tracker/compare/v1.47.0...v1.48.0) (2026-11-03)
 
 
