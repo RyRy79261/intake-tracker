@@ -126,6 +126,9 @@ describe("the reschedule sheet from the dose dialog", () => {
     expect(within(slot).getByTestId("dose-status")).toHaveTextContent("Rescheduled for 13:00");
     expect(within(slot).getByTestId("dose-row")).toHaveAttribute("data-status", "rescheduled");
 
+    // The closing sheet keeps pointer-events off the page until it unmounts,
+    // which under load can be after the Undo toast appears.
+    await waitFor(() => expect(document.body.style.pointerEvents).not.toBe("none"));
     await user.click(await screen.findByRole("button", { name: /^undo/i, hidden: true }));
     await waitFor(async () => {
       const [log] = await logsOf(a);

@@ -169,7 +169,10 @@ describe("Schedule tab: Apply from", () => {
       <PrescriptionViewDrawer prescription={s.prescription} open onOpenChange={() => {}} />,
       { seed: s.seed },
     );
-    const applyFrom = await screen.findByLabelText("Apply from");
+    // The date field shows once the pending change loads, which can be before
+    // the times do; an edit then would keep the form empty and Save disabled.
+    await screen.findByDisplayValue("09:00");
+    const applyFrom = screen.getByLabelText("Apply from");
     expect(applyFrom).toHaveValue(IN_3);
     fireEvent.change(applyFrom, { target: { value: IN_5 } });
     await user.click(screen.getByRole("button", { name: /save schedule/i }));
@@ -199,7 +202,8 @@ describe("Schedule tab: Apply from", () => {
       <PrescriptionViewDrawer prescription={s.prescription} open onOpenChange={() => {}} />,
       { seed: s.seed },
     );
-    fireEvent.change(await screen.findByLabelText("Apply from"), { target: { value: TODAY } });
+    await screen.findByDisplayValue("10:00");
+    fireEvent.change(screen.getByLabelText("Apply from"), { target: { value: TODAY } });
     await user.click(screen.getByRole("button", { name: /save schedule/i }));
     await vi.waitFor(() =>
       expect(toastSpy).toHaveBeenCalledWith({
