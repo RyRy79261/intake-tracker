@@ -40,6 +40,7 @@ import {
   type UserProfile,
   type InsightReport,
   type UserSettings,
+  type JournalEntry,
 } from "@/lib/db";
 import { ok, err } from "@intake/core/service";
 import { isLive } from "@intake/core/lifecycle";
@@ -83,6 +84,7 @@ export interface BackupData {
   userProfile?: UserProfile[];
   insightReports?: InsightReport[];
   userSettings?: UserSettings[];
+  journalEntries?: JournalEntry[];
   // The raw settings-store blob (`{ state }`), device preferences included.
   // Backups older than the userSettings table carry the synced settings only
   // here; import turns them into a userSettings row.
@@ -117,6 +119,7 @@ export interface ImportResult {
   userProfileImported: number;
   insightReportsImported: number;
   userSettingsImported: number;
+  journalEntriesImported: number;
   /** Sum of every `*Imported` count above. */
   totalImported: number;
   skipped: number;
@@ -150,6 +153,7 @@ const IMPORT_COUNT_KEY: Record<TableName, ImportCountKey> = {
   userProfile: "userProfileImported",
   insightReports: "insightReportsImported",
   userSettings: "userSettingsImported",
+  journalEntries: "journalEntriesImported",
 };
 
 /** Health tables: a live local row always wins, no conflict is raised. */
@@ -161,6 +165,7 @@ const SKIP_EXISTING_TABLES: ReadonlySet<TableName> = new Set<TableName>([
   "urinationRecords",
   "defecationRecords",
   "substanceRecords",
+  "journalEntries",
 ]);
 
 type Row = Record<string, unknown> & { id: string; deletedAt?: number | null; updatedAt?: number };
@@ -189,6 +194,7 @@ function emptyImportResult(): ImportResult {
     userProfileImported: 0,
     insightReportsImported: 0,
     userSettingsImported: 0,
+    journalEntriesImported: 0,
     totalImported: 0,
     skipped: 0,
     conflicts: [],
@@ -241,7 +247,7 @@ export async function exportBackup(): Promise<Blob> {
     prescriptions, medicationPhases, phaseSchedules,
     inventoryItems, inventoryTransactions, doseLogs,
     titrationPlans, dailyNotes, auditLogs, userProfile, insightReports,
-    userSettings,
+    userSettings, journalEntries,
   ] = await Promise.all([
     db.intakeRecords.toArray(),
     db.weightRecords.toArray(),
@@ -262,6 +268,7 @@ export async function exportBackup(): Promise<Blob> {
     db.userProfile.toArray(),
     db.insightReports.toArray(),
     db.userSettings.toArray(),
+    db.journalEntries.toArray(),
   ]);
 
   // Get settings from localStorage
@@ -302,6 +309,7 @@ export async function exportBackup(): Promise<Blob> {
     userProfile,
     insightReports,
     userSettings,
+    journalEntries,
     settings,
   };
 
@@ -313,7 +321,7 @@ export async function exportBackup(): Promise<Blob> {
     `${phaseSchedules.length} schedules, ${inventoryItems.length} inventory items, ${inventoryTransactions.length} inv txns, ` +
     `${doseLogs.length} dose logs, ${titrationPlans.length} titration plans, ${dailyNotes.length} daily notes, ` +
     `${auditLogs.length} audit logs, ${userProfile.length} profile, ` +
-    `${insightReports.length} insight reports, ${userSettings.length} settings`
+    `${insightReports.length} insight reports, ${userSettings.length} settings, ${journalEntries.length} journal entries`
   );
 
   const json = JSON.stringify(backupData, null, 2);
@@ -380,6 +388,7 @@ function validateBackupData(data: unknown): data is BackupData {
   if (backup.userProfile !== undefined && !Array.isArray(backup.userProfile)) return false;
   if (backup.insightReports !== undefined && !Array.isArray(backup.insightReports)) return false;
   if (backup.userSettings !== undefined && !Array.isArray(backup.userSettings)) return false;
+  if (backup.journalEntries !== undefined && !Array.isArray(backup.journalEntries)) return false;
 
   return true;
 }

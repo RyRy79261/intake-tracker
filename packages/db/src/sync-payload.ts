@@ -80,6 +80,7 @@ const titrationPlansRowSchema = createInsertSchema(schema.titrationPlans).omit(S
 const userProfileRowSchema = createInsertSchema(schema.userProfile).omit(SERVER_ONLY_COLUMNS);
 const insightReportsRowSchema = createInsertSchema(schema.insightReports).omit(SERVER_ONLY_COLUMNS);
 const userSettingsRowSchema = createInsertSchema(schema.userSettings).omit(SERVER_ONLY_COLUMNS);
+const journalEntriesRowSchema = createInsertSchema(schema.journalEntries).omit(SERVER_ONLY_COLUMNS);
 
 // ─────────────────────────────────────────────────────────────────────────
 // Discriminated union keyed by tableName
@@ -186,6 +187,11 @@ const opSchema = z.discriminatedUnion("tableName", [
     tableName: z.literal("userSettings"),
     row: userSettingsRowSchema,
   }),
+  z.object({
+    ...baseOpShape,
+    tableName: z.literal("journalEntries"),
+    row: journalEntriesRowSchema,
+  }),
 ]);
 
 export const pushBodySchema = z.object({
@@ -248,6 +254,7 @@ export const schemaByTableName = {
   userProfile: schema.userProfile,
   insightReports: schema.insightReports,
   userSettings: schema.userSettings,
+  journalEntries: schema.journalEntries,
 } as const;
 
 // --- Pull side (D-07, D-08) ---
@@ -305,6 +312,7 @@ export const tableNameSchema = z.enum([
   "userProfile",
   "insightReports",
   "userSettings",
+  "journalEntries",
 ]);
 
 // ─────────────────────────────────────────────────────────────────────────

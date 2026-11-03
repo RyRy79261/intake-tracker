@@ -30,7 +30,7 @@ const SYNCED_TABLES = [
   "urinationRecords", "defecationRecords", "substanceRecords", "prescriptions",
   "medicationPhases", "phaseSchedules", "inventoryItems", "inventoryTransactions",
   "doseLogs", "dailyNotes", "titrationPlans", "auditLogs", "userProfile",
-  "insightReports", "userSettings",
+  "insightReports", "userSettings", "journalEntries",
 ];
 
 const DIRECT_WRITE = new RegExp(

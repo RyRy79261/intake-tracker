@@ -34,7 +34,7 @@ const ALGORITHM = "aes-256-gcm";
 const IV_BYTES = 12; // GCM standard
 const KEY_BYTES = 32; // AES-256
 
-function loadMasterKey(): Buffer {
+export function loadMasterKey(): Buffer {
   const raw = process.env.API_KEY_ENCRYPTION_SECRET;
   if (!raw) {
     throw new Error(

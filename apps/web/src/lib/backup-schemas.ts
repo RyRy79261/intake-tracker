@@ -305,6 +305,18 @@ export const userSettingsSchema = baseRecordNoTz
   })
   .passthrough();
 
+export const journalEntrySchema = baseRecord
+  .extend({
+    timestamp: timestampSchema,
+    timePrecision: z.enum(["exact", "approx", "day"]),
+    words: z.string().max(500),
+    finding: z.string().max(60),
+    kind: z.enum(["symptom", "sign", "event"]),
+    places: z.array(z.string()),
+    severity: z.number().int().min(0).max(10).nullable(),
+  })
+  .passthrough();
+
 export type BackupTableName =
   | "intakeRecords"
   | "weightRecords"
@@ -324,7 +336,8 @@ export type BackupTableName =
   | "auditLogs"
   | "userProfile"
   | "insightReports"
-  | "userSettings";
+  | "userSettings"
+  | "journalEntries";
 
 export const BACKUP_SCHEMAS: Record<BackupTableName, z.ZodTypeAny> = {
   intakeRecords: intakeRecordSchema,
@@ -346,6 +359,7 @@ export const BACKUP_SCHEMAS: Record<BackupTableName, z.ZodTypeAny> = {
   userProfile: userProfileSchema,
   insightReports: insightReportSchema,
   userSettings: userSettingsSchema,
+  journalEntries: journalEntrySchema,
 };
 
 /** Boolean type guard backed by a Zod schema. */
@@ -374,4 +388,5 @@ export const BACKUP_VALIDATORS: Record<BackupTableName, (record: unknown) => boo
   userProfile: makeZodValidator(userProfileSchema),
   insightReports: makeZodValidator(insightReportSchema),
   userSettings: makeZodValidator(userSettingsSchema),
+  journalEntries: makeZodValidator(journalEntrySchema),
 };

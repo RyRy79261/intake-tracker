@@ -1117,3 +1117,80 @@ describe("sync-push-route: userSettings merges per setting", () => {
     expect(insertCalls).toHaveLength(0);
   });
 });
+
+// ────────────────────────────────────────────────────────────────────────
+// Journal entries: text encrypted at rest, content blanked on delete
+// ────────────────────────────────────────────────────────────────────────
+
+describe("sync-push-route: journal entries", () => {
+  const secret = process.env.API_KEY_ENCRYPTION_SECRET;
+  beforeEach(() => {
+    resetDbState();
+    process.env.API_KEY_ENCRYPTION_SECRET = Buffer.alloc(32, 7).toString("base64");
+  });
+  afterEach(() => {
+    if (secret === undefined) delete process.env.API_KEY_ENCRYPTION_SECRET;
+    else process.env.API_KEY_ENCRYPTION_SECRET = secret;
+  });
+
+  function journalRow(overrides: Record<string, unknown> = {}) {
+    return {
+      id: "j-1",
+      timestamp: 1_000,
+      timePrecision: "exact",
+      words: "Pain in my left knee, about a four.",
+      finding: "Knee pain",
+      kind: "symptom",
+      places: ["knee-l"],
+      severity: 4,
+      source: "voice",
+      createdAt: 1_000,
+      updatedAt: 1_000,
+      deletedAt: null,
+      deviceId: "dev-A",
+      timezone: "Europe/Berlin",
+      ...overrides,
+    };
+  }
+
+  async function pushJournal(row: Record<string, unknown>) {
+    const { POST } = await import("@/app/api/sync/push/route");
+    const res = await POST(makePushRequest({ ops: [{ queueId: 1, tableName: "journalEntries", op: row.deletedAt == null ? "upsert" : "delete", row }] }));
+    return (await res.json()) as { accepted: unknown[]; rejected: { error: string }[] };
+  }
+
+  it("stores the words and title as ciphertext, never plain text", async () => {
+    const body = await pushJournal(journalRow());
+    expect(body.accepted).toHaveLength(1);
+    const written = insertCalls[0]!.values;
+    expect(written.words).toMatch(/^f1:/);
+    expect(written.finding).toMatch(/^f1:/);
+    expect(JSON.stringify(written)).not.toContain("knee, about");
+    expect(JSON.stringify(written)).not.toContain("Knee pain");
+    // Structure stays readable for the server's own checks.
+    expect(written.places).toEqual(["knee-l"]);
+    expect(written.severity).toBe(4);
+  });
+
+  it("blanks the content of a tombstone, even when the device sent it", async () => {
+    await pushJournal(journalRow({ updatedAt: 2_000, deletedAt: 2_000 }));
+    const written = insertCalls[0]!.values;
+    expect(written).toMatchObject({ words: "", finding: "", places: [], severity: null, deletedAt: 2_000 });
+  });
+
+  it("blanks the content when a tombstone stub deletes the row", async () => {
+    existingRows["j-1"] = { ...journalRow({ words: "f1:x:y:z", finding: "f1:x:y:z" }), userId: "user-test" };
+    updateTargetId = "j-1";
+    const { POST } = await import("@/app/api/sync/push/route");
+    await POST(makePushRequest({ ops: [{ queueId: 1, tableName: "journalEntries", op: "delete", row: { id: "j-1", updatedAt: 2_000, deletedAt: 2_000 } }] }));
+    expect(updateCalls[0]!.set).toMatchObject({ words: "", finding: "", places: [], severity: null, deletedAt: 2_000 });
+  });
+
+  it("rejects (for retry) a journal write when the server has no encryption secret", async () => {
+    delete process.env.API_KEY_ENCRYPTION_SECRET;
+    const body = await pushJournal(journalRow());
+    expect(insertCalls).toHaveLength(0);
+    expect(body.rejected).toEqual([expect.objectContaining({ error: "Server could not encrypt the record" })]);
+    expect(body.rejected[0]).not.toHaveProperty("code");
+  });
+});

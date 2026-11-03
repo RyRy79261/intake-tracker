@@ -16,6 +16,7 @@ import type {
   IntakeRecord,
   InventoryItem,
   InventoryTransaction,
+  JournalEntry,
   MedicationPhase,
   PhaseSchedule,
   Prescription,
@@ -54,6 +55,9 @@ export type {
   InteractionCheckRow,
   InventoryItem,
   InventoryTransaction,
+  JournalEntry,
+  JournalEntryKind,
+  JournalTimePrecision,
   MedicationPhase,
   MedicineInfo,
   PhaseSchedule,
@@ -94,6 +98,7 @@ export type AppDatabase = Dexie & {
   userProfile: EntityTable<UserProfile, "id">;
   userSettings: EntityTable<UserSettings, "id">;
   insightReports: EntityTable<InsightReport, "id">;
+  journalEntries: EntityTable<JournalEntry, "id">;
   _syncQueue: EntityTable<SyncQueueRow, "id">;
   _syncMeta: EntityTable<SyncMetaRow, "tableName">;
   _errorLogs: EntityTable<ErrorLogEntry, "id">;
@@ -1075,12 +1080,42 @@ realDb.version(27).stores({
   }
 });
 
+// Version 28: Add journalEntries — the medical journal (a logbook of anything
+// noticed about the body or the day). New store only; no data to migrate.
+realDb.version(28).stores({
+  // --- REPEAT all v27 stores verbatim ---
+  intakeRecords:           "id, [type+timestamp], timestamp, source, groupId, updatedAt",
+  weightRecords:           "id, timestamp, updatedAt",
+  bloodPressureRecords:    "id, timestamp, position, arm, updatedAt",
+  eatingRecords:           "id, timestamp, groupId, updatedAt",
+  urinationRecords:        "id, timestamp, updatedAt",
+  defecationRecords:       "id, timestamp, updatedAt",
+  prescriptions:           "id, updatedAt, createdAt",
+  medicationPhases:        "id, prescriptionId, status, type, titrationPlanId, updatedAt",
+  phaseSchedules:          "id, phaseId, time, updatedAt",
+  inventoryItems:          "id, prescriptionId, updatedAt",
+  inventoryTransactions:   "id, [inventoryItemId+timestamp], inventoryItemId, timestamp, type, updatedAt",
+  doseLogs:                "id, [prescriptionId+scheduledDate], [scheduleId+scheduledDate], prescriptionId, phaseId, scheduleId, scheduledDate, scheduledTime, status, updatedAt",
+  dailyNotes:              "id, date, prescriptionId, doseLogId, updatedAt",
+  auditLogs:               "id, [action+timestamp], timestamp, action",
+  substanceRecords:        "id, [type+timestamp], type, timestamp, source, sourceRecordId, groupId, updatedAt",
+  titrationPlans:          "id, conditionLabel, status, updatedAt",
+  _syncQueue:              "++id, [tableName+recordId], tableName, enqueuedAt",
+  _syncMeta:               "tableName",
+  _errorLogs:              "id, timestamp, source",
+  userProfile:             "id, updatedAt",
+  insightReports:          "id, generatedAt, updatedAt",
+  userSettings:            "id, updatedAt",
+  // --- v28 addition ---
+  journalEntries:          "id, timestamp, updatedAt",
+});
+
 /**
  * Current Dexie schema version. Bump this constant in lockstep with each new
  * `realDb.version(N)` block above so diagnostic surfaces (Debug → Environment)
  * always reflect the real schema.
  */
-export const DB_SCHEMA_VERSION = 27;
+export const DB_SCHEMA_VERSION = 28;
 
 /**
  * True when `e` (or anything in its `cause` chain) is Dexie's
@@ -1124,7 +1159,7 @@ export async function recoverClosedDatabase(e: unknown): Promise<boolean> {
 }
 
 /**
- * Store definitions for a preview database — the current (v26) schema in a
+ * Store definitions for a preview database — the current (v28) schema in a
  * single version. A preview database is created empty and discarded, so it
  * needs no migration history.
  */
@@ -1140,6 +1175,7 @@ const PREVIEW_STORES = {
   userProfile: "id, updatedAt",
   insightReports: "id, generatedAt, updatedAt",
   userSettings: "id, updatedAt",
+  journalEntries: "id, timestamp, updatedAt",
 } as const;
 
 export const PREVIEW_DB_PREFIX = "IntakeTrackerPreviewDB-";

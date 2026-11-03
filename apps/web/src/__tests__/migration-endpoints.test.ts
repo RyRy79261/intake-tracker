@@ -74,6 +74,7 @@ vi.mock("@intake/db/sync-payload", async () => {
     "prescriptions", "medicationPhases", "phaseSchedules",
     "inventoryItems", "inventoryTransactions", "doseLogs",
     "dailyNotes", "auditLogs", "substanceRecords", "titrationPlans",
+    "journalEntries",
   ];
   const schemaByTableName: Record<string, { _name: string }> = {};
   for (const name of tableNames) {
@@ -114,7 +115,7 @@ function makeRequest(url: string, auth = true): NextRequest {
 }
 
 describe("cleanup endpoint", () => {
-  it("deletes rows from all 16 app tables", async () => {
+  it("deletes rows from all 17 app tables", async () => {
     mockRows["intakeRecords"] = [{ id: "1", userId: mockUserId }];
     mockRows["weightRecords"] = [{ id: "2", userId: mockUserId }];
     mockRows["prescriptions"] = [{ id: "3", userId: mockUserId }];
@@ -124,7 +125,7 @@ describe("cleanup endpoint", () => {
     const data = await res.json();
 
     expect(data.deleted).toBeDefined();
-    expect(Object.keys(data.deleted).length).toBe(16);
+    expect(Object.keys(data.deleted).length).toBe(17);
   });
 
   it("returns per-table delete counts", async () => {

@@ -70,6 +70,7 @@ export const TABLE_TO_INTERFACE: Record<string, string> = {
   userProfile: "UserProfile",
   insightReports: "InsightReport",
   userSettings: "UserSettings",
+  journalEntries: "JournalEntry",
 };
 
 /**

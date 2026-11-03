@@ -47,6 +47,7 @@ export function useStorageInfo(): StorageInfo {
       db.titrationPlans.count(),
       db.dailyNotes.count(),
       db.auditLogs.count(),
+      db.journalEntries.count(),
     ]).then((counts) => {
       setTotalRecords(counts.reduce((sum, c) => sum + c, 0));
     }).catch(() => {

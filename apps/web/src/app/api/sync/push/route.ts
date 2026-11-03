@@ -65,6 +65,12 @@
  *   other device. LWW keeps using the client `updatedAt`; a skipped (losing)
  *   write does not restamp, since nothing changed.
  *
+ * Health text at rest (lib/server/field-vault.ts):
+ *   Fields listed in ENCRYPTED_FIELDS (the journal's words and title) are
+ *   encrypted with AES-256-GCM just before the write, so Neon holds only
+ *   ciphertext. A tombstone also blanks the journal content first
+ *   (BLANK_WHEN_DELETED), on the upsert path and the tombstone-stub path.
+ *
  * Logging: module prefix `[sync/push]`. The request body is never logged
  * (contains PHI — timestamps, food descriptions, medication names).
  */
@@ -74,6 +80,7 @@ import { eq, and, inArray } from "drizzle-orm";
 import { type PgColumn, type PgTable } from "drizzle-orm/pg-core";
 import { withAuth } from "@/lib/auth-middleware";
 import { resolvePush, resolveTombstone, type SyncRow } from "@/lib/sync-protocol";
+import { BLANK_WHEN_DELETED, encryptRowFields } from "@/lib/server/field-vault";
 import { db as drizzleDb } from "@intake/db/client";
 import { usersSync } from "@intake/db/schema";
 import {
@@ -281,9 +288,29 @@ export const POST = withAuth(async ({ request, auth }) => {
         delete rowWithoutUserId.userId;
         delete rowWithoutUserId.serverUpdatedAt;
         sanitizeRow(rowWithoutUserId);
+        // A tombstone keeps no journal content (see BLANK_WHEN_DELETED).
+        if (rowWithoutUserId.deletedAt != null) {
+          Object.assign(rowWithoutUserId, BLANK_WHEN_DELETED[tableName]);
+        }
+
+        // Journal text is stored as ciphertext (lib/server/field-vault.ts).
+        let storedRow: Record<string, unknown>;
+        try {
+          storedRow = encryptRowFields(tableName, rowWithoutUserId, auth.userId!);
+        } catch (encryptErr) {
+          console.error(
+            `[sync/push] Encryption failed: table=${tableName} id=${op.row.id} — ${extractDbError(encryptErr)}`,
+          );
+          rejected.push({
+            queueId: op.queueId,
+            tableName,
+            error: "Server could not encrypt the record",
+          });
+          continue;
+        }
 
         const writeValues: Record<string, unknown> = {
-          ...rowWithoutUserId,
+          ...storedRow,
           userId: auth.userId!,
           updatedAt: writeUpdatedAt,
           // Pull cursor — stamped at write time, not batch start, so a slow
@@ -407,6 +434,8 @@ export const POST = withAuth(async ({ request, auth }) => {
           await drizzleDb
             .update(table)
             .set({
+              // A tombstone keeps no journal content (see BLANK_WHEN_DELETED).
+              ...BLANK_WHEN_DELETED[tableName],
               deletedAt: decision.deletedAt,
               updatedAt: decision.updatedAt,
               // Restamp so peers pull the tombstone (see the upsert path).

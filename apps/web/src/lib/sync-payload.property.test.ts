@@ -69,6 +69,7 @@ const KNOWN_TABLES = [
   "userProfile",
   "insightReports",
   "userSettings",
+  "journalEntries",
 ] as const;
 
 // Minimal valid row shape for the intakeRecords table — used as the
@@ -454,10 +455,10 @@ describe("syncable-table list parity (drift guard)", () => {
     "KNOWN_TABLES (this test file)": KNOWN_TABLES,
   };
 
-  it("schemaByTableName has the expected 19 syncable tables", () => {
+  it("schemaByTableName has the expected 20 syncable tables", () => {
     // Pins the canonical count so adding/removing a synced table is a
     // deliberate, reviewed change rather than a silent drift.
-    expect(canonical).toHaveLength(19);
+    expect(canonical).toHaveLength(20);
   });
 
   it.each(Object.entries(LISTS))(
