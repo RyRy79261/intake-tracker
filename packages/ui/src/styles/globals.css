@@ -169,7 +169,7 @@
     --bath: 53.2 75.2% 25.3%; /* #716610 */
     --meds: 175.2 87.5% 25.1%; /* #08786F */
     --ai: 235.1 61.3% 53.3%; /* #3F4BD1 */
-    --journal: 21.8 87.5% 37.6%; /* #B4490C */
+    --journal: 21.8 87.5% 33%; /* #9E400B: AA as text on the muted panel too */
     /* Settings group colour (System) — day. See settings-groups.ts. */
     --steel: 199.8 49.7% 33.5%; /* #2B6480 */
 
