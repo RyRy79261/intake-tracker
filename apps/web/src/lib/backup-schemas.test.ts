@@ -478,6 +478,12 @@ describe("backup-schemas: journal entries", () => {
     expect(BACKUP_VALIDATORS.journalEntries(makeJournalEntry({ severity: 2.5 }))).toBe(false);
   });
 
+  it("accepts an unrated entry exported without its severity key", () => {
+    const { severity: _unrated, ...withoutKey } = makeJournalEntry({ severity: null });
+    expect(BACKUP_VALIDATORS.journalEntries(withoutKey)).toBe(true);
+    expect(journalEntrySchema.parse(withoutKey).severity).toBeNull();
+  });
+
   it("rejects a body place that is not on the list, or has no side", () => {
     expect(BACKUP_VALIDATORS.journalEntries(makeJournalEntry({ places: ["elbow-l"] }))).toBe(false);
     expect(BACKUP_VALIDATORS.journalEntries(makeJournalEntry({ places: ["knee"] }))).toBe(false);

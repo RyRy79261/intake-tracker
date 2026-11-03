@@ -315,7 +315,8 @@ export const journalEntrySchema = baseRecord
     kind: z.enum(["symptom", "sign", "event"]),
     // Only ids on the body-place list: the journal shows any other id raw.
     places: z.array(z.string().refine(isPlaceId)),
-    severity: z.number().int().min(0).max(10).nullable(),
+    // A missing key is an unrated entry from before the pull kept null.
+    severity: z.number().int().min(0).max(10).nullable().default(null),
   })
   .passthrough();
 

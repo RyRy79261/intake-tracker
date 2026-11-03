@@ -60,4 +60,11 @@ describe("normalizePulledRow (audit core-duplication#3)", () => {
     expect(row).toEqual({ id: "s1", amountMg: 80, deletedAt: null });
     expect("abvPercent" in row).toBe(false);
   });
+
+  it("keeps a journal entry's null severity: null is 'not rated', not a missing key", () => {
+    expect(normalizePulledRow({ id: "j1", userId: "u1", severity: null, source: null })).toEqual({
+      id: "j1",
+      severity: null,
+    });
+  });
 });

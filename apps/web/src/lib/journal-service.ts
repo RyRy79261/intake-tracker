@@ -68,14 +68,22 @@ export async function addJournalEntry(input: NewJournalEntry): Promise<ServiceRe
   }
 }
 
+/**
+ * An entry as the app reads it. A pull before the sync kept `severity: null`
+ * stored unrated entries with the key missing; they read as unrated.
+ */
+function readEntry(entry: JournalEntry): JournalEntry {
+  return entry.severity === undefined ? { ...entry, severity: null } : entry;
+}
+
 /** Live entries, newest first. */
-export function getJournalEntries(limit?: number): Promise<JournalEntry[]> {
-  return getActiveRecords<JournalEntry>(db.journalEntries, limit);
+export async function getJournalEntries(limit?: number): Promise<JournalEntry[]> {
+  return (await getActiveRecords<JournalEntry>(db.journalEntries, limit)).map(readEntry);
 }
 
 /** Live entries between two times (inclusive). */
-export function getJournalEntriesBetween(startTime: number, endTime: number): Promise<JournalEntry[]> {
-  return getRecordsBetween<JournalEntry>(db.journalEntries, startTime, endTime);
+export async function getJournalEntriesBetween(startTime: number, endTime: number): Promise<JournalEntry[]> {
+  return (await getRecordsBetween<JournalEntry>(db.journalEntries, startTime, endTime)).map(readEntry);
 }
 
 /** Delete an entry. Its words, title, places and rating are blanked: there is no undo. */
