@@ -234,6 +234,14 @@ export type VoiceItemKind = keyof Spec;
 export const VOICE_ITEM_KINDS = Object.keys(VOICE_ITEM_SPEC) as VoiceItemKind[];
 
 /**
+ * Whether this build knows the kind. The parser runs on the server, so an app
+ * still open from before a deploy can be sent a kind added since.
+ */
+export function isVoiceItemKind(kind: unknown): kind is VoiceItemKind {
+  return typeof kind === "string" && Object.hasOwn(VOICE_ITEM_SPEC, kind);
+}
+
+/**
  * Kinds a review row can re-look-up on its own. The row sends its edited
  * description with its `kind`, and the parser returns that one item again.
  */

@@ -10,6 +10,7 @@
 import {
   MEDICATION_KINDS,
   isMedicationKind,
+  isVoiceItemKind,
   type MedicationKind,
   REFRESHABLE_KINDS,
   type RefreshableKind,
@@ -75,6 +76,20 @@ export type MedicationItem = ScheduledDoseItem | StockRefillItem | ExtraMedicine
 export type VoiceParsedItem = { [K in VoiceItemKind]: Timed<K> }[VoiceItemKind];
 
 export type RefreshableItem = Extract<VoiceParsedItem, { kind: RefreshableKind }>;
+
+/**
+ * The items this build can review, and how many it cannot. The parse route
+ * may be newer than the open app (a deploy while it was open): an item of a
+ * kind added since has no spec, colour or editor here, so it is left out
+ * instead of crashing the review list.
+ */
+export function keepKnownItems(items: readonly { kind: unknown }[]): {
+  items: VoiceParsedItem[];
+  unknown: number;
+} {
+  const known = items.filter((item) => isVoiceItemKind(item.kind)) as VoiceParsedItem[];
+  return { items: known, unknown: items.length - known.length };
+}
 
 export function isMedicationItem(item: VoiceParsedItem): item is MedicationItem {
   return isMedicationKind(item.kind);

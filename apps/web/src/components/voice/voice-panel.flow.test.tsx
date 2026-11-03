@@ -432,6 +432,27 @@ describe("VoicePanel review — telling the user what was left out", () => {
     expect(screen.getByText(/2 items? .*left out/i)).toBeInTheDocument();
   });
 
+  it("leaves out a kind this build does not know and asks for a reload (#473)", async () => {
+    // The parse route was deployed with a new kind while this app was open.
+    parsedItems = [{ kind: "water", ml: 250 }, { kind: "from_the_future", note: "x" } as never];
+    await recordOnce();
+    expect(
+      screen.getByText(/1 item needs the newest version of the app — save the items below, then reload/),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/Items \(0 approved · 1 pending/)).toBeInTheDocument();
+  });
+
+  it("asks for a reload, not 'no items', when every item is of an unknown kind", async () => {
+    const user = userEvent.setup();
+    parsedItems = [{ kind: "from_the_future" } as never];
+    await renderWithFixtures(<VoicePanel />);
+    await user.click(screen.getByRole("button", { name: "mock-record" }));
+    expect(
+      await screen.findByText("1 item needs the newest version of the app — reload it and record it again."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/Items \(/)).not.toBeInTheDocument();
+  });
+
   it("warns when only part of a long transcript was parsed", async () => {
     parsedItems = [{ kind: "water", ml: 250 }];
     parseExtras = { transcriptTruncated: true };
