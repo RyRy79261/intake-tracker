@@ -7,6 +7,8 @@ import { RecordsTab } from "@/components/analytics/records-tab";
 import { SummaryTab } from "@/components/analytics/summary-tab";
 import { CorrelationsTab } from "@/components/analytics/correlations-tab";
 import { TitrationTab } from "@/components/analytics/titration-tab";
+import { InsightsPrototype } from "@/components/analytics/insights-prototype";
+import { PROTOTYPES_ENABLED } from "@/components/prototype/prototype-switcher";
 import { ExportControls } from "@/components/analytics/export-controls";
 import { AnalyticsIntroDialog } from "@/components/analytics/analytics-intro-dialog";
 import { useTimeScopeRange } from "@/hooks/use-analytics-queries";
@@ -88,7 +90,12 @@ export function AnalyticsPageBody({
         </TabsList>
 
         <TabsContent value="summary" className="wm-stack mt-0">
-          <SummaryTab range={effectiveRange} />
+          {/* PROTOTYPE: insights variants (dev + Vercel preview only). */}
+          {PROTOTYPES_ENABLED ? (
+            <InsightsPrototype range={effectiveRange} />
+          ) : (
+            <SummaryTab range={effectiveRange} />
+          )}
         </TabsContent>
 
         <TabsContent value="correlations" className="wm-stack mt-0">
