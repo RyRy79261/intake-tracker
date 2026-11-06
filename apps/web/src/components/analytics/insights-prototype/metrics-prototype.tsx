@@ -4,7 +4,8 @@
  * PROTOTYPE — throwaway. The whole Metrics window in the doctor-report style
  * (the direction picked from round 1). Three ways to organise it:
  *
- *   A  Chapters      — tabs: Report · Vitals · Intake · Meds · Journal · Records
+ *   A  Chapters      — tabs: Report · Vitals · Fluid · Food · Meds (Records lives behind
+ *                      the History button and entries in the Journal window)
  *   B  One document  — tabs: Report · Records; the report is one long page with a jump index
  *   C  Visit pack    — tabs: Since last visit · Trends · Records; the period runs from your last appointment
  *
@@ -19,7 +20,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@intake/ui/tabs";
 import type { TimeRange, TimeScope } from "@intake/types/analytics";
 import { TimeRangeSelector } from "@/components/analytics/time-range-selector";
 import type { Insights } from "@/components/analytics/insights-prototype/engine";
-import { IntakeChapter, JournalChapter, MedsChapter, VitalsChapter, ChangeCard } from "@/components/analytics/insights-prototype/chapters";
+import { FluidChapter, FoodChapter, IntakeChapter, JournalChapter, MedsChapter, VitalsChapter, ChangeCard } from "@/components/analytics/insights-prototype/chapters";
 import { VariantReport, buildQuestions } from "@/components/analytics/insights-prototype/variant-report";
 import { ConfidenceChip, EngineState, Section, col, fmtNum, muted, shortDate, signed } from "@/components/analytics/insights-prototype/ui";
 import { Table } from "@/components/analytics/insights-prototype/charts";
@@ -38,11 +39,15 @@ export function MetricsPrototype({
   useInsights,
   records,
   exportSlot,
+  aiInsights,
+  nutrientAnalysis,
 }: {
   variant: string;
   useInsights: (period: number) => Insights | null;
   records: (range: TimeRange) => ReactNode;
-  exportSlot?: ReactNode;
+  exportSlot?: (range: TimeRange) => ReactNode;
+  aiInsights?: ReactNode;
+  nutrientAnalysis?: ReactNode;
 }) {
   const [scope, setScope] = useState<TimeScope>("30d");
   const [customRange, setCustomRange] = useState<TimeRange | null>(null);
@@ -56,22 +61,31 @@ export function MetricsPrototype({
   const tabs: { value: string; label: string; body: (d: Insights) => ReactNode; raw?: boolean }[] =
     variant === "B"
       ? [
-          { value: "report", label: "Report", body: (d) => <OneDocument data={d} />, raw: true },
+          { value: "report", label: "Report", body: (d) => <OneDocument data={d} nutrientAnalysis={nutrientAnalysis} aiInsights={aiInsights} />, raw: true },
           { value: "records", label: "Records", body: () => records(range) },
         ]
       : variant === "C"
         ? [
             { value: "visit", label: "Since last visit", body: (d) => <SinceLastVisit data={d} lastVisit={lastVisit} onLastVisit={setLastVisit} /> },
-            { value: "trends", label: "Trends", body: (d) => <Chapters data={d} /> },
+            { value: "trends", label: "Trends", body: (d) => <Chapters data={d} nutrientAnalysis={nutrientAnalysis} /> },
             { value: "records", label: "Records", body: () => records(range) },
           ]
         : [
-            { value: "report", label: "Report", body: (d) => <VariantReport data={d} printable={false} />, raw: true },
+            {
+              value: "report",
+              label: "Report",
+              raw: true,
+              body: (d) => (
+                <>
+                  {aiInsights && <div className="wm-stack" style={{ paddingBottom: 0 }}>{aiInsights}</div>}
+                  <VariantReport data={d} printable={false} />
+                </>
+              ),
+            },
             { value: "vitals", label: "Vitals", body: (d) => <VitalsChapter data={d} /> },
-            { value: "intake", label: "Intake", body: (d) => <IntakeChapter data={d} /> },
+            { value: "fluid", label: "Fluid", body: (d) => <FluidChapter data={d} /> },
+            { value: "food", label: "Food", body: (d) => <FoodChapter data={d} nutrientAnalysis={nutrientAnalysis} /> },
             { value: "meds", label: "Meds", body: (d) => <MedsChapter data={d} /> },
-            { value: "journal", label: "Journal", body: (d) => <JournalChapter data={d} /> },
-            { value: "records", label: "Records", body: () => records(range) },
           ];
 
   const [tab, setTab] = useState(tabs[0]!.value);
@@ -82,7 +96,7 @@ export function MetricsPrototype({
       {variant !== "C" && (
         <div className="wm-top">
           <TimeRangeSelector scope={scope} onScopeChange={setScope} customRange={customRange} onCustomRangeChange={setCustomRange} />
-          {exportSlot}
+          {exportSlot?.(range)}
         </div>
       )}
       <Tabs value={active} onValueChange={setTab}>
@@ -117,11 +131,11 @@ export function MetricsPrototype({
 
 // ---------------------------------------------------------------------------
 
-function Chapters({ data }: { data: Insights }) {
+function Chapters({ data, nutrientAnalysis }: { data: Insights; nutrientAnalysis?: ReactNode }) {
   return (
     <>
       <VitalsChapter data={data} />
-      <IntakeChapter data={data} />
+      <IntakeChapter data={data} nutrientAnalysis={nutrientAnalysis} />
       <MedsChapter data={data} />
       <JournalChapter data={data} />
     </>
@@ -145,7 +159,7 @@ function jumpTo(id: string) {
   box.scrollBy({ top: el.getBoundingClientRect().top - box.getBoundingClientRect().top - 96, behavior: "smooth" });
 }
 
-function OneDocument({ data }: { data: Insights }) {
+function OneDocument({ data, nutrientAnalysis, aiInsights }: { data: Insights; nutrientAnalysis?: ReactNode; aiInsights?: ReactNode }) {
   return (
     <>
       <nav
@@ -164,13 +178,14 @@ function OneDocument({ data }: { data: Insights }) {
         ))}
       </nav>
       <div id="proto-sec-report" style={{ scrollMarginTop: 96 }}>
+        {aiInsights && <div className="wm-stack" style={{ paddingBottom: 0 }}>{aiInsights}</div>}
         <VariantReport data={data} printable={false} />
       </div>
       <div className="wm-stack" style={{ paddingTop: 0 }}>
         <ChapterHead id="proto-sec-vitals">Vitals in detail</ChapterHead>
         <VitalsChapter data={data} />
         <ChapterHead id="proto-sec-intake">Intake in detail</ChapterHead>
-        <IntakeChapter data={data} />
+        <IntakeChapter data={data} nutrientAnalysis={nutrientAnalysis} />
         <ChapterHead id="proto-sec-meds">Medicines in detail</ChapterHead>
         <MedsChapter data={data} />
         <ChapterHead id="proto-sec-journal">Journal in detail</ChapterHead>

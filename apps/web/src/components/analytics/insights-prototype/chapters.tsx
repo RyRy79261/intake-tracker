@@ -7,6 +7,7 @@
  * how many days or readings it rests on.
  */
 
+import type { ReactNode } from "react";
 import type { ChangeEvent, Effect, Insights } from "@/components/analytics/insights-prototype/engine";
 import { DayChart, SubHead, Table } from "@/components/analytics/insights-prototype/charts";
 import { ConfidenceChip, RangeBar, Section, col, fmtNum, muted, pct, shortDate, signed } from "@/components/analytics/insights-prototype/ui";
@@ -127,8 +128,8 @@ export function VitalsChapter({ data: d }: { data: Insights }) {
 
 // ---------------------------------------------------------------------------
 
-export function IntakeChapter({ data: d }: { data: Insights }) {
-  const { water, sodium, alcohol, caffeine, urine } = d;
+export function FluidChapter({ data: d }: { data: Insights }) {
+  const { water, alcohol, caffeine, urine } = d;
   const days = d.inPeriod;
   return (
     <>
@@ -141,23 +142,6 @@ export function IntakeChapter({ data: d }: { data: Insights }) {
         <DayChart days={days} get={(x) => x.water} kind="bars" color={col("water")} label="Fluid per day (solid = over limit)" unit="ml" refValue={d.limits.water} refLabel="limit" />
         <SubHead>When it comes in</SubHead>
         <Clock rows={[{ label: "Fluid", v: d.fluidClock, c: col("water") }]} />
-      </Section>
-
-      <Section title="Sodium" color={col("sodium")}>
-        <div style={grid3}>
-          <Stat label="Days within limit" value={pct(sodium.p)} sub={`${sodium.within}/${sodium.n} · limit ${fmtNum(d.limits.sodium)} mg`} />
-          <Stat label="Typical day" value={fmtNum(sodium.median)} unit="mg" sub={`most days ${fmtNum(sodium.p10)}–${fmtNum(sodium.p90)}`} />
-          <Stat label="Over by (median)" value={Number.isFinite(sodium.medianOver) ? fmtNum(sodium.medianOver) : "—"} unit="mg" sub="on days over" />
-        </div>
-        <DayChart days={days} get={(x) => x.sodium} kind="bars" color={col("sodium")} label="Sodium per day (solid = over limit)" unit="mg" refValue={d.limits.sodium} refLabel="limit" />
-        <SubHead>When it comes in</SubHead>
-        <Clock rows={[{ label: "Sodium", v: d.sodiumClock, c: col("sodium") }]} />
-        {d.sodiumSources.length > 0 && (
-          <>
-            <SubHead>Biggest sources</SubHead>
-            <Table head={["Food", "Sodium", "Share"]} rows={d.sodiumSources.map((s) => [<span key="l" style={{ textTransform: "capitalize" }}>{s.label}</span>, `${fmtNum(s.mg)} mg`, pct(s.share)])} />
-          </>
-        )}
       </Section>
 
       <Section title="Alcohol and caffeine" color={col("alcohol")}>
@@ -184,6 +168,73 @@ export function IntakeChapter({ data: d }: { data: Insights }) {
           <EffectRow key={e.id} e={e} />
         ))}
       </Section>
+    </>
+  );
+}
+
+const hhmm = (m: number) => (Number.isFinite(m) ? `${String(Math.floor(m / 60) % 24).padStart(2, "0")}:${String(Math.round(m % 60)).padStart(2, "0")}` : "—");
+
+export function FoodChapter({ data: d, nutrientAnalysis }: { data: Insights; nutrientAnalysis?: ReactNode }) {
+  const { sodium, food } = d;
+  const days = d.inPeriod;
+  return (
+    <>
+      <Section title="Meals" color={col("sodium")}>
+        <div style={grid3}>
+          <Stat label="Meals, typical day" value={fmtNum(food.mealsPerDay)} sub={`${food.daysLogged} days with food logged`} />
+          <Stat label="First and last meal" value={`${hhmm(food.firstMeal)}–${hhmm(food.lastMeal)}`} sub="typical times" />
+          <Stat label="Eaten after 21:00" value={pct(food.lateShare)} sub="share of food items" />
+        </div>
+        <DayChart days={days} get={(x) => (x.lastMeal !== undefined ? x.lastMeal / 60 : undefined)} kind="dots" color={col("sodium")} label="Time of the last meal (hour of the day)" unit="h" digits={1} />
+        {food.topFoods.length > 0 && (
+          <>
+            <SubHead>Most logged foods</SubHead>
+            <Table head={["Food", "Times", "Total"]} rows={food.topFoods.map((f) => [<span key="n" style={{ textTransform: "capitalize" }}>{f.name}</span>, String(f.n), f.grams ? `${fmtNum(f.grams)} g` : "—"])} />
+          </>
+        )}
+      </Section>
+
+      <Section title="Sodium" color={col("sodium")}>
+        <div style={grid3}>
+          <Stat label="Days within limit" value={pct(sodium.p)} sub={`${sodium.within}/${sodium.n} · limit ${fmtNum(d.limits.sodium)} mg`} />
+          <Stat label="Typical day" value={fmtNum(sodium.median)} unit="mg" sub={`most days ${fmtNum(sodium.p10)}–${fmtNum(sodium.p90)}`} />
+          <Stat label="Over by (median)" value={Number.isFinite(sodium.medianOver) ? fmtNum(sodium.medianOver) : "—"} unit="mg" sub="on days over" />
+        </div>
+        <DayChart days={days} get={(x) => x.sodium} kind="bars" color={col("sodium")} label="Sodium per day (solid = over limit)" unit="mg" refValue={d.limits.sodium} refLabel="limit" />
+        <SubHead>When it comes in</SubHead>
+        <Clock rows={[{ label: "Sodium", v: d.sodiumClock, c: col("sodium") }]} />
+        {d.sodiumSources.length > 0 && (
+          <>
+            <SubHead>Biggest sources</SubHead>
+            <Table head={["Food", "Sodium", "Share"]} rows={d.sodiumSources.map((s) => [<span key="l" style={{ textTransform: "capitalize" }}>{s.label}</span>, `${fmtNum(s.mg)} mg`, pct(s.share)])} />
+          </>
+        )}
+      </Section>
+
+      <Section title="Sugar and potassium" color={col("sodium")}>
+        <div style={grid3}>
+          <Stat label="Sugar, typical day" value={fmtNum(food.sugar.median)} unit="g" sub={food.sugar.limit ? `${food.sugar.within}/${food.sugar.n} days within ${fmtNum(food.sugar.limit)} g` : `${food.sugar.n} days logged`} />
+          <Stat label="Potassium, typical day" value={fmtNum(food.potassium.median)} unit="mg" sub={`${food.potassium.n} days logged`} />
+        </div>
+        <DayChart days={days} get={(x) => x.sugar} kind="bars" color={col("sodium")} label="Sugar per day" unit="g" {...(food.sugar.limit ? { refValue: food.sugar.limit, refLabel: "limit" } : {})} />
+        {food.potassium.n < 7 && (
+          <p style={{ ...muted, marginTop: 6 }}>
+            Potassium is logged on {food.potassium.n} days. Some heart and blood-pressure medicines raise potassium, so log it with food if your care team wants it watched.
+          </p>
+        )}
+      </Section>
+
+      {nutrientAnalysis}
+    </>
+  );
+}
+
+/** Fluid and food together, for the layouts that don't split them. */
+export function IntakeChapter({ data, nutrientAnalysis }: { data: Insights; nutrientAnalysis?: ReactNode }) {
+  return (
+    <>
+      <FluidChapter data={data} />
+      <FoodChapter data={data} nutrientAnalysis={nutrientAnalysis} />
     </>
   );
 }

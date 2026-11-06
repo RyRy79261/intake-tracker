@@ -20,6 +20,7 @@ import type {
   BloodPressureRecord,
   DefecationRecord,
   DoseLog,
+  EatingRecord,
   IntakeRecord,
   JournalEntry,
   MedicationPhase,
@@ -40,7 +41,10 @@ export interface EngineInput {
   dayStartHour: number;
   waterLimit: number; // ml
   saltLimit: number; // mg sodium
+  sugarLimit?: number; // g
+  potassiumLimit?: number; // mg
   intake: IntakeRecord[];
+  eating?: EatingRecord[];
   weight: WeightRecord[];
   bp: BloodPressureRecord[];
   urination: UrinationRecord[];
@@ -164,6 +168,12 @@ export interface Day {
   key: string;
   water?: number;
   sodium?: number;
+  sugar?: number;
+  potassium?: number;
+  foodItems?: number;
+  meals?: number;
+  firstMeal?: number; // minutes after midnight
+  lastMeal?: number;
   waterAfter18?: number;
   caffeine?: number;
   alcohol?: number; // standard drinks
@@ -206,6 +216,29 @@ export function buildDays(inp: EngineInput, nDays: number): Day[] {
       const h = localParts(r.timestamp, tz).hour;
       if (h >= 18 || h < dsh) add(d, "waterAfter18", r.amount);
     } else if (r.type === "salt") add(d, "sodium", r.amount);
+    else if (r.type === "sugar") d.sugar = (d.sugar ?? 0) + r.amount;
+    else if (r.type === "potassium") d.potassium = (d.potassium ?? 0) + r.amount;
+  }
+  // Meals: eating rows more than 90 min apart start a new meal.
+  const byDayEat = new Map<string, number[]>();
+  for (const r of inp.eating ?? []) {
+    const d = dayOf(r.timestamp);
+    if (!d) continue;
+    d.foodItems = (d.foodItems ?? 0) + 1;
+    byDayEat.set(d.key, [...(byDayEat.get(d.key) ?? []), r.timestamp]);
+  }
+  for (const [k, ts] of byDayEat) {
+    const d = map.get(k)!;
+    ts.sort((a, b) => a - b);
+    let meals = 1;
+    for (let i = 1; i < ts.length; i++) if (ts[i]! - ts[i - 1]! > 90 * 60_000) meals++;
+    d.meals = meals;
+    const mins = (t: number) => {
+      const p = localParts(t, tz);
+      return (p.hour < dsh ? p.hour + 24 : p.hour) * 60 + p.minute;
+    };
+    d.firstMeal = mins(ts[0]!);
+    d.lastMeal = mins(ts[ts.length - 1]!);
   }
   for (const r of inp.substance) {
     const d = dayOf(r.timestamp);
@@ -911,6 +944,41 @@ export function weekly(days: Day[], period: number): WeekRow[] {
   return rows;
 }
 
+/** Food: meals, timing, top foods, sugar and potassium, over the period. */
+export function foodSummary(inp: EngineInput, days: Day[], period: number) {
+  const inPeriod = days.slice(-(period + 1), -1);
+  const ate = inPeriod.filter((d) => d.foodItems);
+  const since = inp.now - period * 86_400_000;
+  const foods = new Map<string, { n: number; grams: number }>();
+  let late = 0;
+  let total = 0;
+  for (const r of inp.eating ?? []) {
+    if (r.timestamp < since) continue;
+    total++;
+    const h = localParts(r.timestamp, inp.tz).hour;
+    if (h >= 21 || h < inp.dayStartHour) late++;
+    const name = (r.note ?? "").trim().toLowerCase();
+    if (!name) continue;
+    const v = foods.get(name) ?? { n: 0, grams: 0 };
+    v.n++;
+    v.grams += r.grams ?? 0;
+    foods.set(name, v);
+  }
+  const sug = inPeriod.filter((d) => d.sugar !== undefined).map((d) => d.sugar!);
+  const pot = inPeriod.filter((d) => d.potassium !== undefined).map((d) => d.potassium!);
+  return {
+    daysLogged: ate.length,
+    mealsPerDay: median(ate.map((d) => d.meals ?? 0)),
+    itemsPerDay: median(ate.map((d) => d.foodItems ?? 0)),
+    firstMeal: median(ate.map((d) => d.firstMeal!).filter(Number.isFinite)),
+    lastMeal: median(ate.map((d) => d.lastMeal!).filter(Number.isFinite)),
+    lateShare: total ? late / total : NaN,
+    topFoods: [...foods.entries()].map(([name, v]) => ({ name, ...v })).sort((a, b) => b.n - a.n).slice(0, 8),
+    sugar: { n: sug.length, median: median(sug), within: inp.sugarLimit ? sug.filter((v) => v <= inp.sugarLimit!).length : NaN, limit: inp.sugarLimit },
+    potassium: { n: pot.length, median: median(pot), limit: inp.potassiumLimit },
+  };
+}
+
 export interface CompareRow {
   metric: MetricDef;
   now: number;
@@ -955,6 +1023,7 @@ export function runEngine(inp: EngineInput, period = 30) {
     fluidClock: timeOfDay(inp, (r) => r.type === "water", period),
     sodiumClock: timeOfDay(inp, (r) => r.type === "salt", period),
     sodiumSources: sodiumSources(inp, period),
+    food: foodSummary(inp, days, period),
     effects: nextMorningEffects(inp, days),
     adherence: adherence(inp, period),
     changes: medicationChanges(inp, days),

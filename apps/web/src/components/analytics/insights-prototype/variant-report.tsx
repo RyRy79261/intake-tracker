@@ -169,6 +169,19 @@ export function VariantReport({ data, printable = true }: { data: Insights; prin
 
       <Section title="6 · Symptoms and what came before" color={col("journal")}>
         {data.symptoms.entries.length === 0 && <p style={muted}>No symptoms or signs in the journal in this period.</p>}
+        {data.symptoms.counts.length > 0 && (
+          <table style={{ width: "100%", fontSize: 12, borderCollapse: "collapse", marginBottom: 8 }}>
+            <tbody>
+              {data.symptoms.counts.map((c) => (
+                <tr key={c.finding} style={{ borderTop: `1px solid ${col("line")}` }}>
+                  <td style={{ padding: "3px 0" }}>{c.finding}</td>
+                  <td style={{ ...mono, textAlign: "right" }}>×{c.n}</td>
+                  <td style={{ ...mono, textAlign: "right", width: 64 }}>{Number.isFinite(c.severity) ? `${fmtNum(c.severity)}/10` : "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
         {data.symptoms.patterns.map((p) => (
           <p key={p.finding} style={{ fontSize: 13 }}>
             <b>{p.finding}</b> ×{p.n}: {p.text}.

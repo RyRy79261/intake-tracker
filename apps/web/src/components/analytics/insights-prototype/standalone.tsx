@@ -11,6 +11,9 @@ import type { EngineInput } from "@/components/analytics/insights-prototype/engi
 import { runEngine } from "@/components/analytics/insights-prototype/engine";
 import { METRICS_VARIANTS, MetricsPrototype } from "@/components/analytics/insights-prototype/metrics-prototype";
 import type { TimeRange } from "@intake/types/analytics";
+import { Download, FileText, Sparkles, Apple } from "lucide-react";
+import { Button } from "@intake/ui/button";
+import type { Insights } from "@/components/analytics/insights-prototype/engine";
 import { PrototypeSwitcher } from "@/components/prototype/prototype-switcher";
 
 
@@ -36,7 +39,7 @@ function exampleInput(): EngineInput {
   const dateKey = (ts: number) => new Date(ts).toLocaleDateString("en-CA");
 
   const inp: EngineInput = {
-    now, tz, dayStartHour: 2, waterLimit: 1500, saltLimit: 2000,
+    now, tz, dayStartHour: 2, waterLimit: 1500, saltLimit: 2000, sugarLimit: 30, potassiumLimit: 3500, eating: [],
     intake: [], weight: [], bp: [], urination: [], defecation: [], substance: [],
     doseLogs: [], phases: [], schedules: [], prescriptions: [], journal: [],
   };
@@ -98,6 +101,10 @@ function exampleInput(): EngineInput {
       const night = k === 0 && r() < (drinks >= 3 ? 0.7 : 0.25);
       inp.urination.push({ id: id(), amountEstimate: "medium", timestamp: at(d, night ? 3 : 9 + k * 3), ...meta });
     }
+    const meals: [number, string[]][] = [[8, ["toast", "coffee with milk"]], [13, ["ham sandwich", "apple"]], [20 + Math.round(r() * 2), ["pasta", "salad", "cheese"]]];
+    for (const [h, items] of meals) for (const it of items) (inp.eating ??= []).push({ id: id(), timestamp: at(d, h, 10), grams: 80 + Math.round(r() * 150), note: it, ...meta });
+    inp.intake.push({ id: id(), type: "sugar", amount: Math.round(25 + r() * 35), timestamp: at(d, 15), source: "manual", ...meta });
+    if (r() < 0.2) inp.intake.push({ id: id(), type: "potassium", amount: Math.round(1800 + r() * 1500), timestamp: at(d, 15), source: "manual", ...meta });
     if (r() < 0.7) inp.defecation.push({ id: id(), amountEstimate: "medium", timestamp: at(d, 10), ...meta });
 
     if (d <= 45 && d > 0) {
@@ -155,6 +162,54 @@ function ExampleRecords({ range }: { range: TimeRange }) {
   );
 }
 
+// Stand-ins for parts that need the app (downloads, the AI routes).
+function ExampleExport() {
+  const [note, setNote] = useState<string | null>(null);
+  return (
+    <div style={{ flex: "1 1 100%" }}>
+      <div className="wm-exp">
+        <Button variant="outline" onClick={() => setNote("In the app this downloads this report as a PDF for your care team.")}>
+          <FileText />
+          Export report
+        </Button>
+        <Button variant="outline" onClick={() => setNote("In the app this downloads every record in the period as CSV.")}>
+          <Download />
+          Export CSV
+        </Button>
+      </div>
+      {note && <p className="wm-p" style={{ marginTop: 6 }}>{note}</p>}
+    </div>
+  );
+}
+
+function ExampleAi({ title, button, icon, text }: { title: string; button: string; icon: React.ReactNode; text: () => string }) {
+  const [out, setOut] = useState<string | null>(null);
+  return (
+    <section className="wm-card" style={{ ["--c" as string]: "hsl(var(--ai))" }} aria-label={title}>
+      <h3 className="wm-ct">
+        {icon}
+        {title}
+      </h3>
+      {out ? (
+        <>
+          <p style={{ fontSize: 13, lineHeight: 1.5 }}>{out}</p>
+          <p className="wm-p" style={{ marginTop: 6 }}>Example output. In the app Claude writes this from the report&apos;s numbers, never your raw entries.</p>
+        </>
+      ) : (
+        <Button variant="outline" onClick={() => setOut(text())}>
+          {button}
+        </Button>
+      )}
+    </section>
+  );
+}
+
+const aiSummary = (d: Insights) =>
+  `Over ${d.period} days your home blood pressure averaged ${Math.round(d.bp.sys)}/${Math.round(d.bp.dia)}, all readings below the 135/85 home threshold, but only morning readings were taken. ` +
+  `Fluid stayed within your limit on ${Math.round(d.water.p * 100)}% of days and sodium on ${Math.round(d.sodium.p * 100)}%, with most sodium from ${d.sodiumSources[0]?.label ?? "food"}. ` +
+  `${d.alcohol.drinkDays} of ${d.alcohol.n} days included alcohol, and after 3+ drinks your next-morning heart rate tended to be higher. ` +
+  `Doses were taken ${Math.round((d.adherence.taken / d.adherence.due) * 100)}% of the time, typically ${Math.round(d.adherence.medianDelay)} minutes late. Dizziness was logged ${d.symptoms.counts.find((c) => /dizz/i.test(c.finding))?.n ?? 0} times, mostly within 3 hours of a dose.`;
+
 function App() {
   const [variant, setVariant] = useState(readHash);
   useEffect(() => {
@@ -172,7 +227,22 @@ function App() {
   };
   return (
     <>
-      <MetricsPrototype key={variant} variant={variant} useInsights={useExampleInsights} records={(range) => <ExampleRecords range={range} />} />
+      <MetricsPrototype
+        key={variant}
+        variant={variant}
+        useInsights={useExampleInsights}
+        records={(range) => <ExampleRecords range={range} />}
+        exportSlot={() => <ExampleExport />}
+        aiInsights={<ExampleAi title="AI Insights" button="Summarise this report" icon={<Sparkles />} text={() => aiSummary(runEngine(INPUT, 30))} />}
+        nutrientAnalysis={
+          <ExampleAi
+            title="Nutrient analysis"
+            button="Analyse the last 30 days of food"
+            icon={<Apple />}
+            text={() => "Your logged meals lean on bread, cheese and processed meats, which carry most of your sodium. Swapping the daily ham and soup for unsalted alternatives would bring most days under your sodium limit. Fibre and potassium-rich vegetables are rare in the log."}
+          />
+        }
+      />
       <PrototypeSwitcher variants={METRICS_VARIANTS} current={variant} onChange={choose} />
     </>
   );

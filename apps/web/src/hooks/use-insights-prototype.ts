@@ -18,6 +18,8 @@ export function usePrototypeInsights(period = 30) {
   const dayStartHour = useSettingsStore((s) => s.dayStartHour);
   const waterLimit = useSettingsStore((s) => s.waterLimit);
   const saltLimit = useSettingsStore((s) => s.saltLimit);
+  const sugarLimit = useSettingsStore((s) => s.sugarLimit);
+  const potassiumLimit = useSettingsStore((s) => s.potassiumLimit);
 
   const raw = useLiveQuery(async () => {
     const since = Date.now() - DAYS * 86_400_000;
@@ -25,9 +27,10 @@ export function usePrototypeInsights(period = 30) {
     const live = <T extends { deletedAt: number | null }>(xs: T[]) => xs.filter((x) => x.deletedAt === null);
     const recent = <T extends { deletedAt: number | null; timestamp: number }>(xs: T[]) =>
       xs.filter((x) => x.deletedAt === null && x.timestamp >= since);
-    const [intake, weight, bp, urination, defecation, substance, doseLogs, phases, schedules, prescriptions, journal] =
+    const [intake, eating, weight, bp, urination, defecation, substance, doseLogs, phases, schedules, prescriptions, journal] =
       await Promise.all([
         db.intakeRecords.toArray().then(recent),
+        db.eatingRecords.toArray().then(recent),
         db.weightRecords.toArray().then(recent),
         db.bloodPressureRecords.toArray().then(recent),
         db.urinationRecords.toArray().then(recent),
@@ -39,7 +42,7 @@ export function usePrototypeInsights(period = 30) {
         db.prescriptions.toArray().then(live),
         db.journalEntries.where("timestamp").aboveOrEqual(since).toArray().then(live),
       ]);
-    return { intake, weight, bp, urination, defecation, substance, doseLogs, phases, schedules, prescriptions, journal };
+    return { intake, eating, weight, bp, urination, defecation, substance, doseLogs, phases, schedules, prescriptions, journal };
   }, []);
 
   return useMemo(() => {
@@ -50,8 +53,10 @@ export function usePrototypeInsights(period = 30) {
       dayStartHour,
       waterLimit,
       saltLimit,
+      sugarLimit,
+      potassiumLimit,
       ...raw,
     };
     return runEngine(input, period);
-  }, [raw, dayStartHour, waterLimit, saltLimit, period]);
+  }, [raw, dayStartHour, waterLimit, saltLimit, sugarLimit, potassiumLimit, period]);
 }
