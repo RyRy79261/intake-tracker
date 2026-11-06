@@ -147,31 +147,16 @@ function App() {
     } catch {
       // the frame may refuse; the variant still switches
     }
-    window.scrollTo({ top: 0 });
   };
 
   return (
     <>
-      <header className="pt-head">
-        <div>
-          <h1>Metrics insights</h1>
-          <p>Three prototype layouts, all running the same insights engine on example data.</p>
-        </div>
-        <nav aria-label="Variant" className="pt-tabs">
-          {VARIANTS.map((v) => (
-            <button key={v.key} type="button" aria-pressed={variant === v.key} onClick={() => choose(v.key)}>
-              <b>{v.key}</b> {v.name}
-            </button>
-          ))}
-        </nav>
-      </header>
-      <main className="pt-win">
-        <div className="pt-bar">Metrics · Summary</div>
-        {variant === "B" ? <VariantTimeline data={data} /> : variant === "C" ? <VariantReport data={data} printable={false} /> : <VariantChanges data={data} />}
-      </main>
+      {variant === "B" ? <VariantTimeline data={data} /> : variant === "C" ? <VariantReport data={data} printable={false} /> : <VariantChanges data={data} />}
       <PrototypeSwitcher variants={VARIANTS} current={variant} onChange={choose} />
     </>
   );
 }
 
-createRoot(document.getElementById("root")!).render(<App />);
+// Mounted inside the real app shell's Summary tab panel (captured from the
+// running app), so the variants are judged against the real chrome.
+createRoot(document.getElementById("proto-root")!).render(<App />);
