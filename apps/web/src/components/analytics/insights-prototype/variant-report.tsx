@@ -15,7 +15,7 @@ const BLOCKS = ["00", "03", "06", "09", "12", "15", "18", "21"];
 export function VariantReport({ data, printable = true }: { data: Insights; printable?: boolean }) {
   const { bp, weight, water, sodium, adherence: adh, alcohol } = data;
   const end = data.days[data.days.length - 2]!.key;
-  const start = data.days[data.days.length - 31]!.key;
+  const start = data.days[Math.max(0, data.days.length - 1 - data.period)]!.key;
   const questions = buildQuestions(data);
 
   return (
@@ -24,7 +24,7 @@ export function VariantReport({ data, printable = true }: { data: Insights; prin
         <div>
           <div style={{ fontSize: 15, fontWeight: 700 }}>Report for your care team</div>
           <div style={{ ...muted, ...mono }}>
-            {shortDate(start)} – {shortDate(end)} · 30 days
+            {shortDate(start)} – {shortDate(end)} · {data.period} days
           </div>
         </div>
         {printable && <button type="button" onClick={() => window.print()} className="wm-ibtn" data-print-hide style={{ display: "flex", gap: 6, alignItems: "center", padding: "6px 10px", minHeight: 36, border: `1px solid ${col("line")}`, background: "transparent", fontSize: 13 }}>
@@ -56,7 +56,7 @@ export function VariantReport({ data, printable = true }: { data: Insights; prin
             the average above is morning-weighted.
           </p>
         )}
-        <div style={{ marginTop: 10, fontSize: 12, fontWeight: 600 }}>30-day readings by band ({bp.tirN})</div>
+        <div style={{ marginTop: 10, fontSize: 12, fontWeight: 600 }}>Readings by band, {data.period} days ({bp.tirN})</div>
         <RangeBar
           parts={[
             { label: "Systolic < 100", n: bp.tir.low, color: col("water") },
@@ -114,7 +114,7 @@ export function VariantReport({ data, printable = true }: { data: Insights; prin
 
       <Section title="4 · Alcohol" color={col("alcohol")}>
         <div style={grid3}>
-          <Stat label="Drinking days, last 4 weeks" value={`${alcohol.drinkDays}/${alcohol.n}`} />
+          <Stat label={`Drinking days, ${data.period} days`} value={`${alcohol.drinkDays}/${alcohol.n}`} />
           <Stat label="Per week" value={fmtNum(alcohol.perWeek, 1)} unit="std drinks" />
           <Stat label="Days with 5+" value={String(alcohol.heavyDays)} sub={`most in a day ${fmtNum(alcohol.maxDay, 1)}`} />
         </div>
@@ -155,7 +155,7 @@ export function VariantReport({ data, printable = true }: { data: Insights; prin
         )}
         {data.changes.length > 0 && (
           <>
-            <div style={{ marginTop: 10, fontSize: 12, fontWeight: 600 }}>Changes in the last 90 days</div>
+            <div style={{ marginTop: 10, fontSize: 12, fontWeight: 600 }}>Medicine changes</div>
             <ul style={{ margin: 0, paddingLeft: 16, fontSize: 12 }}>
               {data.changes.slice(0, 8).map((c, i) => (
                 <li key={i}>
@@ -168,7 +168,7 @@ export function VariantReport({ data, printable = true }: { data: Insights; prin
       </Section>
 
       <Section title="6 · Symptoms and what came before" color={col("journal")}>
-        {data.symptoms.entries.length === 0 && <p style={muted}>No symptoms or signs in the journal in 30 days.</p>}
+        {data.symptoms.entries.length === 0 && <p style={muted}>No symptoms or signs in the journal in this period.</p>}
         {data.symptoms.patterns.map((p) => (
           <p key={p.finding} style={{ fontSize: 13 }}>
             <b>{p.finding}</b> ×{p.n}: {p.text}.
@@ -215,19 +215,19 @@ export function VariantReport({ data, printable = true }: { data: Insights; prin
   );
 }
 
-function buildQuestions(d: Insights): string[] {
+export function buildQuestions(d: Insights): string[] {
   const q: string[] = [];
   if (!d.bp.meetsProtocol) q.push("Should I add evening blood pressure readings, so the home average follows the standard protocol?");
   if (d.bp.tir.low / Math.max(1, d.bp.tirN) >= 0.2) q.push("A fifth or more of my readings are under 100 systolic. Is that low enough to matter?");
   if (d.sodium.p < 0.5) q.push(`I'm under my sodium limit on ${pct(d.sodium.p)} of days. Is ${fmtNum(d.limits.sodium)} mg the right limit, and where should I cut?`);
   if (d.water.p < 0.5) q.push(`I'm within my fluid limit on ${pct(d.water.p)} of days. Is ${fmtNum(d.limits.water)} ml still the right limit for me?`);
-  if (d.alcohol.heavyDays > 0) q.push(`I had ${d.alcohol.heavyDays} days with 5+ drinks in 4 weeks. How does alcohol interact with my medicines and heart?`);
+  if (d.alcohol.heavyDays > 0) q.push(`I had ${d.alcohol.heavyDays} days with 5+ drinks in ${d.period} days. How does alcohol interact with my medicines and heart?`);
   if (Number.isFinite(d.adherence.p90Delay) && d.adherence.p90Delay > 90) q.push("Some doses are taken 1.5 h or more late. How much does timing matter for each of my medicines?");
   for (const f of d.flags.filter((f) => f.level === "red").slice(0, 1)) q.push(`About the ${f.title.toLowerCase()} on ${shortDate(f.when)}.`);
   return q;
 }
 
-function Stat({ label, value, unit, sub }: { label: string; value: string; unit?: string; sub?: string }) {
+export function Stat({ label, value, unit, sub }: { label: string; value: string; unit?: string; sub?: string }) {
   return (
     <div>
       <div style={{ ...muted, fontSize: 11 }}>{label}</div>
@@ -240,7 +240,7 @@ function Stat({ label, value, unit, sub }: { label: string; value: string; unit?
   );
 }
 
-function Clock({ rows }: { rows: { label: string; v: number[]; c: string }[] }) {
+export function Clock({ rows }: { rows: { label: string; v: number[]; c: string }[] }) {
   return (
     <div style={{ display: "grid", gridTemplateColumns: "52px repeat(8, 1fr)", gap: 2, alignItems: "end", fontSize: 10 }}>
       {rows.map((r) => [
@@ -263,4 +263,4 @@ function Clock({ rows }: { rows: { label: string; v: number[]; c: string }[] }) 
   );
 }
 
-const grid3: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "10px 12px" };
+export const grid3: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "10px 12px" };

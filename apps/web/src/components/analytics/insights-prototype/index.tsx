@@ -1,47 +1,48 @@
 "use client";
 
 /**
- * PROTOTYPE — throwaway. "Three variants of the Metrics insights, switchable
- * via `?variant=`, on the existing Summary tab" (prototype skill, sub-shape A).
- *
- *   ?variant=A  What changed      — this week vs your own baseline
- *   ?variant=B  Timeline          — every measure on one axis + before/after per med change
- *   ?variant=C  Doctor report     — fixed one-pager that prints
- *   ?variant=0  Current Summary   — today's averages, for comparison
+ * PROTOTYPE — throwaway. Round 2: the whole Metrics window in the
+ * doctor-report style, three ways to organise it (see metrics-prototype.tsx),
+ * switchable via `?variant=` and the floating bar. `?variant=0` shows today's
+ * Metrics window for comparison.
  *
  * Read-only: it never writes to Dexie. Hidden in production builds.
  */
 
-import type { TimeRange } from "@intake/types/analytics";
-import { SummaryTab } from "@/components/analytics/summary-tab";
+import type { ReactNode } from "react";
+import { RecordsTab } from "@/components/analytics/records-tab";
+import { ExportControls } from "@/components/analytics/export-controls";
+import type { FilterType } from "@/lib/history-types";
 import { PrototypeSwitcher, usePrototypeVariant } from "@/components/prototype/prototype-switcher";
 import { usePrototypeInsights } from "@/hooks/use-insights-prototype";
-import { VariantChanges } from "@/components/analytics/insights-prototype/variant-changes";
-import { VariantTimeline } from "@/components/analytics/insights-prototype/variant-timeline";
-import { VariantReport } from "@/components/analytics/insights-prototype/variant-report";
+import { METRICS_VARIANTS, MetricsPrototype } from "@/components/analytics/insights-prototype/metrics-prototype";
 
-const VARIANTS = [
-  { key: "A", name: "What changed" },
-  { key: "B", name: "Timeline" },
-  { key: "C", name: "Doctor report" },
-  { key: "0", name: "Current summary" },
-] as const;
+const VARIANTS = [...METRICS_VARIANTS, { key: "0", name: "Current Metrics" }] as const;
 const KEYS = VARIANTS.map((v) => v.key);
 
-export function InsightsPrototype({ range }: { range: TimeRange }) {
+export function MetricsWindowPrototype({
+  current,
+  recordsFilter,
+  onRecordsFilterChange,
+}: {
+  current: ReactNode;
+  recordsFilter?: FilterType | undefined;
+  onRecordsFilterChange?: ((filter: FilterType) => void) | undefined;
+}) {
   const [variant, setVariant] = usePrototypeVariant(KEYS, "A");
-  const data = usePrototypeInsights();
-
-  let body;
-  if (variant === "0") body = <SummaryTab range={range} />;
-  else if (!data) body = <p className="wm-p" style={{ padding: 14 }}>Loading…</p>;
-  else if (variant === "B") body = <VariantTimeline data={data} />;
-  else if (variant === "C") body = <VariantReport data={data} />;
-  else body = <VariantChanges data={data} />;
-
   return (
     <>
-      {body}
+      {variant === "0" ? (
+        current
+      ) : (
+        <MetricsPrototype
+          key={variant}
+          variant={variant}
+          useInsights={usePrototypeInsights}
+          records={(range) => <RecordsTab range={range} filter={recordsFilter} onFilterChange={onRecordsFilterChange} />}
+          exportSlot={<ExportControls range={{ start: Date.now() - 30 * 86_400_000, end: Date.now() }} />}
+        />
+      )}
       <PrototypeSwitcher variants={VARIANTS} current={variant} onChange={setVariant} />
     </>
   );

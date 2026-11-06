@@ -7,7 +7,7 @@ import { RecordsTab } from "@/components/analytics/records-tab";
 import { SummaryTab } from "@/components/analytics/summary-tab";
 import { CorrelationsTab } from "@/components/analytics/correlations-tab";
 import { TitrationTab } from "@/components/analytics/titration-tab";
-import { InsightsPrototype } from "@/components/analytics/insights-prototype";
+import { MetricsWindowPrototype } from "@/components/analytics/insights-prototype";
 import { PROTOTYPES_ENABLED } from "@/components/prototype/prototype-switcher";
 import { ExportControls } from "@/components/analytics/export-controls";
 import { AnalyticsIntroDialog } from "@/components/analytics/analytics-intro-dialog";
@@ -51,7 +51,21 @@ interface AnalyticsPageBodyProps {
  * Correlations, Records and Titration tabs. Rendered by the `/analytics`
  * route and by the Metrics window.
  */
-export function AnalyticsPageBody({
+export function AnalyticsPageBody(props: AnalyticsPageBodyProps) {
+  // PROTOTYPE: round-2 Metrics redesign (dev + Vercel preview only).
+  if (PROTOTYPES_ENABLED) {
+    return (
+      <MetricsWindowPrototype
+        current={<CurrentAnalyticsPageBody {...props} />}
+        recordsFilter={props.recordsFilter}
+        onRecordsFilterChange={props.onRecordsFilterChange}
+      />
+    );
+  }
+  return <CurrentAnalyticsPageBody {...props} />;
+}
+
+function CurrentAnalyticsPageBody({
   activeTab,
   onTabChange,
   recordsFilter,
@@ -90,12 +104,7 @@ export function AnalyticsPageBody({
         </TabsList>
 
         <TabsContent value="summary" className="wm-stack mt-0">
-          {/* PROTOTYPE: insights variants (dev + Vercel preview only). */}
-          {PROTOTYPES_ENABLED ? (
-            <InsightsPrototype range={effectiveRange} />
-          ) : (
-            <SummaryTab range={effectiveRange} />
-          )}
+          <SummaryTab range={effectiveRange} />
         </TabsContent>
 
         <TabsContent value="correlations" className="wm-stack mt-0">

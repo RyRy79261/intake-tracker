@@ -28,3 +28,20 @@ Not validated: the agents' guideline citations marked [K] came from memory, not 
 engine and variants on generated example data. Bundle it into one HTML file with
 esbuild (`--bundle --format=iife --jsx=automatic --tsconfig=apps/web/tsconfig.json`)
 to share it without running the app.
+
+## Round 2: the whole Metrics window
+
+Verdict from round 1: the doctor report (C) won, and the redesign has to cover the
+whole Metrics window, not just Summary. Round 2 prototypes the full window in that style
+(`metrics-prototype.tsx`, `chapters.tsx`), three ways to organise it:
+
+| Key | Variant | Tabs |
+|---|---|---|
+| A | Chapters | Report · Vitals · Intake · Meds · Journal · Records |
+| B | One document | Report (one long page with a jump index) · Records |
+| C | Visit pack | Since last visit · Trends · Records (period runs from your last appointment) |
+| 0 | Current Metrics | today's window, in the app only |
+
+Summary, Correlations and Titration are replaced: fixed questions with lags replace the
+correlation picker, and a before/after card per medicine change replaces the Titration tab.
+The range selector sets the period every block reports on. Records is unchanged.

@@ -12,9 +12,9 @@ import { useSettingsStore } from "@/stores/settings-store";
 import { getDeviceTimezone } from "@/lib/timezone";
 import { runEngine, type EngineInput } from "@/components/analytics/insights-prototype/engine";
 
-const DAYS = 95;
+const DAYS = 200;
 
-export function usePrototypeInsights() {
+export function usePrototypeInsights(period = 30) {
   const dayStartHour = useSettingsStore((s) => s.dayStartHour);
   const waterLimit = useSettingsStore((s) => s.waterLimit);
   const saltLimit = useSettingsStore((s) => s.saltLimit);
@@ -52,6 +52,6 @@ export function usePrototypeInsights() {
       saltLimit,
       ...raw,
     };
-    return runEngine(input);
-  }, [raw, dayStartHour, waterLimit, saltLimit]);
+    return runEngine(input, period);
+  }, [raw, dayStartHour, waterLimit, saltLimit, period]);
 }

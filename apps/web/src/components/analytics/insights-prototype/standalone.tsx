@@ -9,16 +9,10 @@ import { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import type { EngineInput } from "@/components/analytics/insights-prototype/engine";
 import { runEngine } from "@/components/analytics/insights-prototype/engine";
-import { VariantChanges } from "@/components/analytics/insights-prototype/variant-changes";
-import { VariantTimeline } from "@/components/analytics/insights-prototype/variant-timeline";
-import { VariantReport } from "@/components/analytics/insights-prototype/variant-report";
+import { METRICS_VARIANTS, MetricsPrototype } from "@/components/analytics/insights-prototype/metrics-prototype";
+import type { TimeRange } from "@intake/types/analytics";
 import { PrototypeSwitcher } from "@/components/prototype/prototype-switcher";
 
-const VARIANTS = [
-  { key: "A", name: "What changed" },
-  { key: "B", name: "Timeline" },
-  { key: "C", name: "Doctor report" },
-] as const;
 
 // ---------------------------------------------------------------------------
 // Example data: about 75 days shaped like a fluid- and sodium-restricted
@@ -73,7 +67,7 @@ function exampleInput(): EngineInput {
 
   let w = 70.1;
   let drankPrev = 0;
-  for (let d = 75; d >= 0; d--) {
+  for (let d = 150; d >= 0; d--) {
     const after = d < changeDay;
     const drinks = r() < 0.5 ? Math.round((1 + r() * 6) * 10) / 10 : 0;
     const salty = r() < 0.6;
@@ -129,11 +123,39 @@ function exampleInput(): EngineInput {
 
 function readHash() {
   const h = window.location.hash.replace("#", "").toUpperCase();
-  return VARIANTS.some((v) => v.key === h) ? h : "A";
+  return METRICS_VARIANTS.some((v) => v.key === h) ? h : "A";
+}
+
+const INPUT = exampleInput();
+function useExampleInsights(period: number) {
+  return useMemo(() => runEngine(INPUT, period), [period]);
+}
+
+/** Stand-in for the real Records tab (which reads the device database). */
+function ExampleRecords({ range }: { range: TimeRange }) {
+  const rows = [
+    ...INPUT.bp.map((r) => ({ ts: r.timestamp, what: "Blood pressure", v: `${r.systolic}/${r.diastolic} · HR ${r.heartRate ?? "—"}` })),
+    ...INPUT.weight.map((r) => ({ ts: r.timestamp, what: "Weight", v: `${r.weight} kg` })),
+    ...INPUT.journal.map((r) => ({ ts: r.timestamp, what: "Journal", v: r.finding })),
+  ]
+    .filter((r) => r.ts >= range.start && r.ts <= range.end)
+    .sort((a, b) => b.ts - a.ts)
+    .slice(0, 60);
+  return (
+    <div className="wm-card">
+      <p className="wm-p" style={{ marginBottom: 8 }}>Records tab stays as it is today (example rows shown).</p>
+      {rows.map((r, i) => (
+        <div key={i} style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: 13, padding: "6px 0", borderTop: "1px solid hsl(var(--line))" }}>
+          <span>{r.what}</span>
+          <span style={{ fontFamily: "var(--font-mono)" }}>{r.v}</span>
+          <span className="wm-p">{new Date(r.ts).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</span>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 function App() {
-  const data = useMemo(() => runEngine(exampleInput()), []);
   const [variant, setVariant] = useState(readHash);
   useEffect(() => {
     const on = () => setVariant(readHash());
@@ -148,15 +170,14 @@ function App() {
       // the frame may refuse; the variant still switches
     }
   };
-
   return (
     <>
-      {variant === "B" ? <VariantTimeline data={data} /> : variant === "C" ? <VariantReport data={data} printable={false} /> : <VariantChanges data={data} />}
-      <PrototypeSwitcher variants={VARIANTS} current={variant} onChange={choose} />
+      <MetricsPrototype key={variant} variant={variant} useInsights={useExampleInsights} records={(range) => <ExampleRecords range={range} />} />
+      <PrototypeSwitcher variants={METRICS_VARIANTS} current={variant} onChange={choose} />
     </>
   );
 }
 
-// Mounted inside the real app shell's Summary tab panel (captured from the
-// running app), so the variants are judged against the real chrome.
+// Mounted in place of the Metrics window body inside a snapshot of the real
+// app shell, so the variants are judged against the real chrome.
 createRoot(document.getElementById("proto-root")!).render(<App />);

@@ -12,7 +12,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
 export const PROTOTYPES_ENABLED =
-  process.env.NODE_ENV !== "production" || process.env.NEXT_PUBLIC_VERCEL_ENV === "preview";
+  process.env.NODE_ENV === "development" || process.env.NEXT_PUBLIC_VERCEL_ENV === "preview";
 
 const STORE_KEY = "prototype-variant";
 
