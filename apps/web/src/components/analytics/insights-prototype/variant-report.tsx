@@ -12,7 +12,7 @@ import { EngineState, RangeBar, Section, col, fmtNum, mono, muted, pct, shortDat
 
 const BLOCKS = ["00", "03", "06", "09", "12", "15", "18", "21"];
 
-export function VariantReport({ data }: { data: Insights }) {
+export function VariantReport({ data, printable = true }: { data: Insights; printable?: boolean }) {
   const { bp, weight, water, sodium, adherence: adh, alcohol } = data;
   const end = data.days[data.days.length - 2]!.key;
   const start = data.days[data.days.length - 31]!.key;
@@ -27,9 +27,9 @@ export function VariantReport({ data }: { data: Insights }) {
             {shortDate(start)} – {shortDate(end)} · 30 days
           </div>
         </div>
-        <button type="button" onClick={() => window.print()} className="wm-ibtn" data-print-hide style={{ display: "flex", gap: 6, alignItems: "center", padding: "6px 10px", minHeight: 36, border: `1px solid ${col("line")}`, background: "transparent", fontSize: 13 }}>
+        {printable && <button type="button" onClick={() => window.print()} className="wm-ibtn" data-print-hide style={{ display: "flex", gap: 6, alignItems: "center", padding: "6px 10px", minHeight: 36, border: `1px solid ${col("line")}`, background: "transparent", fontSize: 13 }}>
           <Printer size={14} /> Print
-        </button>
+        </button>}
       </div>
 
       {data.flags.length > 0 && (

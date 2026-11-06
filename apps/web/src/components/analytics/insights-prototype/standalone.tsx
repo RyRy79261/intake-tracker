@@ -1,0 +1,177 @@
+/**
+ * PROTOTYPE — throwaway. Standalone entry for the hosted, shareable build of
+ * the three insights variants (bundled with esbuild into one HTML file).
+ * Runs the real engine and variant components on generated EXAMPLE data, so
+ * nobody's health records leave the device.
+ */
+
+import { useEffect, useMemo, useState } from "react";
+import { createRoot } from "react-dom/client";
+import type { EngineInput } from "@/components/analytics/insights-prototype/engine";
+import { runEngine } from "@/components/analytics/insights-prototype/engine";
+import { VariantChanges } from "@/components/analytics/insights-prototype/variant-changes";
+import { VariantTimeline } from "@/components/analytics/insights-prototype/variant-timeline";
+import { VariantReport } from "@/components/analytics/insights-prototype/variant-report";
+import { PrototypeSwitcher } from "@/components/prototype/prototype-switcher";
+
+const VARIANTS = [
+  { key: "A", name: "What changed" },
+  { key: "B", name: "Timeline" },
+  { key: "C", name: "Doctor report" },
+] as const;
+
+// ---------------------------------------------------------------------------
+// Example data: about 75 days shaped like a fluid- and sodium-restricted
+// heart-failure log (morning BP, daily weigh-in, ~10 drinks a day, evening
+// alcohol on about half the days, twice-daily medicines, a dose change).
+// ---------------------------------------------------------------------------
+
+function exampleInput(): EngineInput {
+  const DAY = 86_400_000;
+  const now = Date.now();
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  let seed = 11;
+  const r = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const id = () => Math.random().toString(36).slice(2);
+  const meta = { createdAt: now, updatedAt: now, deletedAt: null, deviceId: "example", timezone: tz };
+  const at = (d: number, h: number, m = 0) => {
+    const t = new Date(now - d * DAY);
+    t.setHours(h, m, 0, 0);
+    return t.getTime();
+  };
+  const dateKey = (ts: number) => new Date(ts).toLocaleDateString("en-CA");
+
+  const inp: EngineInput = {
+    now, tz, dayStartHour: 2, waterLimit: 1500, saltLimit: 2000,
+    intake: [], weight: [], bp: [], urination: [], defecation: [], substance: [],
+    doseLogs: [], phases: [], schedules: [], prescriptions: [], journal: [],
+  };
+
+  const meds = [
+    { name: "Carvedilol", times: ["08:00", "20:00"] },
+    { name: "Sacubitril/valsartan", times: ["08:00", "20:00"] },
+    { name: "Spironolactone", times: ["08:00"] },
+    { name: "Dapagliflozin", times: ["08:00"] },
+  ];
+  const changeDay = 20;
+  const changeKey = dateKey(at(changeDay, 12));
+  for (const m of meds) {
+    const rx = { id: id(), genericName: m.name, isActive: true, ...meta };
+    inp.prescriptions.push(rx);
+    const ph = { id: id(), prescriptionId: rx.id, type: "maintenance" as const, unit: "mg", startDate: at(48, 9), foodInstruction: "none" as const, status: "active" as const, ...meta };
+    inp.phases.push(ph);
+    if (m.name === "Carvedilol") {
+      for (const time of m.times) {
+        const base = { phaseId: ph.id, time, scheduleTimeUTC: 0, anchorTimezone: tz, daysOfWeek: [0, 1, 2, 3, 4, 5, 6], enabled: true, unit: "mg", ...meta };
+        inp.schedules.push({ ...base, id: id(), dosage: 6.25, effectiveTo: changeKey });
+        inp.schedules.push({ ...base, id: id(), dosage: 12.5, effectiveFrom: changeKey });
+      }
+    }
+    (m as { rxId?: string; phId?: string }).rxId = rx.id;
+    (m as { rxId?: string; phId?: string }).phId = ph.id;
+  }
+
+  let w = 70.1;
+  let drankPrev = 0;
+  for (let d = 75; d >= 0; d--) {
+    const after = d < changeDay;
+    const drinks = r() < 0.5 ? Math.round((1 + r() * 6) * 10) / 10 : 0;
+    const salty = r() < 0.6;
+    w += (r() - 0.5) * 0.45 + (salty ? 0.06 : -0.06);
+    w = Math.max(68.6, Math.min(71.3, w));
+    if (d === 2) w += 1.2;
+    inp.weight.push({ id: id(), weight: Math.round(w * 100) / 100, timestamp: at(d, 9, 5), ...meta });
+
+    const hr = Math.round((after ? 68 : 78) + (drankPrev >= 3 ? 8 : 0) + (r() - 0.5) * 10);
+    const sys = Math.round((after ? 110 : 121) + (r() - 0.5) * 18 + (d < 7 ? 7 : 0));
+    inp.bp.push({ id: id(), systolic: sys, diastolic: Math.round(sys * 0.63 + (r() - 0.5) * 6), heartRate: hr, position: "sitting", arm: "left", timestamp: at(d, 8 + Math.round(r()), 40), ...meta });
+
+    const drinksN = 7 + Math.round(r() * 5);
+    for (let k = 0; k < drinksN; k++) {
+      const h = Math.min(23, 8 + Math.round((k / drinksN) * 15 + r()));
+      inp.intake.push({ id: id(), type: "water", amount: 120 + Math.round(r() * 230), timestamp: at(d, h, Math.round(r() * 59)), source: "manual", ...meta });
+    }
+    const foods = ["bread", "cheese", "soup", "ham", "crisps", "pizza"];
+    for (let k = 0; k < 3; k++) {
+      const f = foods[Math.floor(r() * foods.length)]!;
+      inp.intake.push({ id: id(), type: "salt", amount: Math.round((salty ? 850 : 450) + r() * 350), timestamp: at(d, [13, 17, 21][k]!, 15), source: `food:${f}`, ...meta });
+    }
+    inp.substance.push({ id: id(), type: "caffeine", amountMg: 150 + Math.round(r() * 250), description: "coffee", source: "standalone", timestamp: at(d, 10, 30), ...meta });
+    if (drinks) inp.substance.push({ id: id(), type: "alcohol", amountStandardDrinks: drinks, description: "wine", source: "standalone", timestamp: at(d, 21, 0), ...meta });
+
+    const ur = 4 + Math.round(r() * 2);
+    for (let k = 0; k < ur; k++) {
+      const night = k === 0 && r() < (drinks >= 3 ? 0.7 : 0.25);
+      inp.urination.push({ id: id(), amountEstimate: "medium", timestamp: at(d, night ? 3 : 9 + k * 3), ...meta });
+    }
+    if (r() < 0.7) inp.defecation.push({ id: id(), amountEstimate: "medium", timestamp: at(d, 10), ...meta });
+
+    if (d <= 45 && d > 0) {
+      for (const m of meds) {
+        for (const time of m.times) {
+          const [hh] = time.split(":").map(Number);
+          const late = Math.round(r() * (hh! >= 20 ? 150 : 90) - 15);
+          const skipped = r() < 0.03;
+          inp.doseLogs.push({
+            id: id(), prescriptionId: (m as { rxId?: string }).rxId!, medicineName: m.name, phaseId: (m as { phId?: string }).phId!,
+            scheduledDate: dateKey(at(d, 12)), scheduledTime: time, status: skipped ? "skipped" : "taken", kind: "scheduled",
+            ...(skipped ? {} : { actionTimestamp: at(d, hh!, 0) + late * 60_000 }), ...meta,
+          });
+        }
+      }
+    }
+    if (d % 6 === 2) inp.journal.push({ id: id(), timestamp: at(d, 9, 50), timePrecision: "exact", words: "Dizzy when I stood up after breakfast", finding: "Dizziness", kind: "symptom", places: [], severity: 3, ...meta });
+    if (d === 9 || d === 23) inp.journal.push({ id: id(), timestamp: at(d, 23, 10), timePrecision: "exact", words: "Short of breath lying flat", finding: "Breathlessness", kind: "symptom", places: [], severity: 4, ...meta });
+    drankPrev = drinks;
+  }
+  return inp;
+}
+
+function readHash() {
+  const h = window.location.hash.replace("#", "").toUpperCase();
+  return VARIANTS.some((v) => v.key === h) ? h : "A";
+}
+
+function App() {
+  const data = useMemo(() => runEngine(exampleInput()), []);
+  const [variant, setVariant] = useState(readHash);
+  useEffect(() => {
+    const on = () => setVariant(readHash());
+    window.addEventListener("hashchange", on);
+    return () => window.removeEventListener("hashchange", on);
+  }, []);
+  const choose = (k: string) => {
+    setVariant(k);
+    try {
+      history.replaceState(null, "", `#${k}`);
+    } catch {
+      // the frame may refuse; the variant still switches
+    }
+    window.scrollTo({ top: 0 });
+  };
+
+  return (
+    <>
+      <header className="pt-head">
+        <div>
+          <h1>Metrics insights</h1>
+          <p>Three prototype layouts, all running the same insights engine on example data.</p>
+        </div>
+        <nav aria-label="Variant" className="pt-tabs">
+          {VARIANTS.map((v) => (
+            <button key={v.key} type="button" aria-pressed={variant === v.key} onClick={() => choose(v.key)}>
+              <b>{v.key}</b> {v.name}
+            </button>
+          ))}
+        </nav>
+      </header>
+      <main className="pt-win">
+        <div className="pt-bar">Metrics · Summary</div>
+        {variant === "B" ? <VariantTimeline data={data} /> : variant === "C" ? <VariantReport data={data} printable={false} /> : <VariantChanges data={data} />}
+      </main>
+      <PrototypeSwitcher variants={VARIANTS} current={variant} onChange={choose} />
+    </>
+  );
+}
+
+createRoot(document.getElementById("root")!).render(<App />);

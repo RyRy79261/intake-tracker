@@ -44,6 +44,8 @@ export function ConfidenceChip({ c }: { c: Confidence }) {
         color: s.fg,
         border: `1px solid ${c === "too-little-data" ? col("line") : "transparent"}`,
         whiteSpace: "nowrap",
+        alignSelf: "flex-start",
+        flex: "none",
       }}
     >
       {s.label}

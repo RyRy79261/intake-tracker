@@ -21,3 +21,10 @@ Open the Metrics window (`/analytics?tab=summary&variant=A`) and use ← / → o
   (data inventory) used real logged data and is deliberately not committed.
 
 Not validated: the agents' guideline citations marked [K] came from memory, not a fetched source.
+
+## Hosted build
+
+`apps/web/src/components/analytics/insights-prototype/standalone.tsx` renders the same
+engine and variants on generated example data. Bundle it into one HTML file with
+esbuild (`--bundle --format=iife --jsx=automatic --tsconfig=apps/web/tsconfig.json`)
+to share it without running the app.
