@@ -95,9 +95,9 @@ export function Spark({
   );
 }
 
-export function Section({ title, color, children, aside }: { title: ReactNode; color?: string; children: ReactNode; aside?: ReactNode }) {
+export function Section({ title, color, children, aside, id }: { title: ReactNode; color?: string; children: ReactNode; aside?: ReactNode; id?: string }) {
   return (
-    <section className="wm-card" style={{ "--c": color ?? col("line") } as CSSProperties}>
+    <section id={id} className="wm-card" style={{ "--c": color ?? col("line"), scrollMarginTop: 96 } as CSSProperties}>
       <h3 className="wm-ct" style={{ justifyContent: "space-between" }}>
         <span>{title}</span>
         {aside}

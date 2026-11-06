@@ -12,8 +12,6 @@
 import type { ReactNode } from "react";
 import { RecordsTab } from "@/components/analytics/records-tab";
 import { ExportControls } from "@/components/analytics/export-controls";
-import { AiInsightsCard } from "@/components/analytics/ai-insights-card";
-import { NutrientAnalysisCard } from "@/components/analytics/nutrient-analysis-card";
 import type { FilterType } from "@/lib/history-types";
 import { PrototypeSwitcher, usePrototypeVariant } from "@/components/prototype/prototype-switcher";
 import { usePrototypeInsights } from "@/hooks/use-insights-prototype";
@@ -43,8 +41,6 @@ export function MetricsWindowPrototype({
           useInsights={usePrototypeInsights}
           records={(range) => <RecordsTab range={range} filter={recordsFilter} onFilterChange={onRecordsFilterChange} />}
           exportSlot={(range) => <ExportControls range={range} />}
-          aiInsights={<AiInsightsCard />}
-          nutrientAnalysis={<NutrientAnalysisCard />}
         />
       )}
       <PrototypeSwitcher variants={VARIANTS} current={variant} onChange={setVariant} />

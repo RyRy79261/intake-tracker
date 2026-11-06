@@ -12,6 +12,7 @@ import type { ChangeEvent, Effect, Insights } from "@/components/analytics/insig
 import { DayChart, SubHead, Table } from "@/components/analytics/insights-prototype/charts";
 import { ConfidenceChip, RangeBar, Section, col, fmtNum, muted, pct, shortDate, signed } from "@/components/analytics/insights-prototype/ui";
 import { Clock, Stat, grid3 } from "@/components/analytics/insights-prototype/variant-report";
+import { ChapterNotes, FoodAnalysis } from "@/components/analytics/insights-prototype/ai-review";
 
 const when = (ts: number) => new Date(ts).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 
@@ -42,7 +43,8 @@ export function VitalsChapter({ data: d }: { data: Insights }) {
   const days = d.inPeriod;
   return (
     <>
-      <Section title="Blood pressure and heart rate" color={col("bp")}>
+      <ChapterNotes chapter="vitals" />
+      <Section id="sec-bp" title="Blood pressure and heart rate" color={col("bp")}>
         <div style={grid3}>
           <Stat label="Home average, last 7 days" value={`${fmtNum(bp.sys)}/${fmtNum(bp.dia)}`} unit="mmHg" sub={`${bp.amN} morning · ${bp.pmN} evening readings`} />
           <Stat label="Heart rate" value={fmtNum(bp.hr)} unit="bpm" sub={`most readings ${fmtNum(bp.hrP10)}–${fmtNum(bp.hrP90)}`} />
@@ -90,7 +92,7 @@ export function VitalsChapter({ data: d }: { data: Insights }) {
         ))}
       </Section>
 
-      <Section title="Weight" color={col("weight")}>
+      <Section id="sec-weight" title="Weight" color={col("weight")}>
         <div style={grid3}>
           <Stat label="Last 7 days (median)" value={fmtNum(weight.m7, 1)} unit="kg" />
           <Stat label="vs 4 weeks before" value={signed(weight.m7 - weight.prev, 1)} unit="kg" />
@@ -133,7 +135,8 @@ export function FluidChapter({ data: d }: { data: Insights }) {
   const days = d.inPeriod;
   return (
     <>
-      <Section title="Fluid" color={col("water")}>
+      <ChapterNotes chapter="fluid" />
+      <Section id="sec-fluid" title="Fluid" color={col("water")}>
         <div style={grid3}>
           <Stat label="Days within limit" value={pct(water.p)} sub={`${water.within}/${water.n} logged days · limit ${fmtNum(d.limits.water)} ml`} />
           <Stat label="Typical day" value={fmtNum(water.median)} unit="ml" sub={`most days ${fmtNum(water.p10)}–${fmtNum(water.p90)}`} />
@@ -144,7 +147,7 @@ export function FluidChapter({ data: d }: { data: Insights }) {
         <Clock rows={[{ label: "Fluid", v: d.fluidClock, c: col("water") }]} />
       </Section>
 
-      <Section title="Alcohol and caffeine" color={col("alcohol")}>
+      <Section id="sec-alcohol" title="Alcohol and caffeine" color={col("alcohol")}>
         <div style={grid3}>
           <Stat label="Drinking days" value={`${alcohol.drinkDays}/${alcohol.n}`} />
           <Stat label="Per week" value={fmtNum(alcohol.perWeek, 1)} unit="std drinks" sub={`${alcohol.heavyDays} days with 5+ · most ${fmtNum(alcohol.maxDay, 1)}`} />
@@ -156,7 +159,7 @@ export function FluidChapter({ data: d }: { data: Insights }) {
         ))}
       </Section>
 
-      <Section title="Urination and bowels" color={col("water")}>
+      <Section id="sec-urine" title="Urination and bowels" color={col("water")}>
         <div style={grid3}>
           <Stat label="Urinations, typical day" value={fmtNum(urine.perDay)} sub={`${urine.n} days logged`} />
           <Stat label="At night (00–06)" value={fmtNum(urine.nightPerNight)} unit="/night" sub={`${urine.nightsWith2} nights with 2+`} />
@@ -179,7 +182,8 @@ export function FoodChapter({ data: d, nutrientAnalysis }: { data: Insights; nut
   const days = d.inPeriod;
   return (
     <>
-      <Section title="Meals" color={col("sodium")}>
+      <ChapterNotes chapter="food" />
+      <Section id="sec-meals" title="Meals" color={col("sodium")}>
         <div style={grid3}>
           <Stat label="Meals, typical day" value={fmtNum(food.mealsPerDay)} sub={`${food.daysLogged} days with food logged`} />
           <Stat label="First and last meal" value={`${hhmm(food.firstMeal)}–${hhmm(food.lastMeal)}`} sub="typical times" />
@@ -194,7 +198,7 @@ export function FoodChapter({ data: d, nutrientAnalysis }: { data: Insights; nut
         )}
       </Section>
 
-      <Section title="Sodium" color={col("sodium")}>
+      <Section id="sec-sodium" title="Sodium" color={col("sodium")}>
         <div style={grid3}>
           <Stat label="Days within limit" value={pct(sodium.p)} sub={`${sodium.within}/${sodium.n} · limit ${fmtNum(d.limits.sodium)} mg`} />
           <Stat label="Typical day" value={fmtNum(sodium.median)} unit="mg" sub={`most days ${fmtNum(sodium.p10)}–${fmtNum(sodium.p90)}`} />
@@ -211,7 +215,7 @@ export function FoodChapter({ data: d, nutrientAnalysis }: { data: Insights; nut
         )}
       </Section>
 
-      <Section title="Sugar and potassium" color={col("sodium")}>
+      <Section id="sec-sugar" title="Sugar and potassium" color={col("sodium")}>
         <div style={grid3}>
           <Stat label="Sugar, typical day" value={fmtNum(food.sugar.median)} unit="g" sub={food.sugar.limit ? `${food.sugar.within}/${food.sugar.n} days within ${fmtNum(food.sugar.limit)} g` : `${food.sugar.n} days logged`} />
           <Stat label="Potassium, typical day" value={fmtNum(food.potassium.median)} unit="mg" sub={`${food.potassium.n} days logged`} />
@@ -224,7 +228,7 @@ export function FoodChapter({ data: d, nutrientAnalysis }: { data: Insights; nut
         )}
       </Section>
 
-      {nutrientAnalysis}
+      {nutrientAnalysis ?? <FoodAnalysis data={d} />}
     </>
   );
 }
@@ -273,7 +277,8 @@ export function MedsChapter({ data: d }: { data: Insights }) {
   const a = d.adherence;
   return (
     <>
-      <Section title="Taking your medicines" color={col("meds")}>
+      <ChapterNotes chapter="meds" />
+      <Section id="sec-adherence" title="Taking your medicines" color={col("meds")}>
         <div style={grid3}>
           <Stat label="Doses taken" value={pct(a.taken / a.due)} sub={`${a.taken}/${a.due} scheduled`} />
           <Stat label="Days fully covered" value={pct(a.fullDays / a.days)} sub={`${a.fullDays}/${a.days} days`} />
@@ -291,7 +296,7 @@ export function MedsChapter({ data: d }: { data: Insights }) {
           </>
         )}
       </Section>
-      <Section title="Did each change do anything?" color={col("meds")}>
+      <Section id="sec-changes" title="Did each change do anything?" color={col("meds")}>
         {d.changes.length === 0 ? <p style={muted}>No medicine changes recorded.</p> : d.changes.slice(0, 8).map((c, i) => <ChangeCard key={i} c={c} />)}
       </Section>
     </>

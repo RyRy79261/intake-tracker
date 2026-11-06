@@ -11,9 +11,8 @@ import type { EngineInput } from "@/components/analytics/insights-prototype/engi
 import { runEngine } from "@/components/analytics/insights-prototype/engine";
 import { METRICS_VARIANTS, MetricsPrototype } from "@/components/analytics/insights-prototype/metrics-prototype";
 import type { TimeRange } from "@intake/types/analytics";
-import { Download, FileText, Sparkles, Apple } from "lucide-react";
+import { Download, FileText } from "lucide-react";
 import { Button } from "@intake/ui/button";
-import type { Insights } from "@/components/analytics/insights-prototype/engine";
 import { PrototypeSwitcher } from "@/components/prototype/prototype-switcher";
 
 
@@ -182,34 +181,6 @@ function ExampleExport() {
   );
 }
 
-function ExampleAi({ title, button, icon, text }: { title: string; button: string; icon: React.ReactNode; text: () => string }) {
-  const [out, setOut] = useState<string | null>(null);
-  return (
-    <section className="wm-card" style={{ ["--c" as string]: "hsl(var(--ai))" }} aria-label={title}>
-      <h3 className="wm-ct">
-        {icon}
-        {title}
-      </h3>
-      {out ? (
-        <>
-          <p style={{ fontSize: 13, lineHeight: 1.5 }}>{out}</p>
-          <p className="wm-p" style={{ marginTop: 6 }}>Example output. In the app Claude writes this from the report&apos;s numbers, never your raw entries.</p>
-        </>
-      ) : (
-        <Button variant="outline" onClick={() => setOut(text())}>
-          {button}
-        </Button>
-      )}
-    </section>
-  );
-}
-
-const aiSummary = (d: Insights) =>
-  `Over ${d.period} days your home blood pressure averaged ${Math.round(d.bp.sys)}/${Math.round(d.bp.dia)}, all readings below the 135/85 home threshold, but only morning readings were taken. ` +
-  `Fluid stayed within your limit on ${Math.round(d.water.p * 100)}% of days and sodium on ${Math.round(d.sodium.p * 100)}%, with most sodium from ${d.sodiumSources[0]?.label ?? "food"}. ` +
-  `${d.alcohol.drinkDays} of ${d.alcohol.n} days included alcohol, and after 3+ drinks your next-morning heart rate tended to be higher. ` +
-  `Doses were taken ${Math.round((d.adherence.taken / d.adherence.due) * 100)}% of the time, typically ${Math.round(d.adherence.medianDelay)} minutes late. Dizziness was logged ${d.symptoms.counts.find((c) => /dizz/i.test(c.finding))?.n ?? 0} times, mostly within 3 hours of a dose.`;
-
 function App() {
   const [variant, setVariant] = useState(readHash);
   useEffect(() => {
@@ -233,15 +204,6 @@ function App() {
         useInsights={useExampleInsights}
         records={(range) => <ExampleRecords range={range} />}
         exportSlot={() => <ExampleExport />}
-        aiInsights={<ExampleAi title="AI Insights" button="Summarise this report" icon={<Sparkles />} text={() => aiSummary(runEngine(INPUT, 30))} />}
-        nutrientAnalysis={
-          <ExampleAi
-            title="Nutrient analysis"
-            button="Analyse the last 30 days of food"
-            icon={<Apple />}
-            text={() => "Your logged meals lean on bread, cheese and processed meats, which carry most of your sodium. Swapping the daily ham and soup for unsalted alternatives would bring most days under your sodium limit. Fibre and potassium-rich vegetables are rare in the log."}
-          />
-        }
       />
       <PrototypeSwitcher variants={METRICS_VARIANTS} current={variant} onChange={choose} />
     </>

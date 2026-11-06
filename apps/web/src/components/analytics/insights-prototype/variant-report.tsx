@@ -7,6 +7,7 @@
  */
 
 import { Printer } from "lucide-react";
+import { useAi } from "@/components/analytics/insights-prototype/ai-review";
 import type { Insights } from "@/components/analytics/insights-prototype/engine";
 import { EngineState, RangeBar, Section, col, fmtNum, mono, muted, pct, shortDate, signed } from "@/components/analytics/insights-prototype/ui";
 
@@ -16,7 +17,8 @@ export function VariantReport({ data, printable = true }: { data: Insights; prin
   const { bp, weight, water, sodium, adherence: adh, alcohol } = data;
   const end = data.days[data.days.length - 2]!.key;
   const start = data.days[Math.max(0, data.days.length - 1 - data.period)]!.key;
-  const questions = buildQuestions(data);
+  const ai = useAi();
+  const questions = [...(ai?.addedQuestions ?? []), ...buildQuestions(data)];
 
   return (
     <div className="wm-stack" style={{ paddingBottom: 120 }}>
