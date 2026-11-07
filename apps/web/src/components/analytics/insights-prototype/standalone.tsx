@@ -10,7 +10,6 @@ import { createRoot } from "react-dom/client";
 import type { EngineInput } from "@/components/analytics/insights-prototype/engine";
 import { runEngine } from "@/components/analytics/insights-prototype/engine";
 import { METRICS_VARIANTS, MetricsPrototype } from "@/components/analytics/insights-prototype/metrics-prototype";
-import type { TimeRange } from "@intake/types/analytics";
 import { Download, FileText } from "lucide-react";
 import { Button } from "@intake/ui/button";
 import { PrototypeSwitcher } from "@/components/prototype/prototype-switcher";
@@ -129,36 +128,12 @@ function exampleInput(): EngineInput {
 
 function readHash() {
   const h = window.location.hash.replace("#", "").toUpperCase();
-  return METRICS_VARIANTS.some((v) => v.key === h) ? h : "A";
+  return METRICS_VARIANTS.some((v) => v.key === h) ? h : "1";
 }
 
 const INPUT = exampleInput();
 function useExampleInsights(period: number) {
   return useMemo(() => runEngine(INPUT, period), [period]);
-}
-
-/** Stand-in for the real Records tab (which reads the device database). */
-function ExampleRecords({ range }: { range: TimeRange }) {
-  const rows = [
-    ...INPUT.bp.map((r) => ({ ts: r.timestamp, what: "Blood pressure", v: `${r.systolic}/${r.diastolic} · HR ${r.heartRate ?? "—"}` })),
-    ...INPUT.weight.map((r) => ({ ts: r.timestamp, what: "Weight", v: `${r.weight} kg` })),
-    ...INPUT.journal.map((r) => ({ ts: r.timestamp, what: "Journal", v: r.finding })),
-  ]
-    .filter((r) => r.ts >= range.start && r.ts <= range.end)
-    .sort((a, b) => b.ts - a.ts)
-    .slice(0, 60);
-  return (
-    <div className="wm-card">
-      <p className="wm-p" style={{ marginBottom: 8 }}>Records tab stays as it is today (example rows shown).</p>
-      {rows.map((r, i) => (
-        <div key={i} style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: 13, padding: "6px 0", borderTop: "1px solid hsl(var(--line))" }}>
-          <span>{r.what}</span>
-          <span style={{ fontFamily: "var(--font-mono)" }}>{r.v}</span>
-          <span className="wm-p">{new Date(r.ts).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</span>
-        </div>
-      ))}
-    </div>
-  );
 }
 
 // Stand-ins for parts that need the app (downloads, the AI routes).
@@ -202,7 +177,6 @@ function App() {
         key={variant}
         variant={variant}
         useInsights={useExampleInsights}
-        records={(range) => <ExampleRecords range={range} />}
         exportSlot={() => <ExampleExport />}
       />
       <PrototypeSwitcher variants={METRICS_VARIANTS} current={variant} onChange={choose} />

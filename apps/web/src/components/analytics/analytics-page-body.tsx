@@ -57,8 +57,7 @@ export function AnalyticsPageBody(props: AnalyticsPageBodyProps) {
     return (
       <MetricsWindowPrototype
         current={<CurrentAnalyticsPageBody {...props} />}
-        recordsFilter={props.recordsFilter}
-        onRecordsFilterChange={props.onRecordsFilterChange}
+        activeTab={props.activeTab}
       />
     );
   }

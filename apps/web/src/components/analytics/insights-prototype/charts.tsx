@@ -107,7 +107,7 @@ export function Table({ head, rows, align }: { head: string[]; rows: (string | R
         <thead>
           <tr>
             {head.map((h, i) => (
-              <th key={h} style={{ ...muted, fontSize: 11, fontWeight: 500, textAlign: (align?.[i] ?? (i ? "r" : "l")) === "r" ? "right" : "left", padding: "0 0 4px", whiteSpace: "nowrap" }}>
+              <th key={h} style={{ ...muted, fontSize: 11, fontWeight: 500, textAlign: (align?.[i] ?? (i ? "r" : "l")) === "r" ? "right" : "left", padding: "0 0 4px", paddingLeft: i ? 8 : 0, whiteSpace: "nowrap" }}>
                 {h}
               </th>
             ))}

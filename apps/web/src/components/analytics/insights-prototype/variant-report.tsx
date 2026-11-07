@@ -7,7 +7,7 @@
  */
 
 import { Printer } from "lucide-react";
-import { useAi } from "@/components/analytics/insights-prototype/ai-review";
+import { Annot, FlagDot, References, SuggestedQuestions, useAi } from "@/components/analytics/insights-prototype/ai-review";
 import type { Insights } from "@/components/analytics/insights-prototype/engine";
 import { EngineState, RangeBar, Section, col, fmtNum, mono, muted, pct, shortDate, signed } from "@/components/analytics/insights-prototype/ui";
 
@@ -46,7 +46,8 @@ export function VariantReport({ data, printable = true }: { data: Insights; prin
         </Section>
       )}
 
-      <Section title="1 · Home blood pressure" color={col("bp")}>
+      <Section title="1 · Home blood pressure" color={col("bp")} aside={<FlagDot at="report-bp" />}>
+        <Annot at="report-bp" />
         <div style={grid3}>
           <Stat label="Last 7 days, average" value={`${fmtNum(bp.sys)}/${fmtNum(bp.dia)}`} unit="mmHg" sub={`${bp.n} readings · ${bp.amN} AM · ${bp.pmN} PM`} />
           <Stat label="Heart rate" value={fmtNum(bp.hr)} unit="bpm" sub="same readings" />
@@ -72,7 +73,8 @@ export function VariantReport({ data, printable = true }: { data: Insights; prin
         </p>
       </Section>
 
-      <Section title="2 · Weight" color={col("weight")}>
+      <Section title="2 · Weight" color={col("weight")} aside={<FlagDot at="report-weight" />}>
+        <Annot at="report-weight" />
         <div style={grid3}>
           <Stat label="Last 7 days (median)" value={fmtNum(weight.m7, 1)} unit="kg" />
           <Stat label="vs 4 weeks before" value={signed(weight.m7 - weight.prev, 1)} unit="kg" />
@@ -85,7 +87,8 @@ export function VariantReport({ data, printable = true }: { data: Insights; prin
         </div>
       </Section>
 
-      <Section title="3 · Fluid and sodium" color={col("water")}>
+      <Section title="3 · Fluid and sodium" color={col("water")} aside={<FlagDot at="report-fluid" />}>
+        <Annot at="report-fluid" />
         <div style={grid3}>
           <Stat label="Days within fluid limit" value={pct(water.p)} sub={`${water.within}/${water.n} logged days · limit ${fmtNum(data.limits.water)} ml`} />
           <Stat label="Fluid, typical day" value={fmtNum(water.median)} unit="ml" sub={`most days ${fmtNum(water.p10)}–${fmtNum(water.p90)}`} />
@@ -114,7 +117,8 @@ export function VariantReport({ data, printable = true }: { data: Insights; prin
         )}
       </Section>
 
-      <Section title="4 · Alcohol" color={col("alcohol")}>
+      <Section title="4 · Alcohol" color={col("alcohol")} aside={<FlagDot at="report-alcohol" />}>
+        <Annot at="report-alcohol" />
         <div style={grid3}>
           <Stat label={`Drinking days, ${data.period} days`} value={`${alcohol.drinkDays}/${alcohol.n}`} />
           <Stat label="Per week" value={fmtNum(alcohol.perWeek, 1)} unit="std drinks" />
@@ -129,7 +133,8 @@ export function VariantReport({ data, printable = true }: { data: Insights; prin
           ))}
       </Section>
 
-      <Section title="5 · Medicines" color={col("meds")}>
+      <Section title="5 · Medicines" color={col("meds")} aside={<FlagDot at="report-meds" />}>
+        <Annot at="report-meds" />
         <div style={grid3}>
           <Stat label="Doses taken" value={pct(adh.taken / adh.due)} sub={`${adh.taken}/${adh.due} scheduled`} />
           <Stat label="Days fully covered" value={pct(adh.fullDays / adh.days)} sub={`${adh.fullDays}/${adh.days} days`} />
@@ -169,7 +174,8 @@ export function VariantReport({ data, printable = true }: { data: Insights; prin
         )}
       </Section>
 
-      <Section title="6 · Symptoms and what came before" color={col("journal")}>
+      <Section title="6 · Symptoms and what came before" color={col("journal")} aside={<FlagDot at="report-symptoms" />}>
+        <Annot at="report-symptoms" />
         {data.symptoms.entries.length === 0 && <p style={muted}>No symptoms or signs in the journal in this period.</p>}
         {data.symptoms.counts.length > 0 && (
           <table style={{ width: "100%", fontSize: 12, borderCollapse: "collapse", marginBottom: 8 }}>
@@ -214,16 +220,19 @@ export function VariantReport({ data, printable = true }: { data: Insights; prin
         </ul>
       </Section>
 
-      {questions.length > 0 && (
+      {(questions.length > 0 || !!ai?.review) && (
         <Section title="Things to ask about" color={col("ai")}>
           <ul style={{ margin: 0, paddingLeft: 16, fontSize: 13, display: "grid", gap: 4 }}>
             {questions.map((q) => (
               <li key={q}>{q}</li>
             ))}
           </ul>
+          <SuggestedQuestions />
           <p style={{ ...muted, marginTop: 6 }}>Generated from fixed rules on your numbers, not medical advice.</p>
         </Section>
       )}
+
+      <References />
 
       <EngineState counts={data.counts} days={data.days.length} />
     </div>

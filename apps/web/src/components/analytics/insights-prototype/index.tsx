@@ -10,9 +10,7 @@
  */
 
 import type { ReactNode } from "react";
-import { RecordsTab } from "@/components/analytics/records-tab";
 import { ExportControls } from "@/components/analytics/export-controls";
-import type { FilterType } from "@/lib/history-types";
 import { PrototypeSwitcher, usePrototypeVariant } from "@/components/prototype/prototype-switcher";
 import { usePrototypeInsights } from "@/hooks/use-insights-prototype";
 import { METRICS_VARIANTS, MetricsPrototype } from "@/components/analytics/insights-prototype/metrics-prototype";
@@ -22,24 +20,23 @@ const KEYS = VARIANTS.map((v) => v.key);
 
 export function MetricsWindowPrototype({
   current,
-  recordsFilter,
-  onRecordsFilterChange,
+  activeTab,
 }: {
   current: ReactNode;
-  recordsFilter?: FilterType | undefined;
-  onRecordsFilterChange?: ((filter: FilterType) => void) | undefined;
+  /** The window's tab. History opens Metrics on "records", which the
+   *  prototype hands to today's window (Records moves to History in the build). */
+  activeTab: string;
 }) {
-  const [variant, setVariant] = usePrototypeVariant(KEYS, "A");
+  const [variant, setVariant] = usePrototypeVariant(KEYS, "1");
   return (
     <>
-      {variant === "0" ? (
+      {variant === "0" || activeTab === "records" ? (
         current
       ) : (
         <MetricsPrototype
           key={variant}
           variant={variant}
           useInsights={usePrototypeInsights}
-          records={(range) => <RecordsTab range={range} filter={recordsFilter} onFilterChange={onRecordsFilterChange} />}
           exportSlot={(range) => <ExportControls range={range} />}
         />
       )}

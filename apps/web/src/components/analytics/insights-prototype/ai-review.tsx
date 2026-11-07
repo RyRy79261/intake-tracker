@@ -1,47 +1,56 @@
 "use client";
 
 /**
- * PROTOTYPE — throwaway. The AI layer of the Metrics report (variant A).
+ * PROTOTYPE — throwaway. The AI analysis layer of the Metrics report.
  *
- * - <AiReview> on the Report tab: "Claude's review" of the report, Quick or
- *   Deep (web search, cited sources, runs in the background), with an inline
- *   "what Claude sees" panel, structured findings that link to the chapter
- *   section they are about, a diff against the last review, and drafted
- *   appointment questions that can be added to the exported report.
- * - <ChapterNotes> in each chapter: that review's findings, next to the data.
- * - <FoodAnalysis> in the Food tab: hidden sodium per food, swaps, gaps.
+ * One analysis run (Quick, or Deep with web search and cited sources) reads
+ * the report's numbers and returns findings, appointment questions, food
+ * swaps and references. Three ways to show it, compared with `?variant=`:
  *
- * The model calls are STUBBED: the review is assembled from the engine's
- * numbers by fixed templates so the layout can be judged. Sources are the
- * real ones found during the research for this prototype.
+ *   1  Notes      — one slim analyse row; findings sit as one-line notes in
+ *                   the section they are about; questions join the report's
+ *                   questions; sources become References.
+ *   2  Strip      — a row of finding chips per tab; tap one for a sheet.
+ *   3  Line       — one summary line under the tabs, counts on the tabs,
+ *                   dots on flagged sections; everything else in a sheet.
+ *
+ * The model calls are STUBBED: findings come from fixed templates over the
+ * engine's numbers. Sources are the real ones found in this prototype's
+ * research.
  */
 
-import { createContext, useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { BookOpen, Check, ChevronDown, ChevronRight, Eye, Loader2, Plus, Sparkles, Telescope, Zap } from "lucide-react";
-import { Button } from "@intake/ui/button";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { BookOpen, Check, ChevronDown, ChevronRight, Info, Plus, Sparkles, X } from "lucide-react";
+import { Drawer, DrawerContent, DrawerDescription, DrawerTitle } from "@intake/ui/drawer";
+import { Popover, PopoverContent, PopoverTrigger } from "@intake/ui/popover";
 import type { Insights } from "@/components/analytics/insights-prototype/engine";
 import { col, fmtNum, mono, muted, pct, shortDate } from "@/components/analytics/insights-prototype/ui";
 
-// ---------------------------------------------------------------------------
-// Types and shared state
-// ---------------------------------------------------------------------------
-
 export type Chapter = "vitals" | "fluid" | "food" | "meds";
-type Level = "discuss" | "watch" | "good";
-type Mode = "quick" | "deep";
+export type Level = "discuss" | "watch" | "good";
+export type Mode = "quick" | "deep";
+export type Treatment = "notes" | "strip" | "line";
 
-interface Finding {
+export interface Finding {
   id: string;
   level: Level;
   chapter: Chapter;
   title: string;
   detail: string;
   basis: { label: string; tab: Chapter; anchor: string }[];
+  /** Places it is shown: chapter section ids and report section keys. */
+  at?: string[];
   evidence?: string;
   sources?: number[];
 }
 
-interface Review {
+export interface Swap {
+  name: string;
+  swap: string;
+  perDay: number;
+}
+
+export interface Review {
   mode: Mode;
   at: number;
   period: number;
@@ -49,41 +58,146 @@ interface Review {
   findings: Finding[];
   questions: string[];
   sources: { n: number; title: string; url: string }[];
+  swaps: Swap[];
+}
+
+/** Which report section each finding belongs to. */
+const REPORT_AT: Record<string, string> = {
+  "weight-gain": "report-weight",
+  "dizzy-dose": "report-symptoms",
+  "bp-protocol": "report-bp",
+  "bp-range": "report-bp",
+  "alcohol-hr": "report-alcohol",
+  "fluid-limit": "report-fluid",
+  "sodium-limit": "report-fluid",
+  "food-swaps": "report-fluid",
+  adherence: "report-meds",
+  "change-hr": "report-meds",
+};
+
+const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
+const SWAPS: Record<string, { swap: string; perServing: number }> = {
+  ham: { swap: "fresh roast chicken", perServing: 450 },
+  "ham sandwich": { swap: "chicken salad on low-salt bread", perServing: 700 },
+  bread: { swap: "low-salt bread", perServing: 150 },
+  toast: { swap: "low-salt bread", perServing: 150 },
+  cheese: { swap: "fresh mozzarella or ricotta", perServing: 250 },
+  soup: { swap: "home-made, no stock cube", perServing: 700 },
+  crisps: { swap: "unsalted nuts", perServing: 200 },
+  pizza: { swap: "home-made, half the cheese", perServing: 600 },
+  pasta: { swap: "no salt in the water", perServing: 250 },
+};
+
+export function foodSwaps(d: Insights): Swap[] {
+  const days = Math.max(1, d.food.daysLogged);
+  return d.food.topFoods
+    .flatMap((f) => {
+      const s = SWAPS[f.name];
+      return s ? [{ name: f.name, swap: s.swap, perDay: (s.perServing * f.n) / days }] : [];
+    })
+    .sort((a, b) => b.perDay - a.perDay)
+    .slice(0, 4);
+}
+
+// ---------------------------------------------------------------------------
+// Shared state: the current analysis, the run, the sheet
+// ---------------------------------------------------------------------------
+
+interface Running {
+  mode: Mode;
+  step: number;
+  steps: string[];
 }
 
 interface AiState {
+  treatment: Treatment;
   review: Review | null;
   previous: Review | null;
-  setReview: (r: Review) => void;
+  running: Running | null;
+  mode: Mode;
+  setMode: (m: Mode) => void;
+  run: () => void;
+  share: { profile: boolean; meds: boolean; compare: boolean };
+  setShare: (s: AiState["share"]) => void;
   addedQuestions: string[];
   toggleQuestion: (q: string) => void;
+  sheet: { open: boolean; focus?: string };
+  openSheet: (focus?: string) => void;
+  closeSheet: () => void;
   jump: (tab: string, anchor?: string) => void;
+  data: Insights;
 }
 
 const Ctx = createContext<AiState | null>(null);
+export const useAi = () => useContext(Ctx);
 
-export function AiProvider({ jump, children }: { jump: (tab: string, anchor?: string) => void; children: ReactNode }) {
-  const [review, setReviewState] = useState<Review | null>(null);
+const QUICK_STEPS = ["Reading the report", "Writing findings"];
+const DEEP_STEPS = ["Reading the report", "Searching guidelines", "Checking your medicines", "Comparing with last time", "Writing findings with sources"];
+
+export function AiProvider({ data, treatment, jump, children }: { data: Insights; treatment: Treatment; jump: (tab: string, anchor?: string) => void; children: ReactNode }) {
+  const [review, setReview] = useState<Review | null>(null);
   const [previous, setPrevious] = useState<Review | null>(EARLIER_REVIEW);
+  const [running, setRunning] = useState<Running | null>(null);
+  const [mode, setMode] = useState<Mode>("quick");
+  const [share, setShare] = useState({ profile: true, meds: true, compare: true });
   const [addedQuestions, setAdded] = useState<string[]>([]);
+  const [sheet, setSheet] = useState<{ open: boolean; focus?: string }>({ open: false });
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reviewRef = useRef<Review | null>(null);
+  const dataRef = useRef(data);
+  dataRef.current = data;
+  useEffect(() => () => void (timer.current && clearTimeout(timer.current)), []);
+
+  const run = useCallback(() => {
+    const steps = mode === "deep" ? DEEP_STEPS : QUICK_STEPS;
+    const wait = mode === "deep" ? 1100 : 650;
+    let i = 0;
+    setRunning({ mode, step: 0, steps });
+    const tick = () => {
+      i++;
+      if (i < steps.length) {
+        setRunning({ mode, step: i, steps });
+        timer.current = setTimeout(tick, wait);
+      } else {
+        setRunning(null);
+        if (reviewRef.current) setPrevious(reviewRef.current);
+        const next = buildReview(dataRef.current, mode);
+        reviewRef.current = next;
+        setReview(next);
+      }
+    };
+    timer.current = setTimeout(tick, wait);
+  }, [mode]);
+
   const value = useMemo<AiState>(
     () => ({
+      treatment,
       review,
       previous,
-      setReview: (r) => {
-        if (review) setPrevious(review);
-        setReviewState(r);
-      },
+      running,
+      mode,
+      setMode,
+      run,
+      share,
+      setShare,
       addedQuestions,
       toggleQuestion: (q) => setAdded((xs) => (xs.includes(q) ? xs.filter((x) => x !== q) : [...xs, q])),
+      sheet,
+      openSheet: (focus) => setSheet(focus ? { open: true, focus } : { open: true }),
+      closeSheet: () => setSheet({ open: false }),
       jump,
+      data,
     }),
-    [review, previous, addedQuestions, jump],
+    [treatment, review, previous, running, mode, run, share, addedQuestions, sheet, jump, data],
   );
-  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
+  return (
+    <Ctx.Provider value={value}>
+      {children}
+      {treatment !== "notes" && <AnalysisSheet />}
+    </Ctx.Provider>
+  );
 }
-
-export const useAi = () => useContext(Ctx);
 
 // ---------------------------------------------------------------------------
 // Sources (real, from the research behind this prototype)
@@ -105,7 +219,7 @@ type SourceKey = keyof typeof SOURCES;
 // The stub "model": fixed templates over the engine's numbers
 // ---------------------------------------------------------------------------
 
-function buildReview(d: Insights, mode: Mode): Review {
+export function buildReview(d: Insights, mode: Mode): Review {
   const used: SourceKey[] = [];
   const cite = (...keys: SourceKey[]) =>
     mode === "deep"
@@ -115,7 +229,7 @@ function buildReview(d: Insights, mode: Mode): Review {
         })
       : undefined;
   const f: Finding[] = [];
-  const add = (x: Omit<Finding, "sources" | "evidence"> & { evidence?: string; cites?: SourceKey[] }) => {
+  const add = (x: Omit<Finding, "sources" | "evidence" | "at"> & { evidence?: string | undefined; cites?: SourceKey[] }) => {
     const { cites, evidence, ...rest } = x;
     const s = cites ? cite(...cites) : undefined;
     f.push({ ...rest, ...(mode === "deep" && evidence ? { evidence } : {}), ...(s ? { sources: s } : {}) });
@@ -139,7 +253,7 @@ function buildReview(d: Insights, mode: Mode): Review {
       title: `Dizziness follows your doses`,
       detail: `${dizzy.finding} was logged ${dizzy.n} times; ${dizzy.text}. Morning systolic was ${fmtNum(d.bp.sysP10)}–${fmtNum(d.bp.sysP90)} on most days, so the drop happens after the reading, not at it.`,
       basis: [
-        { label: "Symptoms in the report", tab: "vitals", anchor: "sec-bp" },
+        { label: "Morning blood pressure", tab: "vitals", anchor: "sec-bp" },
         { label: "Dose timing", tab: "meds", anchor: "sec-adherence" },
       ],
       evidence: "Symptomatic hypotension is a known effect of beta-blockers and ARNIs, especially on standing. Guidelines advise reviewing timing and dose spacing with the prescriber rather than stopping.",
@@ -226,6 +340,19 @@ function buildReview(d: Insights, mode: Mode): Review {
     });
   }
 
+  const swaps = foodSwaps(d);
+  if (swaps.length >= 2) {
+    const saved = swaps[0]!.perDay + swaps[1]!.perDay;
+    add({
+      id: "food-swaps", level: "watch", chapter: "food",
+      title: `Two swaps would cut about ${fmtNum(Math.round(saved / 10) * 10)} mg of sodium a day`,
+      detail: `${cap(swaps[0]!.name)} → ${swaps[0]!.swap}, and ${swaps[1]!.name} → ${swaps[1]!.swap}. That takes a typical day from ${fmtNum(d.sodium.median)} to about ${fmtNum(Math.round((d.sodium.median - saved) / 10) * 10)} mg.`,
+      basis: [{ label: "Most logged foods", tab: "food", anchor: "sec-meals" }],
+      evidence: mode === "deep" ? "Sodium per serving checked against nutrition databases found by web search." : undefined,
+    });
+  }
+
+  for (const x of f) x.at = [...new Set([...x.basis.map((b) => b.anchor), REPORT_AT[x.id] ?? ""].filter(Boolean))];
   const order: Record<Level, number> = { discuss: 0, watch: 1, good: 2 };
   f.sort((x, y) => order[x.level] - order[y.level]);
   const discuss = f.filter((x) => x.level === "discuss");
@@ -249,6 +376,7 @@ function buildReview(d: Insights, mode: Mode): Review {
     findings: f,
     questions,
     sources: used.map((k, i) => ({ n: i + 1, ...SOURCES[k] })),
+    swaps,
   };
 }
 
@@ -260,6 +388,7 @@ const EARLIER_REVIEW: Review = {
   headline: "",
   questions: [],
   sources: [],
+  swaps: [],
   findings: [
     { id: "bp-protocol", level: "watch", chapter: "vitals", title: "Blood pressure is only measured in the morning", detail: "", basis: [] },
     { id: "fluid-limit", level: "discuss", chapter: "fluid", title: "Over the fluid limit most days", detail: "", basis: [] },
@@ -268,82 +397,319 @@ const EARLIER_REVIEW: Review = {
 };
 
 // ---------------------------------------------------------------------------
-// UI bits
+// Visual language: level colours, small helpers
 // ---------------------------------------------------------------------------
 
-const LEVEL: Record<Level, { label: string; c: string }> = {
-  discuss: { label: "Discuss with your care team", c: "bp" },
-  watch: { label: "Keep an eye on", c: "caffeine" },
-  good: { label: "Going well", c: "weight" },
+export const LEVEL: Record<Level, { short: string; long: string; c: string }> = {
+  discuss: { short: "Discuss", long: "Discuss with your care team", c: "bp" },
+  watch: { short: "Watch", long: "Keep an eye on", c: "caffeine" },
+  good: { short: "Going well", long: "Going well", c: "weight" },
 };
 
-const card = (c: string): CSSProperties => ({ "--c": col(c) } as CSSProperties);
 const rel = (ts: number) => {
   const days = Math.round((Date.now() - ts) / 86_400_000);
   return days <= 0 ? "today" : days === 1 ? "yesterday" : `${days} days ago`;
 };
 
-function ModeTile({ active, onClick, icon, title, lines }: { active: boolean; onClick: () => void; icon: ReactNode; title: string; lines: string[] }) {
+const isNew = (ai: AiState, f: Finding) => f.level !== "good" && !!ai.previous && !ai.previous.findings.some((p) => p.id === f.id);
+
+function counts(r: Review) {
+  return {
+    discuss: r.findings.filter((f) => f.level === "discuss").length,
+    watch: r.findings.filter((f) => f.level === "watch").length,
+  };
+}
+
+function Spark({ size = 14 }: { size?: number }) {
+  return <Sparkles size={size} aria-hidden="true" style={{ color: col("ai"), flex: "none" }} />;
+}
+
+function Sup({ ns }: { ns?: number[] | undefined }) {
+  if (!ns?.length) return null;
+  return <sup style={{ color: col("ai"), fontWeight: 600, marginLeft: 2 }}>[{ns.join(",")}]</sup>;
+}
+
+// ---------------------------------------------------------------------------
+// The analyse row: status, Quick/Deep, run, what's sent
+// ---------------------------------------------------------------------------
+
+function Seg() {
+  const ai = useAi()!;
   return (
-    <button
-      type="button"
-      aria-pressed={active}
-      onClick={onClick}
-      style={{
-        flex: "1 1 0",
-        minWidth: 0,
-        textAlign: "left",
-        padding: "10px 10px 10px 12px",
-        border: `1px solid ${active ? col("ai") : col("line")}`,
-        boxShadow: active ? `inset 0 0 0 1px ${col("ai")}` : "none",
-        background: active ? "hsl(var(--ai) / .08)" : col("panel"),
-        cursor: "pointer",
-        color: col("fg"),
-      }}
-    >
-      <div style={{ display: "flex", alignItems: "center", gap: 6, fontWeight: 600, fontSize: 13 }}>
-        {icon}
-        {title}
-      </div>
-      {lines.map((l) => (
-        <div key={l} style={{ ...muted, fontSize: 11, marginTop: 2 }}>
-          {l}
-        </div>
+    <div role="group" aria-label="Depth" style={{ display: "flex", border: `1px solid ${col("line")}`, flex: "none" }}>
+      {(["quick", "deep"] as const).map((m) => (
+        <button
+          key={m}
+          type="button"
+          aria-pressed={ai.mode === m}
+          onClick={() => ai.setMode(m)}
+          title={m === "quick" ? "Seconds. Reads the report's numbers." : "A few minutes. Also checks guidelines and research, and cites sources."}
+          style={{
+            minHeight: 30,
+            padding: "0 6px",
+            border: 0,
+            background: ai.mode === m ? col("fg") : "transparent",
+            color: ai.mode === m ? col("panel") : col("fg"),
+            font: "600 10px/1 var(--font-plex-sans), sans-serif",
+            textTransform: "uppercase",
+            letterSpacing: "0.05em",
+            cursor: "pointer",
+          }}
+        >
+          {m}
+        </button>
       ))}
-    </button>
+    </div>
   );
 }
 
-function Basis({ b }: { b: Finding["basis"][number] }) {
-  const ai = useAi();
+function WhatsSent() {
+  const ai = useAi()!;
+  const d = ai.data;
+  const row = (id: keyof AiState["share"], label: string) => (
+    <label htmlFor={`share-${id}`} style={{ display: "flex", gap: 8, alignItems: "center", minHeight: 32, cursor: "pointer" }}>
+      <input id={`share-${id}`} type="checkbox" checked={ai.share[id]} onChange={(e) => ai.setShare({ ...ai.share, [id]: e.target.checked })} style={{ width: 16, height: 16, accentColor: col("ai") }} />
+      {label}
+    </label>
+  );
   return (
-    <button
-      type="button"
-      onClick={() => ai?.jump(b.tab, b.anchor)}
-      style={{ display: "inline-flex", alignItems: "center", gap: 3, minHeight: 28, padding: "0 8px", border: `1px solid ${col("line")}`, background: col("panel"), color: col("fg"), fontSize: 11, cursor: "pointer" }}
-    >
-      <Eye size={12} /> {b.label}
-    </button>
+    <div style={{ fontSize: 12, lineHeight: 1.45, display: "grid", gap: 4 }}>
+      <div style={{ fontWeight: 600 }}>What the analysis reads</div>
+      <div style={muted}>
+        The numbers in this report ({d.period} days): {d.bp.tirN} blood pressure readings, {d.water.n} days of fluid, {d.sodium.n} of sodium, your {d.food.topFoods.length} most logged foods, {d.adherence.due} scheduled doses and {d.symptoms.entries.length} journal findings. Never your raw entries or notes.
+      </div>
+      {row("profile", "Medical profile (conditions)")}
+      {row("meds", "Medicines and doses")}
+      {row("compare", "Last analysis, to compare")}
+      {ai.mode === "deep" && <div style={muted}>Deep also searches guideline and research sites. Your data never goes into a search.</div>}
+    </div>
   );
 }
 
-function FindingCard({ f, compact }: { f: Finding; compact?: boolean }) {
-  const lv = LEVEL[f.level];
+function statusLine(ai: AiState): ReactNode {
+  if (ai.running) return `${ai.running.steps[ai.running.step]}…`;
+  if (!ai.review) return "Analyse this report for things to raise, watch and keep doing";
+  const c = counts(ai.review);
+  const fresh = ai.review.findings.filter((f) => isNew(ai, f)).length;
   return (
-    <div style={{ borderTop: `1px solid ${col("line")}`, paddingTop: 10, marginTop: 10, boxShadow: `inset 3px 0 0 ${col(lv.c)}`, paddingLeft: 10 }}>
-      <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", color: col(lv.c) }}>{lv.label}</div>
-      <div style={{ fontSize: 14, fontWeight: 600, marginTop: 2, textWrap: "balance" } as CSSProperties}>{f.title}</div>
-      <p style={{ fontSize: 13, lineHeight: 1.5, marginTop: 2 }}>{f.detail}</p>
+    <>
+      <b style={{ color: col("bp") }}>{c.discuss} discuss</b> · <b style={{ color: col("caffeine") }}>{c.watch} watch</b>
+      {fresh ? <span style={muted}> · {fresh} new</span> : null}
+    </>
+  );
+}
+
+export function AnalyseBar({ inSheet }: { inSheet?: boolean }) {
+  const ai = useAi()!;
+  const r = ai.running;
+  return (
+    <div style={{ position: "relative", borderBlock: inSheet ? 0 : `1px solid ${col("line")}`, background: inSheet ? "transparent" : "hsl(var(--ai) / .045)" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, minHeight: 44, padding: inSheet ? 0 : "0 14px" }}>
+        <Spark />
+        <div aria-live="polite" style={{ flex: 1, minWidth: 0, fontSize: 12, lineHeight: 1.3 }}>
+          <div style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{statusLine(ai)}</div>
+          {ai.review && !r && !inSheet && (
+            <div style={{ ...muted, fontSize: 11 }}>
+              {ai.review.mode === "deep" ? "Deep" : "Quick"} analysis · {rel(ai.review.at)}
+            </div>
+          )}
+        </div>
+        <Seg />
+        <button
+          type="button"
+          onClick={ai.run}
+          disabled={!!r}
+          style={{ flex: "none", minHeight: 32, padding: "0 10px", border: 0, background: col("ai"), color: col("panel"), font: "600 12px/1 var(--font-plex-sans), sans-serif", cursor: r ? "default" : "pointer", opacity: r ? 0.6 : 1 }}
+        >
+          {ai.review ? "Re-run" : "Analyse"}
+        </button>
+        <Popover>
+          <PopoverTrigger asChild>
+            <button type="button" aria-label="What the analysis reads" style={{ flex: "none", display: "grid", placeItems: "center", width: 32, height: 32, border: 0, background: "transparent", color: col("muted-fg"), cursor: "pointer" }}>
+              <Info size={16} />
+            </button>
+          </PopoverTrigger>
+          <PopoverContent align="end" style={{ width: 300 }}>
+            <WhatsSent />
+          </PopoverContent>
+        </Popover>
+      </div>
+      {r && (
+        <div style={{ position: "absolute", left: 0, bottom: -1, height: 2, width: `${((r.step + 1) / r.steps.length) * 100}%`, background: col("ai"), transition: "width .4s" }} />
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// One finding, collapsed to a line or opened
+// ---------------------------------------------------------------------------
+
+function BasisLinks({ f, onGo }: { f: Finding; onGo?: () => void }) {
+  const ai = useAi()!;
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 6 }}>
+      {f.basis.map((b) => (
+        <button
+          key={b.label}
+          type="button"
+          onClick={() => {
+            onGo?.();
+            ai.jump(b.tab, b.anchor);
+          }}
+          style={{ minHeight: 28, padding: "0 8px", border: `1px solid ${col("line")}`, background: col("panel"), color: col("fg"), fontSize: 11, cursor: "pointer" }}
+        >
+          {b.label} ›
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function FindingBody({ f, onGo }: { f: Finding; onGo?: () => void }) {
+  return (
+    <>
+      <p style={{ fontSize: 12.5, lineHeight: 1.5, marginTop: 4 }}>{f.detail}</p>
       {f.evidence && (
-        <p style={{ fontSize: 12, lineHeight: 1.5, marginTop: 6, padding: "6px 8px", background: "hsl(var(--ai) / .07)" }}>
-          <BookOpen size={12} style={{ display: "inline", verticalAlign: "-2px", marginRight: 4, color: col("ai") }} />
-          {f.evidence} {f.sources?.map((n) => <sup key={n} style={{ color: col("ai"), fontWeight: 600 }}>[{n}]</sup>)}
+        <p style={{ fontSize: 12, lineHeight: 1.5, marginTop: 6, color: col("muted-fg") }}>
+          <BookOpen size={12} aria-hidden="true" style={{ display: "inline", verticalAlign: "-2px", marginRight: 4, color: col("ai") }} />
+          {f.evidence}
+          <Sup ns={f.sources} />
         </p>
       )}
-      {!compact && f.basis.length > 0 && (
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 6 }}>
-          {f.basis.map((b) => (
-            <Basis key={b.label} b={b} />
+      <BasisLinks f={f} {...(onGo ? { onGo } : {})} />
+    </>
+  );
+}
+
+function LevelTag({ level, fresh }: { level: Level; fresh?: boolean }) {
+  return (
+    <span style={{ flex: "none", font: "700 10px/1 var(--font-plex-sans), sans-serif", textTransform: "uppercase", letterSpacing: "0.06em", color: col(LEVEL[level].c) }}>
+      {LEVEL[level].short}
+      {fresh && <span style={{ color: col("ai"), marginLeft: 4 }}>· new</span>}
+    </span>
+  );
+}
+
+/** Variant 1: a finding as a one-line note inside the section it is about. */
+function NoteRow({ f }: { f: Finding }) {
+  const ai = useAi()!;
+  const [open, setOpen] = useState(false);
+  return (
+    <div style={{ minWidth: 0, boxShadow: `inset 2px 0 0 ${col(LEVEL[f.level].c)}`, background: "hsl(var(--ai) / .045)", padding: "0 8px 0 10px" }}>
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+        style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", minHeight: 36, padding: 0, border: 0, background: "transparent", color: col("fg"), textAlign: "left", cursor: "pointer" }}
+      >
+        <Spark size={12} />
+        <LevelTag level={f.level} fresh={isNew(ai, f)} />
+        <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 600, whiteSpace: open ? "normal" : "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{f.title}</span>
+        {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+      </button>
+      {open && (
+        <div style={{ paddingBottom: 10 }}>
+          <FindingBody f={f} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function Annot({ at }: { at: string }) {
+  const ai = useAi();
+  if (!ai || ai.treatment !== "notes" || !ai.review) return null;
+  const fs = ai.review.findings.filter((f) => f.at?.includes(at) && (f.level !== "good" || at.startsWith("report-")));
+  if (!fs.length) return null;
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 2, margin: "-2px 0 10px" }}>
+      {fs.map((f) => (
+        <NoteRow key={f.id} f={f} />
+      ))}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Variant 3: dots on sections, counts on tabs, one summary line
+// ---------------------------------------------------------------------------
+
+export function FlagDot({ at }: { at: string }) {
+  const ai = useAi();
+  if (!ai || ai.treatment !== "line" || !ai.review) return null;
+  const fs = ai.review.findings.filter((f) => f.at?.includes(at) && f.level !== "good");
+  if (!fs.length) return null;
+  const top = fs.some((f) => f.level === "discuss") ? "discuss" : "watch";
+  return (
+    <button
+      type="button"
+      onClick={() => ai.openSheet(fs[0]!.id)}
+      aria-label={`${fs.length} finding${fs.length > 1 ? "s" : ""} here`}
+      style={{ display: "inline-flex", alignItems: "center", gap: 4, minHeight: 28, padding: "0 6px", border: `1px solid ${col(LEVEL[top].c)}`, background: "transparent", color: col(LEVEL[top].c), font: "700 10px/1 var(--font-plex-sans), sans-serif", textTransform: "uppercase", letterSpacing: "0.05em", cursor: "pointer" }}
+    >
+      <Spark size={11} />
+      {fs.length}
+    </button>
+  );
+}
+
+export function TabCount({ chapter }: { chapter: Chapter | "report" }) {
+  const ai = useAi();
+  if (!ai || ai.treatment !== "line" || !ai.review) return null;
+  const fs = ai.review.findings.filter((f) => f.level !== "good" && (chapter === "report" || f.chapter === chapter));
+  if (!fs.length) return null;
+  const top = fs.some((f) => f.level === "discuss") ? "discuss" : "watch";
+  return (
+    <span aria-label={`${fs.length} findings`} style={{ display: "inline-grid", placeItems: "center", minWidth: 15, height: 15, marginLeft: 3, padding: "0 3px", background: col(LEVEL[top].c), color: col("panel"), font: "700 9px/1 var(--font-plex-mono), monospace", verticalAlign: "1px" }}>
+      {fs.length}
+    </span>
+  );
+}
+
+export function SummaryLine() {
+  const ai = useAi();
+  if (!ai || ai.treatment !== "line") return null;
+  const r = ai.running;
+  return (
+    <button
+      type="button"
+      onClick={() => ai.openSheet()}
+      style={{ position: "relative", display: "flex", alignItems: "center", gap: 8, width: "100%", minHeight: 44, padding: "0 14px", border: 0, borderBottom: `1px solid ${col("line")}`, background: "hsl(var(--ai) / .045)", color: col("fg"), textAlign: "left", cursor: "pointer" }}
+    >
+      <Spark />
+      <span style={{ flex: 1, minWidth: 0, fontSize: 12, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{statusLine(ai)}</span>
+      {ai.review && !r && <span style={{ ...muted, fontSize: 11, flex: "none" }}>{ai.review.mode === "deep" ? "Deep" : "Quick"} · {rel(ai.review.at)}</span>}
+      <ChevronRight size={16} style={{ flex: "none" }} />
+      {r && <span style={{ position: "absolute", left: 0, bottom: -1, height: 2, width: `${((r.step + 1) / r.steps.length) * 100}%`, background: col("ai"), transition: "width .4s" }} />}
+    </button>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Variant 2: a strip of finding chips
+// ---------------------------------------------------------------------------
+
+export function FindingsStrip({ chapter }: { chapter?: Chapter }) {
+  const ai = useAi();
+  if (!ai || ai.treatment !== "strip") return null;
+  const fs = (ai.review?.findings ?? []).filter((f) => !chapter || f.chapter === chapter);
+  if (chapter && !fs.length) return null;
+  return (
+    <div style={{ borderBottom: `1px solid ${col("line")}` }}>
+      {!chapter && <AnalyseBar />}
+      {fs.length > 0 && (
+        <div style={{ display: "flex", gap: 6, overflowX: "auto", padding: "8px 14px", scrollSnapType: "x mandatory" }}>
+          {fs.map((f) => (
+            <button
+              key={f.id}
+              type="button"
+              onClick={() => ai.openSheet(f.id)}
+              style={{ flex: "0 0 auto", width: 188, minHeight: 64, padding: "7px 8px 7px 10px", border: `1px solid ${col("line")}`, boxShadow: `inset 3px 0 0 ${col(LEVEL[f.level].c)}`, background: col("bg"), color: col("fg"), textAlign: "left", cursor: "pointer", scrollSnapAlign: "start" }}
+            >
+              <LevelTag level={f.level} fresh={isNew(ai, f)} />
+              <span style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", fontSize: 12, fontWeight: 600, lineHeight: 1.3, marginTop: 4 } as CSSProperties}>{f.title}</span>
+            </button>
           ))}
         </div>
       )}
@@ -351,395 +717,197 @@ function FindingCard({ f, compact }: { f: Finding; compact?: boolean }) {
   );
 }
 
-const QUICK_STEPS = ["Reading your report", "Writing the review"];
-const DEEP_STEPS = ["Reading your report", "Searching heart-failure and hypertension guidelines", "Checking your medicines against the findings", "Cross-checking against your last review", "Writing the review with sources"];
-
 // ---------------------------------------------------------------------------
-// Report tab: Claude's review
+// The sheet (variants 2 and 3)
 // ---------------------------------------------------------------------------
 
-export function AiReview({ data }: { data: Insights }) {
+function AnalysisSheet() {
   const ai = useAi()!;
-  const [mode, setMode] = useState<Mode>("quick");
-  const [showSees, setShowSees] = useState(false);
-  const [profile, setProfile] = useState(true);
-  const [meds, setMeds] = useState(true);
-  const [compare, setCompare] = useState(true);
-  const [step, setStep] = useState<number | null>(null);
-  const [showGood, setShowGood] = useState(false);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => () => void (timer.current && clearTimeout(timer.current)), []);
-
-  const steps = mode === "deep" ? DEEP_STEPS : QUICK_STEPS;
-  const run = () => {
-    let i = 0;
-    setStep(0);
-    const tick = () => {
-      i++;
-      if (i < steps.length) {
-        setStep(i);
-        timer.current = setTimeout(tick, mode === "deep" ? 1400 : 700);
-      } else {
-        setStep(null);
-        ai.setReview(buildReview(data, mode));
-      }
-    };
-    timer.current = setTimeout(tick, mode === "deep" ? 1400 : 700);
-  };
-
   const r = ai.review;
-  const prev = ai.previous;
-  const diff = r && prev && compare
-    ? {
-        added: r.findings.filter((f) => f.level !== "good" && !prev.findings.some((p) => p.id === f.id)),
-        still: r.findings.filter((f) => f.level !== "good" && prev.findings.some((p) => p.id === f.id)),
-        resolved: prev.findings.filter((p) => !r.findings.some((f) => f.id === p.id && f.level !== "good")),
-      }
-    : null;
-
+  const focusRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (ai.sheet.open && ai.sheet.focus) setTimeout(() => focusRef.current?.scrollIntoView({ block: "center" }), 250);
+  }, [ai.sheet]);
+  const resolved = r && ai.previous ? ai.previous.findings.filter((p) => !r.findings.some((f) => f.id === p.id && f.level !== "good")) : [];
   return (
-    <section className="wm-card" style={card("ai")} aria-label="Claude's review">
-      <h3 className="wm-ct" style={{ justifyContent: "space-between" }}>
-        <span style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <Sparkles size={16} style={{ color: col("ai") }} /> Claude&apos;s review
-        </span>
-        {r && (
-          <span style={{ ...muted, fontWeight: 400, fontSize: 11 }}>
-            {r.mode === "deep" ? "Deep" : "Quick"} · {rel(r.at)}
-          </span>
-        )}
-      </h3>
-
-      {/* ------------------------------------------------ result */}
-      {r && step === null && (
-        <>
-          <p style={{ fontSize: 15, lineHeight: 1.45, fontWeight: 600, textWrap: "pretty" } as CSSProperties}>{r.headline}</p>
-          {r.findings
-            .filter((f) => f.level !== "good")
-            .map((f) => (
-              <FindingCard key={f.id} f={f} />
-            ))}
-          <button type="button" onClick={() => setShowGood((v) => !v)} style={linkBtn}>
-            {showGood ? <ChevronDown size={14} /> : <ChevronRight size={14} />} {r.findings.filter((f) => f.level === "good").length} going well
-          </button>
-          {showGood && r.findings.filter((f) => f.level === "good").map((f) => <FindingCard key={f.id} f={f} />)}
-
-          {diff && (
-            <div style={{ marginTop: 14 }}>
-              <div style={{ fontSize: 12, fontWeight: 600 }}>Since your last review ({rel(prev!.at)})</div>
-              <ul style={{ margin: "4px 0 0", padding: 0, listStyle: "none", fontSize: 12, display: "grid", gap: 3 }}>
-                {diff.added.map((f) => (
-                  <li key={f.id}>
-                    <b style={{ color: col("bp") }}>New</b> {f.title}
-                  </li>
-                ))}
-                {diff.still.map((f) => (
-                  <li key={f.id}>
-                    <b style={{ color: col("caffeine") }}>Still</b> {f.title}
-                  </li>
-                ))}
-                {diff.resolved.map((f) => (
-                  <li key={f.id}>
-                    <b style={{ color: col("weight") }}>Resolved</b> {f.title}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {r.questions.length > 0 && (
-            <div style={{ marginTop: 14 }}>
-              <div style={{ fontSize: 12, fontWeight: 600 }}>Questions for your appointment</div>
-              <ul style={{ margin: "4px 0 0", padding: 0, listStyle: "none", display: "grid", gap: 4 }}>
-                {r.questions.map((q) => {
-                  const on = ai.addedQuestions.includes(q);
-                  return (
-                    <li key={q} style={{ display: "flex", gap: 8, alignItems: "flex-start", fontSize: 13 }}>
-                      <button
-                        type="button"
-                        aria-pressed={on}
-                        aria-label={on ? "Remove from report" : "Add to report"}
-                        onClick={() => ai.toggleQuestion(q)}
-                        style={{ flex: "none", display: "grid", placeItems: "center", width: 28, height: 28, border: `1px solid ${on ? col("ai") : col("line")}`, background: on ? col("ai") : col("panel"), color: on ? col("panel") : col("fg"), cursor: "pointer" }}
-                      >
-                        {on ? <Check size={14} /> : <Plus size={14} />}
-                      </button>
-                      <span style={{ paddingTop: 4 }}>{q}</span>
-                    </li>
-                  );
-                })}
-              </ul>
-              <p style={{ ...muted, fontSize: 11, marginTop: 4 }}>Added questions go into the report and the PDF export.</p>
-            </div>
-          )}
-
-          {r.sources.length > 0 && (
-            <div style={{ marginTop: 14 }}>
-              <div style={{ fontSize: 12, fontWeight: 600 }}>Sources</div>
-              <ol style={{ margin: "4px 0 0", paddingLeft: 18, fontSize: 12, display: "grid", gap: 2 }}>
-                {r.sources.map((s) => (
-                  <li key={s.n}>
-                    <a href={s.url} target="_blank" rel="noreferrer" style={{ color: col("ai") }}>
-                      {s.title}
-                    </a>
-                  </li>
-                ))}
-              </ol>
-            </div>
-          )}
-          <p style={{ ...muted, fontSize: 11, marginTop: 10 }}>
-            Not medical advice. Claude never suggests changing a dose; warning signs use fixed wording.
-            <br />
-            PROTOTYPE: this review is built from your numbers by fixed templates so the layout can be judged.
-          </p>
-          <div style={{ height: 1, background: col("line"), margin: "12px 0" }} />
-        </>
-      )}
-
-      {/* ------------------------------------------------ running */}
-      {step !== null && (
-        <div aria-live="polite">
-          <ol style={{ margin: 0, padding: 0, listStyle: "none", display: "grid", gap: 6 }}>
-            {steps.map((s, i) => (
-              <li key={s} style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 13, color: i > step ? col("muted-fg") : col("fg") }}>
-                {i < step ? <Check size={14} style={{ color: col("weight") }} /> : i === step ? <Loader2 size={14} className="animate-spin" /> : <span style={{ width: 14 }} />}
-                {s}
-              </li>
-            ))}
-          </ol>
-          {mode === "deep" && <p style={{ ...muted, marginTop: 8 }}>Deep analysis takes a few minutes in the app. You can close Metrics; it finishes in the background and tells you when it&apos;s ready.</p>}
-        </div>
-      )}
-
-      {/* ------------------------------------------------ start */}
-      {step === null && (
-        <>
-          {!r && (
-            <p style={{ fontSize: 13, lineHeight: 1.5, marginBottom: 10 }}>
-              Claude reads this report the way a clinician would: what needs raising, what to watch, what&apos;s going well, each linked to the numbers behind it.
-            </p>
-          )}
-          <div style={{ display: "flex", gap: 6 }}>
-            <ModeTile active={mode === "quick"} onClick={() => setMode("quick")} icon={<Zap size={14} />} title="Quick review" lines={["About 10 seconds", "Your report's numbers"]} />
-            <ModeTile active={mode === "deep"} onClick={() => setMode("deep")} icon={<Telescope size={14} />} title="Deep analysis" lines={["A few minutes", "Checks guidelines and research, cites sources"]} />
-          </div>
-          <button type="button" onClick={() => setShowSees((v) => !v)} style={linkBtn}>
-            {showSees ? <ChevronDown size={14} /> : <ChevronRight size={14} />} What Claude sees
-          </button>
-          {showSees && (
-            <div style={{ fontSize: 12, display: "grid", gap: 6, padding: "6px 0 4px" }}>
-              <div>
-                <b>Always:</b> the numbers in this report for {data.period} days: {data.bp.tirN} blood pressure readings summarised, {data.water.n} days of fluid, {data.sodium.n} of sodium, {data.adherence.due} scheduled doses, {data.symptoms.entries.length} journal entries (findings and times, not your words). Never your raw entries.
-              </div>
-              <Toggle id="ai-profile" on={profile} set={setProfile} label="Your medical profile (conditions)" />
-              <Toggle id="ai-meds" on={meds} set={setMeds} label="Your medicines and doses" />
-              <Toggle id="ai-compare" on={compare} set={setCompare} label={`Compare with your last review (${rel(ai.previous?.at ?? Date.now())})`} />
-              {mode === "deep" && <div style={muted}>Deep analysis also lets Claude search guideline and research sites. Your data is never put into a search.</div>}
-            </div>
-          )}
-          <div style={{ marginTop: 10 }}>
-            <Button onClick={run} style={{ width: "100%" }}>
-              {mode === "deep" ? <Telescope /> : <Sparkles />}
-              {r ? `Run a new ${mode === "deep" ? "deep analysis" : "quick review"}` : mode === "deep" ? "Start deep analysis" : "Review my report"}
-            </Button>
-          </div>
-        </>
-      )}
-    </section>
-  );
-}
-
-function Toggle({ id, on, set, label }: { id: string; on: boolean; set: (v: boolean) => void; label: string }) {
-  return (
-    <label htmlFor={id} style={{ display: "flex", gap: 8, alignItems: "center", minHeight: 32, cursor: "pointer" }}>
-      <input id={id} type="checkbox" checked={on} onChange={(e) => set(e.target.checked)} style={{ width: 18, height: 18, accentColor: col("ai") }} />
-      {label}
-    </label>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Chapter notes: the review's findings beside the data they are about
-// ---------------------------------------------------------------------------
-
-export function ChapterNotes({ chapter }: { chapter: Chapter }) {
-  const ai = useAi();
-  const notes = ai?.review?.findings.filter((f) => f.chapter === chapter) ?? [];
-  if (!ai) return null;
-  if (!ai.review)
-    return (
-      <button
-        type="button"
-        onClick={() => ai.jump("report", "ai-review")}
-        style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", minHeight: 44, padding: "0 12px", border: `1px dashed ${col("ai")}`, background: "hsl(var(--ai) / .05)", color: col("fg"), fontSize: 13, cursor: "pointer", textAlign: "left" }}
-      >
-        <Sparkles size={14} style={{ color: col("ai") }} /> Ask Claude to review this report — its notes on this chapter appear here
-      </button>
-    );
-  if (notes.length === 0) return null;
-  return (
-    <section className="wm-card" style={card("ai")} aria-label="Claude's notes on this chapter">
-      <h3 className="wm-ct" style={{ marginBottom: 0 }}>
-        <Sparkles size={14} style={{ color: col("ai") }} /> Claude&apos;s notes
-        <span style={{ ...muted, fontWeight: 400, fontSize: 11 }}>
-          {ai.review.mode === "deep" ? "Deep" : "Quick"} review · {rel(ai.review.at)}
-        </span>
-      </h3>
-      {notes.map((f) => (
-        <FindingCard key={f.id} f={f} compact />
-      ))}
-    </section>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Food tab: food analysis
-// ---------------------------------------------------------------------------
-
-const FOCUS = ["Sodium", "Potassium", "Fluid in food", "Fibre", "Sugar"] as const;
-
-const SWAPS: Record<string, { swap: string; perServing: number }> = {
-  ham: { swap: "fresh roast chicken or turkey", perServing: 450 },
-  "ham sandwich": { swap: "chicken and salad sandwich on low-salt bread", perServing: 700 },
-  bread: { swap: "low-salt bread", perServing: 150 },
-  toast: { swap: "low-salt bread", perServing: 150 },
-  cheese: { swap: "fresh mozzarella or ricotta", perServing: 250 },
-  soup: { swap: "home-made soup with no stock cube", perServing: 700 },
-  crisps: { swap: "unsalted nuts or plain popcorn", perServing: 200 },
-  pizza: { swap: "home-made pizza with half the cheese", perServing: 600 },
-  pasta: { swap: "pasta cooked without salt in the water", perServing: 250 },
-};
-
-export function FoodAnalysis({ data: d }: { data: Insights }) {
-  const [focus, setFocus] = useState<string[]>(["Sodium", "Fluid in food"]);
-  const [mode, setMode] = useState<Mode>("quick");
-  const [state, setState] = useState<"idle" | "running" | "done">("idle");
-  const [ranMode, setRanMode] = useState<Mode>("quick");
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => () => void (timer.current && clearTimeout(timer.current)), []);
-  const run = () => {
-    setState("running");
-    setRanMode(mode);
-    timer.current = setTimeout(() => setState("done"), mode === "deep" ? 2600 : 1200);
-  };
-
-  const days = Math.max(1, d.food.daysLogged);
-  const swaps = d.food.topFoods
-    .map((f) => ({ ...f, s: SWAPS[f.name] }))
-    .filter((f) => f.s)
-    .map((f) => ({ name: f.name, swap: f.s!.swap, perDay: (f.s!.perServing * f.n) / days }))
-    .sort((a, b) => b.perDay - a.perDay)
-    .slice(0, 4);
-  const saved = swaps.slice(0, 2).reduce((s, x) => s + x.perDay, 0);
-
-  return (
-    <section className="wm-card" style={card("ai")} aria-label="Food analysis" id="sec-food-ai">
-      <h3 className="wm-ct">
-        <Sparkles size={16} style={{ color: col("ai") }} /> Food analysis
-      </h3>
-      <p style={{ fontSize: 13, lineHeight: 1.5 }}>
-        Claude reads the foods you logged ({d.food.daysLogged} days, food names and grams) and works out where the hidden sodium is, what&apos;s missing, and the swaps that would move your numbers most.
-      </p>
-      <div role="group" aria-label="Focus" style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 8 }}>
-        {FOCUS.map((f) => {
-          const on = focus.includes(f);
-          return (
-            <button
-              key={f}
-              type="button"
-              aria-pressed={on}
-              onClick={() => setFocus((xs) => (on ? xs.filter((x) => x !== f) : [...xs, f]))}
-              style={{ minHeight: 32, padding: "0 10px", border: `1px solid ${on ? col("ai") : col("line")}`, background: on ? "hsl(var(--ai) / .1)" : col("panel"), color: col("fg"), fontSize: 12, cursor: "pointer" }}
-            >
-              {f}
+    <Drawer open={ai.sheet.open} onOpenChange={(o) => (o ? ai.openSheet() : ai.closeSheet())}>
+      <DrawerContent style={{ maxHeight: "88%" }}>
+        <div style={{ overflowY: "auto", padding: "4px 16px 24px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, minHeight: 40 }}>
+            <Spark size={16} />
+            <DrawerTitle style={{ fontSize: 16, fontWeight: 700, flex: 1 }}>Analysis</DrawerTitle>
+            <button type="button" aria-label="Close" onClick={ai.closeSheet} style={{ display: "grid", placeItems: "center", width: 36, height: 36, border: 0, background: "transparent", color: col("fg"), cursor: "pointer" }}>
+              <X size={18} />
             </button>
-          );
-        })}
-      </div>
-      <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
-        <ModeTile active={mode === "quick"} onClick={() => setMode("quick")} icon={<Zap size={14} />} title="Quick" lines={["Seconds"]} />
-        <ModeTile active={mode === "deep"} onClick={() => setMode("deep")} icon={<Telescope size={14} />} title="Deep" lines={["Looks up real sodium values for your foods"]} />
-      </div>
-      <div style={{ marginTop: 8 }}>
-        <Button onClick={run} disabled={state === "running" || focus.length === 0} style={{ width: "100%" }}>
-          {state === "running" ? <Loader2 className="animate-spin" /> : <Sparkles />}
-          {state === "running" ? "Analysing your food…" : state === "done" ? "Analyse again" : "Analyse my food"}
-        </Button>
-      </div>
-
-      {state === "done" && (
-        <div style={{ marginTop: 12 }}>
-          <p style={{ fontSize: 14, fontWeight: 600, lineHeight: 1.45 }}>
-            {swaps.length
-              ? `Two swaps would cut about ${fmtNum(Math.round(saved / 10) * 10)} mg of sodium a day, enough to bring a typical day from ${fmtNum(d.sodium.median)} mg to about ${fmtNum(d.sodium.median - saved)} mg.`
-              : `Your sodium is spread across many foods; there is no single swap that moves it much.`}
-          </p>
-          {focus.includes("Sodium") && swaps.length > 0 && (
-            <div style={{ overflowX: "auto", marginTop: 8 }}>
-              <table style={{ width: "100%", fontSize: 12, borderCollapse: "collapse" }}>
-                <thead>
-                  <tr style={muted}>
-                    <th style={{ textAlign: "left", fontWeight: 500 }}>Instead of</th>
-                    <th style={{ textAlign: "left", fontWeight: 500, paddingLeft: 8 }}>Try</th>
-                    <th style={{ textAlign: "right", fontWeight: 500 }}>Saves a day</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {swaps.map((s) => (
-                    <tr key={s.name} style={{ borderTop: `1px solid ${col("line")}` }}>
-                      <td style={{ padding: "5px 0", textTransform: "capitalize" }}>{s.name}</td>
-                      <td style={{ paddingLeft: 8 }}>{s.swap}</td>
-                      <td style={{ ...mono, textAlign: "right" }}>~{fmtNum(Math.round(s.perDay / 10) * 10)} mg</td>
-                    </tr>
+          </div>
+          <DrawerDescription style={{ ...muted, fontSize: 12 }}>
+            {r ? `${r.mode === "deep" ? "Deep" : "Quick"} analysis of the last ${r.period} days · ${rel(r.at)}` : "Reads this report and sorts what it finds into things to raise, watch and keep doing."}
+          </DrawerDescription>
+          <div style={{ margin: "10px 0", borderBlock: `1px solid ${col("line")}`, padding: "2px 0" }}>
+            <AnalyseBar inSheet />
+          </div>
+          {r && (
+            <>
+              <p style={{ fontSize: 15, fontWeight: 600, lineHeight: 1.45, textWrap: "pretty" } as CSSProperties}>{r.headline}</p>
+              {(["discuss", "watch", "good"] as const).map((lv) => {
+                const fs = r.findings.filter((f) => f.level === lv);
+                if (!fs.length) return null;
+                return (
+                  <div key={lv} style={{ marginTop: 14 }}>
+                    <div style={{ font: "700 11px/1 var(--font-plex-sans), sans-serif", textTransform: "uppercase", letterSpacing: "0.06em", color: col(LEVEL[lv].c) }}>{LEVEL[lv].long}</div>
+                    {fs.map((f) => (
+                      <div
+                        key={f.id}
+                        ref={ai.sheet.focus === f.id ? focusRef : undefined}
+                        style={{ marginTop: 8, padding: "8px 0 8px 10px", boxShadow: `inset 2px 0 0 ${col(LEVEL[lv].c)}`, background: ai.sheet.focus === f.id ? "hsl(var(--ai) / .07)" : "transparent" }}
+                      >
+                        <div style={{ fontSize: 13.5, fontWeight: 600 }}>
+                          {f.title}
+                          {isNew(ai, f) && <span style={{ ...muted, color: col("ai"), fontSize: 11, fontWeight: 600 }}> · new</span>}
+                        </div>
+                        <FindingBody f={f} onGo={ai.closeSheet} />
+                      </div>
+                    ))}
+                  </div>
+                );
+              })}
+              {resolved.length > 0 && (
+                <div style={{ marginTop: 14, fontSize: 12 }}>
+                  <div style={{ fontWeight: 600 }}>No longer flagged since {shortDate(new Date(ai.previous!.at).toISOString().slice(0, 10))}</div>
+                  {resolved.map((p) => (
+                    <div key={p.id} style={muted}>
+                      <Check size={12} style={{ display: "inline", verticalAlign: "-2px", color: col("weight") }} /> {p.title}
+                    </div>
                   ))}
-                </tbody>
-              </table>
-            </div>
+                </div>
+              )}
+              <SheetQuestions />
+              {r.sources.length > 0 && <SourceList r={r} />}
+              <Disclaimer />
+            </>
           )}
-          <ul style={{ margin: "10px 0 0", paddingLeft: 16, fontSize: 13, display: "grid", gap: 4 }}>
-            {focus.includes("Fluid in food") && (
-              <li>
-                <b>Fluid in food:</b> soups, fruit and yoghurt count toward your {fmtNum(d.limits.water)} ml limit. Your logged soups add roughly 200–300 ml on the days you have them.
-              </li>
-            )}
-            {focus.includes("Potassium") && (
-              <li>
-                <b>Potassium:</b> logged on only {d.food.potassium.n} days, so it can&apos;t be judged. If your care team watches it, log it with food; avoid potassium-based salt substitutes unless they say otherwise.
-              </li>
-            )}
-            {focus.includes("Fibre") && (
-              <li>
-                <b>Fibre:</b> vegetables appear in the log on few days; most meals are bread, pasta and cheese. Diuretics and fluid limits make constipation more likely.
-              </li>
-            )}
-            {focus.includes("Sugar") && (
-              <li>
-                <b>Sugar:</b> a typical day is {fmtNum(d.food.sugar.median)} g{d.food.sugar.limit ? ` against ${fmtNum(d.food.sugar.limit)} g` : ""}.
-              </li>
-            )}
-          </ul>
-          {ranMode === "deep" && (
-            <p style={{ ...muted, fontSize: 11, marginTop: 8 }}>
-              Deep mode checks each food&apos;s sodium against nutrition databases found by web search and lists them as sources.
-            </p>
-          )}
-          <p style={{ ...muted, fontSize: 11, marginTop: 6 }}>PROTOTYPE: example analysis built from your logged foods by fixed templates.</p>
         </div>
-      )}
+      </DrawerContent>
+    </Drawer>
+  );
+}
+
+function SheetQuestions() {
+  const ai = useAi()!;
+  const qs = ai.review?.questions ?? [];
+  if (!qs.length) return null;
+  return (
+    <div style={{ marginTop: 16 }}>
+      <div style={{ fontSize: 12, fontWeight: 600 }}>Questions for your appointment</div>
+      <div style={{ ...muted, fontSize: 11 }}>Added questions go into the report and the PDF.</div>
+      <div style={{ display: "grid", gap: 2, marginTop: 6 }}>
+        {qs.map((q) => (
+          <QuestionRow key={q} q={q} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function QuestionRow({ q }: { q: string }) {
+  const ai = useAi()!;
+  const on = ai.addedQuestions.includes(q);
+  return (
+    <button
+      type="button"
+      aria-pressed={on}
+      onClick={() => ai.toggleQuestion(q)}
+      style={{ display: "flex", gap: 8, alignItems: "flex-start", width: "100%", minHeight: 36, padding: "6px 0", border: 0, background: "transparent", color: on ? col("fg") : col("muted-fg"), fontSize: 13, textAlign: "left", cursor: "pointer" }}
+    >
+      <span style={{ flex: "none", display: "grid", placeItems: "center", width: 20, height: 20, border: `1px solid ${on ? col("ai") : col("line")}`, background: on ? col("ai") : "transparent", color: col("panel") }}>{on ? <Check size={13} /> : <Plus size={13} style={{ color: col("muted-fg") }} />}</span>
+      <span>{q}</span>
+    </button>
+  );
+}
+
+function SourceList({ r }: { r: Review }) {
+  return (
+    <div style={{ marginTop: 16 }}>
+      <div style={{ fontSize: 12, fontWeight: 600 }}>Sources</div>
+      <ol style={{ margin: "4px 0 0", paddingLeft: 18, fontSize: 12, display: "grid", gap: 3 }}>
+        {r.sources.map((s) => (
+          <li key={s.n}>
+            <a href={s.url} target="_blank" rel="noreferrer" style={{ color: col("ai") }}>
+              {s.title}
+            </a>
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
+}
+
+function Disclaimer() {
+  return (
+    <p style={{ ...muted, fontSize: 11, marginTop: 14 }}>
+      Not medical advice. It never suggests changing a dose; warning signs use fixed wording. PROTOTYPE: findings come from fixed templates over your numbers.
+    </p>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Report pieces used by every variant
+// ---------------------------------------------------------------------------
+
+/** Suggested questions inside the report's questions section (variant 1). */
+export function SuggestedQuestions() {
+  const ai = useAi();
+  if (!ai || ai.treatment !== "notes" || !ai.review) return null;
+  const qs = ai.review.questions.filter((q) => !ai.addedQuestions.includes(q));
+  if (!qs.length) return null;
+  return (
+    <div style={{ marginTop: 8, paddingTop: 6, borderTop: `1px dashed ${col("line")}` }}>
+      <div style={{ ...muted, fontSize: 11, display: "flex", gap: 4, alignItems: "center" }}>
+        <Spark size={11} /> Suggested from the analysis
+      </div>
+      {qs.map((q) => (
+        <QuestionRow key={q} q={q} />
+      ))}
+    </div>
+  );
+}
+
+/** Numbered references at the end of the report, once a deep analysis ran. */
+export function References() {
+  const ai = useAi();
+  const r = ai?.review;
+  if (!r || !r.sources.length) return null;
+  return (
+    <section className="wm-card" style={{ "--c": col("ai") } as CSSProperties} aria-label="References">
+      <h3 className="wm-ct">References</h3>
+      <ol style={{ margin: 0, paddingLeft: 18, fontSize: 12, display: "grid", gap: 3 }}>
+        {r.sources.map((s) => (
+          <li key={s.n}>
+            <a href={s.url} target="_blank" rel="noreferrer" style={{ color: col("ai") }}>
+              {s.title}
+            </a>
+          </li>
+        ))}
+      </ol>
+      <Disclaimer />
     </section>
   );
 }
 
-const linkBtn: CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  gap: 4,
-  marginTop: 10,
-  padding: 0,
-  minHeight: 32,
-  background: "none",
-  border: 0,
-  color: col("muted-fg"),
-  fontSize: 12,
-  cursor: "pointer",
-};
+/** Swap suggestion for a food, once an analysis ran. */
+export function useSwap(name: string): Swap | undefined {
+  const ai = useAi();
+  return ai?.review?.swaps.find((s) => s.name === name);
+}
+
+export function SwapCell({ name }: { name: string }) {
+  const s = useSwap(name);
+  if (!s) return <span style={muted}>—</span>;
+  return (
+    <span style={{ display: "block", textAlign: "left", fontFamily: "var(--font-plex-sans), sans-serif", fontSize: 11.5, lineHeight: 1.35 }}>
+      {s.swap}
+      <span style={{ ...mono, display: "block", color: col("weight") }}>−{fmtNum(Math.round(s.perDay / 10) * 10)} mg/day</span>
+    </span>
+  );
+}
+
