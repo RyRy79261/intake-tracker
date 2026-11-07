@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.48.3](https://github.com/RyRy79261/intake-tracker/compare/v1.48.2...v1.48.3) (2026-11-07)
+
+
+### Bug Fixes
+
+* **mcp:** refuse GET on the MCP endpoint instead of holding a stream open ([#479](https://github.com/RyRy79261/intake-tracker/issues/479)) ([d5a56ee](https://github.com/RyRy79261/intake-tracker/commit/d5a56eeaf4fb3abbb7ca253c4ce3c5fd99b6dbf8))
+
 ## [1.48.2](https://github.com/RyRy79261/intake-tracker/compare/v1.48.1...v1.48.2) (2026-11-03)
 
 
