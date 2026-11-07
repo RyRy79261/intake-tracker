@@ -1,16 +1,11 @@
 "use client";
 
 /**
- * PROTOTYPE — throwaway. Round 3: the Metrics window as a doctor-style report
- * (layout A won round 2: Report · Vitals · Fluid · Food · Meds). The question
- * now is how the AI analysis fits in without taking over the screen; three
- * treatments, switchable via `?variant=` (see ai-review.tsx):
- *
- *   1  Notes   — slim analyse row; findings as one-line notes in their section
- *   2  Strip   — a row of finding chips per tab, details in a sheet
- *   3  Line    — one summary line, counts on tabs, dots on sections, a sheet
- *
- * Round 2's B (one document) and C (visit pack) live in this branch's history.
+ * PROTOTYPE — throwaway. Round 4: the Metrics window as a doctor-style report
+ * (layout A: Report · Vitals · Fluid · Food · Meds) plus an Analysis tab that
+ * holds every AI analysis: start a health or food analysis (Quick or Deep),
+ * read it, and manage past ones (see ai-review.tsx). Earlier rounds' layouts
+ * and AI treatments live in this branch's history.
  */
 
 import { useCallback, useState, type ReactNode } from "react";
@@ -21,25 +16,20 @@ import type { Insights } from "@/components/analytics/insights-prototype/engine"
 import { FluidChapter, FoodChapter, MedsChapter, VitalsChapter } from "@/components/analytics/insights-prototype/chapters";
 import { VariantReport } from "@/components/analytics/insights-prototype/variant-report";
 import { EngineState } from "@/components/analytics/insights-prototype/ui";
-import { AiProvider, AnalyseBar, FindingsStrip, SummaryLine, TabCount, useAi, type Chapter, type Treatment } from "@/components/analytics/insights-prototype/ai-review";
+import { AiProvider, AnalysisTab, AnalysisTabCount, type Chapter } from "@/components/analytics/insights-prototype/ai-review";
 
 const SCOPE_DAYS: Record<string, number> = { "24h": 7, "7d": 7, "30d": 30, "90d": 90, all: 180 };
 const DAY = 86_400_000;
 
-export const METRICS_VARIANTS = [
-  { key: "1", name: "Notes in the report" },
-  { key: "2", name: "Findings strip" },
-  { key: "3", name: "Summary line" },
-] as const;
+export const METRICS_VARIANTS = [{ key: "1", name: "Analysis tab" }] as const;
 
-const TREATMENT: Record<string, Treatment> = { "1": "notes", "2": "strip", "3": "line" };
-
-const TABS: { value: "report" | Chapter; label: string }[] = [
+const TABS: { value: "report" | Chapter | "analysis"; label: string }[] = [
   { value: "report", label: "Report" },
   { value: "vitals", label: "Vitals" },
   { value: "fluid", label: "Fluid" },
   { value: "food", label: "Food" },
   { value: "meds", label: "Meds" },
+  { value: "analysis", label: "Analysis" },
 ];
 
 /** Scroll only the window's own scroller (scrollIntoView would also move the page). */
@@ -52,11 +42,11 @@ function jumpTo(id: string) {
 }
 
 export function MetricsPrototype({
-  variant,
   useInsights,
   exportSlot,
 }: {
-  variant: string;
+  /** Kept so callers can key the window by variant. */
+  variant?: string;
   useInsights: (period: number) => Insights | null;
   exportSlot?: (range: TimeRange) => ReactNode;
 }) {
@@ -82,7 +72,7 @@ export function MetricsPrototype({
           {TABS.map((t) => (
             <TabsTrigger key={t.value} value={t.value} className="min-w-0 flex-1 px-1">
               {t.label}
-              <TabCount chapter={t.value} />
+              {t.value === "analysis" && <AnalysisTabCount />}
             </TabsTrigger>
           ))}
         </TabsList>
@@ -92,7 +82,6 @@ export function MetricsPrototype({
               <p className="wm-p" style={{ padding: 14 }}>Loading…</p>
             ) : (
               <>
-                <TabTop tab={t.value} />
                 {t.value === "report" ? (
                   <VariantReport data={data} printable={false} />
                 ) : (
@@ -101,6 +90,7 @@ export function MetricsPrototype({
                     {t.value === "fluid" && <FluidChapter data={data} />}
                     {t.value === "food" && <FoodChapter data={data} />}
                     {t.value === "meds" && <MedsChapter data={data} />}
+                    {t.value === "analysis" && <AnalysisTab />}
                     <EngineState counts={data.counts} days={data.period} />
                     <div style={{ height: 96 }} />
                   </div>
@@ -114,19 +104,10 @@ export function MetricsPrototype({
   );
 
   return data ? (
-    <AiProvider data={data} treatment={TREATMENT[variant] ?? "notes"} jump={jump}>
+    <AiProvider data={data} jump={jump}>
       {body}
     </AiProvider>
   ) : (
     body
   );
-}
-
-/** What sits directly under the tabs, per treatment. */
-function TabTop({ tab }: { tab: "report" | Chapter }) {
-  const ai = useAi();
-  if (!ai) return null;
-  if (ai.treatment === "line") return <SummaryLine />;
-  if (ai.treatment === "strip") return tab === "report" ? <FindingsStrip /> : <FindingsStrip chapter={tab} />;
-  return tab === "report" ? <AnalyseBar /> : null;
 }
