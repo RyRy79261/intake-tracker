@@ -284,6 +284,20 @@ describe("logDose — skipped and not_taken", () => {
     expect(await doseLog(unskipped.dose_log_id)).toMatchObject({ status: "pending", skipReason: null });
     expect((await item(r.itemId)).currentStock).toBe(30);
   });
+
+  it("not_taken refuses a dose the user marked in the app, and changes nothing", async () => {
+    const r = await seedRegimen(ctx.testUserId);
+    const args = { scheduleId: r.scheduleId, date: TODAY, timezone: TZ };
+    const taken = ok(await med.logDose(ctx.testUserId, { ...args, action: "taken" }, NOW));
+    // The app re-marks the dose: the row is now the device's.
+    await ctx.db.update(schema.doseLogs).set({ deviceId: "phone" }).where(eq(schema.doseLogs.id, taken.dose_log_id));
+    expect(await med.logDose(ctx.testUserId, { ...args, action: "not_taken" }, NOW + 1000)).toMatchObject({
+      ok: false,
+      reason: "not_connector_entry",
+    });
+    expect(await doseLog(taken.dose_log_id)).toMatchObject({ status: "taken" });
+    expect((await item(r.itemId)).currentStock).toBe(29.5);
+  });
 });
 
 describe("logExtraMedicine", () => {
@@ -327,6 +341,15 @@ describe("logExtraMedicine", () => {
     const r = await seedRegimen(ctx.testUserId);
     const res = ok(await med.logExtraMedicine(ctx.testUserId, { medicineName: "furosemide", amount: 40, unit: "mg", timezone: TZ }, NOW));
     expect(res).toMatchObject({ listed: true, prescription_id: r.prescriptionId, pills_consumed: 1 });
+  });
+
+  it("keeps the amount of a listed medicine that has no mg, and takes no stock", async () => {
+    const r = await seedRegimen(ctx.testUserId);
+    const res = ok(await med.logExtraMedicine(ctx.testUserId, { prescriptionId: r.prescriptionId, amount: 5, unit: "ml", timezone: TZ }, NOW));
+    expect(res).toMatchObject({ listed: true, pills_consumed: 0, stock: null });
+    const log = await doseLog(res.dose_log_id);
+    expect(log).toMatchObject({ doseAmount: 5, doseUnit: "ml", doseMg: null });
+    expectPushable("doseLogs", log);
   });
 
   it("logs an unlisted medicine by name, with no stock", async () => {

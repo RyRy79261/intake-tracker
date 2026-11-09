@@ -121,14 +121,14 @@ export default function PrivacyPolicyPage() {
         <p>
           The journal keeps what you write or say about your body or your day
           (for example a symptom, a bruise, or that you woke up late), a short
-          title, and, if you add them, a body place and a 0–10 intensity. Typed
-          entries are not sent to any AI service: the suggested title and
-          details are worked out on your device. Entries you speak are
-          transcribed and interpreted like any other voice log (see below).
-          The printout for your doctor is made on your device. If you connect
-          the Claude connector and approve it, Claude can read your journal
-          entries and add new ones. Journal entries are not included in AI
-          insights.
+          title, and, if you add them, a body place and a 0–10 intensity. The
+          suggested title and details of a typed entry are worked out on your
+          device, not by an AI service. Entries you speak are transcribed and
+          interpreted like any other voice log (see below). The printout for
+          your doctor is made on your device. The one exception: if you
+          connect the Claude connector and approve journal access, Claude
+          (Anthropic) receives the entries it reads, typed or spoken, and can
+          add new ones. Journal entries are not included in AI insights.
           Deleting an entry erases its words, title, body places and intensity
           on your device and in the cloud copy. There is no undo, but a backup
           file you exported before the deletion still contains the entry, and

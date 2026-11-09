@@ -325,7 +325,8 @@ the HL7 FHIR Symptoms guide, so a future export can code it.
   undo, but a backup exported before the deletion still holds the entry, and
   importing it restores the entry on the device and in the cloud copy.
 - The Claude connector (MCP) can read journal entries and add new ones once
-  you approve it; it decrypts them on the server, as a sync pull does. It can
+  you approve journal access (a connection made before this asks you to
+  reconnect); it decrypts them on the server, as a sync pull does. It can
   delete only entries it added itself.
 
 ### Security Features
@@ -457,7 +458,8 @@ MCP_PUBLIC_URL=https://your-app.example.com
 
 The connector does what the voice log does. It never adds or changes
 prescriptions, schedules, titration plans or settings, and it removes only what
-it logged itself.
+it logged itself. Conditions reach Claude only while "Share conditions with
+AI" is on.
 
 ### Revocation
 

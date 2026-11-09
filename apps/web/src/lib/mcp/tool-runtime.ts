@@ -8,7 +8,7 @@ import { z } from "zod";
 import type { ServerContext } from "@modelcontextprotocol/server";
 import { writeMcpAudit } from "@/lib/mcp/audit";
 import { isValidTimeZone } from "@/lib/mcp/day-window";
-import { READ_SCOPE, WRITE_SCOPE } from "@/lib/mcp/scopes";
+import { JOURNAL_SCOPE, READ_SCOPE, WRITE_SCOPE } from "@/lib/mcp/scopes";
 import { isFutureTimestamp } from "@intake/core/record-schemas";
 
 export const ONE_YEAR_MS = 365 * 24 * 60 * 60_000;
@@ -79,27 +79,31 @@ export async function runTool<TArgs extends Record<string, unknown>>(
   args: TArgs,
   argsForAudit: Record<string, unknown> | null,
   body: (userId: string) => Promise<unknown>,
-  opts: { write?: boolean } = {},
+  opts: { write?: boolean; journal?: boolean } = {},
 ) {
   const started = Date.now();
   const { userId, clientId, scopes } = getAuth(ctx);
-  // Each tool needs its own scope: a write-only grant must not read.
-  const required = opts.write ? WRITE_SCOPE : READ_SCOPE;
-  if (!scopes.includes(required)) {
+  // Each tool needs its own scope: a write-only grant must not read. The
+  // journal needs its own grant on top.
+  const base = opts.write ? WRITE_SCOPE : READ_SCOPE;
+  const missing = [base, ...(opts.journal ? [JOURNAL_SCOPE] : [])].find((s) => !scopes.includes(s));
+  if (missing) {
     void writeMcpAudit({
       userId,
       clientId,
       tool,
       argsForAudit,
       status: "error",
-      errorMessage: `missing ${required} scope`,
+      errorMessage: `missing ${missing} scope`,
       durationMs: Date.now() - started,
     });
     return {
       content: [
         {
           type: "text" as const,
-          text: opts.write
+          text: missing === JOURNAL_SCOPE
+            ? "This connection was approved before Claude could use the medical journal. To let Claude read or add journal entries, remove the intake-tracker connector in Claude's settings and connect it again, then approve the new access."
+            : opts.write
             ? "This connection can only read. To let Claude log entries, remove the intake-tracker connector in Claude's settings and connect it again, then approve the new access."
             : "This connection was not granted read access to intake-tracker data.",
         },
@@ -126,7 +130,7 @@ export async function runTool<TArgs extends Record<string, unknown>>(
       ],
     };
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
+    const message = auditSafeMessage(err);
     // Full internal error is captured in the audit log only. The reply
     // to the MCP client is intentionally generic so we don't leak SQL
     // shapes, stack frames, or internal field names to the model.
@@ -149,6 +153,18 @@ export async function runTool<TArgs extends Record<string, unknown>>(
       isError: true,
     };
   }
+}
+
+/**
+ * The error for the audit row, without the values a failed query carries:
+ * Drizzle appends the statement's parameters ("params: …"), which can hold a
+ * note or a journal's words. The statement and the cause's message stay.
+ */
+export function auditSafeMessage(err: unknown): string {
+  const strip = (m: string) => m.split(/\n?\s*params:/)[0]!.trim();
+  if (!(err instanceof Error)) return strip(String(err));
+  const cause = err.cause instanceof Error ? ` (cause: ${strip(err.cause.message)})` : "";
+  return `${err.name}: ${strip(err.message)}${cause}`;
 }
 
 export function bounded(

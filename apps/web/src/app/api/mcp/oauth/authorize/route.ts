@@ -39,7 +39,7 @@ import { db } from "@intake/db/client";
 import { usersSync } from "@intake/db/schema";
 import { sql } from "drizzle-orm";
 import { getClient, issueAuthCode } from "@/lib/mcp/oauth";
-import { hasScope, parseScopeString, serialiseScopes, WRITE_SCOPE } from "@/lib/mcp/scopes";
+import { hasScope, JOURNAL_SCOPE, parseScopeString, serialiseScopes, WRITE_SCOPE } from "@/lib/mcp/scopes";
 import { isEmailAllowed } from "@/lib/mcp/whitelist";
 import { consentDataCategories, consentWriteActions } from "@/lib/mcp/tool-catalog";
 import { getPublicOrigin } from "@/lib/mcp/origin";
@@ -360,6 +360,7 @@ export async function GET(req: NextRequest) {
   await ensureUserInSync(user.userId, user.email);
 
   const canWrite = hasScope(scope, WRITE_SCOPE);
+  const journal = hasScope(scope, JOURNAL_SCOPE);
 
   // Render consent page. Form POSTs back to the same URL with the same
   // search params (encoded in hidden inputs) plus `confirm=yes`.
@@ -382,7 +383,7 @@ export async function GET(req: NextRequest) {
     <h1>Connect to intake-tracker</h1>
     <p><strong>${escapeHtml(client.clientName)}</strong> is requesting ${canWrite ? "access" : "read-only access"} to your intake-tracker data. It can read:</p>
     <ul>
-      ${consentDataCategories()
+      ${consentDataCategories({ journal })
         .map((line) => `<li>${escapeHtml(line)}</li>`)
         .join("\n      ")}
     </ul>
@@ -390,7 +391,7 @@ export async function GET(req: NextRequest) {
       canWrite
         ? `<p>It can also:</p>
     <ul>
-      ${consentWriteActions()
+      ${consentWriteActions({ journal })
         .map((line) => `<li>${escapeHtml(line)}</li>`)
         .join("\n      ")}
     </ul>`

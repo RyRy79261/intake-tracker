@@ -56,6 +56,7 @@ export interface Refusal {
     | "future_day"
     | "future_time"
     | "nothing_to_undo"
+    | "not_connector_entry"
     | "no_stock_item"
     | "ambiguous_medicine"
     | "invalid";
@@ -680,6 +681,8 @@ export async function logDose(
             status,
             actionTimestamp: now,
             timezone,
+            // The connector made this change: only such a dose can be undone here.
+            deviceId: MCP_DEVICE_ID,
             ...nullify(patch),
             updatedAt: now,
             serverUpdatedAt: now,
@@ -830,6 +833,13 @@ export async function logDose(
     }
 
     case "not_taken": {
+      // Undo reaches only what the connector marked; the user undoes their own in the app.
+      if ((prev?.status === "taken" || prev?.status === "skipped") && prev.deviceId !== MCP_DEVICE_ID) {
+        return refuse(
+          "not_connector_entry",
+          `${slot.prescriptionName} at ${slot.time} on ${date} was marked ${prev.status} in the app, not by Claude. The user can undo it in the app.`,
+        );
+      }
       if (prev?.status === "taken") {
         const restored = await restoreTakenStock(prev.id);
         const status = reopenedStatus(prev.remindAt, now);
@@ -976,6 +986,8 @@ export async function logExtraMedicine(
     let dosageMg: number | undefined;
     if (input.amount !== undefined) {
       if (input.unit === "mg") dosageMg = input.amount;
+      else if (input.unit === "mcg") dosageMg = input.amount / 1000;
+      else if (input.unit === "g") dosageMg = input.amount * 1000;
       else if ((input.unit === "tablet" || input.unit === "capsule") && planBrand && planBrand.strength > 0) {
         dosageMg = input.amount * planBrand.strength;
       }
@@ -1007,6 +1019,10 @@ export async function logExtraMedicine(
       actionTimestamp: takenAt - (((takenAt % 60_000) + 60_000) % 60_000),
       ...(inventoryItemId !== undefined && { inventoryItemId }),
       ...(dosageMg !== undefined && { doseMg: dosageMg }),
+      // What the user said they took, even when it has no mg (ml, or tablets
+      // of a medicine with no known strength), as logUnlistedDose keeps it.
+      ...(input.amount !== undefined && { doseAmount: input.amount }),
+      ...(input.amount !== undefined && input.unit !== undefined && { doseUnit: input.unit }),
       ...(note !== undefined && { note }),
       ...newRowFields(userId, timezone, now),
     };

@@ -520,7 +520,7 @@ export const MANUALS: Manual[] = [
       },
       {
         heading: "Deleting and privacy",
-        body: "Deleting an entry asks first, then erases its words, title, body places and intensity on this device and in your cloud copy. There is no undo, but a backup you exported before the deletion still holds the entry, and importing that backup brings it back.\n\nTyped entries never go to an AI service: the suggested details are worked out on your device. Spoken entries are transcribed and interpreted like any other voice log. In the cloud copy the words and titles are encrypted. If you connect Claude, it can read your journal and add entries; it can delete only entries it added. Journal entries are not included in AI insights.",
+        body: "Deleting an entry asks first, then erases its words, title, body places and intensity on this device and in your cloud copy. There is no undo, but a backup you exported before the deletion still holds the entry, and importing that backup brings it back.\n\nThe suggested details of a typed entry are worked out on your device, not by an AI service. Spoken entries are transcribed and interpreted like any other voice log. In the cloud copy the words and titles are encrypted. If you connect Claude and approve journal access, Claude can read your entries, typed or spoken, and add new ones; it can delete only entries it added. Journal entries are not included in AI insights.",
       },
     ],
   },
@@ -623,7 +623,7 @@ export const MANUALS: Manual[] = [
       },
       {
         heading: "Your journal",
-        body: "Journal entries are stored on your device like everything else. In the cloud copy their words and titles are encrypted, and deleting an entry erases its content there too. Typed entries are never sent to an AI service; spoken ones are transcribed and parsed like any voice log. If you connect Claude, it can read the journal and add entries. The journal is not included in AI insights.",
+        body: "Journal entries are stored on your device like everything else. In the cloud copy their words and titles are encrypted, and deleting an entry erases its content there too. The details of a typed entry are suggested on your device, not by an AI service; spoken ones are transcribed and parsed like any voice log. If you connect Claude and approve journal access, Claude can read every entry and add new ones. The journal is not included in AI insights.",
       },
       {
         heading: "Medical context consent",

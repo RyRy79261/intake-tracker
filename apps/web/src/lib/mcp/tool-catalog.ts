@@ -58,12 +58,23 @@ export type McpToolName = keyof typeof MCP_TOOL_CONSENT;
 
 export const MCP_TOOL_NAMES = Object.keys(MCP_TOOL_CONSENT) as McpToolName[];
 
-/** One line per exposed data category, in registration order. */
-export function consentDataCategories(): string[] {
-  return Array.from(new Set(Object.values(MCP_READ_TOOL_CONSENT)));
+/** The tools that also need the journal scope. */
+export const JOURNAL_TOOLS: readonly McpToolName[] = ["query_journal", "add_journal_entry"];
+
+const lines = (catalog: Record<string, string>, journal: boolean) =>
+  Object.entries(catalog)
+    .filter(([name]) => journal || !JOURNAL_TOOLS.includes(name as McpToolName))
+    .map(([, line]) => line);
+
+/**
+ * One line per exposed data category, in registration order. The journal's
+ * line shows only when the journal scope is asked for.
+ */
+export function consentDataCategories(opts: { journal?: boolean } = {}): string[] {
+  return Array.from(new Set(lines(MCP_READ_TOOL_CONSENT, opts.journal ?? true)));
 }
 
 /** One line per change the write scope allows. */
-export function consentWriteActions(): string[] {
-  return Object.values(MCP_WRITE_TOOL_CONSENT);
+export function consentWriteActions(opts: { journal?: boolean } = {}): string[] {
+  return lines(MCP_WRITE_TOOL_CONSENT, opts.journal ?? true);
 }

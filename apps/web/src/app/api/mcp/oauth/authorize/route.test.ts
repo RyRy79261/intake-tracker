@@ -247,6 +247,22 @@ describe("authorize GET — signed in", () => {
     expect(body).not.toContain("intake-tracker:write");
   });
 
+  it("lists the journal only when the journal scope is asked for", async () => {
+    getSessionMock.mockResolvedValue({
+      data: { user: { id: "user-1", email: "user@example.test" } },
+    });
+
+    const all = await (await GET(makeRequest(authorizeParams()))).text();
+    expect(all).toContain("Your medical journal");
+    expect(all).toContain("Add an entry to your medical journal");
+
+    const without = await (
+      await GET(makeRequest(authorizeParams({ scope: "intake-tracker:read intake-tracker:write" })))
+    ).text();
+    expect(without).not.toContain("medical journal");
+    expect(without).toContain("Log meals");
+  });
+
   it("renders consent and retires the marker after a successful sign-in", async () => {
     getSessionMock.mockResolvedValue({
       data: { user: { id: "user-1", email: "user@example.test" } },

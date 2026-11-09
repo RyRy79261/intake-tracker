@@ -299,8 +299,13 @@ export function registerReadOnlyTools(server: McpServer): void {
       inputSchema: dateRange,
     },
     async (args, ctx) =>
-      runTool(ctx, "query_journal", args, args, (userId) =>
-        queryJournal(userId, { start: args.start_ms, end: args.end_ms }),
+      runTool(
+        ctx,
+        "query_journal",
+        args,
+        args,
+        (userId) => queryJournal(userId, { start: args.start_ms, end: args.end_ms }),
+        { journal: true },
       ),
   );
 
@@ -309,7 +314,7 @@ export function registerReadOnlyTools(server: McpServer): void {
     {
       title: "Profile and settings",
       description:
-        "The user's medical conditions as they entered them in the app (e.g. 'HFrEF'), and the settings that give the numbers their meaning: daily limits (water_ml, sodium_mg, sugar_g, potassium_mg), which optional trackers are on, the day-start hour (a day's totals run from this hour), the first day of the week (0 = Sunday, 1 = Monday), the home time zone and region. `settings` is null when the app has not synced settings yet.",
+        "The user's medical conditions as they entered them in the app (e.g. 'HFrEF'), only while the user has 'Share conditions with AI' on (`conditions_shared`; otherwise `conditions` is empty and you should not guess them), and the settings that give the numbers their meaning: daily limits (water_ml, sodium_mg, sugar_g, potassium_mg), which optional trackers are on, the day-start hour (a day's totals run from this hour), the first day of the week (0 = Sunday, 1 = Monday), the home time zone and region. `settings` is null when the app has not synced settings yet.",
       inputSchema: z.object({}),
     },
     async (_args, ctx) =>
@@ -638,7 +643,7 @@ export function registerWriteTools(server: McpServer): void {
             timestamp: args.at_ms ?? Date.now(),
             timezone: args.timezone,
           }),
-        { write: true },
+        { write: true, journal: true },
       ),
   );
 
@@ -674,7 +679,7 @@ export function registerWriteTools(server: McpServer): void {
                 : "This record was logged in the app, not by Claude. The user can remove it in the app.",
           };
         },
-        { write: true },
+        { write: true, journal: args.kind === "journal_entry" },
       ),
   );
 

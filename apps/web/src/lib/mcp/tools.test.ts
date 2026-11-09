@@ -62,7 +62,7 @@ import { MCP_TOOL_NAMES } from "@/lib/mcp/tool-catalog";
 
 const DAY_MS = 24 * 60 * 60_000;
 
-const READ_WRITE = ["intake-tracker:read", "intake-tracker:write"];
+const READ_WRITE = ["intake-tracker:read", "intake-tracker:write", "intake-tracker:journal"];
 
 async function connect(scopes: string[] = READ_WRITE): Promise<Client> {
   const server = new McpServer({ name: "test", version: "0.0.0" });
@@ -405,5 +405,37 @@ describe("MCP tools — readings and journal", () => {
     expect(res.isError).toBe(true);
     expect(textOf(res)).toMatch(/can only read/);
     expect(recordWrites.logWeight).not.toHaveBeenCalled();
+  });
+});
+
+describe("MCP tools — the journal needs its own grant", () => {
+  it("asks a connection approved before the journal scope to reconnect", async () => {
+    const old = await connect(["intake-tracker:read", "intake-tracker:write"]);
+    for (const [name, args] of [
+      ["query_journal", { start_ms: 0, end_ms: DAY_MS }],
+      ["add_journal_entry", { words: "Sore knee", kind: "symptom" }],
+      ["delete_logged_record", { kind: "journal_entry", id: "6f1c2a8e-5b7d-4c3a-9e2f-1a2b3c4d5e6f" }],
+    ] as const) {
+      const res = await old.callTool({ name, arguments: args });
+      expect(res.isError, name).toBe(true);
+      expect(textOf(res)).toMatch(/medical journal/);
+    }
+    expect(queries.queryJournal).not.toHaveBeenCalled();
+    expect(recordWrites.addJournalEntry).not.toHaveBeenCalled();
+    expect(recordWrites.deleteLoggedRecord).not.toHaveBeenCalled();
+
+    // Other records still delete without it.
+    await old.callTool({ name: "delete_logged_record", arguments: { kind: "weight", id: "6f1c2a8e-5b7d-4c3a-9e2f-1a2b3c4d5e6f" } });
+    expect(recordWrites.deleteLoggedRecord).toHaveBeenCalled();
+  });
+
+  it("keeps a failed query's parameters out of the audit row", async () => {
+    const err = new Error('Failed query: insert into "weight_records" values ($1)\nparams: 80,feeling dizzy');
+    recordWrites.logWeight.mockRejectedValue(err);
+    const res = await client.callTool({ name: "log_weight", arguments: { weight_kg: 80, note: "feeling dizzy" } });
+    expect(textOf(res)).toMatch(/internal error/);
+    const audit = writeMcpAudit.mock.calls.at(-1)![0] as { errorMessage: string };
+    expect(audit.errorMessage).toContain("Failed query");
+    expect(audit.errorMessage).not.toMatch(/dizzy/);
   });
 });

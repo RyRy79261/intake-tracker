@@ -995,14 +995,18 @@ export async function queryJournal(userId: string, range: DateRange) {
 }
 
 /**
- * The user's medical conditions (the newest live profile row) and the synced
+ * The user's medical conditions (the newest live profile row, only while
+ * "Share conditions with AI" is on) and the synced
  * settings that change what the numbers mean: daily limits, the day-start
  * hour, the week start and the home time zone.
  */
 export async function getProfile(userId: string) {
   const [profileRows, settingsRows] = await Promise.all([
     db
-      .select({ conditions: userProfile.conditions })
+      .select({
+        conditions: userProfile.conditions,
+        shareConditionsWithAI: userProfile.shareConditionsWithAI,
+      })
       .from(userProfile)
       .where(and(eq(userProfile.userId, userId), isNull(userProfile.deletedAt)))
       .orderBy(desc(userProfile.updatedAt), asc(userProfile.id))
@@ -1025,8 +1029,12 @@ export async function getProfile(userId: string) {
       .limit(1),
   ]);
   const s = settingsRows[0];
+  const profile = profileRows[0];
+  // The profile promises conditions go to AI only while sharing is on.
+  const shared = profile?.shareConditionsWithAI === true;
   return {
-    conditions: profileRows[0]?.conditions ?? [],
+    conditions: shared ? profile.conditions : [],
+    conditions_shared: shared,
     settings: s
       ? {
           daily_limits: {

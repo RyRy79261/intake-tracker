@@ -325,8 +325,8 @@ the existing patterns from `src/lib/analytics-service.ts` and
 | `list_recent_doses` | last N dose log entries with prescription names | `doseLogs` |
 | `get_inventory_status` | pill counts + days-of-supply per prescription | `inventoryItems` |
 | `query_defecation_history` | bowel movements + amount estimate over [start, end] | `defecationRecords` |
-| `query_journal` | journal entries over [start, end]; `words`/`finding` decrypted with the field vault, as the sync pull does | `journalEntries` |
-| `get_profile` | conditions (newest live profile row) + daily limits, day-start hour, week start, home zone | `userProfile` + `userSettings` |
+| `query_journal` | journal entries over [start, end]; `words`/`finding` decrypted with the field vault, as the sync pull does. Needs `intake-tracker:journal` | `journalEntries` |
+| `get_profile` | conditions (newest live profile row, only while `shareConditionsWithAI` is on) + daily limits, day-start hour, week start, home zone | `userProfile` + `userSettings` |
 | `list_insight_reports` | saved AI analyses, newest first | `insightReports` |
 
 Each tool's Zod input schema enforces date-range sanity (`end >= start`,
@@ -346,7 +346,7 @@ Registered by `registerWriteTools` (`src/lib/mcp/tools.ts`), backed by
 | `log_sodium` | one `salt` intake (sodium mg) with `sodiumSource`/`sourceAmount`/`sourceUnit` | the Food card's sodium entry |
 | `log_weight` / `log_blood_pressure` | one weight / BP row (BP defaults sitting, left arm) | `addWeightRecord` / `addBloodPressureRecord` |
 | `log_urination` / `log_defecation` | one estimate row | `addEstimateRecord` |
-| `add_journal_entry` | one journal entry, `words`/`finding` encrypted (`encryptRowFields`); returns `journalNotices` | `buildJournalEntry` |
+| `add_journal_entry` | needs `intake-tracker:journal`; one journal entry, `words`/`finding` encrypted (`encryptRowFields`); returns `journalNotices` | `buildJournalEntry` |
 | `log_dose` | taken / skipped / not_taken on a scheduled slot, with the stock transaction and dose snapshot | `takeDose` / `skipDose` / `untakeDose` / `unskipDose` |
 | `log_extra_medicine` | a PRN dose of a listed medicine (stock follows) or an unlisted one | `logPrnDose` / `logUnlistedDose` |
 | `refill_stock` | a refill transaction on the active stock item | `adjustStock` |
@@ -356,7 +356,14 @@ Single-row writes live in `src/lib/mcp/record-writes.ts`, medication writes in
 `src/lib/mcp/medication-writes.ts` (tools in `medication-tools.ts`). The
 connector covers what the voice log covers. It never creates or edits
 prescriptions, phases, schedules, stock items, titration plans, the profile or
-settings, and never edits or deletes a row the user logged.
+settings. It never deletes a row the user logged, and `log_dose` undoes only a
+take or skip the connector made.
+
+The journal has its own scope, `intake-tracker:journal`, on top of read or
+write. A grant approved before the connector could reach the journal lacks it:
+the journal tools answer with a message to reconnect, and the consent screen
+lists the journal only when the scope is asked for (claude.ai asks for every
+scope by naming none).
 
 The tools write straight to the server mirror tables. Each row carries
 `deviceId='mcp-connector'` and a fresh `serverUpdatedAt`, so the app's next

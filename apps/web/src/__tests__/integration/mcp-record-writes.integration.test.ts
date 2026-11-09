@@ -167,11 +167,33 @@ describe("journal", () => {
     await ctx.db.update(schema.weightRecords).set({ deviceId: "phone" }).where(eq(schema.weightRecords.id, mine.id));
     expect(await writes.deleteLoggedRecord(ctx.testUserId, "weight", mine.id, NOW + 2)).toEqual({ deleted: false, reason: "not_connector_entry" });
   });
+
+  it("deletes as sodium only a standalone sodium row, never part of a meal or drink", async () => {
+    const sodium = await writes.logSodium(ctx.testUserId, { amount: 500, unit: "mg", source: "sodium", ...base }, NOW);
+    const grouped = crypto.randomUUID();
+    await ctx.db.insert(schema.intakeRecords).values({
+      id: grouped,
+      userId: ctx.testUserId,
+      type: "water",
+      amount: 250,
+      timestamp: AT,
+      source: "drink",
+      groupId: crypto.randomUUID(),
+      groupSource: "mcp_drink",
+      createdAt: NOW,
+      updatedAt: NOW,
+      deletedAt: null,
+      deviceId: "mcp-connector",
+      timezone: "UTC",
+    });
+    expect(await writes.deleteLoggedRecord(ctx.testUserId, "sodium", grouped, NOW + 1)).toEqual({ deleted: false, reason: "not_found" });
+    expect(await writes.deleteLoggedRecord(ctx.testUserId, "sodium", sodium.id, NOW + 1)).toMatchObject({ deleted: true });
+  });
 });
 
 describe("profile and insight reports", () => {
   it("reads conditions and settings, and null settings before they sync", async () => {
-    expect(await queries.getProfile(ctx.testUserId)).toEqual({ conditions: [], settings: null });
+    expect(await queries.getProfile(ctx.testUserId)).toEqual({ conditions: [], conditions_shared: false, settings: null });
     await ctx.db.insert(schema.userProfile).values({
       id: "p1",
       userId: ctx.testUserId,
@@ -183,7 +205,11 @@ describe("profile and insight reports", () => {
       deviceId: "d",
     });
     const profile = await queries.getProfile(ctx.testUserId);
-    expect(profile.conditions).toEqual(["HFrEF"]);
+    expect(profile).toMatchObject({ conditions: ["HFrEF"], conditions_shared: true });
+
+    // "Share conditions with AI" off: the conditions stay in the app.
+    await ctx.db.update(schema.userProfile).set({ shareConditionsWithAI: false });
+    expect(await queries.getProfile(ctx.testUserId)).toMatchObject({ conditions: [], conditions_shared: false });
   });
 
   it("lists reports newest first with mode defaulting to fast", async () => {

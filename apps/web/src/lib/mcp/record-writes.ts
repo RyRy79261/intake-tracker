@@ -236,6 +236,9 @@ export async function addJournalEntry(
 
   const finding = (input.finding?.trim() || titleFromWords(words)).slice(0, JOURNAL_FINDING_MAX);
   const severity = input.severity ?? null;
+  // Read before the insert: a failure here must not leave a saved entry
+  // reported as failed (a retry would add it twice).
+  const notices = journalNotices({ finding, words, severity, places }, { onBloodThinners: await onBloodThinners(userId) });
   const timezone = await getUserTimeZone(userId, input.timezone);
   const base = rowFields(userId, input.timestamp, timezone, now);
   const row = {
@@ -248,7 +251,6 @@ export async function addJournalEntry(
     severity,
   };
   await db.insert(journalEntries).values(encryptRowFields("journalEntries", row, userId));
-  const notices = journalNotices({ finding, words, severity, places }, { onBloodThinners: await onBloodThinners(userId) });
   return {
     id: base.id,
     kind: "journal_entry",
@@ -288,14 +290,21 @@ export async function deleteLoggedRecord(
   now = Date.now(),
 ): Promise<DeleteRecordResult> {
   const table = RECORD_TABLES[kind];
-  const live = and(eq(table.userId, userId), eq(table.id, id), isNull(table.deletedAt));
+  // A sodium id is a standalone sodium row: a meal's or drink's intake row
+  // goes with its group (delete_logged_entry), never on its own.
+  const sodiumOnly =
+    kind === "sodium" ? [eq(intakeRecords.type, "salt"), isNull(intakeRecords.groupId)] : [];
+  const live = and(eq(table.userId, userId), eq(table.id, id), isNull(table.deletedAt), ...sodiumOnly);
   const [row] = await db.select({ deviceId: table.deviceId }).from(table).where(live).limit(1);
   if (!row) return { deleted: false, reason: "not_found" };
   if (row.deviceId !== MCP_DEVICE_ID) return { deleted: false, reason: "not_connector_entry" };
   const blank = kind === "journal_entry" ? BLANK_WHEN_DELETED.journalEntries : {};
-  await db
+  const updated = await db
     .update(table)
     .set({ ...blank, deletedAt: now, updatedAt: now, serverUpdatedAt: now })
-    .where(and(live, eq(table.deviceId, MCP_DEVICE_ID)));
+    .where(and(live, eq(table.deviceId, MCP_DEVICE_ID)))
+    .returning({ id: table.id });
+  // The app pushed a change to the row between the two statements.
+  if (updated.length === 0) return { deleted: false, reason: "not_connector_entry" };
   return { deleted: true, kind, id };
 }
