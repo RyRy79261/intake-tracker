@@ -15,10 +15,14 @@
  * entries the connector itself logged — nothing else can be changed.
  */
 import { z } from "zod";
-import type { McpServer, ServerContext } from "@modelcontextprotocol/server";
+import type { McpServer } from "@modelcontextprotocol/server";
 import {
   getInventoryStatus,
+  getProfile,
   getTodaySummary,
+  listInsightReports,
+  queryDefecationHistory,
+  queryJournal,
   listMedications,
   listRecentDoses,
   listTitrationPlans,
@@ -30,152 +34,48 @@ import {
   queryWeightHistory,
 } from "@/lib/mcp/queries";
 import { deleteLoggedEntry, logDrink, logFood } from "@/lib/mcp/writes";
-import { writeMcpAudit } from "@/lib/mcp/audit";
-import { isValidTimeZone } from "@/lib/mcp/day-window";
-import { READ_SCOPE, WRITE_SCOPE } from "@/lib/mcp/scopes";
+import {
+  auditNumbers,
+  bounded,
+  consumedAt,
+  dateRange,
+  runTool,
+  timezoneArg,
+  withRange,
+} from "@/lib/mcp/tool-runtime";
 import type { McpReadToolName, McpWriteToolName } from "@/lib/mcp/tool-catalog";
 import { VOICE_ITEM_SPEC } from "@intake/core/voice-items";
-import { isFutureTimestamp } from "@intake/core/record-schemas";
+import { SODIUM_FRACTIONS } from "@intake/core/sodium";
+import {
+  JOURNAL_FINDING_MAX,
+  JOURNAL_KINDS,
+  JOURNAL_TIME_PRECISIONS,
+  JOURNAL_WORDS_MAX,
+  PLACE_OPTIONS,
+} from "@intake/core/journal";
+import type { JournalEntryKind, JournalTimePrecision } from "@intake/types/records";
+import {
+  type RecordKind,
+  addJournalEntry,
+  deleteLoggedRecord,
+  logBloodPressure,
+  logEstimate,
+  logSodium,
+  logWeight,
+} from "@/lib/mcp/record-writes";
+import { deleteMedicationRecord } from "@/lib/mcp/medication-writes";
+import { registerMedicationWriteTools } from "@/lib/mcp/medication-tools";
 
-const ONE_YEAR_MS = 365 * 24 * 60 * 60_000;
-
-const rangeShape = {
-  start_ms: z
-    .number()
-    .int()
-    .nonnegative()
-    .describe("Range start, unix milliseconds"),
-  end_ms: z
-    .number()
-    .int()
-    .nonnegative()
-    .describe("Range end, unix milliseconds"),
-};
-
-// Range limits live in the schema, so the SDK rejects a bad range before the
-// tool runs and returns the message below to the model verbatim (a throw
-// inside runTool would be masked as a generic internal error).
-type RangeArgs = { start_ms: number; end_ms: number };
-
-function withRange<S extends z.ZodRawShape>(shape: S) {
-  return z
-    .object({ ...shape, ...rangeShape })
-    .refine((a) => (a as RangeArgs).end_ms >= (a as RangeArgs).start_ms, {
-      message: "end_ms must be >= start_ms",
-      path: ["end_ms"],
-    })
-    .refine((a) => (a as RangeArgs).end_ms - (a as RangeArgs).start_ms <= ONE_YEAR_MS, {
-      message:
-        "Range must be <= 1 year (365 days); split longer periods into several calls",
-      path: ["end_ms"],
-    });
-}
-
-const dateRange = withRange({});
-
-const timezoneArg = z
-  .string()
-  .refine(isValidTimeZone, {
-    message: "timezone must be an IANA time zone such as 'Europe/Berlin'",
-  })
-  .optional()
-  .describe(
-    "The user's IANA time zone (e.g. 'Europe/Berlin'). Defaults to the zone the app last reported for the user, else UTC.",
-  );
-
-function getAuth(ctx: ServerContext): {
-  userId: string;
-  clientId: string;
-  scopes: string[];
-} {
-  const info = ctx.http?.authInfo;
-  if (!info?.extra || typeof info.extra !== "object") {
-    throw new Error("Missing auth context");
-  }
-  const extra = info.extra as { userId?: string; clientId?: string };
-  if (!extra.userId || !extra.clientId) {
-    throw new Error("Missing userId/clientId in auth context");
-  }
-  return { userId: extra.userId, clientId: extra.clientId, scopes: info.scopes ?? [] };
-}
-
-async function runTool<TArgs extends Record<string, unknown>>(
-  ctx: ServerContext,
-  tool: string,
-  args: TArgs,
-  argsForAudit: Record<string, unknown> | null,
-  body: (userId: string) => Promise<unknown>,
-  opts: { write?: boolean } = {},
-) {
-  const started = Date.now();
-  const { userId, clientId, scopes } = getAuth(ctx);
-  // Each tool needs its own scope: a write-only grant must not read.
-  const required = opts.write ? WRITE_SCOPE : READ_SCOPE;
-  if (!scopes.includes(required)) {
-    void writeMcpAudit({
-      userId,
-      clientId,
-      tool,
-      argsForAudit,
-      status: "error",
-      errorMessage: `missing ${required} scope`,
-      durationMs: Date.now() - started,
-    });
-    return {
-      content: [
-        {
-          type: "text" as const,
-          text: opts.write
-            ? "This connection can only read. To let Claude log entries, remove the intake-tracker connector in Claude's settings and connect it again, then approve the new access."
-            : "This connection was not granted read access to intake-tracker data.",
-        },
-      ],
-      isError: true,
-    };
-  }
-  try {
-    const result = await body(userId);
-    void writeMcpAudit({
-      userId,
-      clientId,
-      tool,
-      argsForAudit,
-      status: "success",
-      durationMs: Date.now() - started,
-    });
-    return {
-      content: [
-        {
-          type: "text" as const,
-          text: JSON.stringify(result, null, 2),
-        },
-      ],
-    };
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    // Full internal error is captured in the audit log only. The reply
-    // to the MCP client is intentionally generic so we don't leak SQL
-    // shapes, stack frames, or internal field names to the model.
-    void writeMcpAudit({
-      userId,
-      clientId,
-      tool,
-      argsForAudit,
-      status: "error",
-      errorMessage: message,
-      durationMs: Date.now() - started,
-    });
-    return {
-      content: [
-        {
-          type: "text" as const,
-          text: "An internal error occurred while processing your request.",
-        },
-      ],
-      isError: true,
-    };
-  }
-}
+const DELETABLE_KINDS = [
+  "sodium",
+  "weight",
+  "blood_pressure",
+  "urination",
+  "defecation",
+  "journal_entry",
+  "extra_medicine",
+  "stock_refill",
+] as const satisfies readonly (RecordKind | "extra_medicine" | "stock_refill")[];
 
 export function registerReadOnlyTools(server: McpServer): void {
   // Names are typed against the consent catalog, so every tool registered
@@ -375,19 +275,68 @@ export function registerReadOnlyTools(server: McpServer): void {
         getInventoryStatus(userId),
       ),
   );
+
+  server.registerTool(
+    tool("query_defecation_history"),
+    {
+      title: "Bowel movement history",
+      description:
+        "Bowel movements in the given time range, each with an amount estimate ('small' | 'medium' | 'large', or null) and an optional note. Returned oldest first. Capped at 5000 rows: when `truncated` is true the NEWEST 5000 rows in the range are kept, so page further back by calling again with end_ms set just before the first row's timestamp.",
+      inputSchema: dateRange,
+    },
+    async (args, ctx) =>
+      runTool(ctx, "query_defecation_history", args, args, (userId) =>
+        queryDefecationHistory(userId, { start: args.start_ms, end: args.end_ms }),
+      ),
+  );
+
+  server.registerTool(
+    tool("query_journal"),
+    {
+      title: "Medical journal",
+      description:
+        "The user's medical journal entries in the given time range: things they felt (`kind`='symptom'), saw ('sign') or that happened ('event'). `words` is exactly what they said or typed; `finding` is the short title a doctor reads first. `places` are body-place ids (sided ones end in -l / -r, the user's own left or right) with readable `placeLabels`; `severity` is a 0-10 rating or null when not rated; `timePrecision` says whether `timestamp` is 'exact', 'approx' or only the 'day'. Treat the words as the user's private notes: quote them only to the user. Returned oldest first. Capped at 5000 rows: when `truncated` is true the NEWEST 5000 rows in the range are kept, so page further back by calling again with end_ms set just before the first row's timestamp.",
+      inputSchema: dateRange,
+    },
+    async (args, ctx) =>
+      runTool(ctx, "query_journal", args, args, (userId) =>
+        queryJournal(userId, { start: args.start_ms, end: args.end_ms }),
+      ),
+  );
+
+  server.registerTool(
+    tool("get_profile"),
+    {
+      title: "Profile and settings",
+      description:
+        "The user's medical conditions as they entered them in the app (e.g. 'HFrEF'), and the settings that give the numbers their meaning: daily limits (water_ml, sodium_mg, sugar_g, potassium_mg), which optional trackers are on, the day-start hour (a day's totals run from this hour), the first day of the week (0 = Sunday, 1 = Monday), the home time zone and region. `settings` is null when the app has not synced settings yet.",
+      inputSchema: z.object({}),
+    },
+    async (_args, ctx) =>
+      runTool(ctx, "get_profile", {}, null, (userId) => getProfile(userId)),
+  );
+
+  server.registerTool(
+    tool("list_insight_reports"),
+    {
+      title: "Saved AI analyses",
+      description:
+        "AI analyses the user generated in the app's Metrics window, newest first: the period analysed (`rangeStart`..`rangeEnd`, unix ms), `mode` ('fast' summary or 'deep' research with web `sources`), whether the user's medical profile was used (`personalised`), the `narrative` and the `observations`. They are AI output, not clinical advice.",
+      inputSchema: z.object({
+        limit: z.number().int().min(1).max(50).default(10).describe("Number of reports (1-50, default 10)"),
+      }),
+    },
+    async (args, ctx) =>
+      runTool(ctx, "list_insight_reports", args, args, (userId) =>
+        listInsightReports(userId, args.limit),
+      ),
+  );
 }
 
 // ─── Log tools ────────────────────────────────────────────────────────
 
 const FOOD = VOICE_ITEM_SPEC.food;
 const DRINK = VOICE_ITEM_SPEC.alcohol;
-
-function bounded(
-  spec: { min: number; max: number; unit: string },
-  description: string,
-) {
-  return z.number().min(spec.min).max(spec.max).describe(`${description} (${spec.unit})`);
-}
 
 const entryDescription = z
   .string()
@@ -407,24 +356,6 @@ const soluteShape = {
   potassium_mg: bounded(FOOD.potassiumMg, "Potassium in the portion consumed").optional(),
 };
 
-const consumedAt = z
-  .number()
-  .int()
-  .refine((ts) => !isFutureTimestamp(ts, Date.now()), {
-    message: "consumed_at_ms can't be in the future",
-  })
-  .refine((ts) => ts >= Date.now() - ONE_YEAR_MS, {
-    message: "consumed_at_ms must be within the last year",
-  })
-  .optional()
-  .describe("When the user ate or drank it, unix milliseconds. Defaults to now.");
-
-/** Numbers only: the free-text description never reaches the audit log. */
-function auditNumbers(args: Record<string, unknown>): Record<string, unknown> {
-  return Object.fromEntries(
-    Object.entries(args).filter(([, v]) => typeof v === "number"),
-  );
-}
 
 export function registerWriteTools(server: McpServer): void {
   const tool = (name: McpWriteToolName) => name;
@@ -536,4 +467,216 @@ export function registerWriteTools(server: McpServer): void {
         { write: true },
       ),
   );
+
+  const noteArg = z
+    .string()
+    .trim()
+    .max(VOICE_ITEM_SPEC.weight.note.maxLength)
+    .optional()
+    .describe(`A short note, in the user's words (max ${VOICE_ITEM_SPEC.weight.note.maxLength} characters)`);
+  const takenAt = consumedAt.describe("When it happened, unix milliseconds. Defaults to now.");
+  const writeAnnotations = { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false };
+  const undoHint =
+    "Returns `id` and `kind`; pass both to delete_logged_record to undo a mistake. The entry appears in the app the next time the app syncs.";
+  /** Numbers and choices only: notes and words never reach the audit log. */
+  const auditFields = (args: Record<string, unknown>) =>
+    Object.fromEntries(
+      Object.entries(args).filter(
+        ([k, v]) => typeof v === "number" || typeof v === "boolean" || (typeof v === "string" && !["note", "words", "finding"].includes(k)),
+      ),
+    );
+
+  server.registerTool(
+    tool("log_sodium"),
+    {
+      title: "Log salt or sodium",
+      annotations: writeAnnotations,
+      description: `Log salt, MSG or sodium the user added on its own (a pinch of salt on dinner, a stock cube), not part of a meal: for a meal use log_food with its sodium_mg. Give what the user added as they said it: \`amount\` with \`unit\` ('mg' or 'g') and \`source\` ('salt', 'msg' or 'sodium'); the app converts it to sodium (1 g salt is about 393 mg sodium, 1 g MSG about 123 mg). Before logging, tell the user the values you will log. ${undoHint}`,
+      inputSchema: z.object({
+        amount: z.number().positive().max(100000).describe("Amount added, in `unit`"),
+        unit: z.enum(["mg", "g"]),
+        source: z.enum(["salt", "msg", "sodium"]).describe("What was added: table salt, MSG, or sodium itself"),
+        note: noteArg,
+        at_ms: takenAt,
+        timezone: timezoneArg,
+      }).refine((a) => {
+        const mg = (a.unit === "g" ? a.amount * 1000 : a.amount) * SODIUM_FRACTIONS[a.source];
+        return mg >= VOICE_ITEM_SPEC.salt.sodiumMg.min && mg <= VOICE_ITEM_SPEC.salt.sodiumMg.max;
+      }, { message: `That is outside ${VOICE_ITEM_SPEC.salt.sodiumMg.min}-${VOICE_ITEM_SPEC.salt.sodiumMg.max} mg of sodium`, path: ["amount"] }),
+    },
+    async (args, ctx) =>
+      runTool(ctx, "log_sodium", args, auditFields(args), (userId) =>
+        logSodium(userId, { amount: args.amount, unit: args.unit, source: args.source, note: args.note, timestamp: args.at_ms ?? Date.now(), timezone: args.timezone }),
+        { write: true },
+      ),
+  );
+
+  const W = VOICE_ITEM_SPEC.weight;
+  server.registerTool(
+    tool("log_weight"),
+    {
+      title: "Log weight",
+      annotations: writeAnnotations,
+      description: `Log a weight reading in kg (convert from lb or stone first and say so). Before logging, tell the user the value you will log. ${undoHint}`,
+      inputSchema: z.object({
+        weight_kg: bounded(W.weightKg, "Weight"),
+        note: noteArg,
+        at_ms: takenAt,
+        timezone: timezoneArg,
+      }),
+    },
+    async (args, ctx) =>
+      runTool(ctx, "log_weight", args, auditFields(args), (userId) =>
+        logWeight(userId, { weightKg: args.weight_kg, note: args.note, timestamp: args.at_ms ?? Date.now(), timezone: args.timezone }),
+        { write: true },
+      ),
+  );
+
+  const BP = VOICE_ITEM_SPEC.blood_pressure;
+  const wholeBounded = (spec: { min: number; max: number; unit: string }, d: string) =>
+    z.number().int().min(spec.min).max(spec.max).describe(`${d} (${spec.unit})`);
+  server.registerTool(
+    tool("log_blood_pressure"),
+    {
+      title: "Log blood pressure",
+      annotations: writeAnnotations,
+      description: `Log one blood pressure reading: systolic over diastolic in mmHg, with the heart rate when the user has it. Position defaults to sitting and arm to left, as in the app; ask when it matters. Log each reading separately. Before logging, tell the user the values you will log. ${undoHint}`,
+      inputSchema: z
+        .object({
+          systolic: wholeBounded(BP.systolic, "Systolic, the top number"),
+          diastolic: wholeBounded(BP.diastolic, "Diastolic, the bottom number"),
+          heart_rate: wholeBounded(BP.heartRate, "Heart rate").optional(),
+          irregular_heartbeat: z.boolean().optional().describe("The monitor flagged an irregular heartbeat"),
+          position: z.enum(["sitting", "standing"]).optional(),
+          arm: z.enum(["left", "right"]).optional(),
+          note: noteArg,
+          at_ms: takenAt,
+          timezone: timezoneArg,
+        })
+        .refine((a) => a.systolic > a.diastolic, { message: "systolic must be higher than diastolic", path: ["diastolic"] }),
+    },
+    async (args, ctx) =>
+      runTool(ctx, "log_blood_pressure", args, auditFields(args), (userId) =>
+        logBloodPressure(userId, {
+          systolic: args.systolic,
+          diastolic: args.diastolic,
+          heartRate: args.heart_rate,
+          irregularHeartbeat: args.irregular_heartbeat,
+          position: args.position,
+          arm: args.arm,
+          note: args.note,
+          timestamp: args.at_ms ?? Date.now(),
+          timezone: args.timezone,
+        }),
+        { write: true },
+      ),
+  );
+
+  const amountEstimate = z
+    .enum(["small", "medium", "large"])
+    .describe("Rough amount: small, medium or large");
+  for (const kind of ["urination", "defecation"] as const) {
+    const name = kind === "urination" ? "log_urination" : "log_defecation";
+    server.registerTool(
+      tool(name),
+      {
+        title: kind === "urination" ? "Log urination" : "Log bowel movement",
+        annotations: writeAnnotations,
+        description:
+          kind === "urination"
+            ? `Log one urination with a rough amount. The app always records an amount, so ask the user when they did not say. ${undoHint}`
+            : `Log one bowel movement, with a rough amount when the user gives one. Put anything notable (colour, consistency) in the note in the user's words. ${undoHint}`,
+        inputSchema: z.object({
+          amount_estimate: kind === "urination" ? amountEstimate : amountEstimate.optional(),
+          note: noteArg,
+          at_ms: takenAt,
+          timezone: timezoneArg,
+        }),
+      },
+      async (args, ctx) =>
+        runTool(ctx, name, args, auditFields(args), (userId) =>
+          logEstimate(userId, kind, { amountEstimate: args.amount_estimate, note: args.note, timestamp: args.at_ms ?? Date.now(), timezone: args.timezone }),
+          { write: true },
+        ),
+    );
+  }
+
+  server.registerTool(
+    tool("add_journal_entry"),
+    {
+      title: "Add a journal entry",
+      annotations: writeAnnotations,
+      description: `Add one entry to the user's medical journal: something they felt (kind 'symptom', e.g. knee pain), saw ('sign', e.g. a rash, swollen ankles) or that happened ('event', e.g. a fall, a missed night's sleep). \`words\` is what the user said, in their words; \`finding\` a short title a doctor reads first ('Knee pain'; defaults to the start of the words). \`places\` are body-place ids from this list (sided ones need the user's own side, -l or -r; ask when they did not say): ${PLACE_OPTIONS.map((p) => p.id).join(", ")}. \`severity\` is a 0-10 rating only when the user gave one. One thing per entry: if it comes back later, that is a new entry. Before adding, tell the user what you will add. The result's \`notices\` are safety messages the app shows for this entry (for example call 112 for chest pain): always pass them on to the user word for word. ${undoHint}`,
+      inputSchema: z.object({
+        words: z.string().trim().min(1).max(JOURNAL_WORDS_MAX).describe(`What the user noticed, in their words (max ${JOURNAL_WORDS_MAX} characters)`),
+        finding: z.string().trim().max(JOURNAL_FINDING_MAX).optional().describe(`Short title (max ${JOURNAL_FINDING_MAX} characters)`),
+        kind: z.enum(JOURNAL_KINDS as [JournalEntryKind, ...JournalEntryKind[]]),
+        places: z.array(z.string()).max(PLACE_OPTIONS.length).optional().describe("Body-place ids"),
+        severity: z.number().int().min(0).max(10).optional().describe("0-10 rating, only when the user gave one"),
+        time_precision: z
+          .enum(JOURNAL_TIME_PRECISIONS as [JournalTimePrecision, ...JournalTimePrecision[]])
+          .optional()
+          .describe("'exact' (default), 'approx' (about then) or 'day' (only the day is known)"),
+        at_ms: takenAt,
+        timezone: timezoneArg,
+      }),
+    },
+    async (args, ctx) =>
+      runTool(
+        ctx,
+        "add_journal_entry",
+        args,
+        { kind: args.kind, severity: args.severity ?? null, places: args.places?.length ?? 0, at_ms: args.at_ms ?? null },
+        (userId) =>
+          addJournalEntry(userId, {
+            words: args.words,
+            finding: args.finding,
+            kind: args.kind,
+            places: args.places,
+            severity: args.severity,
+            timePrecision: args.time_precision,
+            timestamp: args.at_ms ?? Date.now(),
+            timezone: args.timezone,
+          }),
+        { write: true },
+      ),
+  );
+
+  server.registerTool(
+    tool("delete_logged_record"),
+    {
+      title: "Delete a logged record",
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
+      description:
+        "Remove one record this connector logged, by the `kind` and `id` its log tool returned. Use it to undo a wrong or duplicate entry, and only when the user asks. A deleted journal entry keeps no words. Records the user logged in the app can't be removed here; the user removes those in the app. For a meal or drink use delete_logged_entry; to undo a taken or skipped dose use log_dose with action 'not_taken'.",
+      inputSchema: z.object({
+        kind: z.enum(DELETABLE_KINDS),
+        id: z.string().uuid().describe("The id the log tool returned"),
+      }),
+    },
+    async (args, ctx) =>
+      runTool(
+        ctx,
+        "delete_logged_record",
+        args,
+        { kind: args.kind, id: args.id },
+        async (userId) => {
+          const result =
+            args.kind === "extra_medicine" || args.kind === "stock_refill"
+              ? await deleteMedicationRecord(userId, args.kind, args.id)
+              : await deleteLoggedRecord(userId, args.kind, args.id);
+          if (result.deleted) return result;
+          return {
+            ...result,
+            message:
+              result.reason === "not_found"
+                ? "No live record of this kind has this id. It may already be deleted."
+                : "This record was logged in the app, not by Claude. The user can remove it in the app.",
+          };
+        },
+        { write: true },
+      ),
+  );
+
+  registerMedicationWriteTools(server);
 }

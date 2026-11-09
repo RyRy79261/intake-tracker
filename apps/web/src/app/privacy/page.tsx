@@ -125,8 +125,10 @@ export default function PrivacyPolicyPage() {
           entries are not sent to any AI service: the suggested title and
           details are worked out on your device. Entries you speak are
           transcribed and interpreted like any other voice log (see below).
-          The printout for your doctor is made on your device. Journal entries
-          are not shared with the Claude connector or included in AI insights.
+          The printout for your doctor is made on your device. If you connect
+          the Claude connector and approve it, Claude can read your journal
+          entries and add new ones. Journal entries are not included in AI
+          insights.
           Deleting an entry erases its words, title, body places and intensity
           on your device and in the cloud copy. There is no undo, but a backup
           file you exported before the deletion still contains the entry, and

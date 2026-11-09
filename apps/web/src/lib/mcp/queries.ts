@@ -33,7 +33,13 @@ import {
   pushSettings,
   pushSubscriptions,
   userSettings,
+  defecationRecords,
+  journalEntries,
+  userProfile,
+  insightReports,
 } from "@intake/db/schema";
+import { decryptRowFields } from "@/lib/server/field-vault";
+import { placeLabel } from "@intake/core/journal";
 import { resolveTimeZone, zonedDayWindow } from "@/lib/mcp/day-window";
 import { dailyTotals, totalsWindow, type MetricKey } from "@intake/core/daily-totals";
 import { resolveDoseStatus } from "@/lib/dose-status";
@@ -919,6 +925,147 @@ export async function listTitrationPlans(userId: string) {
     .where(and(eq(titrationPlans.userId, userId), isNull(titrationPlans.deletedAt)))
     .orderBy(desc(titrationPlans.updatedAt));
   return { titration_plans: plans };
+}
+
+export async function queryDefecationHistory(userId: string, range: DateRange) {
+  const rows = await db
+    .select({
+      id: defecationRecords.id,
+      timestamp: defecationRecords.timestamp,
+      // 'small' | 'medium' | 'large', nullable.
+      amountEstimate: defecationRecords.amountEstimate,
+      note: defecationRecords.note,
+    })
+    .from(defecationRecords)
+    .where(
+      and(
+        eq(defecationRecords.userId, userId),
+        gte(defecationRecords.timestamp, range.start),
+        lte(defecationRecords.timestamp, range.end),
+        isNull(defecationRecords.deletedAt),
+      ),
+    )
+    .orderBy(desc(defecationRecords.timestamp), desc(defecationRecords.id))
+    .limit(MAX_ROWS + 1);
+  return capRows(rows);
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Journal, profile, settings, insight reports
+// ─────────────────────────────────────────────────────────────────────────
+
+/**
+ * Live journal entries in the range. `words` and `finding` are stored
+ * encrypted (lib/server/field-vault.ts) and decrypted here, as the sync pull
+ * does; one that no longer decrypts reads as the vault's UNREADABLE_TEXT.
+ */
+export async function queryJournal(userId: string, range: DateRange) {
+  const rows = await db
+    .select({
+      id: journalEntries.id,
+      timestamp: journalEntries.timestamp,
+      timePrecision: journalEntries.timePrecision,
+      words: journalEntries.words,
+      finding: journalEntries.finding,
+      kind: journalEntries.kind,
+      places: journalEntries.places,
+      severity: journalEntries.severity,
+      source: journalEntries.source,
+      timezone: journalEntries.timezone,
+    })
+    .from(journalEntries)
+    .where(
+      and(
+        eq(journalEntries.userId, userId),
+        gte(journalEntries.timestamp, range.start),
+        lte(journalEntries.timestamp, range.end),
+        isNull(journalEntries.deletedAt),
+      ),
+    )
+    .orderBy(desc(journalEntries.timestamp), desc(journalEntries.id))
+    .limit(MAX_ROWS + 1);
+  const { items, truncated } = capRows(rows);
+  return {
+    items: items.map((row) => {
+      const plain = decryptRowFields("journalEntries", row, userId);
+      return { ...plain, placeLabels: plain.places.map(placeLabel) };
+    }),
+    truncated,
+  };
+}
+
+/**
+ * The user's medical conditions (the newest live profile row) and the synced
+ * settings that change what the numbers mean: daily limits, the day-start
+ * hour, the week start and the home time zone.
+ */
+export async function getProfile(userId: string) {
+  const [profileRows, settingsRows] = await Promise.all([
+    db
+      .select({ conditions: userProfile.conditions })
+      .from(userProfile)
+      .where(and(eq(userProfile.userId, userId), isNull(userProfile.deletedAt)))
+      .orderBy(desc(userProfile.updatedAt), asc(userProfile.id))
+      .limit(1),
+    db
+      .select({
+        waterLimit: userSettings.waterLimit,
+        saltLimit: userSettings.saltLimit,
+        sugarLimit: userSettings.sugarLimit,
+        potassiumLimit: userSettings.potassiumLimit,
+        optionalTrackers: userSettings.optionalTrackers,
+        dayStartHour: userSettings.dayStartHour,
+        weekStartsOn: userSettings.weekStartsOn,
+        homeTimezone: userSettings.homeTimezone,
+        primaryRegion: userSettings.primaryRegion,
+      })
+      .from(userSettings)
+      .where(and(eq(userSettings.userId, userId), isNull(userSettings.deletedAt)))
+      .orderBy(desc(userSettings.updatedAt), asc(userSettings.id))
+      .limit(1),
+  ]);
+  const s = settingsRows[0];
+  return {
+    conditions: profileRows[0]?.conditions ?? [],
+    settings: s
+      ? {
+          daily_limits: {
+            water_ml: s.waterLimit,
+            sodium_mg: s.saltLimit,
+            sugar_g: s.sugarLimit,
+            potassium_mg: s.potassiumLimit,
+          },
+          optional_trackers: s.optionalTrackers,
+          day_start_hour: s.dayStartHour,
+          week_starts_on: s.weekStartsOn,
+          home_timezone: s.homeTimezone,
+          region: s.primaryRegion || null,
+        }
+      : null,
+  };
+}
+
+/** Saved AI analyses, newest first. */
+export async function listInsightReports(userId: string, limit: number) {
+  const rows = await db
+    .select({
+      id: insightReports.id,
+      generatedAt: insightReports.generatedAt,
+      rangeStart: insightReports.rangeStart,
+      rangeEnd: insightReports.rangeEnd,
+      mode: insightReports.mode,
+      personalised: insightReports.personalised,
+      narrative: insightReports.narrative,
+      observations: insightReports.observations,
+      sources: insightReports.sources,
+    })
+    .from(insightReports)
+    .where(and(eq(insightReports.userId, userId), isNull(insightReports.deletedAt)))
+    .orderBy(desc(insightReports.generatedAt), desc(insightReports.id))
+    .limit(limit);
+  return {
+    insight_reports: rows.map((r) => ({ ...r, mode: r.mode ?? "fast" })),
+  };
 }
 
 // ─────────────────────────────────────────────────────────────────────────

@@ -324,7 +324,9 @@ the HL7 FHIR Symptoms guide, so a future export can code it.
   and on the server; only an empty tombstone remains for sync. There is no
   undo, but a backup exported before the deletion still holds the entry, and
   importing it restores the entry on the device and in the cloud copy.
-- The MCP connector cannot read journal entries.
+- The Claude connector (MCP) can read journal entries and add new ones once
+  you approve it; it decrypts them on the server, as a sync pull does. It can
+  delete only entries it added itself.
 
 ### Security Features
 
@@ -435,12 +437,27 @@ MCP_PUBLIC_URL=https://your-app.example.com
 | `get_inventory_status` | per-prescription pill stock + refill thresholds |
 | `query_substance_history` | caffeine and alcohol history |
 | `query_urination_history` | urination history |
+| `query_defecation_history` | bowel movement history |
 | `list_titration_plans` | titration plans with their notes and warnings |
+| `query_journal` | medical journal entries in a date range |
+| `get_profile` | medical conditions, daily limits, day start, home time zone |
+| `list_insight_reports` | AI analyses saved in the Metrics window |
 | `log_food` *(write)* | log a meal with its water, sodium, sugar and potassium |
 | `log_drink` *(write)* | log a drink with its caffeine, alcohol and solutes |
+| `log_sodium` *(write)* | log salt, MSG or sodium added on its own |
+| `log_weight` *(write)* | log a weight reading |
+| `log_blood_pressure` *(write)* | log a blood pressure reading |
+| `log_urination` / `log_defecation` *(write)* | log a urination or bowel movement |
+| `add_journal_entry` *(write)* | add a journal entry (returns the app's safety notices) |
+| `log_dose` *(write)* | mark a scheduled dose taken or skipped, or undo that |
+| `log_extra_medicine` *(write)* | log an as-needed or unlisted medicine |
+| `refill_stock` *(write)* | add pills to a medicine's stock |
 | `delete_logged_entry` *(write)* | remove a meal or drink Claude logged |
+| `delete_logged_record` *(write)* | remove a reading, journal entry, extra dose or refill Claude logged |
 
-Journal entries are not exposed to the connector.
+The connector does what the voice log does. It never adds or changes
+prescriptions, schedules, titration plans or settings, and it removes only what
+it logged itself.
 
 ### Revocation
 

@@ -23,12 +23,28 @@ export const MCP_READ_TOOL_CONSENT = {
     "Titration plans, including their clinical notes and warnings",
   list_recent_doses: "Medication dose logs",
   get_inventory_status: "Medication inventory and refill thresholds",
+  query_defecation_history: "Bowel movement history",
+  query_journal: "Your medical journal: what you noticed, its title, kind, body places and rating",
+  get_profile:
+    "Your medical conditions and app settings (daily limits, day start, home time zone)",
+  list_insight_reports: "AI analyses saved in the app",
 } as const;
 
 export const MCP_WRITE_TOOL_CONSENT = {
   log_food: "Log meals you ate, with their water, sodium, sugar and potassium",
   log_drink: "Log drinks, with their caffeine, alcohol, sodium, sugar and potassium",
+  log_sodium: "Log salt, MSG or sodium you added to food",
+  log_weight: "Log a weight reading",
+  log_blood_pressure: "Log a blood pressure and heart rate reading",
+  log_urination: "Log a urination",
+  log_defecation: "Log a bowel movement",
+  add_journal_entry: "Add an entry to your medical journal",
+  log_dose: "Mark a scheduled medicine dose as taken or skipped, or undo that (stock follows)",
+  log_extra_medicine: "Log a medicine taken outside the schedule (stock follows)",
+  refill_stock: "Add pills to the stock of a medicine on your list",
   delete_logged_entry: "Remove a meal or drink that Claude logged (never one you logged)",
+  delete_logged_record:
+    "Remove a reading, journal entry, extra dose or refill that Claude logged (never one you logged)",
 } as const;
 
 export const MCP_TOOL_CONSENT = {
