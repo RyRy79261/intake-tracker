@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.49.0](https://github.com/RyRy79261/intake-tracker/compare/v1.48.3...v1.49.0) (2026-11-10)
+
+
+### Features
+
+* **mcp:** journal, readings, doses and stock in the Claude connector ([#484](https://github.com/RyRy79261/intake-tracker/issues/484)) ([aa6788a](https://github.com/RyRy79261/intake-tracker/commit/aa6788a9419b405fc9d5d0328c564de596a2aff7))
+
 ## [1.48.3](https://github.com/RyRy79261/intake-tracker/compare/v1.48.2...v1.48.3) (2026-11-07)
 
 
