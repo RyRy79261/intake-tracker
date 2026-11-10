@@ -13,7 +13,7 @@ import { test, expect, type APIRequestContext } from "@playwright/test";
  *   4. POST /api/mcp/oauth/authorize  → auth code redirect
  *   5. POST /api/mcp/oauth/token      → access + refresh tokens
  *   6. POST /api/mcp/mcp  initialize  → server info
- *   7. POST /api/mcp/mcp  tools/list  → 8 read-only tools
+ *   7. POST /api/mcp/mcp  tools/list  → the read and log tools
  *
  * Auth: globalSetup signs into Neon Auth via the /auth page and persists
  * the session cookie in `playwright/.auth/user.json`. We reuse that
@@ -215,7 +215,7 @@ test.describe("MCP connector handshake", () => {
       });
       expect(initRes.status()).toBe(200);
 
-      // tools/list — should surface all 8 read-only tools.
+      // tools/list — should surface the read and log tools.
       const listRes = await request.post(`${baseURL}/api/mcp/mcp`, {
         headers: {
           "content-type": "application/json",
@@ -242,6 +242,15 @@ test.describe("MCP connector handshake", () => {
         "list_medications",
         "list_recent_doses",
         "get_inventory_status",
+        "query_journal",
+        "query_defecation_history",
+        "get_profile",
+        "list_insight_reports",
+        "add_journal_entry",
+        "log_weight",
+        "log_blood_pressure",
+        "log_dose",
+        "delete_logged_record",
       ];
       for (const name of expectedTools) {
         expect(body, `tools/list missing ${name}`).toContain(name);
