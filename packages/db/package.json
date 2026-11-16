@@ -27,7 +27,7 @@
   "devDependencies": {
     "@intake/eslint-config": "workspace:*",
     "@intake/typescript-config": "workspace:*",
-    "@next/env": "16.4.5",
+    "@next/env": "16.4.6",
     "@types/node": "^26.6.6",
     "drizzle-kit": "^0.31.11",
     "eslint": "^10.14.0",
