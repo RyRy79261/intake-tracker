@@ -27,7 +27,7 @@ function exampleInput(): EngineInput {
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
   let seed = 11;
   const r = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
-  const id = () => Math.random().toString(36).slice(2);
+  const id = () => crypto.randomUUID();
   const meta = { createdAt: now, updatedAt: now, deletedAt: null, deviceId: "example", timezone: tz };
   const at = (d: number, h: number, m = 0) => {
     const t = new Date(now - d * DAY);
