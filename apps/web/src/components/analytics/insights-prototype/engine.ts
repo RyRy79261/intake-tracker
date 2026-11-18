@@ -873,7 +873,13 @@ export function adherence(inp: EngineInput, win: ReportWindow) {
     if (l.status === "taken") v.taken++;
     byDay.set(l.scheduledDate, v);
   }
-  const fullDays = [...byDay.values()].filter((v) => v.taken === v.due).length;
+  // A day that still has a dose waiting (pending by the shared rule) can't be
+  // fully covered yet. It stays in the denominator when it has resolved doses,
+  // and a day whose only doses are pending isn't counted at all.
+  const pendingDays = new Set(
+    inp.doseLogs.filter((l) => l.kind !== "prn" && inWin(l) && doseOutcome(l, inp) === "pending").map((l) => l.scheduledDate),
+  );
+  const fullDays = [...byDay.entries()].filter(([k, v]) => v.taken === v.due && !pendingDays.has(k)).length;
   const missed = new Map<string, { name: string; n: number }>();
   for (const l of logs) {
     if (doseOutcome(l, inp) !== "missed") continue;

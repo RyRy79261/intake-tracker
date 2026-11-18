@@ -74,7 +74,9 @@ export function usePrototypeInsights(sel: Selection) {
     // Until the records for this window arrive (the last result is for the previous one).
     if (!raw || raw.loaded !== `${start}|${end}|${firstKey}|${lastKey}`) return null;
     const input: EngineInput = {
-      now,
+      // The current time, so a rescheduled dose's wait is re-checked each
+      // minute (the window itself stays keyed on the clock reading above).
+      now: Math.max(now, Date.now()),
       tz,
       dayStartHour,
       waterLimit,
@@ -84,5 +86,6 @@ export function usePrototypeInsights(sel: Selection) {
       ...raw.records,
     };
     return runEngine(input, sel);
-  }, [raw, start, end, firstKey, lastKey, now, tz, dayStartHour, waterLimit, saltLimit, sugarLimit, potassiumLimit, sel]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- tick re-reads the clock each minute
+  }, [raw, start, end, firstKey, lastKey, now, tick, tz, dayStartHour, waterLimit, saltLimit, sugarLimit, potassiumLimit, sel]);
 }

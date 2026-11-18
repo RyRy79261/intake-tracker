@@ -64,7 +64,9 @@ file that opens without the app; making it takes three steps, run from the repo 
    The bundle carries no CSS and mounts into `#proto-root`, so it needs the shell below.
 
 2. **Capture the app's shell** with Playwright from `pnpm dev`, so the window is judged
-   in the real chrome and styles. On a phone-sized page (e.g. 390×844) open
+   in the real chrome and styles. Use a **fresh browser context** (never your own browser
+   profile) and seed its IndexedDB with generated example data only, so no real records
+   can reach the file. On a phone-sized page (e.g. 390×844) open
    `http://localhost:3000/analytics?variant=1`, wait for `[data-testid=metrics-body]`,
    then in the page:
    - serialise every stylesheet's rules (`document.styleSheets` → `cssRules` →
@@ -72,6 +74,8 @@ file that opens without the app; making it takes three steps, run from the repo 
      `min-width`, so the capture keeps the phone layout at any width;
    - inline each `@font-face` `url(...)` as a `data:` URI (fetch it, base64 it);
    - replace `[data-testid=metrics-body]` with `<div id="proto-root"></div>`;
+   - empty Home (`[data-testid=home]`: remove everything inside it) and remove any open
+     dialogs, so only the sys-bar, the window frame and the bottom bar remain;
    - remove every `<script>`, every `<link rel=stylesheet|preload|modulepreload>` and
      the original `<style>` tags (their rules are now in the one `<style>`), and keep the
      `<html>` class and attributes (theme).
