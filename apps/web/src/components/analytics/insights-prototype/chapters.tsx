@@ -139,7 +139,7 @@ export function FluidChapter({ data: d }: { data: Insights }) {
         <div style={grid3}>
           <Stat label="Days within limit" value={pct(water.p)} sub={`${water.within}/${water.n} logged days · limit ${fmtNum(d.limits.water)} ml`} />
           <Stat label="Typical day" value={fmtNum(water.median)} unit="ml" sub={`most days ${fmtNum(water.p10)}–${fmtNum(water.p90)}`} />
-          <Stat label="After 18:00" value={pct(d.fluidClock.slice(6).reduce((s, v) => s + v, 0))} sub="share of the day's fluid" />
+          <Stat label="18:00 to midnight" value={pct(d.lateFluid.share)} sub={`share of fluid logged by midnight · ${d.lateFluid.days} days`} />
         </div>
         <DayChart days={days} get={(x) => x.water} kind="bars" color={col("water")} label="Fluid per day (solid = over limit)" unit="ml" refValue={d.limits.water} refLabel="limit" />
         <SubHead>When it comes in</SubHead>

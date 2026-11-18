@@ -14,6 +14,7 @@ import { useLiveQuery } from "@/hooks/use-live-query";
 import { useSettingsStore } from "@/stores/settings-store";
 import { getDeviceTimezone } from "@/lib/timezone";
 import {
+  localParts,
   resolveSelection,
   runEngine,
   type EngineInput,
@@ -29,19 +30,24 @@ export function usePrototypeInsights(sel: Selection) {
   const tz = getDeviceTimezone();
 
   // Re-read the clock every minute so a relative report moves on when the
-  // logical day changes, without waiting for a database or settings update.
+  // logical day changes, or when 06:00 ends last night's outcome window,
+  // without waiting for a database or settings update.
   const tick = useNowTick();
-  const todayKey = useMemo(
-    () => logicalDayKey(Date.now(), dayStartHour, tz),
+  const clockKey = useMemo(
+    () => {
+      const at = Date.now();
+      return `${logicalDayKey(at, dayStartHour, tz)}|${localParts(at, tz).hour >= 6}`;
+    },
     // eslint-disable-next-line react-hooks/exhaustive-deps -- tick forces a re-read of the clock
     [tick, dayStartHour, tz],
   );
-  // One clock reading per logical day: the loaded records and the report use the same window.
+  // One clock reading per logical day (and per side of 06:00): the loaded
+  // records and the report use the same window.
   const { now, win } = useMemo(() => {
     const at = Date.now();
     return { now: at, win: resolveSelection({ now: at, tz, dayStartHour }, sel) };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- todayKey forces a re-read of the clock
-  }, [sel, todayKey, dayStartHour, tz]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- clockKey forces a re-read of the clock
+  }, [sel, clockKey, dayStartHour, tz]);
 
   const { start, end, firstKey, lastKey } = win.load;
   const raw = useLiveQuery(async () => {

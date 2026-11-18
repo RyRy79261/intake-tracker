@@ -93,7 +93,7 @@ export function VariantReport({ data, printable = true }: { data: Insights; prin
           <Stat label="Over by (median)" value={Number.isFinite(water.medianOver) ? fmtNum(water.medianOver) : "—"} unit="ml" sub="on days over" />
           <Stat label="Days within sodium limit" value={pct(sodium.p)} sub={`${sodium.within}/${sodium.n} · limit ${fmtNum(data.limits.sodium)} mg`} />
           <Stat label="Sodium, typical day" value={fmtNum(sodium.median)} unit="mg" sub={`most days ${fmtNum(sodium.p10)}–${fmtNum(sodium.p90)}`} />
-          <Stat label="Fluid after 18:00" value={pct(data.fluidClock.slice(6).reduce((s, v) => s + v, 0))} sub="share of the day's fluid" />
+          <Stat label="Fluid 18:00 to midnight" value={pct(data.lateFluid.share)} sub="share of fluid logged by midnight" />
         </div>
         <div style={{ marginTop: 10, fontSize: 12, fontWeight: 600 }}>When fluid and sodium come in (share by time of day)</div>
         <Clock rows={[{ label: "Fluid", v: data.fluidClock, c: col("water") }, { label: "Sodium", v: data.sodiumClock, c: col("sodium") }]} />

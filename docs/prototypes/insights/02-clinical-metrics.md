@@ -39,7 +39,7 @@
 
 **6. Medication adherence and timing.** MED-HIGH.
 - *Computation:*
-  - Days fully covered = days on which every scheduled dose was taken ÷ days in period, from dose logs. This is not PDC (proportion of days covered), which counts days covered by medication supply (fills or stock), so no PDC threshold applies to it; a real PDC would need supply data from the inventory.
+  - Days fully covered = days on which every scheduled dose was taken ÷ days in the period with at least one scheduled dose, from dose logs. Days with no scheduled dose are left out (a weekly medicine counts on its one dose day, not seven), and with no scheduled-dose days in the period it shows no value. This is not PDC (proportion of days covered), which counts days covered by medication supply (fills or stock), so no PDC threshold applies to it; a real PDC would need supply data from the inventory.
   - On-time % = share of taken doses within ±60 min of schedule.
   - Timing SD in minutes.
   - Skipped doses broken down by medication and weekday.

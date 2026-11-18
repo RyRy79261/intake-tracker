@@ -52,6 +52,9 @@ export interface Review {
   mode: Mode;
   at: number;
   period: number;
+  /** The resolved window it read: first and last logical day (YYYY-MM-DD). */
+  startKey: string;
+  endKey: string;
   headline: string;
   findings: Finding[];
   questions: string[];
@@ -237,7 +240,7 @@ export function buildReview(d: Insights, mode: Mode): Review {
     id: "fluid-limit", level: !fluidOk ? "watch" : d.water.p < 0.5 ? "discuss" : d.water.p < 0.8 ? "watch" : "good", chapter: "fluid",
     title: fluidOk ? `Within your fluid limit on ${d.water.within} of ${d.water.n} logged days (${pct(d.water.p)})` : `Fluid logged on ${d.water.n} of ${d.period} days, too few to rate`,
     detail: fluidOk
-      ? `A typical day is ${fmtNum(d.water.median)} ml against a ${fmtNum(d.limits.water)} ml limit; ${pct(d.fluidClock.slice(6).reduce((s, v) => s + v, 0))} of it comes after 18:00.`
+      ? `A typical day is ${fmtNum(d.water.median)} ml against a ${fmtNum(d.limits.water)} ml limit; ${pct(d.lateFluid.share)} of it between 18:00 and midnight.`
       : `At least ${MIN_DAYS} logged days are needed before the share of days within your ${fmtNum(d.limits.water)} ml limit means much.`,
     basis: [{ label: "Fluid", tab: "fluid", anchor: "sec-fluid" }],
     evidence: "Strict fluid restriction is now advised mainly for people with low sodium or congestion, so whether your limit still fits is a question for your care team.",
@@ -323,6 +326,8 @@ export function buildReview(d: Insights, mode: Mode): Review {
     mode,
     at: Date.now(),
     period: d.period,
+    startKey: d.startKey,
+    endKey: d.endKey,
     headline: headlineFor(f, d.flags),
     findings: f,
     questions,
@@ -397,6 +402,8 @@ function buildFood(d: Insights, mode: Mode, focus: string[], at = Date.now()): A
     mode,
     at,
     period: d.period,
+    startKey: d.startKey,
+    endKey: d.endKey,
     focus,
     headline: swaps.length >= 2
       ? `Two swaps could cut an estimated ${fmtNum(Math.round(saved / 10) * 10)} mg of sodium a day (fixed per-serving estimates, not your logged sodium).`
@@ -593,6 +600,18 @@ export function AnalysisTab() {
   );
 }
 
+/** Everything buildFood reads for this focus, so the disclosure matches the result. */
+function foodReads(d: Insights, focus: string[]): string {
+  const extra = [
+    focus.includes("Sodium") && "the label and share of your biggest sodium source (a label can be a note you typed)",
+    focus.includes("Fluid in food") && "your fluid limit",
+    focus.includes("Potassium") && "your typical daily potassium, how many days it was logged and your potassium limit",
+    focus.includes("Sugar") && "your typical daily sugar, how many days it was logged and your sugar limit",
+  ].filter((x): x is string => !!x);
+  const list = extra.length > 1 ? `${extra.slice(0, -1).join("; ")}; and ${extra[extra.length - 1]}` : extra[0];
+  return `The food names you logged in the last ${d.period} days (${d.food.daysLogged} days with food), which come from your meal notes, and how often each appears${list ? `; ${list}` : ""}. Nothing else.`;
+}
+
 function NewAnalysis() {
   const ai = useAi()!;
   const d = ai.data;
@@ -627,7 +646,7 @@ function NewAnalysis() {
         <p style={{ ...muted, fontSize: 12, lineHeight: 1.5, marginBottom: 6 }}>
           {kind === "health"
             ? `The numbers in this report for ${d.period} days: ${d.bp.tirN} blood pressure readings, ${d.water.n} days of fluid, ${d.sodium.n} of sodium, ${d.adherence.due} scheduled doses and ${d.symptoms.entries.length} journal findings, plus your medicines' names and the labels of your biggest sodium sources. A label can be the note you typed on a sodium entry, and the text can quote it; no other notes or raw entries.`
-            : `The food names you logged in the last ${d.period} days (${d.food.daysLogged} days with food), which come from your meal notes, how often each appears, the labels of your biggest sodium sources (which can be a note you typed) and your limits. Nothing else.`}
+            : foodReads(d, focus)}
           {" In this prototype the text is built on this device and nothing is sent anywhere."}
           {mode === "deep" && " Deep does not search the web here: it attaches preselected guideline references, and swap savings are fixed estimates."}
         </p>
@@ -784,7 +803,7 @@ function OpenAnalysis({ a }: { a: Analysis }) {
       )}
       <p style={{ fontSize: 15, fontWeight: 600, lineHeight: 1.45, textWrap: "pretty" } as CSSProperties}>{a.headline}</p>
       <p style={{ ...muted, fontSize: 11, marginTop: 2 }}>
-        Last {a.period} days, analysed {rel(a.at)}
+        {shortDate(a.startKey)} – {shortDate(a.endKey)} ({a.period} days), analysed {rel(a.at)}
         {a.kind === "food" && a.focus.length ? ` · ${a.focus.join(", ")}` : ""}
       </p>
 
@@ -972,14 +991,18 @@ export function SwapCell({ name }: { name: string }) {
   const food = useLatestFood();
   const s = food?.swaps.find((x) => x.name === name);
   if (!food || !s) return <span style={muted}>—</span>;
-  // The saved rate is over the analysis' own period, which may not be the range shown now.
-  const other = ai && food.period !== ai.data.period;
+  // The saved rate is over the analysis' own window, which may not be the range shown now.
+  const other = !!ai && (food.startKey !== ai.data.startKey || food.endKey !== ai.data.endKey);
   return (
     <span style={{ display: "block", textAlign: "left", fontFamily: "var(--font-plex-sans), sans-serif", fontSize: 11.5, lineHeight: 1.35 }}>
       {s.swap}
       <span style={{ ...mono, display: "block", color: col("weight") }}>
         est. −{fmtNum(Math.round(s.perDay / 10) * 10)} mg/day
-        {other && <span style={{ color: col("muted-fg") }}> · over {food.period} d</span>}
+        {other && (
+          <span style={{ color: col("muted-fg") }}>
+            {" "}· over {shortDate(food.startKey)} – {shortDate(food.endKey)}
+          </span>
+        )}
       </span>
     </span>
   );

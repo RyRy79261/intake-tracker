@@ -59,15 +59,28 @@ Create a single switcher component on the route:
 
 ```tsx
 // pseudo-code, adapt to the project's framework
+const VARIANTS = ['A', 'B', 'C'] as const;
 const prototypeOn = process.env.NODE_ENV !== 'production'; // or the project's own prototype flag
-const variant = prototypeOn ? searchParams.get('variant') : null;
-if (!variant) return <ExistingPage {...data} />; // sub-shape B: default to 'A' instead
+// Production: the existing page, whatever the query string says.
+// Sub-shape B has no existing page: return the project's not-found response here.
+if (!prototypeOn) return <ExistingPage {...data} />;
+const param = searchParams.get('variant');
+// An unknown key (e.g. ?variant=old) counts as no variant, never as an empty page.
+const variant = VARIANTS.find((v) => v === param) ?? null; // sub-shape B: `?? 'A'` instead
+if (!variant)
+  return (
+    <>
+      <ExistingPage {...data} />
+      {/* The bar stays on the default page, so the user can pick a variant from it. */}
+      <PrototypeSwitcher variants={VARIANTS} current={null} />
+    </>
+  );
 return (
   <>
     {variant === 'A' && <VariantA {...data} />}
     {variant === 'B' && <VariantB {...data} />}
     {variant === 'C' && <VariantC {...data} />}
-    <PrototypeSwitcher variants={['A','B','C']} current={variant} />
+    <PrototypeSwitcher variants={VARIANTS} current={variant} />
   </>
 );
 ```
@@ -83,7 +96,7 @@ For sub-shape B (new page): the throwaway route under `/prototype/<name>` mounts
 A small fixed-position bar at the bottom-centre of the screen with three pieces:
 
 - **Left arrow**: cycles to the previous variant (wraps around).
-- **Variant label**: shows the current variant key and, if the variant exports a name, that name too. e.g. `B (Sidebar layout)`.
+- **Variant label**: shows the current variant key and, if the variant exports a name, that name too. e.g. `B (Sidebar layout)`. With no variant selected (`current` is null) it shows the existing page's name, e.g. `Current`, and the arrows step to the first or last variant.
 - **Right arrow**: cycles forward (wraps around).
 
 Behaviour:

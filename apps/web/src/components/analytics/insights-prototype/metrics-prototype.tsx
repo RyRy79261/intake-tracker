@@ -65,6 +65,12 @@ export function MetricsPrototype({
     [customRange, scope],
   );
   const data = useInsights(sel);
+  // The hook returns null while a new range loads. The Analysis state (runs,
+  // the open one, added questions, a run in progress) lives in AiProvider, so
+  // it keeps the last loaded data and stays mounted through that gap.
+  const [lastData, setLastData] = useState<Insights | null>(data);
+  if (data && data !== lastData) setLastData(data);
+  const aiData = data ?? lastData;
   const [tab, setTab] = useState<string>("report");
   const jump = useCallback((next: string, anchor?: string) => {
     setTab(next);
@@ -113,8 +119,8 @@ export function MetricsPrototype({
     </div>
   );
 
-  return data ? (
-    <AiProvider data={data} jump={jump}>
+  return aiData ? (
+    <AiProvider data={aiData} jump={jump}>
       {body}
     </AiProvider>
   ) : (
