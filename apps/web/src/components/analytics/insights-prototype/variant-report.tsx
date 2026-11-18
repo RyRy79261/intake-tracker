@@ -19,6 +19,7 @@ export function VariantReport({ data, printable = true }: { data: Insights; prin
   const start = data.days[Math.max(0, data.days.length - 1 - data.period)]!.key;
   const ai = useAi();
   const questions = [...(ai?.addedQuestions ?? []), ...buildQuestions(data)];
+  const changes = changesInPeriod(data);
 
   return (
     <div className="wm-stack" style={{ paddingBottom: 120 }}>
@@ -155,11 +156,11 @@ export function VariantReport({ data, printable = true }: { data: Insights; prin
             </tbody>
           </table>
         )}
-        {data.changes.length > 0 && (
+        {changes.length > 0 && (
           <>
             <div style={{ marginTop: 10, fontSize: 12, fontWeight: 600 }}>Medicine changes</div>
             <ul style={{ margin: 0, paddingLeft: 16, fontSize: 12 }}>
-              {data.changes.slice(0, 8).map((c, i) => (
+              {changes.slice(0, 8).map((c, i) => (
                 <li key={i}>
                   <span style={mono}>{shortDate(c.date)}</span> {c.medicine}: {c.what}
                 </li>
@@ -231,11 +232,19 @@ export function VariantReport({ data, printable = true }: { data: Insights; prin
   );
 }
 
+/** Medicine changes dated inside the selected period (the responses still use readings from before it). */
+export function changesInPeriod(d: Insights) {
+  const first = d.inPeriod[0]?.key;
+  const last = d.inPeriod[d.inPeriod.length - 1]?.key;
+  if (!first || !last) return [];
+  return d.changes.filter((c) => c.date >= first && c.date <= last);
+}
+
 export function buildQuestions(d: Insights): string[] {
   const q: string[] = [];
   if (!d.bp.meetsProtocol) q.push("Should I add evening blood pressure readings, so the home average follows the standard protocol?");
   if (d.bp.tir.low / Math.max(1, d.bp.tirN) >= 0.2) q.push("A fifth or more of my readings are under 100 systolic. Is that low enough to matter?");
-  if (d.sodium.p < 0.5) q.push(`I'm under my sodium limit on ${pct(d.sodium.p)} of days. Is ${fmtNum(d.limits.sodium)} mg the right limit, and where should I cut?`);
+  if (d.sodium.p < 0.5) q.push(`I'm within my sodium limit on ${pct(d.sodium.p)} of days. Is ${fmtNum(d.limits.sodium)} mg the right limit, and where should I cut?`);
   if (d.water.p < 0.5) q.push(`I'm within my fluid limit on ${pct(d.water.p)} of days. Is ${fmtNum(d.limits.water)} ml still the right limit for me?`);
   if (d.alcohol.heavyDays > 0) q.push(`I had ${d.alcohol.heavyDays} days with 5+ drinks in ${d.period} days. How does alcohol interact with my medicines and heart?`);
   if (Number.isFinite(d.adherence.p90Delay) && d.adherence.p90Delay > 90) q.push("Some doses are taken 1.5 h or more late. How much does timing matter for each of my medicines?");
@@ -265,7 +274,7 @@ export function Clock({ rows }: { rows: { label: string; v: number[]; c: string 
         </span>,
         ...r.v.map((v, i) => (
           <div key={`${r.label}${i}`} title={`${BLOCKS[i]}:00 ${pct(v)}`} style={{ height: 28, display: "flex", alignItems: "flex-end", background: "hsl(var(--fg) / .03)" }}>
-            <div style={{ width: "100%", height: `${Math.max(2, v * 100 * 1.6)}%`, maxHeight: "100%", background: r.c, opacity: 0.8 }} />
+            {v > 0 && <div style={{ width: "100%", height: `${Math.min(100, Math.max(2, v * 100))}%`, background: r.c, opacity: 0.8 }} />}
           </div>
         )),
       ])}

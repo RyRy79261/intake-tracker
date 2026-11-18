@@ -59,7 +59,9 @@ Create a single switcher component on the route:
 
 ```tsx
 // pseudo-code, adapt to the project's framework
-const variant = searchParams.get('variant') ?? 'A';
+const prototypeOn = process.env.NODE_ENV !== 'production'; // or the project's own prototype flag
+const variant = prototypeOn ? searchParams.get('variant') : null;
+if (!variant) return <ExistingPage {...data} />; // sub-shape B: default to 'A' instead
 return (
   <>
     {variant === 'A' && <VariantA {...data} />}
@@ -69,6 +71,8 @@ return (
   </>
 );
 ```
+
+Gate the variant rendering itself, not just the switcher: in production the page renders the existing content whatever the query string says, so a stray prototype merge can't replace it.
 
 For sub-shape A (existing page): keep all the existing data fetching above the switcher; only the rendered subtree changes per variant.
 
@@ -85,7 +89,7 @@ A small fixed-position bar at the bottom-centre of the screen with three pieces:
 Behaviour:
 
 - Clicking an arrow updates the URL search param (use the framework's router, e.g. `router.replace` on Next, `navigate` on React Router, etc) so the variant is shareable and reload-stable.
-- Keyboard: `←` and `→` arrow keys also cycle. Don't intercept arrow keys when an `<input>`, `<textarea>`, or `[contenteditable]` is focused.
+- Keyboard: `←` and `→` arrow keys also cycle. Don't intercept arrow keys when an `<input>`, `<textarea>`, `<select>`, `[contenteditable]`, or another widget that uses arrow keys itself (e.g. `[role=listbox]`, `[role=slider]`, `[role=tablist]`, `[role=menu]`, `[role=radiogroup]`) is focused.
 - Visually distinct from the page (e.g. high-contrast pill, subtle shadow) so it's obviously not part of the design being evaluated.
 - Hidden in production builds: gate on `process.env.NODE_ENV !== 'production'` or an equivalent check, so a stray prototype merge can't ship the bar to users.
 

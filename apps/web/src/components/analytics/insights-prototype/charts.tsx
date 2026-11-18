@@ -57,12 +57,16 @@ export function DayChart({
 
   let line: ReactNode = null;
   if (smooth) {
-    const pts: string[] = [];
+    // A window with too few readings breaks the line, so gaps are not bridged.
+    const runs: string[][] = [[]];
     vals.forEach((_, i) => {
       const win = vals.slice(Math.max(0, i - 6), i + 1).filter((v): v is number => v !== undefined);
-      if (win.length >= 3) pts.push(`${x(i)},${y(quantile(win, 0.5))}`);
+      if (win.length >= 3) runs[runs.length - 1]!.push(`${x(i)},${y(quantile(win, 0.5))}`);
+      else if (runs[runs.length - 1]!.length) runs.push([]);
     });
-    if (pts.length > 1) line = <polyline points={pts.join(" ")} fill="none" stroke={color} strokeWidth={1.75} vectorEffect="non-scaling-stroke" />;
+    const drawn = runs.filter((r) => r.length > 1);
+    if (drawn.length)
+      line = drawn.map((r, j) => <polyline key={j} points={r.join(" ")} fill="none" stroke={color} strokeWidth={1.75} vectorEffect="non-scaling-stroke" />);
   }
 
   return (
@@ -77,7 +81,7 @@ export function DayChart({
       <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" width="100%" height={H} style={{ display: "block", background: "hsl(var(--fg) / .03)" }} role="img" aria-label={label}>
         {band && nums.length >= 7 && <rect x={0} width={W} y={y(p90)} height={Math.max(1, y(p10) - y(p90))} fill={color} opacity={0.1} />}
         {refValue !== undefined && <line x1={0} x2={W} y1={y(refValue)} y2={y(refValue)} stroke={col("muted-fg")} strokeDasharray="4 3" vectorEffect="non-scaling-stroke" />}
-        {marks.map((k) => {
+        {[...new Set(marks)].map((k) => {
           const i = days.findIndex((d) => d.key === k);
           return i < 0 ? null : <line key={k} x1={x(i)} x2={x(i)} y1={0} y2={H} stroke={col("meds")} strokeWidth={1.5} vectorEffect="non-scaling-stroke" opacity={0.8} />;
         })}
@@ -107,7 +111,7 @@ export function Table({ head, rows, align }: { head: string[]; rows: (string | R
         <thead>
           <tr>
             {head.map((h, i) => (
-              <th key={h} style={{ ...muted, fontSize: 11, fontWeight: 500, textAlign: (align?.[i] ?? (i ? "r" : "l")) === "r" ? "right" : "left", padding: "0 0 4px", paddingLeft: i ? 8 : 0, whiteSpace: "nowrap" }}>
+              <th key={i} style={{ ...muted, fontSize: 11, fontWeight: 500, textAlign: (align?.[i] ?? (i ? "r" : "l")) === "r" ? "right" : "left", padding: "0 0 4px", paddingLeft: i ? 8 : 0, whiteSpace: "nowrap" }}>
                 {h}
               </th>
             ))}

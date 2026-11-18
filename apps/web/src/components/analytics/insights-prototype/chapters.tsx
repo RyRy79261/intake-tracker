@@ -9,9 +9,10 @@
 
 import type { ReactNode } from "react";
 import type { ChangeEvent, Effect, Insights } from "@/components/analytics/insights-prototype/engine";
+import { substanceOn } from "@/components/analytics/insights-prototype/engine";
 import { DayChart, SubHead, Table } from "@/components/analytics/insights-prototype/charts";
 import { ConfidenceChip, RangeBar, Section, col, fmtNum, muted, pct, shortDate, signed } from "@/components/analytics/insights-prototype/ui";
-import { Clock, Stat, grid3 } from "@/components/analytics/insights-prototype/variant-report";
+import { Clock, Stat, changesInPeriod, grid3 } from "@/components/analytics/insights-prototype/variant-report";
 import { SwapCell, useLatestFood } from "@/components/analytics/insights-prototype/ai-review";
 
 const when = (ts: number) => new Date(ts).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
@@ -34,7 +35,7 @@ export function EffectRow({ e }: { e: Effect }) {
 }
 
 const effects = (d: Insights, ids: string[]) => d.effects.filter((e) => ids.includes(e.id));
-const changeMarks = (d: Insights) => d.changes.map((c) => c.date);
+const changeMarks = (d: Insights) => [...new Set(changesInPeriod(d).map((c) => c.date))];
 
 // ---------------------------------------------------------------------------
 
@@ -51,7 +52,7 @@ export function VitalsChapter({ data: d }: { data: Insights }) {
         </div>
         {!bp.meetsProtocol && (
           <p style={{ ...muted, marginTop: 8 }}>
-            The standard home protocol is morning and evening readings for 7 days. With {bp.pmN} evening readings this average is morning-only.
+            The standard home protocol is morning and evening readings for 7 days. With {bp.pmN} evening readings, this average combines morning and evening readings but does not meet that protocol.
           </p>
         )}
         <DayChart days={days} get={(x) => x.amSys} kind="dots" color={col("bp")} label="Morning systolic" unit="mmHg" refValue={135} refLabel="home threshold" band marks={changeMarks(d)} />
@@ -151,7 +152,7 @@ export function FluidChapter({ data: d }: { data: Insights }) {
           <Stat label="Per week" value={fmtNum(alcohol.perWeek, 1)} unit="std drinks" sub={`${alcohol.heavyDays} days with 5+ · most ${fmtNum(alcohol.maxDay, 1)}`} />
           <Stat label="Caffeine, typical day" value={fmtNum(caffeine.median)} unit="mg" sub={`${caffeine.over400} days over 400 mg`} />
         </div>
-        <DayChart days={days} get={(x) => (x.water !== undefined ? x.alcohol ?? 0 : undefined)} kind="bars" color={col("alcohol")} label="Alcohol per day" unit="drinks" digits={1} />
+        <DayChart days={days} get={(x) => substanceOn(x, "alcohol")} kind="bars" color={col("alcohol")} label="Alcohol per day" unit="drinks" digits={1} />
         {effects(d, ["alc-hr", "alc-sys"]).map((e) => (
           <EffectRow key={e.id} e={e} />
         ))}
@@ -161,7 +162,11 @@ export function FluidChapter({ data: d }: { data: Insights }) {
         <div style={grid3}>
           <Stat label="Urinations, typical day" value={fmtNum(urine.perDay)} sub={`${urine.n} days logged`} />
           <Stat label="At night (00–06)" value={fmtNum(urine.nightPerNight)} unit="/night" sub={`${urine.nightsWith2} nights with 2+`} />
-          <Stat label="Bowel movements" value={fmtNum(urine.bowelPerWeek, 1)} unit="/week" sub={urine.bowelPerWeek < 3 ? "under 3 a week" : "per week"} />
+          {Number.isFinite(urine.bowelPerWeek) ? (
+            <Stat label="Bowel movements logged" value={fmtNum(urine.bowelPerWeek, 1)} unit="/week" sub={`${urine.bowelN} logged in ${d.period} days${urine.bowelPerWeek < 3 ? " · under 3 a week" : ""}`} />
+          ) : (
+            <Stat label="Bowel movements logged" value="—" sub="none logged in this period" />
+          )}
         </div>
         <DayChart days={days} get={(x) => x.urination} kind="bars" color={col("water")} label="Urinations per day" unit="/day" />
         <p style={{ ...muted, marginTop: 6 }}>Amounts are your small/medium/large estimates, so output is not measured.</p>
@@ -173,7 +178,11 @@ export function FluidChapter({ data: d }: { data: Insights }) {
   );
 }
 
-const hhmm = (m: number) => (Number.isFinite(m) ? `${String(Math.floor(m / 60) % 24).padStart(2, "0")}:${String(Math.round(m % 60)).padStart(2, "0")}` : "—");
+const hhmm = (m: number) => {
+  if (!Number.isFinite(m)) return "—";
+  const t = Math.round(m);
+  return `${String(Math.floor(t / 60) % 24).padStart(2, "0")}:${String(t % 60).padStart(2, "0")}`;
+};
 
 export function FoodChapter({ data: d, nutrientAnalysis }: { data: Insights; nutrientAnalysis?: ReactNode }) {
   const { sodium, food } = d;
@@ -266,7 +275,11 @@ export function ChangeCard({ c }: { c: ChangeEvent }) {
         align={["l", "r", "r"]}
         rows={c.responses.map((r) => [
           r.label,
-          r.afterNeedsUntil ? `judge from ${shortDate(r.afterNeedsUntil)}` : r.confidence === "too-little-data" ? `${r.nBefore} / ${r.nAfter} days` : `${signed(r.est, r.unit === "kg" ? 1 : 0)} ${r.unit}`,
+          r.afterNeedsUntil
+            ? `judge from ${shortDate(r.afterNeedsUntil)}`
+            : r.confidence === "too-little-data"
+              ? `${r.nBefore} / ${r.nAfter} days`
+              : `${signed(r.est, r.unit === "kg" ? 1 : 0)} ${r.unit} (${r.nBefore} / ${r.nAfter} days)`,
           <ConfidenceChip key="c" c={r.afterNeedsUntil ? "too-little-data" : r.confidence} />,
         ])}
       />
@@ -282,6 +295,7 @@ export function ChangeCard({ c }: { c: ChangeEvent }) {
 
 export function MedsChapter({ data: d }: { data: Insights }) {
   const a = d.adherence;
+  const changes = changesInPeriod(d);
   return (
     <>
       <Section id="sec-adherence" title="Taking your medicines" color={col("meds")}>
@@ -303,7 +317,7 @@ export function MedsChapter({ data: d }: { data: Insights }) {
         )}
       </Section>
       <Section id="sec-changes" title="Did each change do anything?" color={col("meds")}>
-        {d.changes.length === 0 ? <p style={muted}>No medicine changes recorded.</p> : d.changes.slice(0, 8).map((c, i) => <ChangeCard key={i} c={c} />)}
+        {changes.length === 0 ? <p style={muted}>No medicine changes in this period.</p> : changes.slice(0, 8).map((c, i) => <ChangeCard key={i} c={c} />)}
       </Section>
     </>
   );

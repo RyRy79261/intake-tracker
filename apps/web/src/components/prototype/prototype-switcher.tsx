@@ -84,7 +84,8 @@ export function PrototypeSwitcher({
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null;
-      if (t && (t.closest("input, textarea, select, [contenteditable]") || t.isContentEditable)) return;
+      // Arrow keys stay with text fields and tab lists (Radix moves between tabs on them).
+      if (t && (t.closest('input, textarea, select, [contenteditable], [role="tab"]') || t.isContentEditable)) return;
       if (e.key === "ArrowLeft" && !e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey) go(-1);
       if (e.key === "ArrowRight" && !e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey) go(1);
     };

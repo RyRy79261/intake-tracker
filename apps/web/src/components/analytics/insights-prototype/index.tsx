@@ -40,7 +40,8 @@ export function MetricsWindowPrototype({
           exportSlot={(range) => <ExportControls range={range} />}
         />
       )}
-      <PrototypeSwitcher variants={VARIANTS} current={variant} onChange={setVariant} />
+      {/* Records always shows today's window, so a layout picked there would not apply. */}
+      {activeTab !== "records" && <PrototypeSwitcher variants={VARIANTS} current={variant} onChange={setVariant} />}
     </>
   );
 }

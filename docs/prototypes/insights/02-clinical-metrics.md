@@ -39,7 +39,7 @@
 
 **6. Medication adherence and timing.** MED-HIGH.
 - *Computation:*
-  - PDC = days covered ÷ days in period, from dose logs. Count a day as covered when all of that day's scheduled doses were taken. Threshold ≥ 80% (PQA standard [K]).
+  - Days fully covered = days on which every scheduled dose was taken ÷ days in period, from dose logs. This is not PDC (proportion of days covered), which counts days covered by medication supply (fills or stock), so no PDC threshold applies to it; a real PDC would need supply data from the inventory.
   - On-time % = share of taken doses within ±60 min of schedule.
   - Timing SD in minutes.
   - Skipped doses broken down by medication and weekday.
@@ -106,7 +106,7 @@ Section order:
 2. Home BP summary (insight 3) with morning and evening means.
 3. Weight trend with alert events.
 4. Medication list, changes and their measured responses (insight 4).
-5. Adherence (PDC, missed doses).
+5. Adherence (days fully covered, missed doses).
 6. Safety flags (insight 5).
 7. Fluid and sodium adherence.
 8. Nocturia and diuretic response.
@@ -131,4 +131,4 @@ Put dates and n on everything. The NICE CG182/NG106 and NG136 style (summaries o
 - https://www.reliasmedia.com/articles/8984-weight-gain-predictor-of-heart-failure-hospitalization (Chaudhry 2007 summary)
 - https://eprints.um.edu.my/41142 (722 protocol rationale)
 - https://www.ncbi.nlm.nih.gov/pmc/articles/PMC11461595/ (BP TTR review)
-- [K] = from my own knowledge, not fetched; verify: ESC 2021 HF, ESH 2023, AHA 2019 measurement statement, Mena 2005 ARV, Kario 2003, Freeman 2011, HFA 2019 diuretic statement, SODIUM-HF 2022, FRESH-UP 2025, Mesas 2011, Tasnim 2020, PQA PDC.
+- [K] = from my own knowledge, not fetched; verify: ESC 2021 HF, ESH 2023, AHA 2019 measurement statement, Mena 2005 ARV, Kario 2003, Freeman 2011, HFA 2019 diuretic statement, SODIUM-HF 2022, FRESH-UP 2025, Mesas 2011, Tasnim 2020.

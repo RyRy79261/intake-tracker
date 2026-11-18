@@ -7,7 +7,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
-import type { EngineInput } from "@/components/analytics/insights-prototype/engine";
+import type { EngineInput, Selection } from "@/components/analytics/insights-prototype/engine";
 import { runEngine } from "@/components/analytics/insights-prototype/engine";
 import { METRICS_VARIANTS, MetricsPrototype } from "@/components/analytics/insights-prototype/metrics-prototype";
 import { Download, FileText } from "lucide-react";
@@ -22,19 +22,26 @@ import { PrototypeSwitcher } from "@/components/prototype/prototype-switcher";
 // ---------------------------------------------------------------------------
 
 function exampleInput(): EngineInput {
-  const DAY = 86_400_000;
   const now = Date.now();
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
   let seed = 11;
   const r = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
   const id = () => crypto.randomUUID();
   const meta = { createdAt: now, updatedAt: now, deletedAt: null, deviceId: "example", timezone: tz };
+  // `d` local calendar days back (stepped from noon, so a clock change or a
+  // late-night start never lands two days on one date), at h:m local time.
   const at = (d: number, h: number, m = 0) => {
-    const t = new Date(now - d * DAY);
+    const t = new Date(now);
+    t.setHours(12, 0, 0, 0);
+    t.setDate(t.getDate() - d);
     t.setHours(h, m, 0, 0);
     return t.getTime();
   };
-  const dateKey = (ts: number) => new Date(ts).toLocaleDateString("en-CA");
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const dateKey = (ts: number) => {
+    const t = new Date(ts);
+    return `${t.getFullYear()}-${pad(t.getMonth() + 1)}-${pad(t.getDate())}`;
+  };
 
   const inp: EngineInput = {
     now, tz, dayStartHour: 2, waterLimit: 1500, saltLimit: 2000, sugarLimit: 30, potassiumLimit: 3500, eating: [],
@@ -96,7 +103,8 @@ function exampleInput(): EngineInput {
 
     const ur = 4 + Math.round(r() * 2);
     for (let k = 0; k < ur; k++) {
-      const night = k === 0 && r() < (drinks >= 3 ? 0.7 : 0.25);
+      // The 03:00 event follows the previous evening's drinks.
+      const night = k === 0 && r() < (drankPrev >= 3 ? 0.7 : 0.25);
       inp.urination.push({ id: id(), amountEstimate: "medium", timestamp: at(d, night ? 3 : 9 + k * 3), ...meta });
     }
     const meals: [number, string[]][] = [[8, ["toast", "coffee with milk"]], [13, ["ham sandwich", "apple"]], [20 + Math.round(r() * 2), ["pasta", "salad", "cheese"]]];
@@ -123,6 +131,16 @@ function exampleInput(): EngineInput {
     if (d === 9 || d === 23) inp.journal.push({ id: id(), timestamp: at(d, 23, 10), timePrecision: "exact", words: "Short of breath lying flat", finding: "Breathlessness", kind: "symptom", places: [], severity: 4, ...meta });
     drankPrev = drinks;
   }
+  // Today's later readings have not happened yet.
+  const past = <T extends { timestamp: number }>(xs: T[]) => xs.filter((x) => x.timestamp <= now);
+  inp.intake = past(inp.intake);
+  inp.eating = past(inp.eating ?? []);
+  inp.weight = past(inp.weight);
+  inp.bp = past(inp.bp);
+  inp.urination = past(inp.urination);
+  inp.defecation = past(inp.defecation);
+  inp.substance = past(inp.substance);
+  inp.journal = past(inp.journal);
   return inp;
 }
 
@@ -132,8 +150,8 @@ function readHash() {
 }
 
 const INPUT = exampleInput();
-function useExampleInsights(period: number) {
-  return useMemo(() => runEngine(INPUT, period), [period]);
+function useExampleInsights(sel: Selection) {
+  return useMemo(() => runEngine(INPUT, sel), [sel]);
 }
 
 // Stand-ins for parts that need the app (downloads, the AI routes).
@@ -151,7 +169,10 @@ function ExampleExport() {
           Export CSV
         </Button>
       </div>
-      {note && <p className="wm-p" style={{ marginTop: 6 }}>{note}</p>}
+      {/* Always mounted so the text is announced; focus stays on the button. */}
+      <p role="status" className="wm-p" style={note ? { marginTop: 6 } : undefined}>
+        {note}
+      </p>
     </div>
   );
 }

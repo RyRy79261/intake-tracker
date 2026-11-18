@@ -15,7 +15,7 @@
  * - "pattern, not proof"; safety messages are fixed text, never advice on doses.
  */
 
-import { logicalDayKey, shiftDayKey } from "@intake/core/logical-day";
+import { logicalDayKey, logicalDayStart, shiftDayKey } from "@intake/core/logical-day";
 import type {
   BloodPressureRecord,
   DefecationRecord,
@@ -55,6 +55,73 @@ export interface EngineInput {
   schedules: PhaseSchedule[];
   prescriptions: Prescription[];
   journal: JournalEntry[];
+}
+
+// ---------------------------------------------------------------------------
+// What the report covers
+// ---------------------------------------------------------------------------
+
+/**
+ * The days a report covers: the last `days` complete logical days (ending
+ * yesterday, or today with `includeToday`), or the logical days a custom
+ * range [start, end] (ms) touches. A bare number means `{ days: n }`.
+ */
+export type Selection = { days: number; includeToday?: boolean } | { start: number; end: number };
+
+export interface ReportWindow {
+  /** First and last selected logical day ("YYYY-MM-DD", inclusive). */
+  startKey: string;
+  endKey: string;
+  /** Number of selected days. */
+  period: number;
+  /** The day after `endKey`: the last row of `days`, read only for next-morning outcomes. */
+  anchorKey: string;
+  /** First row of `days`: earlier days feed baselines and comparisons, never the period. */
+  firstKey: string;
+  nDays: number;
+  /** The selected logical days in ms (inclusive), for exports. */
+  range: { start: number; end: number };
+  /** Every record the engine reads lies in [start, end] ms; doses in [firstKey, lastKey]. */
+  load: { start: number; end: number; firstKey: string; lastKey: string };
+}
+
+export function resolveSelection(
+  ctx: Pick<EngineInput, "now" | "tz" | "dayStartHour">,
+  sel: Selection | number,
+): ReportWindow {
+  const { tz, dayStartHour: dsh } = ctx;
+  const today = logicalDayKey(ctx.now, dsh, tz);
+  const s: Selection = typeof sel === "number" ? { days: sel } : sel;
+  let startKey: string;
+  let endKey: string;
+  if ("days" in s) {
+    endKey = s.includeToday ? today : shiftDayKey(today, -1);
+    startKey = shiftDayKey(endKey, -(Math.max(1, Math.round(s.days)) - 1));
+  } else {
+    endKey = logicalDayKey(s.end, dsh, tz);
+    if (endKey > today) endKey = today; // nothing is logged after today
+    startKey = logicalDayKey(s.start, dsh, tz);
+    if (startKey > endKey) startKey = endKey;
+  }
+  const period = dateDiffDays(startKey, endKey) + 1;
+  const anchorKey = shiftDayKey(endKey, 1);
+  const nDays = Math.max(90, 2 * period + 2);
+  const firstKey = shiftDayKey(anchorKey, -(nDays - 1));
+  return {
+    startKey,
+    endKey,
+    period,
+    anchorKey,
+    firstKey,
+    nDays,
+    range: { start: logicalDayStart(startKey, dsh, tz), end: logicalDayStart(anchorKey, dsh, tz) - 1 },
+    load: {
+      start: logicalDayStart(firstKey, dsh, tz),
+      end: logicalDayStart(shiftDayKey(anchorKey, 1), dsh, tz) - 1,
+      firstKey,
+      lastKey: anchorKey,
+    },
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -178,7 +245,7 @@ export interface Day {
   caffeine?: number;
   alcohol?: number; // standard drinks
   urination?: number;
-  nightUrination?: number; // 00:00–06:00
+  nightUrination?: number; // 00:00–06:00 on this calendar date (the night before this day)
   defecation?: number;
   weight?: number; // first weight of the day
   amSys?: number; // first BP before 12:00
@@ -192,11 +259,11 @@ export interface Day {
   journal: JournalEntry[];
 }
 
-export function buildDays(inp: EngineInput, nDays: number): Day[] {
+/** `nDays` logical days ending with `lastKey` (today by default). */
+export function buildDays(inp: EngineInput, nDays: number, lastKey = logicalDayKey(inp.now, inp.dayStartHour, inp.tz)): Day[] {
   const { tz, dayStartHour: dsh } = inp;
-  const today = logicalDayKey(inp.now, dsh, tz);
   const keys: string[] = [];
-  for (let i = nDays - 1; i >= 0; i--) keys.push(shiftDayKey(today, -i));
+  for (let i = nDays - 1; i >= 0; i--) keys.push(shiftDayKey(lastKey, -i));
   const map = new Map<string, Day>(
     keys.map((k) => [
       k,
@@ -250,7 +317,15 @@ export function buildDays(inp: EngineInput, nDays: number): Day[] {
     const d = dayOf(r.timestamp);
     if (!d) continue;
     add(d, "urination", 1);
-    if (localParts(r.timestamp, tz).hour < 6) add(d, "nightUrination", 1);
+  }
+  // Night urinations go to the calendar date of their 00:00–06:00 interval,
+  // whatever the day start, so one row holds one whole night: the night
+  // after day D's evening is on D+1's row.
+  for (const r of inp.urination) {
+    const p = localParts(r.timestamp, tz);
+    if (p.hour >= 6) continue;
+    const n = map.get(p.date);
+    if (n) add(n, "nightUrination", 1);
   }
   for (const r of inp.defecation) {
     const d = dayOf(r.timestamp);
@@ -291,11 +366,35 @@ export function buildDays(inp: EngineInput, nDays: number): Day[] {
   return keys.map((k) => map.get(k)!);
 }
 
+/** The instant a scheduled dose was due: its date and time on the log's own clock. */
+export function scheduledAt(l: DoseLog): number | null {
+  const [hh, mm] = (l.scheduledTime ?? "").split(":").map(Number);
+  if (!Number.isFinite(hh) || !Number.isFinite(mm)) return null;
+  return logicalDayStart(l.scheduledDate, hh!, l.timezone || "UTC") + mm! * 60_000;
+}
+
+/** Minutes elapsed from the scheduled instant to the action (so a clock change counts real time). */
 export function doseDelayMin(l: DoseLog): number | null {
-  if (!l.actionTimestamp || !l.scheduledTime) return null;
-  const p = localParts(l.actionTimestamp, l.timezone || "UTC");
-  const [hh, mm] = l.scheduledTime.split(":").map(Number);
-  return dateDiffDays(l.scheduledDate, p.date) * 1440 + p.hour * 60 + p.minute - (hh! * 60 + mm!);
+  if (!l.actionTimestamp) return null;
+  const due = scheduledAt(l);
+  return due === null ? null : Math.round((l.actionTimestamp - due) / 60_000);
+}
+
+/** A dose's display name: its prescription's, else the unlisted medicine's own. */
+function doseName(l: DoseLog, rxName: Map<string, string>, fallback: string): string {
+  return (l.prescriptionId ? rxName.get(l.prescriptionId) : undefined) ?? l.medicineName ?? fallback;
+}
+function rxNames(inp: EngineInput) {
+  return new Map(inp.prescriptions.map((p) => [p.id, p.genericName]));
+}
+
+/**
+ * Caffeine or alcohol on a day: the logged amount when there is a record;
+ * none logged counts as zero only on a day the user was logging fluid;
+ * otherwise unknown.
+ */
+export function substanceOn(d: Day, k: "caffeine" | "alcohol"): number | undefined {
+  return d[k] ?? (d.water !== undefined ? 0 : undefined);
 }
 
 // ---------------------------------------------------------------------------
@@ -321,12 +420,17 @@ export const METRICS: MetricDef[] = [
   { id: "water", label: "Fluid", unit: "ml", get: (d) => d.water, watch: "up", domain: "water" },
   { id: "late", label: "Fluid after 18:00", unit: "%", get: (d) => (d.water ? (100 * (d.waterAfter18 ?? 0)) / d.water : undefined), watch: "up", domain: "water" },
   { id: "sodium", label: "Sodium", unit: "mg", get: (d) => d.sodium, watch: "up", domain: "sodium" },
-  { id: "caffeine", label: "Caffeine", unit: "mg", get: (d) => (d.water !== undefined ? d.caffeine ?? 0 : undefined), watch: "up", domain: "caffeine" },
-  { id: "alcohol", label: "Alcohol", unit: "drinks", get: (d) => (d.water !== undefined ? d.alcohol ?? 0 : undefined), digits: 1, watch: "up", domain: "alcohol" },
+  { id: "caffeine", label: "Caffeine", unit: "mg", get: (d) => substanceOn(d, "caffeine"), watch: "up", domain: "caffeine" },
+  { id: "alcohol", label: "Alcohol", unit: "drinks", get: (d) => substanceOn(d, "alcohol"), digits: 1, watch: "up", domain: "alcohol" },
   { id: "urination", label: "Urinations", unit: "/day", get: (d) => d.urination, watch: "both", domain: "water" },
-  { id: "night", label: "Night urinations", unit: "/night", get: (d) => (d.urination ? d.nightUrination ?? 0 : undefined), watch: "up", domain: "water" },
+  { id: "night", label: "Night urinations", unit: "/night", get: (d) => nightOn(d), watch: "up", domain: "water" },
   { id: "onTime", label: "Doses on time (±60 min)", unit: "%", get: (d) => (d.dosesDue ? (100 * d.dosesOnTime) / d.dosesDue : undefined), watch: "down", domain: "meds" },
 ];
+
+/** Night urinations on a row's night, or unknown when no urination was logged around it. */
+function nightOn(d: Day): number | undefined {
+  return d.urination || d.nightUrination !== undefined ? d.nightUrination ?? 0 : undefined;
+}
 
 export interface BaselineRow {
   metric: MetricDef;
@@ -390,8 +494,9 @@ export interface Flag {
 export function safetyFlags(inp: EngineInput, days: Day[]): Flag[] {
   const flags: Flag[] = [];
   const recent = days.slice(-14);
-  // Rapid weight gain on first-of-day weights.
-  for (let i = 1; i < recent.length; i++) {
+  const rxName = rxNames(inp);
+  // Rapid weight gain on first-of-day weights (the first day compares with the one before the window).
+  for (let i = 0; i < recent.length; i++) {
     const d = recent[i]!;
     if (d.weight === undefined) continue;
     const back = (n: number) => {
@@ -405,9 +510,11 @@ export function safetyFlags(inp: EngineInput, days: Day[]): Flag[] {
     else if (w3 !== undefined && d.weight - w3 > 2)
       flags.push({ level: "amber", when: d.key, title: `Weight up ${(d.weight - w3).toFixed(1)} kg in 3 days`, detail: "Heart-failure guidance treats more than 2 kg in 3 days as a warning sign of fluid build-up. Check the plan your care team gave you." });
   }
-  const twoWeeksAgo = inp.now - 14 * 86_400_000;
+  // The same 14 logical days as the weight check.
+  const twoWeeksAgo = logicalDayStart(recent[0]!.key, inp.dayStartHour, inp.tz);
+  const until = logicalDayStart(shiftDayKey(recent[recent.length - 1]!.key, 1), inp.dayStartHour, inp.tz);
   for (const r of inp.bp) {
-    if (r.timestamp < twoWeeksAgo) continue;
+    if (r.timestamp < twoWeeksAgo || r.timestamp >= until) continue;
     const when = logicalDayKey(r.timestamp, inp.dayStartHour, inp.tz);
     if (r.systolic >= 180 || r.diastolic >= 120)
       flags.push({ level: "red", when, title: `Reading of ${r.systolic}/${r.diastolic}`, detail: "A reading of 180/120 or more needs prompt medical advice, urgently if you have symptoms such as chest pain, breathlessness or confusion." });
@@ -417,11 +524,11 @@ export function safetyFlags(inp: EngineInput, days: Day[]): Flag[] {
       flags.push({ level: "amber", when, title: `Heart rate ${r.heartRate} bpm`, detail: "A resting heart rate under 50 on a beta-blocker is worth mentioning to your care team." });
   }
   // Dizziness or light-headedness within 4 h of a taken dose.
-  const dizzy = inp.journal.filter((j) => j.timestamp >= twoWeeksAgo && /dizz|light.?head|faint|vertigo|swimmy/i.test(j.finding));
+  const dizzy = inp.journal.filter((j) => j.timestamp >= twoWeeksAgo && j.timestamp < until && /dizz|light.?head|faint|vertigo|swimmy/i.test(j.finding));
   for (const j of dizzy) {
     const dose = inp.doseLogs.find((l) => l.status === "taken" && l.actionTimestamp && j.timestamp - l.actionTimestamp >= 0 && j.timestamp - l.actionTimestamp <= 4 * 3_600_000);
     if (dose)
-      flags.push({ level: "amber", when: logicalDayKey(j.timestamp, inp.dayStartHour, inp.tz), title: `${j.finding} within 4 h of ${dose.medicineName ?? "a dose"}`, detail: "Dizziness soon after blood-pressure medicines can mean BP is dropping. Note it for your care team; don't change doses on your own." });
+      flags.push({ level: "amber", when: logicalDayKey(j.timestamp, inp.dayStartHour, inp.tz), title: `${j.finding} within 4 h of ${doseName(dose, rxName, "a dose")}`, detail: "Dizziness soon after blood-pressure medicines can mean BP is dropping. Note it for your care team; don't change doses on your own." });
   }
   return flags.sort((a, b) => (a.when < b.when ? 1 : -1));
 }
@@ -430,7 +537,8 @@ export function safetyFlags(inp: EngineInput, days: Day[]): Flag[] {
 // 3. Weight: trend and drift
 // ---------------------------------------------------------------------------
 
-export function weightTrend(days: Day[]) {
+export function weightTrend(allDays: Day[]) {
+  const days = allDays.slice(0, -1); // the last row is after the selection (or today, still being logged)
   const last28 = days.slice(-28);
   const pts = last28.flatMap((d, i) => (d.weight !== undefined ? [{ x: i, y: d.weight }] : []));
   const m7 = median(days.slice(-7).flatMap((d) => (d.weight !== undefined ? [d.weight] : [])));
@@ -448,17 +556,22 @@ export function weightTrend(days: Day[]) {
 // 4. Home BP in the guideline format
 // ---------------------------------------------------------------------------
 
-export function homeBp(inp: EngineInput, period = 30) {
+export function homeBp(inp: EngineInput, win: ReportWindow) {
+  const dayKey = (r: BloodPressureRecord) => logicalDayKey(r.timestamp, inp.dayStartHour, inp.tz);
+  // The protocol week: the last 7 selected days.
   const days7 = new Set<string>();
-  const today = logicalDayKey(inp.now, inp.dayStartHour, inp.tz);
-  for (let i = 1; i <= 7; i++) days7.add(shiftDayKey(today, -i));
-  const rows = inp.bp
-    .filter((r) => days7.has(logicalDayKey(r.timestamp, inp.dayStartHour, inp.tz)))
-    .sort((a, b) => a.timestamp - b.timestamp);
+  for (let i = 0; i < 7; i++) days7.add(shiftDayKey(win.endKey, -i));
+  const rows = inp.bp.filter((r) => days7.has(dayKey(r))).sort((a, b) => a.timestamp - b.timestamp);
+  const rowDays = new Set(rows.map(dayKey)).size;
   const am = rows.filter((r) => localParts(r.timestamp, inp.tz).hour < 12);
   const pm = rows.filter((r) => localParts(r.timestamp, inp.tz).hour >= 17);
   const mean = (xs: number[]) => xs.reduce((s, x) => s + x, 0) / xs.length;
-  const all90 = inp.bp.filter((r) => r.timestamp >= inp.now - period * 86_400_000).sort((a, b) => a.timestamp - b.timestamp);
+  const all90 = inp.bp
+    .filter((r) => {
+      const k = dayKey(r);
+      return k >= win.startKey && k <= win.endKey;
+    })
+    .sort((a, b) => a.timestamp - b.timestamp);
   const band = (r: BloodPressureRecord) =>
     r.systolic < 100 ? "low" : r.systolic >= 135 || r.diastolic >= 85 ? "high" : "in";
   const tir = { low: 0, in: 0, high: 0 };
@@ -477,7 +590,8 @@ export function homeBp(inp: EngineInput, period = 30) {
     hr: mean(rows.flatMap((r) => (r.heartRate ? [r.heartRate] : []))),
     amSys: am.length ? mean(am.map((r) => r.systolic)) : NaN,
     pmSys: pm.length ? mean(pm.map((r) => r.systolic)) : NaN,
-    meetsProtocol: am.length >= 6 && pm.length >= 6,
+    meetsProtocol: am.length >= 6 && pm.length >= 6 && rowDays >= 3,
+    protocolDays: rowDays,
     tir,
     tirN: all90.length,
     sysP10: quantile(sys, 0.1),
@@ -515,26 +629,24 @@ export function limitAdherence(days: Day[], limit: number, key: "water" | "sodiu
   };
 }
 
-/** Share of each 3-hour block of the (calendar) day, across the last 30 days. */
-export function timeOfDay(inp: EngineInput, pick: (r: IntakeRecord) => boolean, period = 30) {
+/** Share of each 3-hour block of the (calendar) day, across the selected days. */
+export function timeOfDay(inp: EngineInput, pick: (r: IntakeRecord) => boolean, inSel: (ts: number) => boolean) {
   const bins = new Array(8).fill(0) as number[];
-  const since = inp.now - period * 86_400_000;
   let total = 0;
   for (const r of inp.intake) {
-    if (r.timestamp < since || !pick(r)) continue;
+    if (!pick(r) || !inSel(r.timestamp)) continue;
     bins[Math.floor(localParts(r.timestamp, inp.tz).hour / 3)]! += r.amount;
     total += r.amount;
   }
   return bins.map((b) => (total ? b / total : 0));
 }
 
-/** Biggest sodium sources in the last 30 days, by the record's food label. */
-export function sodiumSources(inp: EngineInput, period = 30) {
-  const since = inp.now - period * 86_400_000;
+/** Biggest sodium sources in the selected days, by the record's food label. */
+export function sodiumSources(inp: EngineInput, inSel: (ts: number) => boolean) {
   const by = new Map<string, number>();
   let total = 0;
   for (const r of inp.intake) {
-    if (r.type !== "salt" || r.timestamp < since) continue;
+    if (r.type !== "salt" || !inSel(r.timestamp)) continue;
     const label = (r.source?.startsWith("food:") ? r.source.slice(5) : r.note || r.source || "Logged by hand").trim() || "Logged by hand";
     by.set(label, (by.get(label) ?? 0) + r.amount);
     total += r.amount;
@@ -577,12 +689,17 @@ interface Hypothesis {
   measure: (d: Day, next: Day) => number | undefined;
 }
 
+const alcoholExposed = (d: Day) => {
+  const a = substanceOn(d, "alcohol");
+  return a === undefined ? undefined : a >= 3;
+};
+
 const HYPOTHESES: Hypothesis[] = [
   {
     id: "alc-hr",
     question: "Does drinking raise my heart rate the next morning?",
     exposure: "3+ drinks",
-    exposed: (d) => (d.water === undefined ? undefined : (d.alcohol ?? 0) >= 3),
+    exposed: (d) => alcoholExposed(d),
     outcome: "next-morning heart rate",
     unit: "bpm",
     digits: 0,
@@ -592,7 +709,7 @@ const HYPOTHESES: Hypothesis[] = [
     id: "alc-sys",
     question: "Does drinking change my blood pressure the next morning?",
     exposure: "3+ drinks",
-    exposed: (d) => (d.water === undefined ? undefined : (d.alcohol ?? 0) >= 3),
+    exposed: (d) => alcoholExposed(d),
     outcome: "next-morning systolic",
     unit: "mmHg",
     digits: 0,
@@ -636,16 +753,22 @@ const HYPOTHESES: Hypothesis[] = [
     outcome: "night urinations",
     unit: "",
     digits: 1,
-    measure: (_d, n) => (n.urination ? n.nightUrination ?? 0 : undefined),
+    // The next row's night is the 00:00–06:00 after this day's evening.
+    measure: (_d, n) => nightOn(n),
   },
 ];
 
-export function nextMorningEffects(inp: EngineInput, days: Day[]): Effect[] {
+/**
+ * Exposure days are the selected days only (the last `period` rows before the
+ * final one). The outcome is read on the following day, which for the last
+ * selected day is the row just after the selection.
+ */
+export function nextMorningEffects(inp: EngineInput, days: Day[], period: number): Effect[] {
   const NEED = 5;
   return HYPOTHESES.map((h) => {
     const ex: number[] = [];
     const ot: number[] = [];
-    for (let i = 0; i < days.length - 1; i++) {
+    for (let i = Math.max(0, days.length - 1 - period); i < days.length - 1; i++) {
       const e = h.exposed(days[i]!, inp);
       const y = h.measure(days[i]!, days[i + 1]!);
       if (e === undefined || y === undefined) continue;
@@ -669,9 +792,13 @@ export function nextMorningEffects(inp: EngineInput, days: Day[]): Effect[] {
 // 7. Adherence and timing
 // ---------------------------------------------------------------------------
 
-export function adherence(inp: EngineInput, period = 30) {
-  const since = shiftDayKey(logicalDayKey(inp.now, inp.dayStartHour, inp.tz), -period);
-  const logs = inp.doseLogs.filter((l) => l.kind !== "prn" && l.status !== "pending" && l.scheduledDate >= since);
+/** Doses scheduled on the selected days, by `scheduledDate` (the same mapping as the daily rows). */
+export function adherence(inp: EngineInput, win: ReportWindow) {
+  const inWin = (l: DoseLog) => l.scheduledDate >= win.startKey && l.scheduledDate <= win.endKey;
+  const rxName = rxNames(inp);
+  // Group by prescription; an unlisted medicine by its own name.
+  const group = (l: DoseLog) => (l.prescriptionId ? `rx:${l.prescriptionId}` : `name:${l.medicineName ?? "Unknown"}`);
+  const logs = inp.doseLogs.filter((l) => l.kind !== "prn" && l.status !== "pending" && inWin(l));
   const taken = logs.filter((l) => l.status === "taken");
   const delays = taken.map(doseDelayMin).filter((d): d is number => d !== null);
   const bySlot = new Map<string, number[]>();
@@ -690,8 +817,15 @@ export function adherence(inp: EngineInput, period = 30) {
     byDay.set(l.scheduledDate, v);
   }
   const fullDays = [...byDay.values()].filter((v) => v.taken === v.due).length;
-  const missed = new Map<string, number>();
-  for (const l of logs) if (l.status !== "taken") missed.set(l.medicineName ?? "Unknown", (missed.get(l.medicineName ?? "Unknown") ?? 0) + 1);
+  const missed = new Map<string, { name: string; n: number }>();
+  for (const l of logs) {
+    if (l.status === "taken") continue;
+    const v = missed.get(group(l)) ?? { name: doseName(l, rxName, "Unknown"), n: 0 };
+    v.n++;
+    missed.set(group(l), v);
+  }
+  const groups = new Map<string, DoseLog[]>();
+  for (const l of logs) groups.set(group(l), [...(groups.get(group(l)) ?? []), l]);
   return {
     due: logs.length,
     taken: taken.length,
@@ -703,16 +837,16 @@ export function adherence(inp: EngineInput, period = 30) {
     slots: [...bySlot.entries()]
       .map(([time, ds]) => ({ time, n: ds.length, median: median(ds), p90: quantile(ds, 0.9) }))
       .sort((a, b) => (a.time < b.time ? -1 : 1)),
-    missed: [...missed.entries()].map(([name, n]) => ({ name, n })).sort((a, b) => b.n - a.n),
-    byMedicine: [...new Set(logs.map((l) => l.medicineName ?? "Unknown"))]
-      .map((name) => {
-        const mine = logs.filter((l) => (l.medicineName ?? "Unknown") === name);
+    missed: [...missed.values()].sort((a, b) => b.n - a.n),
+    byMedicine: [...groups.values()]
+      .map((mine) => {
+        const name = doseName(mine[0]!, rxName, "Unknown");
         const tk = mine.filter((l) => l.status === "taken");
         const ds = tk.map(doseDelayMin).filter((d): d is number => d !== null);
         return { name, due: mine.length, taken: tk.length, onTime: ds.filter((d) => Math.abs(d) <= 60).length, medianDelay: median(ds) };
       })
       .sort((a, b) => a.taken / a.due - b.taken / b.due),
-    prn: inp.doseLogs.filter((l) => l.kind === "prn" && l.status === "taken" && l.scheduledDate >= since).map((l) => ({ name: l.medicineName ?? "As needed", ts: l.actionTimestamp ?? 0 })),
+    prn: inp.doseLogs.filter((l) => l.kind === "prn" && l.status === "taken" && inWin(l)).map((l) => ({ name: doseName(l, rxName, "As needed"), ts: l.actionTimestamp ?? 0 })),
   };
 }
 
@@ -796,13 +930,17 @@ export function medicationChanges(inp: EngineInput, days: Day[]): ChangeEvent[] 
 
   return list.map((e) => {
     const { lag, why } = lagDays(e.medicine);
-    const overlaps = list
-      .filter((o) => o !== e && Math.abs(dateDiffDays(o.date, e.date)) <= 14)
-      .map((o) => `${o.medicine} (${o.date.slice(5)})`);
     const inRange = (from: string, to: string) => days.filter((d) => d.key >= from && d.key < to);
-    const before = inRange(shiftDayKey(e.date, -28), e.date);
+    const beforeStart = shiftDayKey(e.date, -28);
+    const before = inRange(beforeStart, e.date);
     const afterStart = shiftDayKey(e.date, lag);
-    const after = inRange(afterStart, shiftDayKey(afterStart, 28)).filter((d) => d.key < today);
+    const afterEnd = shiftDayKey(afterStart, 28);
+    const after = inRange(afterStart, afterEnd).filter((d) => d.key < today);
+    // Any other change from the start of the before sample to the end of the
+    // after sample (the lag between them included) can move the comparison.
+    const overlaps = list
+      .filter((o) => o !== e && o.date >= beforeStart && o.date < afterEnd)
+      .map((o) => `${o.medicine} (${o.date.slice(5)})`);
     return {
       ...e,
       lag,
@@ -842,25 +980,36 @@ export interface SymptomContext {
   hoursSinceDose?: { name: string; h: number };
 }
 
-export function symptomContext(inp: EngineInput, days: Day[], period = 30): { entries: SymptomContext[]; patterns: { finding: string; n: number; text: string }[]; counts: { finding: string; n: number; severity: number }[] } {
-  const since = inp.now - period * 86_400_000;
+export function symptomContext(inp: EngineInput, days: Day[], inSel: (ts: number) => boolean): { entries: SymptomContext[]; patterns: { finding: string; n: number; text: string }[]; counts: { finding: string; n: number; severity: number }[] } {
+  const rxName = rxNames(inp);
+  const H24 = 24 * 3_600_000;
   const entries = inp.journal
-    .filter((j) => j.timestamp >= since && j.kind !== "event")
+    .filter((j) => j.kind !== "event" && inSel(j.timestamp))
     .sort((a, b) => b.timestamp - a.timestamp)
     .map((j): SymptomContext => {
       const t = j.timestamp;
       const bp = inp.bp.filter((r) => r.timestamp <= t && t - r.timestamp <= 72 * 3_600_000).sort((a, b) => b.timestamp - a.timestamp)[0];
       const key = logicalDayKey(t, inp.dayStartHour, inp.tz);
       const idx = days.findIndex((d) => d.key === key);
-      const w = idx >= 0 ? days[idx]!.weight : undefined;
+      // The day's first weight, only if it was measured by the time of the entry.
+      const w = inp.weight
+        .filter((r) => r.timestamp <= t && logicalDayKey(r.timestamp, inp.dayStartHour, inp.tz) === key)
+        .sort((a, b) => a.timestamp - b.timestamp)[0]?.weight;
       const usualW = median(days.slice(Math.max(0, idx - 28), Math.max(0, idx)).flatMap((d) => (d.weight !== undefined ? [d.weight] : [])));
       const alcohol24h = inp.substance
-        .filter((s) => s.type === "alcohol" && s.timestamp <= t && t - s.timestamp <= 24 * 3_600_000)
+        .filter((s) => s.type === "alcohol" && s.timestamp <= t && t - s.timestamp <= H24)
         .reduce((s, r) => s + (r.amountStandardDrinks ?? 0), 0);
+      // Doses due in the 24 h before the entry that were skipped, or taken
+      // more than 120 min late where that lateness had begun by the entry.
       const lateOrMissed24h = inp.doseLogs
-        .filter((l) => l.kind !== "prn" && l.scheduledDate >= shiftDayKey(key, -1) && l.scheduledDate <= key)
-        .filter((l) => l.status === "skipped" || (l.status === "taken" && (doseDelayMin(l) ?? 0) > 120))
-        .map((l) => `${l.medicineName ?? "dose"} ${l.scheduledTime} ${l.status === "skipped" ? "skipped" : "late"}`);
+        .filter((l) => {
+          if (l.kind === "prn") return false;
+          const due = scheduledAt(l);
+          if (due === null || due > t || t - due > H24) return false;
+          if (l.status === "skipped") return true;
+          return l.status === "taken" && (doseDelayMin(l) ?? 0) > 120 && due + 120 * 60_000 <= t;
+        })
+        .map((l) => `${doseName(l, rxName, "dose")} ${l.scheduledTime} ${l.status === "skipped" ? "skipped" : "late"}`);
       const lastDose = inp.doseLogs
         .filter((l) => l.status === "taken" && l.actionTimestamp && l.actionTimestamp <= t)
         .sort((a, b) => b.actionTimestamp! - a.actionTimestamp!)[0];
@@ -871,7 +1020,7 @@ export function symptomContext(inp: EngineInput, days: Day[], period = 30): { en
         alcohol24h,
         ...(idx > 0 && days[idx - 1]!.sodium !== undefined ? { sodiumDayBefore: days[idx - 1]!.sodium! } : {}),
         lateOrMissed24h,
-        ...(lastDose ? { hoursSinceDose: { name: lastDose.medicineName ?? "dose", h: (t - lastDose.actionTimestamp!) / 3_600_000 } } : {}),
+        ...(lastDose ? { hoursSinceDose: { name: doseName(lastDose, rxName, "dose"), h: (t - lastDose.actionTimestamp!) / 3_600_000 } } : {}),
       };
     });
   // Patterns only once a finding has 5+ entries.
@@ -916,9 +1065,9 @@ export interface WeekRow {
   dosesPct: number;
 }
 
-/** One row per 7-day block, newest first, covering the period. */
+/** One row per 7-day block, newest first, covering the selected days only (the oldest row may be short). */
 export function weekly(days: Day[], period: number): WeekRow[] {
-  const complete = days.slice(0, -1);
+  const complete = days.slice(-(period + 1), -1);
   const weeks = Math.max(1, Math.min(13, Math.ceil(period / 7)));
   const rows: WeekRow[] = [];
   const pick = (ds: Day[], f: (d: Day) => number | undefined) => median(ds.map(f).filter((v): v is number => v !== undefined));
@@ -945,15 +1094,14 @@ export function weekly(days: Day[], period: number): WeekRow[] {
 }
 
 /** Food: meals, timing, top foods, sugar and potassium, over the period. */
-export function foodSummary(inp: EngineInput, days: Day[], period: number) {
+export function foodSummary(inp: EngineInput, days: Day[], period: number, inSel: (ts: number) => boolean) {
   const inPeriod = days.slice(-(period + 1), -1);
   const ate = inPeriod.filter((d) => d.foodItems);
-  const since = inp.now - period * 86_400_000;
   const foods = new Map<string, { n: number; grams: number }>();
   let late = 0;
   let total = 0;
   for (const r of inp.eating ?? []) {
-    if (r.timestamp < since) continue;
+    if (!inSel(r.timestamp)) continue;
     total++;
     const h = localParts(r.timestamp, inp.tz).hour;
     if (h >= 21 || h < inp.dayStartHour) late++;
@@ -1005,11 +1153,27 @@ export function periodCompare(days: Day[], period: number): CompareRow[] {
   });
 }
 
-export function runEngine(inp: EngineInput, period = 30) {
-  const days = buildDays(inp, Math.max(90, 2 * period + 2));
+/**
+ * The report for a selection. `days` ends with the day after the selection
+ * (today for the default "last N complete days"); `inPeriod` is the `period`
+ * rows before it. Earlier rows feed baselines and comparisons only, never a
+ * figure for the period.
+ */
+export function runEngine(inp: EngineInput, sel: Selection | number = 30) {
+  const win = resolveSelection(inp, sel);
+  const { period } = win;
+  const days = buildDays(inp, win.nDays, win.anchorKey);
   const inPeriod = days.slice(-(period + 1), -1);
+  const inSel = (ts: number) => {
+    const k = logicalDayKey(ts, inp.dayStartHour, inp.tz);
+    return k >= win.startKey && k <= win.endKey;
+  };
   return {
     period,
+    /** First and last selected logical day, and the same days in ms (what an export should cover). */
+    startKey: win.startKey,
+    endKey: win.endKey,
+    range: win.range,
     days,
     inPeriod,
     weeks: weekly(days, period),
@@ -1017,33 +1181,37 @@ export function runEngine(inp: EngineInput, period = 30) {
     baseline: baselineDiff(days),
     flags: safetyFlags(inp, days),
     weight: weightTrend(days),
-    bp: homeBp(inp, period),
+    bp: homeBp(inp, win),
     water: limitAdherence(days, inp.waterLimit, "water", period),
     sodium: limitAdherence(days, inp.saltLimit, "sodium", period),
-    fluidClock: timeOfDay(inp, (r) => r.type === "water", period),
-    sodiumClock: timeOfDay(inp, (r) => r.type === "salt", period),
-    sodiumSources: sodiumSources(inp, period),
-    food: foodSummary(inp, days, period),
-    effects: nextMorningEffects(inp, days),
-    adherence: adherence(inp, period),
+    fluidClock: timeOfDay(inp, (r) => r.type === "water", inSel),
+    sodiumClock: timeOfDay(inp, (r) => r.type === "salt", inSel),
+    sodiumSources: sodiumSources(inp, inSel),
+    food: foodSummary(inp, days, period, inSel),
+    effects: nextMorningEffects(inp, days, period),
+    adherence: adherence(inp, win),
     changes: medicationChanges(inp, days),
-    symptoms: symptomContext(inp, days, period),
+    symptoms: symptomContext(inp, days, inSel),
     urine: (() => {
       const u = inPeriod.filter((d) => d.urination !== undefined);
+      const nights = inPeriod.map(nightOn).filter((v): v is number => v !== undefined);
+      const bowelN = inPeriod.reduce((s, d) => s + (d.defecation ?? 0), 0);
       return {
         n: u.length,
         perDay: median(u.map((d) => d.urination!)),
-        nightPerNight: median(u.map((d) => d.nightUrination ?? 0)),
-        nightsWith2: u.filter((d) => (d.nightUrination ?? 0) >= 2).length,
-        bowelPerWeek: (inPeriod.reduce((s, d) => s + (d.defecation ?? 0), 0) / Math.max(1, inPeriod.length)) * 7,
+        nightPerNight: median(nights),
+        nightsWith2: nights.filter((v) => v >= 2).length,
+        /** Recorded bowel movements per week; NaN (no data) when none was recorded in the period. */
+        bowelPerWeek: bowelN ? (bowelN / Math.max(1, inPeriod.length)) * 7 : NaN,
+        bowelN,
       };
     })(),
     caffeine: (() => {
-      const c = inPeriod.filter((d) => d.water !== undefined).map((d) => d.caffeine ?? 0);
+      const c = inPeriod.map((d) => substanceOn(d, "caffeine")).filter((v): v is number => v !== undefined);
       return { median: median(c), max: Math.max(0, ...c), over400: c.filter((v) => v > 400).length, n: c.length };
     })(),
     alcohol: (() => {
-      const last = inPeriod.filter((d) => d.water !== undefined);
+      const last = inPeriod.filter((d) => substanceOn(d, "alcohol") !== undefined);
       const drinkDays = last.filter((d) => (d.alcohol ?? 0) > 0);
       return {
         n: last.length,

@@ -71,8 +71,9 @@ export function Spark({
 }) {
   const nums = values.filter((v): v is number => v !== undefined && Number.isFinite(v));
   if (nums.length < 2) return <svg width={width} height={height} aria-hidden="true" />;
-  let lo = Math.min(...nums, band?.[0] ?? Infinity);
-  let hi = Math.max(...nums, band?.[1] ?? -Infinity);
+  const okBand = band && Number.isFinite(band[0]) && Number.isFinite(band[1]) ? band : undefined;
+  let lo = Math.min(...nums, okBand?.[0] ?? Infinity);
+  let hi = Math.max(...nums, okBand?.[1] ?? -Infinity);
   if (hi === lo) {
     hi += 1;
     lo -= 1;
@@ -82,8 +83,8 @@ export function Spark({
   const cut = values.length - highlightLast;
   return (
     <svg width={width} height={height} aria-hidden="true" style={{ display: "block", overflow: "visible" }}>
-      {band && Number.isFinite(band[0]) && (
-        <rect x={0} width={width} y={y(band[1])} height={Math.max(1, y(band[0]) - y(band[1]))} fill={color} opacity={0.12} />
+      {okBand && (
+        <rect x={0} width={width} y={y(okBand[1])} height={Math.max(1, y(okBand[0]) - y(okBand[1]))} fill={color} opacity={0.12} />
       )}
       <rect x={x(cut) - 1} width={width - x(cut) + 1} y={0} height={height} fill={col("fg")} opacity={0.04} />
       {values.map((v, i) =>

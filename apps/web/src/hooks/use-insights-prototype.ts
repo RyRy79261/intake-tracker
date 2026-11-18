@@ -1,62 +1,82 @@
 "use client";
 
 /**
- * PROTOTYPE — throwaway. Reads the last 95 days straight from Dexie (read-only)
- * and runs the insights engine over it. No service layer on purpose.
+ * PROTOTYPE — throwaway. Reads the records a selection needs straight from
+ * Dexie (read-only) and runs the insights engine over them. No service layer
+ * on purpose.
  */
 
 import { useMemo } from "react";
+import { logicalDayKey } from "@intake/core/logical-day";
+import { useNowTick } from "@intake/ui/use-now-tick";
 import { db } from "@/lib/db";
 import { useLiveQuery } from "@/hooks/use-live-query";
 import { useSettingsStore } from "@/stores/settings-store";
 import { getDeviceTimezone } from "@/lib/timezone";
-import { runEngine, type EngineInput } from "@/components/analytics/insights-prototype/engine";
+import {
+  resolveSelection,
+  runEngine,
+  type EngineInput,
+  type Selection,
+} from "@/components/analytics/insights-prototype/engine";
 
-const DAYS = 200;
-
-export function usePrototypeInsights(period = 30) {
+export function usePrototypeInsights(sel: Selection) {
   const dayStartHour = useSettingsStore((s) => s.dayStartHour);
   const waterLimit = useSettingsStore((s) => s.waterLimit);
   const saltLimit = useSettingsStore((s) => s.saltLimit);
   const sugarLimit = useSettingsStore((s) => s.sugarLimit);
   const potassiumLimit = useSettingsStore((s) => s.potassiumLimit);
+  const tz = getDeviceTimezone();
 
+  // Re-read the clock every minute so a relative report moves on when the
+  // logical day changes, without waiting for a database or settings update.
+  const tick = useNowTick();
+  const todayKey = useMemo(
+    () => logicalDayKey(Date.now(), dayStartHour, tz),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- tick forces a re-read of the clock
+    [tick, dayStartHour, tz],
+  );
+  // One clock reading per logical day: the loaded records and the report use the same window.
+  const { now, win } = useMemo(() => {
+    const at = Date.now();
+    return { now: at, win: resolveSelection({ now: at, tz, dayStartHour }, sel) };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- todayKey forces a re-read of the clock
+  }, [sel, todayKey, dayStartHour, tz]);
+
+  const { start, end, firstKey, lastKey } = win.load;
   const raw = useLiveQuery(async () => {
-    const since = Date.now() - DAYS * 86_400_000;
-    const sinceDate = new Date(since).toISOString().slice(0, 10);
     const live = <T extends { deletedAt: number | null }>(xs: T[]) => xs.filter((x) => x.deletedAt === null);
-    const recent = <T extends { deletedAt: number | null; timestamp: number }>(xs: T[]) =>
-      xs.filter((x) => x.deletedAt === null && x.timestamp >= since);
     const [intake, eating, weight, bp, urination, defecation, substance, doseLogs, phases, schedules, prescriptions, journal] =
       await Promise.all([
-        db.intakeRecords.toArray().then(recent),
-        db.eatingRecords.toArray().then(recent),
-        db.weightRecords.toArray().then(recent),
-        db.bloodPressureRecords.toArray().then(recent),
-        db.urinationRecords.toArray().then(recent),
-        db.defecationRecords.toArray().then(recent),
-        db.substanceRecords.toArray().then(recent),
-        db.doseLogs.where("scheduledDate").aboveOrEqual(sinceDate).toArray().then(live),
+        db.intakeRecords.where("timestamp").between(start, end, true, true).toArray().then(live),
+        db.eatingRecords.where("timestamp").between(start, end, true, true).toArray().then(live),
+        db.weightRecords.where("timestamp").between(start, end, true, true).toArray().then(live),
+        db.bloodPressureRecords.where("timestamp").between(start, end, true, true).toArray().then(live),
+        db.urinationRecords.where("timestamp").between(start, end, true, true).toArray().then(live),
+        db.defecationRecords.where("timestamp").between(start, end, true, true).toArray().then(live),
+        db.substanceRecords.where("timestamp").between(start, end, true, true).toArray().then(live),
+        db.doseLogs.where("scheduledDate").between(firstKey, lastKey, true, true).toArray().then(live),
         db.medicationPhases.toArray().then(live),
         db.phaseSchedules.toArray().then(live),
         db.prescriptions.toArray().then(live),
-        db.journalEntries.where("timestamp").aboveOrEqual(since).toArray().then(live),
+        db.journalEntries.where("timestamp").between(start, end, true, true).toArray().then(live),
       ]);
-    return { intake, eating, weight, bp, urination, defecation, substance, doseLogs, phases, schedules, prescriptions, journal };
-  }, []);
+    return { loaded: `${start}|${end}|${firstKey}|${lastKey}`, records: { intake, eating, weight, bp, urination, defecation, substance, doseLogs, phases, schedules, prescriptions, journal } };
+  }, [start, end, firstKey, lastKey]);
 
   return useMemo(() => {
-    if (!raw) return null;
+    // Until the records for this window arrive (the last result is for the previous one).
+    if (!raw || raw.loaded !== `${start}|${end}|${firstKey}|${lastKey}`) return null;
     const input: EngineInput = {
-      now: Date.now(),
-      tz: getDeviceTimezone(),
+      now,
+      tz,
       dayStartHour,
       waterLimit,
       saltLimit,
       sugarLimit,
       potassiumLimit,
-      ...raw,
+      ...raw.records,
     };
-    return runEngine(input, period);
-  }, [raw, dayStartHour, waterLimit, saltLimit, sugarLimit, potassiumLimit, period]);
+    return runEngine(input, sel);
+  }, [raw, start, end, firstKey, lastKey, now, tz, dayStartHour, waterLimit, saltLimit, sugarLimit, potassiumLimit, sel]);
 }

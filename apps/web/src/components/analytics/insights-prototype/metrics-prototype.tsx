@@ -8,18 +8,18 @@
  * and AI treatments live in this branch's history.
  */
 
-import { useCallback, useState, type ReactNode } from "react";
+import { useCallback, useMemo, useState, type ReactNode } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@intake/ui/tabs";
 import type { TimeRange, TimeScope } from "@intake/types/analytics";
 import { TimeRangeSelector } from "@/components/analytics/time-range-selector";
-import type { Insights } from "@/components/analytics/insights-prototype/engine";
+import type { Insights, Selection } from "@/components/analytics/insights-prototype/engine";
 import { FluidChapter, FoodChapter, MedsChapter, VitalsChapter } from "@/components/analytics/insights-prototype/chapters";
 import { VariantReport } from "@/components/analytics/insights-prototype/variant-report";
 import { EngineState } from "@/components/analytics/insights-prototype/ui";
 import { AiProvider, AnalysisTab, AnalysisTabCount, type Chapter } from "@/components/analytics/insights-prototype/ai-review";
 
-const SCOPE_DAYS: Record<string, number> = { "24h": 7, "7d": 7, "30d": 30, "90d": 90, all: 180 };
-const DAY = 86_400_000;
+// Complete logical days ending yesterday; "24h" (Today) is the current logical day.
+const SCOPE_DAYS: Record<string, number> = { "7d": 7, "30d": 30, "90d": 90, all: 180 };
 
 export const METRICS_VARIANTS = [{ key: "1", name: "Analysis tab" }] as const;
 
@@ -47,14 +47,24 @@ export function MetricsPrototype({
 }: {
   /** Kept so callers can key the window by variant. */
   variant?: string;
-  useInsights: (period: number) => Insights | null;
+  /** Pass `sel` through to the engine (keep it stable: it is memoised here). */
+  useInsights: (sel: Selection) => Insights | null;
   exportSlot?: (range: TimeRange) => ReactNode;
 }) {
   const [scope, setScope] = useState<TimeScope>("30d");
   const [customRange, setCustomRange] = useState<TimeRange | null>(null);
-  const period = customRange ? Math.max(7, Math.round((customRange.end - customRange.start) / DAY)) : SCOPE_DAYS[scope] ?? 30;
-  const data = useInsights(period);
-  const range: TimeRange = customRange ?? { start: Date.now() - period * DAY, end: Date.now() };
+  // A custom range reports exactly its logical days; earlier days still feed
+  // the baselines. The export covers the days the engine reports (`data.range`).
+  const sel = useMemo<Selection>(
+    () =>
+      customRange
+        ? { start: customRange.start, end: customRange.end }
+        : scope === "24h"
+          ? { days: 1, includeToday: true }
+          : { days: SCOPE_DAYS[scope] ?? 30 },
+    [customRange, scope],
+  );
+  const data = useInsights(sel);
   const [tab, setTab] = useState<string>("report");
   const jump = useCallback((next: string, anchor?: string) => {
     setTab(next);
@@ -65,7 +75,7 @@ export function MetricsPrototype({
     <div className="wm" data-testid="metrics-body">
       <div className="wm-top">
         <TimeRangeSelector scope={scope} onScopeChange={setScope} customRange={customRange} onCustomRangeChange={setCustomRange} />
-        {exportSlot?.(range)}
+        {data && exportSlot?.(data.range)}
       </div>
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList aria-label="Metrics" className="wm-tabs sticky top-0 z-[2] flex h-auto w-full overflow-hidden bg-panel">

@@ -4,20 +4,23 @@
  * PROTOTYPE — throwaway. The Analysis tab of the Metrics report.
  *
  * One place for the AI analyses: start a Health report or Food analysis
- * (Quick, or Deep with web search and cited sources), read the open one,
- * and manage every past one (open, compare with the latest, delete).
- * Findings link to the chapter section they are about; appointment
- * questions can be added to the report; food swaps feed the Food tab.
+ * (Quick, or Deep with cited sources), read the open one, and manage every
+ * past one (open, delete; health reports can also be compared with each
+ * other). Findings link to the chapter section they are about; appointment
+ * questions can be added to the on-screen Report; food swaps feed the Food
+ * tab.
  *
  * The model calls are STUBBED: results come from fixed templates over the
- * engine's numbers. Sources are the real ones found in this prototype's
- * research.
+ * engine's numbers. Deep does not search the web: it attaches preselected
+ * references (real ones found in this prototype's research). The seeded
+ * history is EXAMPLE data, labelled as such, and is kept out of comparisons
+ * with real runs and out of what the Food tab and the tab badge read.
  */
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { BookOpen, Check, ChevronDown, ChevronRight, Plus, Sparkles, Trash2 } from "lucide-react";
 import type { Insights } from "@/components/analytics/insights-prototype/engine";
-import { Section, col, fmtNum, mono, muted, pct, shortDate } from "@/components/analytics/insights-prototype/ui";
+import { Section, col, fmtNum, mono, muted, pct, shortDate, signed } from "@/components/analytics/insights-prototype/ui";
 
 export type Chapter = "vitals" | "fluid" | "food" | "meds";
 export type Level = "discuss" | "watch" | "good";
@@ -35,6 +38,9 @@ export interface Finding {
   evidence?: string;
   sources?: number[];
 }
+
+/** Fewest logged days before a share of days is rated (as the chapters do). */
+const MIN_DAYS = 7;
 
 export interface Swap {
   name: string;
@@ -58,6 +64,8 @@ export interface Analysis extends Review {
   kind: Kind;
   focus: string[];
   foodNotes: { label: string; text: string }[];
+  /** Seeded example, not a run over the user's records. */
+  example?: true;
 }
 
 /** Which report section each finding belongs to. */
@@ -76,23 +84,24 @@ const REPORT_AT: Record<string, string> = {
 
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
-const SWAPS: Record<string, { swap: string; perServing: number }> = {
-  ham: { swap: "fresh roast chicken", perServing: 450 },
-  "ham sandwich": { swap: "chicken salad on low-salt bread", perServing: 700 },
-  bread: { swap: "low-salt bread", perServing: 150 },
-  toast: { swap: "low-salt bread", perServing: 150 },
-  cheese: { swap: "fresh mozzarella or ricotta", perServing: 250 },
-  soup: { swap: "home-made, no stock cube", perServing: 700 },
-  crisps: { swap: "unsalted nuts", perServing: 200 },
-  pizza: { swap: "home-made, half the cheese", perServing: 600 },
-  pasta: { swap: "no salt in the water", perServing: 250 },
-};
+/** Fixed per-serving sodium savings (estimates, not looked up). */
+const SWAPS = new Map<string, { swap: string; perServing: number }>([
+  ["ham", { swap: "fresh roast chicken", perServing: 450 }],
+  ["ham sandwich", { swap: "chicken salad on low-salt bread", perServing: 700 }],
+  ["bread", { swap: "low-salt bread", perServing: 150 }],
+  ["toast", { swap: "low-salt bread", perServing: 150 }],
+  ["cheese", { swap: "fresh mozzarella or ricotta", perServing: 250 }],
+  ["soup", { swap: "home-made, no stock cube", perServing: 700 }],
+  ["crisps", { swap: "unsalted nuts", perServing: 200 }],
+  ["pizza", { swap: "home-made, half the cheese", perServing: 600 }],
+  ["pasta", { swap: "no salt in the water", perServing: 250 }],
+]);
 
 export function foodSwaps(d: Insights): Swap[] {
   const days = Math.max(1, d.food.daysLogged);
   return d.food.topFoods
     .flatMap((f) => {
-      const s = SWAPS[f.name];
+      const s = SWAPS.get(f.name);
       return s ? [{ name: f.name, swap: s.swap, perDay: (s.perServing * f.n) / days }] : [];
     })
     .sort((a, b) => b.perDay - a.perDay)
@@ -106,7 +115,7 @@ export function foodSwaps(d: Insights): Swap[] {
 const SOURCES = {
   escHf: { title: "ESC 2021 Guidelines for heart failure", url: "https://academic.oup.com/eurheartj/article/42/36/3599/6358045" },
   esh: { title: "2023 ESH Guidelines for the management of arterial hypertension", url: "https://journals.lww.com/jhypertension/fulltext/2023/12000/2023_esh_guidelines_for_the_management_of_arterial.2.aspx" },
-  ahaHbpm: { title: "AHA: Self-measured blood pressure monitoring at home (2019)", url: "https://www.ahajournals.org/doi/10.1161/HYP.0000000000000087" },
+  ahaHbpm: { title: "AHA: Measurement of blood pressure in humans (2019 scientific statement)", url: "https://www.ahajournals.org/doi/10.1161/HYP.0000000000000087" },
   racgp: { title: "RACGP: How to measure home blood pressure", url: "https://www.racgp.org.au/afp/2016/january-february/how-to-measure-home-blood-pressure-recommendations" },
   hfm: { title: "Heart Failure Matters: rapid weight gain", url: "https://www.heartfailurematters.org/warning-signs/rapid-weight-gain/" },
   ahaTracker: { title: "AHA heart failure symptom tracker", url: "https://u1-cd-cpr.sc.heart.org/-/media/Files/Health-Topics/Heart-Failure/HF-Symptom-Tracker.pdf" },
@@ -146,54 +155,74 @@ export function buildReview(d: Insights, mode: Mode): Review {
       cites: ["hfm", "ahaTracker", "hse"],
     });
 
+  // Dizziness: report only the dose timing the engine measured, never a cause.
   const dizzy = d.symptoms.patterns.find((p) => /dizz|light/i.test(p.finding));
+  const dizzyNear = dizzy
+    ? d.symptoms.entries.filter((e) => e.entry.finding.trim().toLowerCase() === dizzy.finding.trim().toLowerCase() && e.hoursSinceDose && e.hoursSinceDose.h <= 3).length
+    : 0;
   if (dizzy)
     add({
-      id: "dizzy-dose", level: "discuss", chapter: "meds",
-      title: `Dizziness follows your doses`,
-      detail: `${dizzy.finding} was logged ${dizzy.n} times; ${dizzy.text}. Morning systolic was ${fmtNum(d.bp.sysP10)}–${fmtNum(d.bp.sysP90)} on most days, so the drop happens after the reading, not at it.`,
-      basis: [
-        { label: "Morning blood pressure", tab: "vitals", anchor: "sec-bp" },
-        { label: "Dose timing", tab: "meds", anchor: "sec-adherence" },
-      ],
-      evidence: "Symptomatic hypotension is a known effect of beta-blockers and ARNIs, especially on standing. Guidelines advise reviewing timing and dose spacing with the prescriber rather than stopping.",
+      id: "dizzy-dose", level: dizzyNear ? "discuss" : "watch", chapter: "meds",
+      title: dizzyNear ? `${cap(dizzy.finding)}: ${dizzyNear} of ${dizzy.n} entries came within 3 h of a dose` : `${cap(dizzy.finding)} logged ${dizzy.n} times`,
+      detail: `${cap(dizzy.text)}. This is timing in your log only; it does not show what causes it.`,
+      basis: [{ label: "Dose timing", tab: "meds", anchor: "sec-adherence" }],
+      evidence: "Symptomatic hypotension is a known effect of beta-blockers and ARNIs, especially on standing. Guidelines advise reviewing it with the prescriber rather than stopping a medicine.",
       cites: ["escHf"],
     });
 
-  if (!d.bp.meetsProtocol)
+  // Home BP: report the counts; never certify the protocol from counts alone.
+  const week = d.days.slice(-8, -1);
+  const bothDays = week.filter((x) => x.amSys !== undefined && x.pmSys !== undefined).length;
+  const protocolNote = "The standard home protocol is two readings morning and evening for 7 days, discarding day 1 and averaging the rest (at least 12 readings).";
+  if (d.bp.tirN === 0)
     add({
       id: "bp-protocol", level: "watch", chapter: "vitals",
-      title: "Blood pressure is only measured in the morning",
-      detail: `${d.bp.amN} morning and ${d.bp.pmN} evening readings this week. The home average of ${fmtNum(d.bp.sys)}/${fmtNum(d.bp.dia)} misses the evening, which is when your later doses are working.`,
+      title: `No blood pressure readings in the last ${d.period} days`,
+      detail: "Nothing to average or put in bands yet.",
       basis: [{ label: "Home blood pressure", tab: "vitals", anchor: "sec-bp" }],
-      evidence: "The standard home protocol is two readings morning and evening for 7 days, discarding day 1 and averaging the rest (at least 12 readings).",
+      evidence: protocolNote,
       cites: ["esh", "ahaHbpm", "racgp"],
     });
-  else
+  else {
+    const counts = `${d.bp.amN} morning and ${d.bp.pmN} evening readings in the last 7 days, with both on ${bothDays} of the 7 days`;
+    const avg = d.bp.n ? `, average ${fmtNum(d.bp.sys)}/${fmtNum(d.bp.dia)}` : "";
+    const full = d.bp.amN >= 6 && d.bp.pmN >= 6 && bothDays >= 6;
     add({
-      id: "bp-protocol", level: "good", chapter: "vitals",
-      title: "Home blood pressure follows the standard protocol",
-      detail: `${d.bp.amN} morning and ${d.bp.pmN} evening readings this week, average ${fmtNum(d.bp.sys)}/${fmtNum(d.bp.dia)}.`,
+      id: "bp-protocol", level: full ? "good" : "watch", chapter: "vitals",
+      title:
+        d.bp.n === 0
+          ? "No blood pressure readings in the last 7 days"
+          : d.bp.pmN === 0 && d.bp.amN > 0
+            ? "Blood pressure is only measured in the morning"
+            : d.bp.amN === 0 && d.bp.pmN > 0
+              ? "Blood pressure is only measured in the evening"
+              : full
+                ? `Morning and evening readings on ${bothDays} of the last 7 days`
+                : "Fewer home readings than the standard protocol asks for",
+      detail: `${counts}${avg}.${d.bp.pmN === 0 && d.bp.amN > 0 ? " The average misses the evening, when later doses are working." : ""}`,
       basis: [{ label: "Home blood pressure", tab: "vitals", anchor: "sec-bp" }],
-      cites: ["esh"],
+      evidence: protocolNote,
+      cites: ["esh", "ahaHbpm", "racgp"],
     });
 
-  const inBand = d.bp.tir.in / Math.max(1, d.bp.tirN);
-  add({
-    id: "bp-range", level: inBand >= 0.7 ? "good" : "watch", chapter: "vitals",
-    title: `${pct(inBand)} of readings in the 100–134 band`,
-    detail: `${d.bp.tir.low} readings below 100 systolic and ${d.bp.tir.high} at or above 135/85 over ${d.period} days.`,
-    basis: [{ label: "Readings by band", tab: "vitals", anchor: "sec-bp" }],
-    evidence: "Time in target range predicts outcomes beyond the average reading, so the share of readings in range is worth tracking alongside it.",
-    cites: ["tir"],
-  });
+    const inBand = d.bp.tir.in / d.bp.tirN;
+    add({
+      id: "bp-range", level: inBand >= 0.7 ? "good" : "watch", chapter: "vitals",
+      title: `${pct(inBand)} of readings in the 100–134 band`,
+      detail: `${d.bp.tir.in} of ${d.bp.tirN} readings over ${d.period} days; ${d.bp.tir.low} below 100 systolic and ${d.bp.tir.high} at or above 135/85.`,
+      basis: [{ label: "Readings by band", tab: "vitals", anchor: "sec-bp" }],
+      evidence: "Time in target range predicts outcomes beyond the average reading, so the share of readings in range is worth tracking alongside it.",
+      cites: ["tir"],
+    });
+  }
 
   const alcHr = d.effects.find((e) => e.id === "alc-hr");
-  if (alcHr && (alcHr.confidence === "consistent" || alcHr.confidence === "possible"))
+  const alcShown = !!alcHr && (alcHr.confidence === "consistent" || alcHr.confidence === "possible");
+  if (alcHr && alcShown)
     add({
-      id: "alcohol-hr", level: "discuss", chapter: "fluid",
-      title: `Heart rate is ${fmtNum(alcHr.est)} bpm higher the morning after 3+ drinks`,
-      detail: `Seen across ${alcHr.nExposed} drinking days against ${alcHr.nOther} other days (likely ${fmtNum(alcHr.lo)} to ${fmtNum(alcHr.hi)} bpm). You drank on ${d.alcohol.drinkDays} of ${d.alcohol.n} days, ${fmtNum(d.alcohol.perWeek, 1)} standard drinks a week.`,
+      id: "alcohol-hr", level: alcHr.est > 0 ? "discuss" : "watch", chapter: "fluid",
+      title: `Next-morning heart rate is ${fmtNum(Math.abs(alcHr.est))} bpm ${alcHr.est > 0 ? "higher" : "lower"} after 3+ drinks than after other days`,
+      detail: `${alcHr.nExposed} days with 3+ drinks against ${alcHr.nOther} other days; the difference is likely ${signed(alcHr.lo)} to ${signed(alcHr.hi)} bpm. You drank on ${d.alcohol.drinkDays} of ${d.alcohol.n} days, ${fmtNum(d.alcohol.perWeek, 1)} standard drinks a week. This is a pattern in your log, not proof that drinking causes it.`,
       basis: [
         { label: "Alcohol", tab: "fluid", anchor: "sec-alcohol" },
         { label: "Heart rate chart", tab: "vitals", anchor: "sec-bp" },
@@ -202,40 +231,56 @@ export function buildReview(d: Insights, mode: Mode): Review {
       cites: ["escHf"],
     });
 
+  // Limits: rate a share of days only once enough days are logged.
+  const fluidOk = d.water.n >= MIN_DAYS;
   add({
-    id: "fluid-limit", level: d.water.p < 0.5 ? "discuss" : d.water.p < 0.8 ? "watch" : "good", chapter: "fluid",
-    title: `Within your fluid limit on ${pct(d.water.p)} of days`,
-    detail: `A typical day is ${fmtNum(d.water.median)} ml against a ${fmtNum(d.limits.water)} ml limit; ${pct(d.fluidClock.slice(6).reduce((s, v) => s + v, 0))} of it comes after 18:00.`,
+    id: "fluid-limit", level: !fluidOk ? "watch" : d.water.p < 0.5 ? "discuss" : d.water.p < 0.8 ? "watch" : "good", chapter: "fluid",
+    title: fluidOk ? `Within your fluid limit on ${d.water.within} of ${d.water.n} logged days (${pct(d.water.p)})` : `Fluid logged on ${d.water.n} of ${d.period} days, too few to rate`,
+    detail: fluidOk
+      ? `A typical day is ${fmtNum(d.water.median)} ml against a ${fmtNum(d.limits.water)} ml limit; ${pct(d.fluidClock.slice(6).reduce((s, v) => s + v, 0))} of it comes after 18:00.`
+      : `At least ${MIN_DAYS} logged days are needed before the share of days within your ${fmtNum(d.limits.water)} ml limit means much.`,
     basis: [{ label: "Fluid", tab: "fluid", anchor: "sec-fluid" }],
     evidence: "Strict fluid restriction is now advised mainly for people with low sodium or congestion, so whether your limit still fits is a question for your care team.",
     cites: ["escHf"],
   });
 
+  const sodiumOk = d.sodium.n >= MIN_DAYS;
   add({
-    id: "sodium-limit", level: d.sodium.p < 0.5 ? "discuss" : "watch", chapter: "food",
-    title: `Sodium within your limit on ${pct(d.sodium.p)} of days`,
-    detail: `A typical day is ${fmtNum(d.sodium.median)} mg against ${fmtNum(d.limits.sodium)} mg. ${d.sodiumSources[0] ? `The biggest single source is ${d.sodiumSources[0].label} (${pct(d.sodiumSources[0].share)}).` : ""}`,
+    id: "sodium-limit", level: !sodiumOk ? "watch" : d.sodium.p < 0.5 ? "discuss" : "watch", chapter: "food",
+    title: sodiumOk ? `Sodium within your limit on ${d.sodium.within} of ${d.sodium.n} logged days (${pct(d.sodium.p)})` : `Sodium logged on ${d.sodium.n} of ${d.period} days, too few to rate`,
+    detail: sodiumOk
+      ? `A typical day is ${fmtNum(d.sodium.median)} mg against ${fmtNum(d.limits.sodium)} mg. ${d.sodiumSources[0] ? `The biggest single source is ${d.sodiumSources[0].label} (${pct(d.sodiumSources[0].share)}).` : ""}`
+      : `At least ${MIN_DAYS} logged days are needed before the share of days within your ${fmtNum(d.limits.sodium)} mg limit means much.`,
     basis: [{ label: "Sodium", tab: "food", anchor: "sec-sodium" }],
     evidence: "Guidelines recommend avoiding high salt intake in heart failure; trials of strict restriction have not shown a clear benefit, so a realistic target matters more than a very low one.",
     cites: ["escHf"],
   });
 
   const a = d.adherence;
-  if (a.due)
+  if (a.due) {
+    // Timed doses are the ones with a delay; their count is the slots' total.
+    const timed = a.slots.reduce((s, x) => s + x.n, 0);
+    const late = [...a.slots].sort((x, y) => y.median - x.median)[0];
+    const delay = a.medianDelay;
     add({
       id: "adherence", level: a.taken / a.due >= 0.9 ? "good" : "watch", chapter: "meds",
-      title: `${pct(a.taken / a.due)} of doses taken, ${pct(a.onTime / Math.max(1, a.taken))} within an hour`,
-      detail: `Typically ${fmtNum(a.medianDelay)} minutes late; ${a.slots.length ? `the ${[...a.slots].sort((x, y) => y.median - x.median)[0]!.time} dose runs latest.` : ""}`,
+      title: `${pct(a.taken / a.due)} of doses taken${timed ? `, ${pct(a.onTime / timed)} within an hour` : ""}`,
+      detail: `${a.taken} of ${a.due} scheduled doses taken.${
+        timed && Number.isFinite(delay)
+          ? ` Typically ${Math.round(delay) === 0 ? "on time" : `${fmtNum(Math.abs(delay))} minutes ${delay > 0 ? "late" : "early"}`} (${timed} timed doses).${late && late.median > 0 ? ` The ${late.time} dose runs latest.` : ""}`
+          : " No dose times to judge timing from."
+      }`,
       basis: [{ label: "Taking your medicines", tab: "meds", anchor: "sec-adherence" }],
     });
+  }
 
   const change = d.changes.find((c) => c.responses.some((r) => r.label === "Morning heart rate" && (r.confidence === "consistent" || r.confidence === "possible")));
   if (change) {
     const hr = change.responses.find((r) => r.label === "Morning heart rate")!;
     add({
-      id: "change-hr", level: "good", chapter: "meds",
-      title: `${change.medicine} change on ${shortDate(change.date)}: heart rate ${fmtNum(hr.est)} bpm`,
-      detail: `4 weeks before against 4 weeks from ${change.lag} days after (${hr.nBefore} and ${hr.nAfter} readings).`,
+      id: "change-hr", level: "watch", chapter: "meds",
+      title: `Morning heart rate ${signed(hr.est)} bpm after the ${change.medicine} change recorded on ${shortDate(change.date)}`,
+      detail: `${change.what}. ${hr.nBefore} readings in the 4 weeks before against ${hr.nAfter} from ${change.lag} days after (likely ${signed(hr.lo)} to ${signed(hr.hi)} bpm). A before-and-after difference, not proof the change caused it.${change.caveat ? ` ${change.caveat}` : ""}`,
       basis: [{ label: "Before and after", tab: "meds", anchor: "sec-changes" }],
     });
   }
@@ -245,39 +290,60 @@ export function buildReview(d: Insights, mode: Mode): Review {
     const saved = swaps[0]!.perDay + swaps[1]!.perDay;
     add({
       id: "food-swaps", level: "watch", chapter: "food",
-      title: `Two swaps would cut about ${fmtNum(Math.round(saved / 10) * 10)} mg of sodium a day`,
-      detail: `${cap(swaps[0]!.name)} → ${swaps[0]!.swap}, and ${swaps[1]!.name} → ${swaps[1]!.swap}. That takes a typical day from ${fmtNum(d.sodium.median)} to about ${fmtNum(Math.round((d.sodium.median - saved) / 10) * 10)} mg.`,
+      title: `Two swaps could cut an estimated ${fmtNum(Math.round(saved / 10) * 10)} mg of sodium a day`,
+      detail: `${cap(swaps[0]!.name)} → ${swaps[0]!.swap}, and ${swaps[1]!.name} → ${swaps[1]!.swap}. The saving is a fixed per-serving estimate times how often you logged each food, not taken from your logged sodium (typically ${fmtNum(d.sodium.median)} mg a day).`,
       basis: [{ label: "Most logged foods", tab: "food", anchor: "sec-meals" }],
-      evidence: mode === "deep" ? "Sodium per serving checked against nutrition databases found by web search." : undefined,
+      evidence: mode === "deep" ? "Per-serving savings are fixed estimates from this prototype's own list; nothing was looked up." : undefined,
     });
   }
 
+  // Warning signs keep the engine's fixed wording and always lead.
+  const red = d.flags.filter((x) => x.level === "red");
+  if (red.length)
+    add({
+      id: "warning-signs", level: "discuss", chapter: "vitals",
+      title: red.length === 1 ? `Warning sign: ${red[0]!.title} on ${shortDate(red[0]!.when)}` : `${red.length} warning signs in the last 2 weeks`,
+      detail: red.map((x) => `${x.title} (${shortDate(x.when)}). ${x.detail}`).join(" "),
+      basis: [{ label: "Blood pressure readings", tab: "vitals", anchor: "sec-bp" }],
+    });
+
   for (const x of f) x.at = [...new Set([...x.basis.map((b) => b.anchor), REPORT_AT[x.id] ?? ""].filter(Boolean))];
   const order: Record<Level, number> = { discuss: 0, watch: 1, good: 2 };
-  f.sort((x, y) => order[x.level] - order[y.level]);
-  const discuss = f.filter((x) => x.level === "discuss");
-  const headline = discuss.length
-    ? `${discuss.length} things to raise with your care team: ${discuss.map((x) => x.title.charAt(0).toLowerCase() + x.title.slice(1)).slice(0, 2).join("; ")}.`
-    : "Nothing that needs your care team's attention; a few things to keep an eye on.";
+  f.sort((x, y) => (x.id === "warning-signs" ? -1 : y.id === "warning-signs" ? 1 : order[x.level] - order[y.level]));
 
   const questions = [
-    dizzy && "Could the timing or spacing of my doses be causing the dizziness after I take them?",
-    !d.bp.meetsProtocol && "Should I add evening blood-pressure readings?",
-    d.water.p < 0.5 && `Is ${fmtNum(d.limits.water)} ml still the right fluid limit for me?`,
-    alcHr && "How much alcohol is safe with my heart medicines?",
-    d.sodium.p < 0.5 && "Which sodium target is realistic for me?",
+    dizzyNear > 0 && "Could the timing or spacing of my doses be linked to the dizziness after I take them?",
+    d.bp.amN > 0 && d.bp.pmN === 0 && "Should I add evening blood-pressure readings?",
+    fluidOk && d.water.p < 0.5 && `Is ${fmtNum(d.limits.water)} ml still the right fluid limit for me?`,
+    alcShown && "How much alcohol is safe with my heart medicines?",
+    sodiumOk && d.sodium.p < 0.5 && "Which sodium target is realistic for me?",
   ].filter((q): q is string => !!q);
 
   return {
     mode,
     at: Date.now(),
     period: d.period,
-    headline,
+    headline: headlineFor(f, d.flags),
     findings: f,
     questions,
     sources: used.map((k, i) => ({ n: i + 1, ...SOURCES[k] })),
     swaps,
   };
+}
+
+/** Never reassures while a warning sign is showing. */
+function headlineFor(f: Finding[], flags: Insights["flags"]): string {
+  const lower = (t: string) => t.charAt(0).toLowerCase() + t.slice(1);
+  const warn = f.find((x) => x.id === "warning-signs");
+  const discuss = f.filter((x) => x.level === "discuss" && x !== warn);
+  const list = discuss.length
+    ? `${discuss.length} ${discuss.length === 1 ? "thing" : "things"} to raise with your care team: ${discuss.map((x) => lower(x.title)).slice(0, 2).join("; ")}.`
+    : "";
+  if (warn) return `${warn.title}. It is listed under Warning signs in the Report.${list ? ` Also ${lower(list)}` : ""}`;
+  if (list) return list;
+  const amber = flags.filter((x) => x.level === "amber").length;
+  if (amber) return `${amber} warning ${amber === 1 ? "sign" : "signs"} from the last 2 weeks ${amber === 1 ? "is" : "are"} listed under Warning signs in the Report.`;
+  return "Nothing that needs your care team's attention; a few things to keep an eye on.";
 }
 
 // ---------------------------------------------------------------------------
@@ -290,29 +356,53 @@ function buildFood(d: Insights, mode: Mode, focus: string[], at = Date.now()): A
   const swaps = foodSwaps(d);
   const saved = swaps.slice(0, 2).reduce((s, x) => s + x.perDay, 0);
   const notes: Analysis["foodNotes"] = [];
-  if (focus.includes("Sodium"))
+  const top = d.food.topFoods;
+  const logged = (names: string[]) => top.filter((x) => names.some((n) => x.name.includes(n)));
+  const times = (xs: typeof top) => xs.map((x) => `${x.name} (${x.n} times)`).join(", ");
+  if (focus.includes("Sodium")) {
+    const salty = top.filter((x) => SWAPS.has(x.name));
     notes.push({
       label: "Sodium",
-      text: `${d.sodiumSources[0] ? `${cap(d.sodiumSources[0].label)} carries ${pct(d.sodiumSources[0].share)} of your logged sodium. ` : ""}Bread, cheese and cured meat appear almost daily, and together they make up most of the rest.`,
+      text: `${d.sodiumSources[0] ? `${cap(d.sodiumSources[0].label)} carries ${pct(d.sodiumSources[0].share)} of your logged sodium. ` : ""}${
+        salty.length ? `Among your most logged foods, usually salty ones are ${times(salty)} over ${d.food.daysLogged} days with food logged.` : "None of your most logged foods are on this prototype's list of usually salty foods."
+      }`,
     });
-  if (focus.includes("Fluid in food"))
-    notes.push({ label: "Fluid in food", text: `Soups, fruit and yoghurt count toward your ${fmtNum(d.limits.water)} ml limit. Days with soup add roughly 200–300 ml you may not be logging as fluid.` });
-  if (focus.includes("Potassium"))
-    notes.push({ label: "Potassium", text: `Logged on ${d.food.potassium.n} days, too few to judge. Avoid potassium-based salt substitutes unless your care team agrees.` });
+  }
+  if (focus.includes("Fluid in food")) {
+    const wet = logged(["soup", "yoghurt", "yogurt", "fruit", "melon", "jelly", "ice cream"]);
+    notes.push({
+      label: "Fluid in food",
+      text: `${wet.length ? `Watery foods in your log: ${times(wet)}. ` : ""}General information: soups, fruit and yoghurt are mostly water, and many heart-failure plans count them toward the fluid limit. Ask your care team whether your ${fmtNum(d.limits.water)} ml limit includes them.`,
+    });
+  }
+  if (focus.includes("Potassium")) {
+    const k = d.food.potassium;
+    notes.push({
+      label: "Potassium",
+      text: `${
+        k.n < MIN_DAYS ? `Logged on ${k.n} days, too few to judge.` : `A typical day is ${fmtNum(k.median)} mg over ${k.n} logged days${k.limit ? ` against your ${fmtNum(k.limit)} mg limit` : ""}.`
+      } General information: potassium-based salt substitutes are best avoided unless your care team agrees.`,
+    });
+  }
   if (focus.includes("Fibre"))
-    notes.push({ label: "Fibre", text: "Vegetables appear on few days; most meals are bread, pasta and cheese. Diuretics and a fluid limit make constipation more likely." });
+    notes.push({ label: "Fibre", text: "Fibre is not tracked in your food log, so it is not judged here. General information: diuretics and a fluid limit make constipation more likely." });
   if (focus.includes("Sugar"))
-    notes.push({ label: "Sugar", text: `A typical day is ${fmtNum(d.food.sugar.median)} g${d.food.sugar.limit ? ` against your ${fmtNum(d.food.sugar.limit)} g limit` : ""}.` });
+    notes.push({
+      label: "Sugar",
+      text: d.food.sugar.n ? `A typical day is ${fmtNum(d.food.sugar.median)} g over ${d.food.sugar.n} logged days${d.food.sugar.limit ? ` against your ${fmtNum(d.food.sugar.limit)} g limit` : ""}.` : "No sugar logged in this period.",
+    });
   return {
     id: `food-${at}`,
     kind: "food",
     mode,
     at,
-    period: 30,
+    period: d.period,
     focus,
     headline: swaps.length >= 2
-      ? `Two swaps would cut about ${fmtNum(Math.round(saved / 10) * 10)} mg of sodium a day, taking a typical day from ${fmtNum(d.sodium.median)} to about ${fmtNum(Math.round((d.sodium.median - saved) / 10) * 10)} mg.`
-      : "Your sodium is spread across many foods; no single swap moves it much.",
+      ? `Two swaps could cut an estimated ${fmtNum(Math.round(saved / 10) * 10)} mg of sodium a day (fixed per-serving estimates, not your logged sodium).`
+      : swaps.length === 1
+        ? `One swap could cut an estimated ${fmtNum(Math.round(saved / 10) * 10)} mg of sodium a day (a fixed per-serving estimate, not your logged sodium).`
+        : "None of your most logged foods has a swap on this prototype's list.",
     findings: [],
     questions: [],
     swaps,
@@ -325,19 +415,22 @@ function health(d: Insights, mode: Mode, at = Date.now()): Analysis {
   return { ...buildReview(d, mode), at, id: `health-${at}`, kind: "health", focus: [], foodNotes: [] };
 }
 
-/** Example history so the list, compare and delete have something to show. */
+/**
+ * EXAMPLE history so the list, compare and delete have something to show.
+ * Built from the current numbers with some findings left out, so it is not
+ * a record of past runs: each is marked `example`, labelled in the UI, and
+ * kept out of comparisons with real runs, the Food tab and the tab badge.
+ */
 function seedHistory(d: Insights): Analysis[] {
   const DAY = 86_400_000;
   const older = health(d, "deep", Date.now() - 16 * DAY);
-  older.findings = older.findings
-    .filter((f) => !["weight-gain", "dizzy-dose", "food-swaps"].includes(f.id))
-    .concat({ id: "missed-evening", level: "watch", chapter: "meds", title: "Evening doses are often missed", detail: "6 of 30 evening doses were not logged as taken.", basis: [{ label: "Taking your medicines", tab: "meds", anchor: "sec-adherence" }] });
-  older.headline = "2 things to raise with your care team: fluid over the limit most days, and heart rate after drinking.";
+  older.findings = older.findings.filter((f) => !["weight-gain", "dizzy-dose", "food-swaps"].includes(f.id));
+  older.headline = headlineFor(older.findings, []);
   const food = buildFood(d, "quick", ["Sodium", "Fluid in food"], Date.now() - 21 * DAY);
   const first = health(d, "quick", Date.now() - 34 * DAY);
   first.findings = first.findings.filter((f) => ["bp-protocol", "fluid-limit", "sodium-limit"].includes(f.id));
-  first.headline = "Fluid and sodium are over your limits on most days.";
-  return [older, food, first];
+  first.headline = headlineFor(first.findings, []);
+  return [older, food, first].map((x) => ({ ...x, id: `example-${x.id}`, example: true as const }));
 }
 
 // ---------------------------------------------------------------------------
@@ -370,11 +463,11 @@ export const useAi = () => useContext(Ctx);
 const STEPS: Record<Kind, Record<Mode, string[]>> = {
   health: {
     quick: ["Reading the report", "Writing findings"],
-    deep: ["Reading the report", "Searching guidelines", "Checking your medicines", "Comparing with last time", "Writing findings with sources"],
+    deep: ["Reading the report", "Attaching preselected guidelines", "Checking your medicines", "Writing findings with sources"],
   },
   food: {
     quick: ["Reading your food log", "Working out swaps"],
-    deep: ["Reading your food log", "Looking up sodium per food", "Working out swaps", "Writing notes with sources"],
+    deep: ["Reading your food log", "Matching foods to fixed estimates", "Working out swaps", "Writing notes with sources"],
   },
 };
 
@@ -384,11 +477,11 @@ export function AiProvider({ data, jump, children }: { data: Insights; jump: (ta
   const [running, setRunning] = useState<Running | null>(null);
   const [addedQuestions, setAdded] = useState<string[]>([]);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const dataRef = useRef(data);
-  dataRef.current = data;
   useEffect(() => () => void (timer.current && clearTimeout(timer.current)), []);
 
   const run = useCallback((kind: Kind, mode: Mode, focus: string[]) => {
+    // The input is the data as it was when the run started, whatever range is picked meanwhile.
+    const input = data;
     const steps = STEPS[kind][mode];
     const wait = mode === "deep" ? 1000 : 600;
     let i = 0;
@@ -399,14 +492,14 @@ export function AiProvider({ data, jump, children }: { data: Insights; jump: (ta
         setRunning({ kind, mode, step: i, steps });
         timer.current = setTimeout(tick, wait);
       } else {
-        const next = kind === "health" ? health(dataRef.current, mode) : buildFood(dataRef.current, mode, focus);
+        const next = kind === "health" ? health(input, mode) : buildFood(input, mode, focus);
         setAnalyses((xs) => [next, ...xs]);
         setOpenId(next.id);
         setRunning(null);
       }
     };
     timer.current = setTimeout(tick, wait);
-  }, []);
+  }, [data]);
 
   const value = useMemo<AiState>(
     () => ({
@@ -490,7 +583,7 @@ function Seg<T extends string>({ value, set, options, label }: { value: T; set: 
 
 export function AnalysisTab() {
   const ai = useAi()!;
-  const open = ai.analyses.find((a) => a.id === ai.openId) ?? ai.analyses[0] ?? null;
+  const open = ai.analyses.find((a) => a.id === ai.openId) ?? ai.analyses.find((a) => !a.example) ?? ai.analyses[0] ?? null;
   return (
     <>
       <NewAnalysis />
@@ -512,7 +605,7 @@ function NewAnalysis() {
     <Section title={<span style={{ display: "flex", alignItems: "center", gap: 8 }}><Spark />New analysis</span>} color={col("ai")}>
       <div style={{ display: "grid", gap: 6 }}>
         <Seg label="What to analyse" value={kind} set={setKind} options={[{ v: "health", label: "Health report", hint: "Everything in this report" }, { v: "food", label: "Food", hint: "Your logged meals" }]} />
-        <Seg label="Depth" value={mode} set={setMode} options={[{ v: "quick", label: "Quick", hint: "Seconds" }, { v: "deep", label: "Deep", hint: "Minutes, with sources" }]} />
+        <Seg label="Depth" value={mode} set={setMode} options={[{ v: "quick", label: "Quick", hint: "Seconds" }, { v: "deep", label: "Deep", hint: "Adds preselected sources" }]} />
       </div>
       {kind === "food" && (
         <div role="group" aria-label="Focus" style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 8 }}>
@@ -533,9 +626,10 @@ function NewAnalysis() {
       {showReads && (
         <p style={{ ...muted, fontSize: 12, lineHeight: 1.5, marginBottom: 6 }}>
           {kind === "health"
-            ? `The numbers in this report for ${d.period} days: ${d.bp.tirN} blood pressure readings, ${d.water.n} days of fluid, ${d.sodium.n} of sodium, ${d.adherence.due} scheduled doses and ${d.symptoms.entries.length} journal findings, plus your conditions and medicines. Never your raw entries or notes.`
-            : `The names and grams of the foods you logged in the last 30 days (${d.food.daysLogged} days) and your limits. Nothing else.`}
-          {mode === "deep" && " Deep also searches guideline, research and nutrition sites; your data never goes into a search."}
+            ? `The numbers in this report for ${d.period} days: ${d.bp.tirN} blood pressure readings, ${d.water.n} days of fluid, ${d.sodium.n} of sodium, ${d.adherence.due} scheduled doses and ${d.symptoms.entries.length} journal findings, plus your medicines' names and the labels of your biggest sodium sources. A label can be the note you typed on a sodium entry, and the text can quote it; no other notes or raw entries.`
+            : `The food names you logged in the last ${d.period} days (${d.food.daysLogged} days with food), which come from your meal notes, how often each appears, the labels of your biggest sodium sources (which can be a note you typed) and your limits. Nothing else.`}
+          {" In this prototype the text is built on this device and nothing is sent anywhere."}
+          {mode === "deep" && " Deep does not search the web here: it attaches preselected guideline references, and swap savings are fixed estimates."}
         </p>
       )}
       {r ? (
@@ -546,7 +640,7 @@ function NewAnalysis() {
           <div style={{ fontSize: 12, marginTop: 6 }}>
             {kindLabel(r.kind)}, {r.mode}: {r.steps[r.step]}…
           </div>
-          {r.mode === "deep" && <div style={{ ...muted, fontSize: 11 }}>Takes a few minutes in the app. It keeps going if you leave and appears below when ready.</div>}
+          {r.mode === "deep" && <div style={{ ...muted, fontSize: 11 }}>Takes a few minutes in the app. It keeps going if you switch tabs in this window and appears below when ready; switching to Current Metrics or closing the window stops it.</div>}
         </div>
       ) : (
         <button
@@ -600,16 +694,22 @@ function FindingRow({ f }: { f: Finding }) {
 
 function Compare({ a }: { a: Analysis }) {
   const ai = useAi()!;
-  const same = ai.analyses.filter((x) => x.kind === a.kind && x.id !== a.id);
-  const [againstId, setAgainstId] = useState<string>(() => same.find((x) => x.at < a.at)?.id ?? same[0]?.id ?? "");
+  // Real runs compare only with real runs, examples only with examples.
+  const same = ai.analyses.filter((x) => x.kind === a.kind && x.id !== a.id && !x.example === !a.example);
+  const fallback = () => same.find((x) => x.at < a.at) ?? same[0];
+  const [againstId, setAgainstId] = useState<string>(() => fallback()?.id ?? "");
   const [show, setShow] = useState(false);
-  const b = same.find((x) => x.id === againstId);
-  if (!same.length || a.kind !== "health") return null;
+  // If the chosen one was deleted, fall back to one that is still there.
+  const b = same.find((x) => x.id === againstId) ?? fallback();
+  if (!same.length) return null;
+  if (a.kind !== "health") return <p style={{ ...muted, fontSize: 11, marginTop: 14 }}>Comparing analyses is for health reports only in this prototype.</p>;
   const flagged = (x: Analysis) => x.findings.filter((f) => f.level !== "good");
   const [newer, older] = b && b.at > a.at ? [b, a] : [a, b];
-  const added = b ? flagged(newer).filter((f) => !older!.findings.some((p) => p.id === f.id)) : [];
+  const added = b ? flagged(newer).filter((f) => !flagged(older!).some((p) => p.id === f.id)) : [];
   const still = b ? flagged(newer).filter((f) => flagged(older!).some((p) => p.id === f.id)) : [];
   const gone = b ? flagged(older!).filter((p) => !flagged(newer).some((f) => f.id === p.id)) : [];
+  // Resolved only when the newer analysis measured the same thing and rated it well.
+  const resolved = (p: Finding) => newer.findings.some((f) => f.id === p.id && f.level === "good");
   return (
     <div style={{ marginTop: 14 }}>
       <button type="button" aria-expanded={show} onClick={() => setShow((v) => !v)} style={{ ...linkBtn, color: col("fg"), fontWeight: 600 }}>
@@ -620,10 +720,11 @@ function Compare({ a }: { a: Analysis }) {
           <label htmlFor="compare-with" style={muted}>
             Compare with
           </label>{" "}
-          <select id="compare-with" value={againstId} onChange={(e) => setAgainstId(e.target.value)} style={{ minHeight: 32, border: `1px solid ${col("line")}`, background: col("panel"), color: col("fg"), fontSize: 12 }}>
+          <select id="compare-with" value={b?.id ?? ""} onChange={(e) => setAgainstId(e.target.value)} style={{ minHeight: 32, border: `1px solid ${col("line")}`, background: col("panel"), color: col("fg"), fontSize: 12 }}>
             {same.map((x) => (
               <option key={x.id} value={x.id}>
                 {when(x.at)} · {x.mode}
+                {x.example ? " · example" : ""}
               </option>
             ))}
           </select>
@@ -638,11 +739,17 @@ function Compare({ a }: { a: Analysis }) {
                 <b style={{ color: col("caffeine") }}>Still</b> {f.title}
               </li>
             ))}
-            {gone.map((f) => (
-              <li key={`g${f.id}`}>
-                <b style={{ color: col("weight") }}>Resolved</b> {f.title}
-              </li>
-            ))}
+            {gone.map((f) =>
+              resolved(f) ? (
+                <li key={`g${f.id}`}>
+                  <b style={{ color: col("weight") }}>Resolved</b> {f.title}
+                </li>
+              ) : (
+                <li key={`g${f.id}`}>
+                  <b style={{ color: col("muted-fg") }}>Not flagged in the newer analysis</b> {f.title}
+                </li>
+              ),
+            )}
           </ul>
         </div>
       )}
@@ -652,19 +759,26 @@ function Compare({ a }: { a: Analysis }) {
 
 function OpenAnalysis({ a }: { a: Analysis }) {
   const ai = useAi()!;
-  const latest = ai.analyses[0]?.id === a.id;
+  const latestReal = ai.analyses.find((x) => !x.example);
+  const latest = latestReal?.id === a.id;
   return (
     <Section
       title={
         <span style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
           {kindLabel(a.kind)} <Pill>{a.mode}</Pill>
+          {a.example && <Pill c="muted-fg">example</Pill>}
         </span>
       }
-      aside={<span style={{ ...muted, fontSize: 11, fontWeight: 400 }}>{latest ? "Latest" : "Past"} · {when(a.at)}</span>}
+      aside={<span style={{ ...muted, fontSize: 11, fontWeight: 400 }}>{a.example ? "Example" : latest ? "Latest" : "Past"} · {when(a.at)}</span>}
       color={col("ai")}
     >
-      {!latest && (
-        <button type="button" onClick={() => ai.setOpenId(ai.analyses[0]!.id)} style={{ ...linkBtn, marginTop: -6, marginBottom: 6 }}>
+      {a.example && (
+        <p style={{ ...muted, fontSize: 11, marginBottom: 6 }}>
+          Example data: made from your current numbers to show what history looks like, not an analysis that was run on {when(a.at)}.
+        </p>
+      )}
+      {!latest && latestReal && (
+        <button type="button" onClick={() => ai.setOpenId(latestReal.id)} style={{ ...linkBtn, marginTop: -6, marginBottom: 6 }}>
           ‹ Back to the latest
         </button>
       )}
@@ -699,7 +813,7 @@ function OpenAnalysis({ a }: { a: Analysis }) {
                   <tr style={muted}>
                     <th style={{ textAlign: "left", fontWeight: 500, paddingBottom: 4 }}>Instead of</th>
                     <th style={{ textAlign: "left", fontWeight: 500, paddingLeft: 8 }}>Try</th>
-                    <th style={{ textAlign: "right", fontWeight: 500, paddingLeft: 8 }}>Saves a day</th>
+                    <th style={{ textAlign: "right", fontWeight: 500, paddingLeft: 8 }}>Est. saving a day</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -731,7 +845,7 @@ function OpenAnalysis({ a }: { a: Analysis }) {
       {a.questions.length > 0 && (
         <div style={{ marginTop: 14 }}>
           <div style={{ fontSize: 12, fontWeight: 600 }}>Questions for your appointment</div>
-          <div style={{ ...muted, fontSize: 11 }}>Added questions appear in the Report and its PDF.</div>
+          <div style={{ ...muted, fontSize: 11 }}>Added questions appear in the on-screen Report under Things to ask about. The PDF export does not include them yet.</div>
           {a.questions.map((q) => {
             const on = ai.addedQuestions.includes(q);
             return (
@@ -761,7 +875,7 @@ function OpenAnalysis({ a }: { a: Analysis }) {
         </div>
       )}
       <p style={{ ...muted, fontSize: 11, marginTop: 14 }}>
-        Not medical advice. It never suggests changing a dose; warning signs use fixed wording. PROTOTYPE: results come from fixed templates over your numbers.
+        Not medical advice. It never suggests changing a dose; warning signs use fixed wording. PROTOTYPE: results come from fixed templates over your numbers, and Deep attaches preselected references rather than searching.
       </p>
     </Section>
   );
@@ -805,6 +919,7 @@ function PastAnalyses({ openId }: { openId: string | null }) {
                   <button type="button" onClick={() => ai.setOpenId(a.id)} aria-current={isOpen} style={{ flex: 1, minWidth: 0, display: "grid", gap: 2, padding: "8px 6px", border: 0, background: "transparent", color: col("fg"), textAlign: "left", cursor: "pointer" }}>
                     <span style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 600 }}>
                       {kindLabel(a.kind)} <Pill>{a.mode}</Pill>
+                      {a.example && <Pill c="muted-fg">example</Pill>}
                       <span style={{ ...muted, fontWeight: 400, fontSize: 12, marginLeft: "auto" }}>{when(a.at)}</span>
                     </span>
                     <span style={{ ...muted, fontSize: 12 }}>
@@ -837,7 +952,7 @@ function PastAnalyses({ openId }: { openId: string | null }) {
 /** Count of things to discuss in the latest health analysis, for the tab label. */
 export function AnalysisTabCount() {
   const ai = useAi();
-  const latest = ai?.analyses.find((a) => a.kind === "health");
+  const latest = ai?.analyses.find((a) => a.kind === "health" && !a.example);
   const n = latest ? counts(latest).discuss : 0;
   if (!n) return null;
   return (
@@ -847,18 +962,25 @@ export function AnalysisTabCount() {
   );
 }
 
-/** The latest food analysis, for the Food tab's swap column. */
+/** The latest real food analysis (never an example), for the Food tab's swap column. */
 export function useLatestFood() {
-  return useAi()?.analyses.find((a) => a.kind === "food") ?? null;
+  return useAi()?.analyses.find((a) => a.kind === "food" && !a.example) ?? null;
 }
 
 export function SwapCell({ name }: { name: string }) {
-  const s = useLatestFood()?.swaps.find((x) => x.name === name);
-  if (!s) return <span style={muted}>—</span>;
+  const ai = useAi();
+  const food = useLatestFood();
+  const s = food?.swaps.find((x) => x.name === name);
+  if (!food || !s) return <span style={muted}>—</span>;
+  // The saved rate is over the analysis' own period, which may not be the range shown now.
+  const other = ai && food.period !== ai.data.period;
   return (
     <span style={{ display: "block", textAlign: "left", fontFamily: "var(--font-plex-sans), sans-serif", fontSize: 11.5, lineHeight: 1.35 }}>
       {s.swap}
-      <span style={{ ...mono, display: "block", color: col("weight") }}>−{fmtNum(Math.round(s.perDay / 10) * 10)} mg/day</span>
+      <span style={{ ...mono, display: "block", color: col("weight") }}>
+        est. −{fmtNum(Math.round(s.perDay / 10) * 10)} mg/day
+        {other && <span style={{ color: col("muted-fg") }}> · over {food.period} d</span>}
+      </span>
     </span>
   );
 }
