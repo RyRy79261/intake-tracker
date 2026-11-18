@@ -22,6 +22,10 @@ const queries = vi.hoisted(() => ({
   listTitrationPlans: vi.fn(),
   listRecentDoses: vi.fn(),
   getInventoryStatus: vi.fn(),
+  queryDefecationHistory: vi.fn(),
+  queryJournal: vi.fn(),
+  getProfile: vi.fn(),
+  listInsightReports: vi.fn(),
 }));
 vi.mock("@/lib/mcp/queries", () => queries);
 
@@ -32,6 +36,24 @@ const writes = vi.hoisted(() => ({
 }));
 vi.mock("@/lib/mcp/writes", () => writes);
 
+const recordWrites = vi.hoisted(() => ({
+  logSodium: vi.fn(),
+  logWeight: vi.fn(),
+  logBloodPressure: vi.fn(),
+  logEstimate: vi.fn(),
+  addJournalEntry: vi.fn(),
+  deleteLoggedRecord: vi.fn(),
+}));
+vi.mock("@/lib/mcp/record-writes", () => recordWrites);
+
+const medicationWrites = vi.hoisted(() => ({
+  logDose: vi.fn(),
+  logExtraMedicine: vi.fn(),
+  refillStock: vi.fn(),
+  deleteMedicationRecord: vi.fn(),
+}));
+vi.mock("@/lib/mcp/medication-writes", () => medicationWrites);
+
 const writeMcpAudit = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/mcp/audit", () => ({ writeMcpAudit }));
 
@@ -40,7 +62,7 @@ import { MCP_TOOL_NAMES } from "@/lib/mcp/tool-catalog";
 
 const DAY_MS = 24 * 60 * 60_000;
 
-const READ_WRITE = ["intake-tracker:read", "intake-tracker:write"];
+const READ_WRITE = ["intake-tracker:read", "intake-tracker:write", "intake-tracker:journal"];
 
 async function connect(scopes: string[] = READ_WRITE): Promise<Client> {
   const server = new McpServer({ name: "test", version: "0.0.0" });
@@ -76,6 +98,8 @@ let client: Client;
 beforeEach(async () => {
   for (const fn of Object.values(queries)) fn.mockReset().mockResolvedValue({});
   for (const fn of Object.values(writes)) fn.mockReset().mockResolvedValue({});
+  for (const fn of Object.values(recordWrites)) fn.mockReset().mockResolvedValue({});
+  for (const fn of Object.values(medicationWrites)) fn.mockReset().mockResolvedValue({});
   writeMcpAudit.mockReset();
   client = await connect();
 });
@@ -316,5 +340,102 @@ describe("MCP tools — log tools", () => {
     expect(hints.log_food).toMatchObject({ readOnlyHint: false, destructiveHint: false });
     expect(hints.log_drink).toMatchObject({ readOnlyHint: false, destructiveHint: false });
     expect(hints.delete_logged_entry).toMatchObject({ destructiveHint: true, idempotentHint: true });
+  });
+});
+
+describe("MCP tools — readings and journal", () => {
+  it("converts nothing itself: log_sodium passes what the user added", async () => {
+    await client.callTool({ name: "log_sodium", arguments: { amount: 2, unit: "g", source: "salt", note: "on chips" } });
+    expect(recordWrites.logSodium).toHaveBeenCalledWith(
+      "user-1",
+      expect.objectContaining({ amount: 2, unit: "g", source: "salt", note: "on chips" }),
+    );
+    const audit = writeMcpAudit.mock.calls.at(-1)![0] as { argsForAudit: Record<string, unknown> };
+    expect(audit.argsForAudit).not.toHaveProperty("note");
+  });
+
+  it("refuses sodium outside the voice range", async () => {
+    const res = await client.callTool({ name: "log_sodium", arguments: { amount: 100, unit: "g", source: "sodium" } });
+    expect(res.isError).toBe(true);
+    expect(recordWrites.logSodium).not.toHaveBeenCalled();
+  });
+
+  it("refuses a blood pressure whose systolic is not above diastolic", async () => {
+    const res = await client.callTool({ name: "log_blood_pressure", arguments: { systolic: 80, diastolic: 90 } });
+    expect(res.isError).toBe(true);
+    expect(textOf(res)).toMatch(/systolic must be higher/);
+  });
+
+  it("requires an amount for urination but not for defecation", async () => {
+    expect((await client.callTool({ name: "log_urination", arguments: {} })).isError).toBe(true);
+    await client.callTool({ name: "log_defecation", arguments: {} });
+    expect(recordWrites.logEstimate).toHaveBeenCalledWith("user-1", "defecation", expect.any(Object));
+  });
+
+  it("keeps the journal's words out of the audit log", async () => {
+    await client.callTool({
+      name: "add_journal_entry",
+      arguments: { words: "Chest felt tight on the stairs", kind: "symptom", places: ["chest"], severity: 6 },
+    });
+    const audit = writeMcpAudit.mock.calls.at(-1)![0] as { argsForAudit: Record<string, unknown> };
+    expect(JSON.stringify(audit.argsForAudit)).not.toMatch(/tight|stairs/);
+    expect(audit.argsForAudit).toMatchObject({ kind: "symptom", severity: 6, places: 1 });
+  });
+
+  it("lists every body place id in the journal tool's description", async () => {
+    const { tools } = await client.listTools();
+    const t = tools.find((x) => x.name === "add_journal_entry")!;
+    expect(t.description).toContain("knee-l");
+    expect(t.description).toContain("whole");
+  });
+
+  it("routes delete_logged_record by kind", async () => {
+    const id = "6f1c2a8e-5b7d-4c3a-9e2f-1a2b3c4d5e6f";
+    recordWrites.deleteLoggedRecord.mockResolvedValue({ deleted: false, reason: "not_connector_entry" });
+    const res = await client.callTool({ name: "delete_logged_record", arguments: { kind: "weight", id } });
+    expect(recordWrites.deleteLoggedRecord).toHaveBeenCalledWith("user-1", "weight", id);
+    expect(textOf(res)).toMatch(/logged in the app/);
+    await client.callTool({ name: "delete_logged_record", arguments: { kind: "stock_refill", id } });
+    expect(medicationWrites.deleteMedicationRecord).toHaveBeenCalledWith("user-1", "stock_refill", id);
+  });
+
+  it("needs the write scope for every log tool", async () => {
+    const readOnly = await connect(["intake-tracker:read"]);
+    const res = await readOnly.callTool({ name: "log_weight", arguments: { weight_kg: 80 } });
+    expect(res.isError).toBe(true);
+    expect(textOf(res)).toMatch(/can only read/);
+    expect(recordWrites.logWeight).not.toHaveBeenCalled();
+  });
+});
+
+describe("MCP tools — the journal needs its own grant", () => {
+  it("asks a connection approved before the journal scope to reconnect", async () => {
+    const old = await connect(["intake-tracker:read", "intake-tracker:write"]);
+    for (const [name, args] of [
+      ["query_journal", { start_ms: 0, end_ms: DAY_MS }],
+      ["add_journal_entry", { words: "Sore knee", kind: "symptom" }],
+      ["delete_logged_record", { kind: "journal_entry", id: "6f1c2a8e-5b7d-4c3a-9e2f-1a2b3c4d5e6f" }],
+    ] as const) {
+      const res = await old.callTool({ name, arguments: args });
+      expect(res.isError, name).toBe(true);
+      expect(textOf(res)).toMatch(/medical journal/);
+    }
+    expect(queries.queryJournal).not.toHaveBeenCalled();
+    expect(recordWrites.addJournalEntry).not.toHaveBeenCalled();
+    expect(recordWrites.deleteLoggedRecord).not.toHaveBeenCalled();
+
+    // Other records still delete without it.
+    await old.callTool({ name: "delete_logged_record", arguments: { kind: "weight", id: "6f1c2a8e-5b7d-4c3a-9e2f-1a2b3c4d5e6f" } });
+    expect(recordWrites.deleteLoggedRecord).toHaveBeenCalled();
+  });
+
+  it("keeps a failed query's parameters out of the audit row", async () => {
+    const err = new Error('Failed query: insert into "weight_records" values ($1)\nparams: 80,feeling dizzy');
+    recordWrites.logWeight.mockRejectedValue(err);
+    const res = await client.callTool({ name: "log_weight", arguments: { weight_kg: 80, note: "feeling dizzy" } });
+    expect(textOf(res)).toMatch(/internal error/);
+    const audit = writeMcpAudit.mock.calls.at(-1)![0] as { errorMessage: string };
+    expect(audit.errorMessage).toContain("Failed query");
+    expect(audit.errorMessage).not.toMatch(/dizzy/);
   });
 });

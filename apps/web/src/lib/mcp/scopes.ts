@@ -2,14 +2,23 @@
  * MCP connector scopes.
  *
  * `intake-tracker:read` covers the query tools; `intake-tracker:write` the
- * log tools. A client that names no scope (claude.ai sends none) gets both,
- * and the consent screen lists both. A client can still ask for read alone.
+ * log tools. `intake-tracker:journal` is needed on top of those for the
+ * medical journal: a grant approved before the connector could reach the
+ * journal does not hold it, so the user approves journal access before
+ * Claude reads a word. A client that names no scope (claude.ai sends none)
+ * gets all three, and the consent screen lists all three. A client can still
+ * ask for fewer.
  */
-export const SUPPORTED_SCOPES = ["intake-tracker:read", "intake-tracker:write"] as const;
+export const SUPPORTED_SCOPES = [
+  "intake-tracker:read",
+  "intake-tracker:write",
+  "intake-tracker:journal",
+] as const;
 export type Scope = (typeof SUPPORTED_SCOPES)[number];
 
 export const READ_SCOPE: Scope = "intake-tracker:read";
 export const WRITE_SCOPE: Scope = "intake-tracker:write";
+export const JOURNAL_SCOPE: Scope = "intake-tracker:journal";
 
 /** Granted when the request names no supported scope. */
 export const DEFAULT_SCOPES: readonly Scope[] = SUPPORTED_SCOPES;

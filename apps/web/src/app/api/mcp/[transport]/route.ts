@@ -153,7 +153,36 @@ async function handle(request: Request, { params }: RouteContext) {
   return withCors(next);
 }
 
-export const GET = handle;
+/**
+ * GET is refused at once, never held open as a stream.
+ *
+ * In Streamable HTTP a GET opens a standalone server-to-client SSE stream
+ * for notifications the server sends unprompted. This server sends none:
+ * every answer rides on the POST that asked for it. mcp-handler 1.x answered
+ * GET with 405 itself; 2.x hands it to the SDK, which opens the stream and
+ * leaves it open. Since the 2.x bump (18 Oct 2026) every connected client
+ * held a function idle until `maxDuration` cut it off, reconnected and did
+ * it again, around the clock, and each reconnect looked the bearer up in
+ * Neon. Fluid compute bills that idle time; with noble-notations doing the
+ * same, the Hobby allowance went in a week and the account was paused.
+ *
+ * The spec makes 405 the answer for a server that offers no GET stream, and
+ * clients carry on with POST alone. No auth or whitelist check first: there
+ * is nothing here to protect, and skipping them keeps a GET off the database.
+ */
+async function handleGet(_request: Request, { params }: RouteContext) {
+  if ((await params).transport !== "mcp") {
+    return withCors(new NextResponse(null, { status: 404 }));
+  }
+  return withCors(
+    new NextResponse(null, {
+      status: 405,
+      headers: { Allow: "POST, DELETE, OPTIONS" },
+    }),
+  );
+}
+
+export const GET = handleGet;
 export const POST = handle;
 export const DELETE = handle;
 

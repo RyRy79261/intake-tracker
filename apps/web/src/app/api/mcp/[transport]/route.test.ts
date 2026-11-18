@@ -126,6 +126,22 @@ describe("MCP route — gates", () => {
     expect(res.status).toBe(401);
   });
 
+  it("refuses a GET at once instead of holding a stream open, without touching the database", async () => {
+    // mcp-handler 2 opens a standalone SSE stream for a GET and keeps it until
+    // maxDuration. Every connected client then kept a function running around
+    // the clock and the Vercel account was paused (Nov 2026). This holds the
+    // route to answering GET itself across future upgrades.
+    const request = new Request("https://intake.example/api/mcp/mcp", {
+      method: "GET",
+      headers: { accept: "text/event-stream", authorization: "Bearer valid-token" },
+    });
+    const res = await GET(request, { params: Promise.resolve({ transport: "mcp" }) });
+    expect(res.status).toBe(405);
+    expect(res.headers.get("allow")).toContain("POST");
+    expect(res.headers.get("content-type") ?? "").not.toContain("text/event-stream");
+    expect(lookupAccessToken).not.toHaveBeenCalled();
+  });
+
   it("answers 403 when the token is valid but the user left the whitelist", async () => {
     isEmailAllowed.mockReturnValue(false);
     const res = await rpc({ id: 1, method: "tools/list", params: {} });

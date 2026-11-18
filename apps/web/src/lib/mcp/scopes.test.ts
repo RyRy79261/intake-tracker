@@ -6,12 +6,13 @@ import {
   DEFAULT_SCOPES,
   READ_SCOPE,
   WRITE_SCOPE,
+  JOURNAL_SCOPE,
 } from "@/lib/mcp/scopes";
 
 describe("mcp/scopes", () => {
   describe("parseScopeString", () => {
-    it("grants read and write when no scope is named", () => {
-      expect(parseScopeString(undefined)).toEqual([READ_SCOPE, WRITE_SCOPE]);
+    it("grants read, write and journal when no scope is named", () => {
+      expect(parseScopeString(undefined)).toEqual([READ_SCOPE, WRITE_SCOPE, JOURNAL_SCOPE]);
       expect(parseScopeString("")).toEqual([...DEFAULT_SCOPES]);
     });
     it("grants read alone when only read is asked for", () => {
