@@ -1,0 +1,210 @@
+/**
+ * PROTOTYPE — throwaway. Standalone entry for the hosted, shareable build of
+ * the three insights variants (bundled with esbuild into one HTML file).
+ * Runs the real engine and variant components on generated EXAMPLE data, so
+ * nobody's health records leave the device.
+ */
+
+import { useEffect, useMemo, useState } from "react";
+import { createRoot } from "react-dom/client";
+import type { EngineInput, Selection } from "@/components/analytics/insights-prototype/engine";
+import { runEngine } from "@/components/analytics/insights-prototype/engine";
+import { METRICS_VARIANTS, MetricsPrototype } from "@/components/analytics/insights-prototype/metrics-prototype";
+import { Download, FileText } from "lucide-react";
+import { Button } from "@intake/ui/button";
+import { PrototypeSwitcher } from "@/components/prototype/prototype-switcher";
+
+
+// ---------------------------------------------------------------------------
+// Example data: about 75 days shaped like a fluid- and sodium-restricted
+// heart-failure log (morning BP, daily weigh-in, ~10 drinks a day, evening
+// alcohol on about half the days, twice-daily medicines, a dose change).
+// ---------------------------------------------------------------------------
+
+function exampleInput(): EngineInput {
+  const now = Date.now();
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  let seed = 11;
+  const r = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const id = () => crypto.randomUUID();
+  const meta = { createdAt: now, updatedAt: now, deletedAt: null, deviceId: "example", timezone: tz };
+  // `d` local calendar days back (stepped from noon, so a clock change or a
+  // late-night start never lands two days on one date), at h:m local time.
+  const at = (d: number, h: number, m = 0) => {
+    const t = new Date(now);
+    t.setHours(12, 0, 0, 0);
+    t.setDate(t.getDate() - d);
+    t.setHours(h, m, 0, 0);
+    return t.getTime();
+  };
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const dateKey = (ts: number) => {
+    const t = new Date(ts);
+    return `${t.getFullYear()}-${pad(t.getMonth() + 1)}-${pad(t.getDate())}`;
+  };
+
+  const inp: EngineInput = {
+    now, tz, dayStartHour: 2, waterLimit: 1500, saltLimit: 2000, sugarLimit: 30, potassiumLimit: 3500, eating: [],
+    intake: [], weight: [], bp: [], urination: [], defecation: [], substance: [],
+    doseLogs: [], phases: [], schedules: [], prescriptions: [], journal: [],
+  };
+
+  const meds = [
+    { name: "Carvedilol", times: ["08:00", "20:00"] },
+    { name: "Sacubitril/valsartan", times: ["08:00", "20:00"] },
+    { name: "Spironolactone", times: ["08:00"] },
+    { name: "Dapagliflozin", times: ["08:00"] },
+  ];
+  const changeDay = 20;
+  const changeKey = dateKey(at(changeDay, 12));
+  for (const m of meds) {
+    const rx = { id: id(), genericName: m.name, isActive: true, ...meta };
+    inp.prescriptions.push(rx);
+    const ph = { id: id(), prescriptionId: rx.id, type: "maintenance" as const, unit: "mg", startDate: at(48, 9), foodInstruction: "none" as const, status: "active" as const, ...meta };
+    inp.phases.push(ph);
+    if (m.name === "Carvedilol") {
+      for (const time of m.times) {
+        const base = { phaseId: ph.id, time, scheduleTimeUTC: 0, anchorTimezone: tz, daysOfWeek: [0, 1, 2, 3, 4, 5, 6], enabled: true, unit: "mg", ...meta };
+        inp.schedules.push({ ...base, id: id(), dosage: 6.25, effectiveTo: changeKey });
+        inp.schedules.push({ ...base, id: id(), dosage: 12.5, effectiveFrom: changeKey });
+      }
+    }
+    (m as { rxId?: string; phId?: string }).rxId = rx.id;
+    (m as { rxId?: string; phId?: string }).phId = ph.id;
+  }
+
+  let w = 70.1;
+  let drankPrev = 0;
+  for (let d = 150; d >= 0; d--) {
+    const after = d < changeDay;
+    const drinks = r() < 0.5 ? Math.round((1 + r() * 6) * 10) / 10 : 0;
+    const salty = r() < 0.6;
+    w += (r() - 0.5) * 0.45 + (salty ? 0.06 : -0.06);
+    w = Math.max(68.6, Math.min(71.3, w));
+    if (d === 2) w += 1.2;
+    inp.weight.push({ id: id(), weight: Math.round(w * 100) / 100, timestamp: at(d, 9, 5), ...meta });
+
+    const hr = Math.round((after ? 68 : 78) + (drankPrev >= 3 ? 8 : 0) + (r() - 0.5) * 10);
+    const sys = Math.round((after ? 110 : 121) + (r() - 0.5) * 18 + (d < 7 ? 7 : 0));
+    inp.bp.push({ id: id(), systolic: sys, diastolic: Math.round(sys * 0.63 + (r() - 0.5) * 6), heartRate: hr, position: "sitting", arm: "left", timestamp: at(d, 8 + Math.round(r()), 40), ...meta });
+
+    const drinksN = 7 + Math.round(r() * 5);
+    for (let k = 0; k < drinksN; k++) {
+      const h = Math.min(23, 8 + Math.round((k / drinksN) * 15 + r()));
+      inp.intake.push({ id: id(), type: "water", amount: 120 + Math.round(r() * 230), timestamp: at(d, h, Math.round(r() * 59)), source: "manual", ...meta });
+    }
+    const foods = ["bread", "cheese", "soup", "ham", "crisps", "pizza"];
+    for (let k = 0; k < 3; k++) {
+      const f = foods[Math.floor(r() * foods.length)]!;
+      inp.intake.push({ id: id(), type: "salt", amount: Math.round((salty ? 850 : 450) + r() * 350), timestamp: at(d, [13, 17, 21][k]!, 15), source: `food:${f}`, ...meta });
+    }
+    inp.substance.push({ id: id(), type: "caffeine", amountMg: 150 + Math.round(r() * 250), description: "coffee", source: "standalone", timestamp: at(d, 10, 30), ...meta });
+    if (drinks) inp.substance.push({ id: id(), type: "alcohol", amountStandardDrinks: drinks, description: "wine", source: "standalone", timestamp: at(d, 21, 0), ...meta });
+
+    const ur = 4 + Math.round(r() * 2);
+    for (let k = 0; k < ur; k++) {
+      // The 03:00 event follows the previous evening's drinks.
+      const night = k === 0 && r() < (drankPrev >= 3 ? 0.7 : 0.25);
+      inp.urination.push({ id: id(), amountEstimate: "medium", timestamp: at(d, night ? 3 : 9 + k * 3), ...meta });
+    }
+    const meals: [number, string[]][] = [[8, ["toast", "coffee with milk"]], [13, ["ham sandwich", "apple"]], [20 + Math.round(r() * 2), ["pasta", "salad", "cheese"]]];
+    for (const [h, items] of meals) for (const it of items) (inp.eating ??= []).push({ id: id(), timestamp: at(d, h, 10), grams: 80 + Math.round(r() * 150), note: it, ...meta });
+    inp.intake.push({ id: id(), type: "sugar", amount: Math.round(25 + r() * 35), timestamp: at(d, 15), source: "manual", ...meta });
+    if (r() < 0.2) inp.intake.push({ id: id(), type: "potassium", amount: Math.round(1800 + r() * 1500), timestamp: at(d, 15), source: "manual", ...meta });
+    if (r() < 0.7) inp.defecation.push({ id: id(), amountEstimate: "medium", timestamp: at(d, 10), ...meta });
+
+    if (d <= 45 && d > 0) {
+      for (const m of meds) {
+        for (const time of m.times) {
+          const [hh] = time.split(":").map(Number);
+          const late = Math.round(r() * (hh! >= 20 ? 150 : 90) - 15);
+          const skipped = r() < 0.03;
+          inp.doseLogs.push({
+            id: id(), prescriptionId: (m as { rxId?: string }).rxId!, medicineName: m.name, phaseId: (m as { phId?: string }).phId!,
+            scheduledDate: dateKey(at(d, 12)), scheduledTime: time, status: skipped ? "skipped" : "taken", kind: "scheduled",
+            ...(skipped ? {} : { actionTimestamp: at(d, hh!, 0) + late * 60_000 }), ...meta,
+          });
+        }
+      }
+    }
+    if (d % 6 === 2) inp.journal.push({ id: id(), timestamp: at(d, 9, 50), timePrecision: "exact", words: "Dizzy when I stood up after breakfast", finding: "Dizziness", kind: "symptom", places: [], severity: 3, ...meta });
+    if (d === 9 || d === 23) inp.journal.push({ id: id(), timestamp: at(d, 23, 10), timePrecision: "exact", words: "Short of breath lying flat", finding: "Breathlessness", kind: "symptom", places: [], severity: 4, ...meta });
+    drankPrev = drinks;
+  }
+  // Today's later readings have not happened yet.
+  const past = <T extends { timestamp: number }>(xs: T[]) => xs.filter((x) => x.timestamp <= now);
+  inp.intake = past(inp.intake);
+  inp.eating = past(inp.eating ?? []);
+  inp.weight = past(inp.weight);
+  inp.bp = past(inp.bp);
+  inp.urination = past(inp.urination);
+  inp.defecation = past(inp.defecation);
+  inp.substance = past(inp.substance);
+  inp.journal = past(inp.journal);
+  return inp;
+}
+
+function readHash() {
+  const h = window.location.hash.replace("#", "").toUpperCase();
+  return METRICS_VARIANTS.some((v) => v.key === h) ? h : "1";
+}
+
+const INPUT = exampleInput();
+function useExampleInsights(sel: Selection) {
+  return useMemo(() => runEngine(INPUT, sel), [sel]);
+}
+
+// Stand-ins for parts that need the app (downloads, the AI routes).
+function ExampleExport() {
+  const [note, setNote] = useState<string | null>(null);
+  return (
+    <div style={{ flex: "1 1 100%" }}>
+      <div className="wm-exp">
+        <Button variant="outline" onClick={() => setNote("In the app this downloads this report as a PDF for your care team.")}>
+          <FileText />
+          Export report
+        </Button>
+        <Button variant="outline" onClick={() => setNote("In the app this downloads every record in the period as CSV.")}>
+          <Download />
+          Export CSV
+        </Button>
+      </div>
+      {/* Always mounted so the text is announced; focus stays on the button. */}
+      <p role="status" className="wm-p" style={note ? { marginTop: 6 } : undefined}>
+        {note}
+      </p>
+    </div>
+  );
+}
+
+function App() {
+  const [variant, setVariant] = useState(readHash);
+  useEffect(() => {
+    const on = () => setVariant(readHash());
+    window.addEventListener("hashchange", on);
+    return () => window.removeEventListener("hashchange", on);
+  }, []);
+  const choose = (k: string) => {
+    setVariant(k);
+    try {
+      history.replaceState(null, "", `#${k}`);
+    } catch {
+      // the frame may refuse; the variant still switches
+    }
+  };
+  return (
+    <>
+      <MetricsPrototype
+        key={variant}
+        variant={variant}
+        useInsights={useExampleInsights}
+        exportSlot={() => <ExampleExport />}
+      />
+      <PrototypeSwitcher variants={METRICS_VARIANTS} current={variant} onChange={choose} />
+    </>
+  );
+}
+
+// Mounted in place of the Metrics window body inside a snapshot of the real
+// app shell, so the variants are judged against the real chrome.
+createRoot(document.getElementById("proto-root")!).render(<App />);
