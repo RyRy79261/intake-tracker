@@ -21,6 +21,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { BookOpen, Check, ChevronDown, ChevronRight, Plus, Sparkles, Trash2 } from "lucide-react";
 import type { Insights } from "@/components/analytics/insights-prototype/engine";
 import { PROTOTYPES_ENABLED } from "@/components/prototype/prototype-switcher";
+import { AiInsightsCard } from "@/components/analytics/ai-insights-card";
 import { Section, col, fmtNum, mono, muted, pct, shortDate, signed } from "@/components/analytics/insights-prototype/ui";
 
 export type Chapter = "vitals" | "fluid" | "food" | "meds";
@@ -595,6 +596,8 @@ export function AnalysisTab() {
   const open = ai.analyses.find((a) => a.id === ai.openId) ?? ai.analyses.find((a) => !a.example) ?? ai.analyses[0] ?? null;
   return (
     <>
+      {/* The real AI summary (Fast and Deep), carried over from the old Summary tab. */}
+      <AiInsightsCard />
       <NewAnalysis />
       {open && <OpenAnalysis a={open} />}
       <PastAnalyses openId={open?.id ?? null} />
@@ -896,7 +899,7 @@ function OpenAnalysis({ a }: { a: Analysis }) {
         </div>
       )}
       <p style={{ ...muted, fontSize: 11, marginTop: 14 }}>
-        Not medical advice. It never suggests changing a dose; warning signs use fixed wording. These results are written from your numbers by fixed rules; AI analysis is not connected yet, and Deep attaches preselected references rather than searching.
+        Not medical advice. It never suggests changing a dose; warning signs use fixed wording. These results are written from your numbers by fixed rules, not by the AI (AI Insights above is the AI summary), and Deep attaches preselected references rather than searching.
       </p>
     </Section>
   );

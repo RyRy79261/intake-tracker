@@ -283,10 +283,8 @@ test.describe('Analytics insights (/api/analytics/insights)', () => {
     await page.clock.setSystemTime(new Date('2026-10-15T12:00:00'));
     await page.clock.pauseAt(new Date('2026-10-15T12:00:01'));
     await page.goto('/analytics');
-    // First visit: the analytics intro dialog.
-    const intro = page.getByRole('dialog').filter({ hasText: 'Your analytics' });
-    await intro.getByRole('button', { name: 'Got it' }).click();
-    await expect(intro).toBeHidden();
+    // AI Insights lives in the Metrics window's Analysis tab.
+    await page.getByTestId('window').getByRole('tab', { name: 'Analysis' }).click();
     await page.getByRole('button', { name: 'Fast analysis' }).click();
     const generateButton = page.getByRole('dialog').getByRole('button', { name: 'Generate insights' });
     await expect(generateButton).toBeEnabled();
