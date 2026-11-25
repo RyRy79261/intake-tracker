@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.50.0](https://github.com/RyRy79261/intake-tracker/compare/v1.49.0...v1.50.0) (2026-11-25)
+
+
+### Features
+
+* **metrics:** prototype the Metrics redesign as a doctor-style report with an Analysis tab ([#491](https://github.com/RyRy79261/intake-tracker/issues/491)) ([1503292](https://github.com/RyRy79261/intake-tracker/commit/1503292d5745122be4bb269d23644d199a863550))
+
 ## [1.49.0](https://github.com/RyRy79261/intake-tracker/compare/v1.48.3...v1.49.0) (2026-11-10)
 
 
