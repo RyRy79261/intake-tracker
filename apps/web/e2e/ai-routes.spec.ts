@@ -278,14 +278,18 @@ test.describe('Analytics insights (/api/analytics/insights)', () => {
     await page.getByRole('button', { name: 'Confirm Entry' }).first().click();
     await expect(page.getByRole('button', { name: /^Water today 250 of/ })).toBeVisible();
 
-    // Next day, and hold the clock there: no timer runs, so an error toast
-    // stays up until it is read (its auto-dismiss is a timer).
+    // Next day. AI Insights lives in the Metrics window's Analysis tab.
     await page.clock.setSystemTime(new Date('2026-10-15T12:00:00'));
-    await page.clock.pauseAt(new Date('2026-10-15T12:00:01'));
     await page.goto('/analytics');
-    // AI Insights lives in the Metrics window's Analysis tab.
     await page.getByTestId('window').getByRole('tab', { name: 'Analysis' }).click();
-    await page.getByRole('button', { name: 'Fast analysis' }).click();
+    const fast = page.getByRole('button', { name: 'Fast analysis' });
+    await expect(fast).toBeVisible(SLOW);
+    // Now hold the clock: no timer runs, so an error toast stays up until it
+    // is read (its auto-dismiss is a timer). Held only once the window has
+    // loaded, because loading it needs the clock to run.
+    const at = await page.evaluate(() => Date.now());
+    await page.clock.pauseAt(new Date(at + 1000));
+    await fast.click();
     const generateButton = page.getByRole('dialog').getByRole('button', { name: 'Generate insights' });
     await expect(generateButton).toBeEnabled();
     // Let the dialog's open animation finish: a click mid-animation can land
