@@ -37,8 +37,8 @@
   },
   "devDependencies": {
     "@intake/typescript-config": "workspace:*",
-    "eslint": "^10.14.0",
+    "eslint": "^10.15.0",
     "typescript": "^6.0.3",
-    "typescript-eslint": "^8.72.1"
+    "typescript-eslint": "^8.73.0"
   }
 }
