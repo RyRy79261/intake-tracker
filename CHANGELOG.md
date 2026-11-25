@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.51.0](https://github.com/RyRy79261/intake-tracker/compare/v1.50.0...v1.51.0) (2026-11-25)
+
+
+### Features
+
+* **metrics:** show the redesigned Metrics window in production ([#495](https://github.com/RyRy79261/intake-tracker/issues/495)) ([cf47dfd](https://github.com/RyRy79261/intake-tracker/commit/cf47dfd2ccddfe807cf079a3b8862cc65fc82bf5))
+
 ## [1.50.0](https://github.com/RyRy79261/intake-tracker/compare/v1.49.0...v1.50.0) (2026-11-25)
 
 
