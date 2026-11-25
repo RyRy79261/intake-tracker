@@ -120,10 +120,10 @@ test.describe("Windows on a phone", () => {
   });
 
   test("/analytics?tab= still picks the tab, and History opens Records", async ({ page }) => {
-    await page.goto("/analytics?tab=correlations");
+    await page.goto("/analytics?tab=titration");
     const metrics = windowNamed(page, "Metrics");
     await expect(metrics).toBeVisible();
-    await expect(metrics.getByRole("tab", { name: "Correlations" })).toHaveAttribute("data-state", "active");
+    await expect(metrics.getByRole("tab", { name: "Titration" })).toHaveAttribute("data-state", "active");
 
     await page.getByRole("button", { name: "Back to home" }).click();
     await expect(windows(page)).toHaveCount(0);
@@ -183,14 +183,14 @@ test.describe("Swiping on a phone", () => {
     const metrics = windowNamed(page, "Metrics");
     await expect(metrics).toBeVisible();
     await expect(windows(page)).toHaveCount(1);
-    await expect(metrics.getByRole("tab", { name: "Summary" })).toHaveAttribute("data-state", "active");
+    await expect(metrics.getByRole("tab", { name: "Report" })).toHaveAttribute("data-state", "active");
     // History is Metrics on Records, lit in the sys-bar.
     await swipe(page, -250);
     await expect(metrics.getByRole("tab", { name: "Records" })).toHaveAttribute("data-state", "active");
     await expect(sysBar(page).getByRole("button", { name: "History" })).toHaveAttribute("aria-pressed", "true");
 
     await swipe(page, 250);
-    await expect(metrics.getByRole("tab", { name: "Summary" })).toHaveAttribute("data-state", "active");
+    await expect(metrics.getByRole("tab", { name: "Report" })).toHaveAttribute("data-state", "active");
     await swipe(page, 250);
     await expect(windowNamed(page, "Journal")).toBeVisible();
     await swipe(page, 250);

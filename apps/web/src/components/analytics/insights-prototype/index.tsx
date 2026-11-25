@@ -6,12 +6,13 @@
  * switchable via `?variant=` and the floating bar. `?variant=0` shows today's
  * Metrics window for comparison.
  *
- * Read-only: it never writes to Dexie. Hidden in production builds.
+ * Read-only: it never writes to Dexie. Shown in every build; the variant
+ * switcher and `?variant=0` exist only in development and preview.
  */
 
 import type { ReactNode } from "react";
 import { ExportControls } from "@/components/analytics/export-controls";
-import { PrototypeSwitcher, usePrototypeVariant } from "@/components/prototype/prototype-switcher";
+import { PROTOTYPES_ENABLED, PrototypeSwitcher, usePrototypeVariant } from "@/components/prototype/prototype-switcher";
 import { usePrototypeInsights } from "@/hooks/use-insights-prototype";
 import { METRICS_VARIANTS, MetricsPrototype } from "@/components/analytics/insights-prototype/metrics-prototype";
 
@@ -23,14 +24,15 @@ export function MetricsWindowPrototype({
   activeTab,
 }: {
   current: ReactNode;
-  /** The window's tab. History opens Metrics on "records", which the
-   *  prototype hands to today's window (Records moves to History in the build). */
+  /** The window's tab. History opens Metrics on "records", and Records links to
+   *  "titration"; both stay in today's window until they get homes of their own. */
   activeTab: string;
 }) {
   const [variant, setVariant] = usePrototypeVariant(KEYS, "1");
+  const legacyTab = activeTab === "records" || activeTab === "titration";
   return (
     <>
-      {variant === "0" || activeTab === "records" ? (
+      {(PROTOTYPES_ENABLED && variant === "0") || legacyTab ? (
         current
       ) : (
         <MetricsPrototype
@@ -40,8 +42,8 @@ export function MetricsWindowPrototype({
           exportSlot={(range) => <ExportControls range={range} />}
         />
       )}
-      {/* Records always shows today's window, so a layout picked there would not apply. */}
-      {activeTab !== "records" && <PrototypeSwitcher variants={VARIANTS} current={variant} onChange={setVariant} />}
+      {/* Records and Titration always show today's window, so a layout picked there would not apply. */}
+      {PROTOTYPES_ENABLED && !legacyTab && <PrototypeSwitcher variants={VARIANTS} current={variant} onChange={setVariant} />}
     </>
   );
 }
