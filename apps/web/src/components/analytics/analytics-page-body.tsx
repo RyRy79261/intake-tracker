@@ -7,6 +7,8 @@ import { RecordsTab } from "@/components/analytics/records-tab";
 import { SummaryTab } from "@/components/analytics/summary-tab";
 import { CorrelationsTab } from "@/components/analytics/correlations-tab";
 import { TitrationTab } from "@/components/analytics/titration-tab";
+import { MetricsWindowPrototype } from "@/components/analytics/insights-prototype";
+import { PROTOTYPES_ENABLED } from "@/components/prototype/prototype-switcher";
 import { ExportControls } from "@/components/analytics/export-controls";
 import { AnalyticsIntroDialog } from "@/components/analytics/analytics-intro-dialog";
 import { useTimeScopeRange } from "@/hooks/use-analytics-queries";
@@ -49,7 +51,20 @@ interface AnalyticsPageBodyProps {
  * Correlations, Records and Titration tabs. Rendered by the `/analytics`
  * route and by the Metrics window.
  */
-export function AnalyticsPageBody({
+export function AnalyticsPageBody(props: AnalyticsPageBodyProps) {
+  // PROTOTYPE: round-2 Metrics redesign (dev + Vercel preview only).
+  if (PROTOTYPES_ENABLED) {
+    return (
+      <MetricsWindowPrototype
+        current={<CurrentAnalyticsPageBody {...props} />}
+        activeTab={props.activeTab}
+      />
+    );
+  }
+  return <CurrentAnalyticsPageBody {...props} />;
+}
+
+function CurrentAnalyticsPageBody({
   activeTab,
   onTabChange,
   recordsFilter,
