@@ -6,12 +6,13 @@
  * switchable via `?variant=` and the floating bar. `?variant=0` shows today's
  * Metrics window for comparison.
  *
- * Read-only: it never writes to Dexie. Hidden in production builds.
+ * Read-only: it never writes to Dexie. Shown in every build; the variant
+ * switcher and `?variant=0` exist only in development and preview.
  */
 
 import type { ReactNode } from "react";
 import { ExportControls } from "@/components/analytics/export-controls";
-import { PrototypeSwitcher, usePrototypeVariant } from "@/components/prototype/prototype-switcher";
+import { PROTOTYPES_ENABLED, PrototypeSwitcher, usePrototypeVariant } from "@/components/prototype/prototype-switcher";
 import { usePrototypeInsights } from "@/hooks/use-insights-prototype";
 import { METRICS_VARIANTS, MetricsPrototype } from "@/components/analytics/insights-prototype/metrics-prototype";
 
@@ -30,7 +31,7 @@ export function MetricsWindowPrototype({
   const [variant, setVariant] = usePrototypeVariant(KEYS, "1");
   return (
     <>
-      {variant === "0" || activeTab === "records" ? (
+      {(PROTOTYPES_ENABLED && variant === "0") || activeTab === "records" ? (
         current
       ) : (
         <MetricsPrototype
@@ -41,7 +42,7 @@ export function MetricsWindowPrototype({
         />
       )}
       {/* Records always shows today's window, so a layout picked there would not apply. */}
-      {activeTab !== "records" && <PrototypeSwitcher variants={VARIANTS} current={variant} onChange={setVariant} />}
+      {PROTOTYPES_ENABLED && activeTab !== "records" && <PrototypeSwitcher variants={VARIANTS} current={variant} onChange={setVariant} />}
     </>
   );
 }

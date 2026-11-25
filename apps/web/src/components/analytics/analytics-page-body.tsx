@@ -8,7 +8,6 @@ import { SummaryTab } from "@/components/analytics/summary-tab";
 import { CorrelationsTab } from "@/components/analytics/correlations-tab";
 import { TitrationTab } from "@/components/analytics/titration-tab";
 import { MetricsWindowPrototype } from "@/components/analytics/insights-prototype";
-import { PROTOTYPES_ENABLED } from "@/components/prototype/prototype-switcher";
 import { ExportControls } from "@/components/analytics/export-controls";
 import { AnalyticsIntroDialog } from "@/components/analytics/analytics-intro-dialog";
 import { useTimeScopeRange } from "@/hooks/use-analytics-queries";
@@ -52,8 +51,9 @@ interface AnalyticsPageBodyProps {
  * route and by the Metrics window.
  */
 export function AnalyticsPageBody(props: AnalyticsPageBodyProps) {
-  // PROTOTYPE: round-2 Metrics redesign (dev + Vercel preview only).
-  if (PROTOTYPES_ENABLED) {
+  // The redesigned Metrics window, in every build. Tests keep today's window
+  // (their fixtures and assertions are written against it).
+  if (process.env.NODE_ENV !== "test") {
     return (
       <MetricsWindowPrototype
         current={<CurrentAnalyticsPageBody {...props} />}
